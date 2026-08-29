@@ -152,7 +152,12 @@ function testRetryClassification(): void {
 }
 
 function testUncertainState(): void {
-  const uncertainError = makeError('EXECUTION_UNCERTAIN');
+  const uncertainError = {
+    ...makeError('EXECUTION_UNCERTAIN'),
+    code: 'EXECUTION_UNCERTAIN' as const,
+    category: 'EXECUTION_UNCERTAIN' as const,
+    retryability: 'RECONCILE_BEFORE_RETRY' as const,
+  };
   const uncertain: ExecutionResult<TestContractVersion, TestCorrelationId, TestClassification> = {
     kind: 'ExecutionResult',
     schemaVersion: '1.0.0',
