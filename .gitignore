@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+service-account-key.json
+credentials.json
+
+# Builds / caches
+build/
+dist/
+.next/
+.expo/
+coverage/
+.cache/
+*.log
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Large provenance archives are not normal Git blobs
+reference/source-archives/*.zip
+
+# Generated media/runtime outputs
+**/output/
+**/tmp/
