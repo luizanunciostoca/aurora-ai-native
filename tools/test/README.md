@@ -1,10 +1,10 @@
 # W00-C Test Foundation
 
-Status: ACTIVE_BASELINE_TOOLING
+Status: ACTIVE_BASELINE_TOOLING_WITH_W00A_ROOT_INTEGRATION_PENDING
 
-## Canonical runner
+## Canonical smoke runner
 
-The W00 baseline uses the Node.js built-in `node:test` runner for baseline smoke coverage. This introduces no third-party test framework dependency while W00-A owns package-manager/workspace bootstrap.
+The W00 baseline uses the Node.js built-in `node:test` runner for baseline smoke coverage. This introduces no third-party test framework dependency.
 
 Canonical direct command:
 
@@ -12,16 +12,20 @@ Canonical direct command:
 node tools/test/run-tests.mjs
 ```
 
-W00-A integration request for the root manifest:
+## W00-A root integration
+
+W00-A PR #3 already defines the generic workspace test dispatcher as `node ./tools/workspace/run-task.mjs test`. W00-C must not replace that dispatcher. The ownership-safe root integration request is to chain the baseline smoke gate before the generic workspace tests and add a direct smoke alias:
 
 ```json
 {
   "scripts": {
-    "test": "node tools/test/run-tests.mjs",
-    "test:smoke": "node --test tools/test/smoke.test.mjs"
+    "test": "node ./tools/test/run-tests.mjs && node ./tools/workspace/run-task.mjs test",
+    "test:smoke": "node ./tools/test/run-tests.mjs"
   }
 }
 ```
+
+This preserves W00-A workspace discovery while making the W00-C smoke gate mandatory. Standard shell `&&` is intentional: a smoke failure prevents later tests and preserves a non-zero exit code; no failure is masked.
 
 ## Test strategy
 
