@@ -1,0 +1,51 @@
+name: Governance change
+description: Propose a change to Git workflow, ownership, branch rules or repository governance.
+title: "chore: governance — "
+labels: []
+body:
+  - type: input
+    id: wave
+    attributes:
+      label: Wave ID
+      placeholder: W00-E or future owning wave
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current rule / problem
+      description: Describe the current canonical behavior and the concrete problem.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed change
+      description: State the exact rule, ownership or configuration change requested.
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Compatibility and workflow impact
+      description: Include affected branches, PRs, checks, owners, automations or documentation.
+    validations:
+      required: true
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Rollout / rollback
+      description: Explain activation order, prerequisites and how to revert safely.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Governance confirmations
+      options:
+        - label: This proposal does not silently bypass an active ownership lock.
+          required: true
+        - label: Required-check names are based on accepted live workflows, not invented placeholders.
+          required: true
+        - label: I did not include secrets, credentials or sensitive personal data.
+          required: true
