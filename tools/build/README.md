@@ -1,25 +1,29 @@
 # W00-C Build Foundation
 
-Status: ACTIVE_BASELINE_TOOLING_WITH_W00A_COMPLETION_DEPENDENCY
+Status: BLOCKED_PENDING_W00A_ACCEPTANCE
 
-Canonical direct command:
+## Canonical build gate
+
+W00-A PR #3 introduced the canonical root workspace dispatcher:
 
 ```text
-node tools/build/run-workspace-build.mjs
+npm run build
 ```
 
-W00-A integration request for the root manifest:
+The root script delegates to `tools/workspace/run-task.mjs build`, which validates the workspace, discovers only canonical direct workspaces and runs every active package that declares a `build` script. Protected legacy/reference manifests are excluded by W00-A workspace policy.
 
-```json
-{
-  "scripts": {
-    "build": "node tools/build/run-workspace-build.mjs"
-  }
-}
+W00-C intentionally does **not** maintain a second workspace build orchestrator. An initial C-owned prototype was removed during cleanup after the live W00-A branch exposed the canonical generic dispatcher. This prevents duplicate build graphs and double execution.
+
+## Acceptance dependency
+
+Final W00-C build validation must wait until W00-A is accepted and merged. Then W00-C must run a clean canonical install followed by:
+
+```text
+npm run build
 ```
 
-The build orchestrator requires the root `package.json` to declare an exact `packageManager` value. Until W00-A integrates that canonical manifest, the command intentionally exits with code 2 and `W00C_BLOCKED_W00A`; this is a real dependency failure, not a masked success.
+The command must return the underlying non-zero exit code when any active workspace build fails. A baseline with no active package build tasks may pass only when the canonical workspace dispatcher explicitly reports that state.
 
-After W00-A integration, the orchestrator scans canonical roots (`apps`, `services`, `packages`, `catalog`, `infra`, `evals`), excludes legacy/reference trees, validates discovered package manifests, and runs each declared package-level `build` script with the canonical package manager. A scaffold-only baseline with zero package-level build scripts is valid and reported explicitly.
+## Legacy policy
 
-Legacy `electron-builder` configuration is not part of the canonical build graph and is never traversed by this command.
+Legacy `electron-builder` configuration under `apps/**/legacy-reference/**` is not part of the canonical build graph. Broken legacy references are recorded as debt/reference and are not reconstructed by W00-C.
