@@ -1,18 +1,16 @@
-import type {
-  ActionIntentId,
-  CausationId,
-  CommandId,
-  CorrelationId,
-  DecisionId,
-  EventId,
-  EvidenceId,
-  ExecutionId,
-  IdentityId,
-  PolicyTokenId,
-  ProviderExternalId,
-  ReceiptId,
-  TenantId,
-} from '../../../contracts/src/ids/types';
+import type { ActionIntentId } from '../../../contracts/src/ids/types';
+import type { CausationId } from '../../../contracts/src/ids/types';
+import type { CommandId } from '../../../contracts/src/ids/types';
+import type { CorrelationId } from '../../../contracts/src/ids/types';
+import type { DecisionId } from '../../../contracts/src/ids/types';
+import type { EventId } from '../../../contracts/src/ids/types';
+import type { EvidenceId } from '../../../contracts/src/ids/types';
+import type { ExecutionId } from '../../../contracts/src/ids/types';
+import type { IdentityId } from '../../../contracts/src/ids/types';
+import type { PolicyTokenId } from '../../../contracts/src/ids/types';
+import type { ProviderExternalId } from '../../../contracts/src/ids/types';
+import type { ReceiptId } from '../../../contracts/src/ids/types';
+import type { TenantId } from '../../../contracts/src/ids/types';
 import { ID_NAMESPACE_REGISTRY } from '../../../registries/src/ids/id-namespace.registry';
 
 export interface StringSchema<T extends string> {
@@ -25,10 +23,16 @@ const CROCKFORD_ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 function makeCanonicalIdSchema<T extends string>(prefix: string): StringSchema<T> {
   const is = (value: unknown): value is T => {
-    if (typeof value !== 'string') return false;
+    if (typeof value !== 'string') {
+      return false;
+    }
     const separatorIndex = value.indexOf('_');
-    if (separatorIndex !== prefix.length) return false;
-    if (value.slice(0, separatorIndex) !== prefix) return false;
+    if (separatorIndex !== prefix.length) {
+      return false;
+    }
+    if (value.slice(0, separatorIndex) !== prefix) {
+      return false;
+    }
     return CROCKFORD_ULID_PATTERN.test(value.slice(separatorIndex + 1));
   };
 
@@ -49,42 +53,21 @@ function makeCanonicalIdSchema<T extends string>(prefix: string): StringSchema<T
   });
 }
 
-export const TenantIdSchema = makeCanonicalIdSchema<TenantId>(
-  ID_NAMESPACE_REGISTRY.TenantId.prefix,
-);
-export const IdentityIdSchema = makeCanonicalIdSchema<IdentityId>(
-  ID_NAMESPACE_REGISTRY.IdentityId.prefix,
-);
-export const CorrelationIdSchema = makeCanonicalIdSchema<CorrelationId>(
-  ID_NAMESPACE_REGISTRY.CorrelationId.prefix,
-);
-export const CausationIdSchema = makeCanonicalIdSchema<CausationId>(
-  ID_NAMESPACE_REGISTRY.CausationId.prefix,
-);
-export const CommandIdSchema = makeCanonicalIdSchema<CommandId>(
-  ID_NAMESPACE_REGISTRY.CommandId.prefix,
-);
-export const EventIdSchema = makeCanonicalIdSchema<EventId>(
-  ID_NAMESPACE_REGISTRY.EventId.prefix,
-);
-export const ActionIntentIdSchema = makeCanonicalIdSchema<ActionIntentId>(
-  ID_NAMESPACE_REGISTRY.ActionIntentId.prefix,
-);
-export const ReceiptIdSchema = makeCanonicalIdSchema<ReceiptId>(
-  ID_NAMESPACE_REGISTRY.ReceiptId.prefix,
-);
-export const EvidenceIdSchema = makeCanonicalIdSchema<EvidenceId>(
-  ID_NAMESPACE_REGISTRY.EvidenceId.prefix,
-);
-export const DecisionIdSchema = makeCanonicalIdSchema<DecisionId>(
-  ID_NAMESPACE_REGISTRY.DecisionId.prefix,
-);
-export const PolicyTokenIdSchema = makeCanonicalIdSchema<PolicyTokenId>(
-  ID_NAMESPACE_REGISTRY.PolicyTokenId.prefix,
-);
-export const ExecutionIdSchema = makeCanonicalIdSchema<ExecutionId>(
-  ID_NAMESPACE_REGISTRY.ExecutionId.prefix,
-);
+const ids = ID_NAMESPACE_REGISTRY;
+const makeIdSchema = makeCanonicalIdSchema;
+
+export const TenantIdSchema = makeIdSchema<TenantId>(ids.TenantId.prefix);
+export const IdentityIdSchema = makeIdSchema<IdentityId>(ids.IdentityId.prefix);
+export const CorrelationIdSchema = makeIdSchema<CorrelationId>(ids.CorrelationId.prefix);
+export const CausationIdSchema = makeIdSchema<CausationId>(ids.CausationId.prefix);
+export const CommandIdSchema = makeIdSchema<CommandId>(ids.CommandId.prefix);
+export const EventIdSchema = makeIdSchema<EventId>(ids.EventId.prefix);
+export const ActionIntentIdSchema = makeIdSchema<ActionIntentId>(ids.ActionIntentId.prefix);
+export const ReceiptIdSchema = makeIdSchema<ReceiptId>(ids.ReceiptId.prefix);
+export const EvidenceIdSchema = makeIdSchema<EvidenceId>(ids.EvidenceId.prefix);
+export const DecisionIdSchema = makeIdSchema<DecisionId>(ids.DecisionId.prefix);
+export const PolicyTokenIdSchema = makeIdSchema<PolicyTokenId>(ids.PolicyTokenId.prefix);
+export const ExecutionIdSchema = makeIdSchema<ExecutionId>(ids.ExecutionId.prefix);
 
 /** @deprecated Use DecisionIdSchema. */
 export const OwnerDecisionIdSchema = DecisionIdSchema;
