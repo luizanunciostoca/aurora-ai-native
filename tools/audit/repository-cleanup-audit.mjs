@@ -29,16 +29,29 @@ const namePattern = /(?:^|[-_.])(backup|bak|copy|final\d*|new(?:-new)*|old)(?:[-
 const markerPattern = /\b(TODO|FIXME|PLACEHOLDER|STUB|omitted for brevity)\b/i;
 
 function isLegacy(p) {
-  return p.includes('/legacy-reference/') || p.includes('/legacy-manus-reference/') || p.startsWith('reference/');
+  return (
+    p.includes('/legacy-reference/') ||
+    p.includes('/legacy-manus-reference/') ||
+    p.startsWith('reference/')
+  );
 }
 
 function resolveCandidate(fromFile, spec) {
   if (!spec.startsWith('.') && !spec.startsWith('/')) return null;
-  const base = spec.startsWith('/') ? path.join(root, spec) : path.resolve(path.dirname(fromFile), spec);
+  const base = spec.startsWith('/')
+    ? path.join(root, spec)
+    : path.resolve(path.dirname(fromFile), spec);
   const candidates = [
     base,
-    `${base}.js`, `${base}.mjs`, `${base}.cjs`, `${base}.ts`, `${base}.tsx`, `${base}.jsx`, `${base}.json`,
-    path.join(base, 'index.js'), path.join(base, 'index.ts'),
+    `${base}.js`,
+    `${base}.mjs`,
+    `${base}.cjs`,
+    `${base}.ts`,
+    `${base}.tsx`,
+    `${base}.jsx`,
+    `${base}.json`,
+    path.join(base, 'index.js'),
+    path.join(base, 'index.ts'),
   ];
   return candidates.some(fs.existsSync) ? null : rel(base);
 }
@@ -46,8 +59,8 @@ function resolveCandidate(fromFile, spec) {
 function scanRefs(file, text) {
   const refs = [];
   const patterns = [
-    /(?:import\s+(?:[^'\"]+?\s+from\s+)?|require\s*\(|import\s*\()\s*['\"]([^'\"]+)['\"]/g,
-    /(?:src|href)\s*=\s*['\"]([^'\"]+)['\"]/gi,
+    /(?:import\s+(?:[^'"]+?\s+from\s+)?|require\s*\(|import\s*\()\s*['"]([^'"]+)['"]/g,
+    /(?:src|href)\s*=\s*['"]([^'"]+)['"]/gi,
   ];
   for (const re of patterns) {
     let m;
@@ -56,7 +69,14 @@ function scanRefs(file, text) {
   for (const spec of refs) {
     if (/^(?:https?:|data:|#|mailto:|javascript:)/i.test(spec)) continue;
     const missing = resolveCandidate(file, spec);
-    if (missing) brokenRelativeRefs.push({ file: rel(file), ref: spec, expected: missing, legacy: isLegacy(rel(file)) });
+    if (missing) {
+      brokenRelativeRefs.push({
+        file: rel(file),
+        ref: spec,
+        expected: missing,
+        legacy: isLegacy(rel(file)),
+      });
+    }
   }
 }
 
