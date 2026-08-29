@@ -3,7 +3,9 @@ export interface RuntimeValidator<T> {
 }
 
 export interface RuntimeSchema<T> extends RuntimeValidator<T> {
-  safeParse(input: unknown):
+  safeParse(
+    input: unknown,
+  ):
     | { readonly success: true; readonly data: T }
     | { readonly success: false; readonly error: TypeError };
   serialize(input: unknown): string;

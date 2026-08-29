@@ -60,9 +60,7 @@ export function requireOwn(record: Record<string, unknown>, key: string, path: s
 }
 
 export function optionalOwn(record: Record<string, unknown>, key: string): unknown | undefined {
-  return Object.prototype.hasOwnProperty.call(record, key)
-    ? record[key]
-    : undefined;
+  return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
 }
 
 export function parseFixedLiteral<const T extends string>(
