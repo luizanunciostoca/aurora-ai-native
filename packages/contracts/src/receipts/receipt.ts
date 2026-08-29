@@ -4,7 +4,6 @@ import type { ExecutionOutcome } from '../results/index.js';
 import type { ContractVersion } from '../versioning/index.js';
 import type { ExternalReference, RestrictedMetadata } from '../actions/index.js';
 
-
 export interface ReceiptExecutorReference {
   readonly executor: string;
   readonly instanceReference?: string;

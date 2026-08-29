@@ -73,7 +73,8 @@ assert(parsed.executionOutcome === 'SUCCEEDED', 'Receipt must reuse canonical ex
 const roundTrip = ReceiptSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
 assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'Receipt serialization round trip must be stable');
 
-const { actionIntentId: _missingActionIntentId, ...withoutIntent } = validReceipt;
+const withoutIntent = JSON.parse(JSON.stringify(validReceipt)) as Record<string, unknown>;
+delete withoutIntent.actionIntentId;
 expectThrows(() => ReceiptSchema.parse(withoutIntent, dependencies), 'actionIntentId: missing required field');
 
 expectThrows(

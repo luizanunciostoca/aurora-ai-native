@@ -97,7 +97,13 @@ export function restrictedMetadata(
       if (typeof value === 'string' && value.length <= 2048) return value;
       return fail(`${path}.${key}[${index}]`, 'metadata values must be bounded primitives');
     });
-    output[key] = Array.isArray(raw) ? parsed : parsed[0]!;
+    if (Array.isArray(raw)) {
+      output[key] = parsed;
+    } else {
+      const first = parsed[0];
+      if (first === undefined) fail(`${path}.${key}`, 'metadata value is required');
+      output[key] = first;
+    }
   }
   return output;
 }

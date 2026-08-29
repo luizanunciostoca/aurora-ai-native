@@ -90,7 +90,8 @@ assert(parsed.verification.state === 'VERIFIED', 'Evidence verification state mu
 const roundTrip = EvidenceSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
 assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'Evidence serialization round trip must be stable');
 
-const { subject: _missingSubject, ...withoutSubject } = validEvidence;
+const withoutSubject = JSON.parse(JSON.stringify(validEvidence)) as Record<string, unknown>;
+delete withoutSubject.subject;
 expectThrows(() => EvidenceSchema.parse(withoutSubject, dependencies), 'subject: missing required field');
 
 expectThrows(
