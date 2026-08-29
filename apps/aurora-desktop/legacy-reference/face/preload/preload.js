@@ -1,0 +1,43 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  sendVoiceCommand: (command) => ipcRenderer.invoke("voice-send-command", command),
+  getVoiceStatus: () => ipcRenderer.invoke("voice-get-status"),
+  updateVoiceSettings: (settings) => ipcRenderer.invoke("voice-update-settings", settings),
+  startContinuousListening: () => ipcRenderer.invoke("voice-start-continuous"),
+  stopContinuousListening: () => ipcRenderer.invoke("voice-stop-continuous"),
+  testVoiceSystem: () => ipcRenderer.invoke("voice-test-system"),
+  onVoiceCommand: (callback) => ipcRenderer.on("voice-command", (event, command) => callback(command)),
+  onVoiceStatusUpdate: (callback) => ipcRenderer.on("voice-status-changed", (event, status) => callback(status)),
+  onConversationResponse: (callback) => ipcRenderer.on("conversation-response", (event, response) => callback(response)),
+  enviarComandoVoz: (comando) => ipcRenderer.invoke("voice-command", comando),
+  receberRespostaVoz: (callback) => ipcRenderer.on("voice-response", (event, resposta) => callback(resposta)),
+});
+
+contextBridge.exposeInMainWorld("auroraAPI", {
+  onSystemNotification: (callback) => ipcRenderer.on("system-notification", (event, data) => callback(data)),
+  onDashboardLog: (callback) => ipcRenderer.on("dashboard-log", (event, data) => callback(data)),
+  onDashboardStatus: (callback) => ipcRenderer.on("dashboard-status", (event, data) => callback(data)),
+  onDashboardModule: (callback) => ipcRenderer.on("dashboard-module", (event, data) => callback(data)),
+  onDashboardError: (callback) => ipcRenderer.on("dashboard-error", (event, data) => callback(data)),
+  sendDashboardCommand: (command) => ipcRenderer.invoke("dashboard-command", command),
+  getDashboardStatus: () => ipcRenderer.invoke("dashboard-status"),
+  invokeCommand: (command, args = {}) => ipcRenderer.invoke("process-command", { command, ...args }),
+  processVoiceCommand: (command) => ipcRenderer.invoke("process-voice-command", command),
+  startVoiceListening: () => ipcRenderer.invoke("start-voice-listening"),
+  stopVoiceListening: () => ipcRenderer.invoke("stop-voice-listening"),
+  processVoiceRecording: () => ipcRenderer.invoke("process-voice-recording"),
+  speakText: (text) => ipcRenderer.invoke("speak-text", text),
+  getVoiceStatus: () => ipcRenderer.invoke("get-voice-status"),
+  testVoiceSystem: () => ipcRenderer.invoke("test-voice-system"),
+  executeWindowsCommand: (command) => ipcRenderer.invoke("execute-windows-command", command),
+  getSystemStatus: () => ipcRenderer.invoke("get-system-status"),
+  showInfoPanel: () => ipcRenderer.invoke("show-info-panel"),
+  showConfigPanel: () => ipcRenderer.invoke("show-config-panel"),
+  minimizeWindow: () => ipcRenderer.invoke("minimize-window"),
+  closeWindow: () => ipcRenderer.invoke("close-window"),
+  toggleFullscreen: () => ipcRenderer.invoke("toggle-fullscreen"),
+  onSystemUpdate: (callback) => ipcRenderer.on("system-update", callback),
+  speakFirstWords: () => ipcRenderer.invoke("speak-first-words"),
+  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+});
