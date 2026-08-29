@@ -48,10 +48,10 @@ const invalidCorrelation: CorrelationId = tenantId;
 // @ts-expect-error Provider/external identifiers cannot replace canonical IdentityId.
 const providerActor: ActorRef = { kind: 'HUMAN', identityId: providerExternalId };
 
-// @ts-expect-error Internal IdentityId cannot replace a provider-owned external ID.
 const invalidExternalIdentity: ExternalIdentityRef = {
   kind: 'EXTERNAL_IDENTITY',
   provider: 'provider-x',
+  // @ts-expect-error Internal IdentityId cannot replace a provider-owned external ID.
   externalId: identityId,
 };
 
