@@ -1,4 +1,4 @@
-name: W00 Lockfile Bootstrap
+name: W00 Integration Verify
 
 on:
   push:
@@ -8,16 +8,15 @@ permissions:
   contents: write
 
 jobs:
-  bootstrap-and-verify:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22.16.0
-      - name: Regenerate canonical npm lockfile
-        run: npm install --package-lock-only --ignore-scripts
-      - name: Commit generated lockfile if changed
+      - run: npm install --package-lock-only --ignore-scripts
+      - name: Commit lockfile if changed
         run: |
           if ! git diff --quiet -- package-lock.json; then
             git config user.name "github-actions[bot]"
@@ -27,9 +26,8 @@ jobs:
             git push origin HEAD:wave/00-integration-remediation
           fi
       - run: npm ci
-      - name: Apply canonical formatting
-        run: npm run format
-      - name: Commit canonical formatting if changed
+      - run: npm run format
+      - name: Commit formatting if changed
         run: |
           if ! git diff --quiet; then
             git config user.name "github-actions[bot]"
@@ -41,3 +39,8 @@ jobs:
       - run: npm run quality
       - run: npm test
       - run: npm run build
+      - run: bash tools/security/check-sensitive-files.sh
+      - run: bash tools/security/check-sensitive-files.sh --self-test
+      - run: bash tools/security/require-env.sh --self-test
+      - run: bash tools/security/check-dependency-hygiene.sh
+      - run: node tools/audit/repository-cleanup-audit.mjs
