@@ -1,4 +1,4 @@
-import type { ContractVersion } from '../versioning/index.js';
+import type { ContractVersion } from '../versioning/types.js';
 import type { CorrelationContext } from './correlation.js';
 import type { DataClassification } from './data-classification.js';
 import type { Deadline, Expiry } from './deadline.js';

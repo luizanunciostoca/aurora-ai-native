@@ -5,7 +5,7 @@ import type {
 import {
   CausationIdSchema,
   CorrelationIdSchema,
-} from '../ids/index.js';
+} from '../ids/id.schemas.js';
 import {
   asRecord,
   assertExactKeys,

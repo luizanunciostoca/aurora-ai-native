@@ -1,4 +1,4 @@
-import type { TenantId } from '../ids/index.js';
+import type { TenantId } from '../ids/types.js';
 
 export interface TenantContext {
   readonly tenantId: TenantId;

@@ -2,7 +2,7 @@ import type {
   PropagationContext,
   PropagationMetadata,
 } from '../../../contracts/src/context/propagation.js';
-import { ContractVersionSchema } from '../versioning/index.js';
+import { ContractVersionSchema } from '../versioning/version.schemas.js';
 import {
   asRecord,
   assertExactKeys,

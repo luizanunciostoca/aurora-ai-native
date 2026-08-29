@@ -2,11 +2,13 @@ import type {
   CausationId,
   CorrelationId,
   IdentityId,
+  ProviderExternalId,
   TenantId,
-} from '../ids/index.js';
+} from '../ids/types.js';
 import type {
   ActorRef,
   CorrelationContext,
+  ExternalIdentityRef,
   PropagationContext,
   TenantContext,
 } from './index.js';
@@ -15,6 +17,7 @@ declare const tenantId: TenantId;
 declare const identityId: IdentityId;
 declare const correlationId: CorrelationId;
 declare const causationId: CausationId;
+declare const providerExternalId: ProviderExternalId;
 
 const tenant: TenantContext = { tenantId };
 const actor: ActorRef = { kind: 'HUMAN', identityId };
@@ -22,10 +25,16 @@ const correlation: CorrelationContext = {
   correlationId,
   causation: { causationId },
 };
+const externalIdentity: ExternalIdentityRef = {
+  kind: 'EXTERNAL_IDENTITY',
+  provider: 'provider-x',
+  externalId: providerExternalId,
+};
 
 void tenant;
 void actor;
 void correlation;
+void externalIdentity;
 
 // @ts-expect-error TenantId and IdentityId must remain non-assignable.
 const invalidIdentity: IdentityId = tenantId;
@@ -37,7 +46,14 @@ const invalidTenant: TenantId = identityId;
 const invalidCorrelation: CorrelationId = tenantId;
 
 // @ts-expect-error Provider/external identifiers cannot replace canonical IdentityId.
-const providerActor: ActorRef = { kind: 'HUMAN', identityId: 'provider-user-123' };
+const providerActor: ActorRef = { kind: 'HUMAN', identityId: providerExternalId };
+
+// @ts-expect-error Internal IdentityId cannot replace a provider-owned external ID.
+const invalidExternalIdentity: ExternalIdentityRef = {
+  kind: 'EXTERNAL_IDENTITY',
+  provider: 'provider-x',
+  externalId: identityId,
+};
 
 const emailActor: ActorRef = {
   kind: 'HUMAN',
@@ -52,4 +68,5 @@ void invalidIdentity;
 void invalidTenant;
 void invalidCorrelation;
 void providerActor;
+void invalidExternalIdentity;
 void emailActor;

@@ -1,13 +1,17 @@
-import type { IdentityId } from '../ids/index.js';
+import type { IdentityId, ProviderExternalId } from '../ids/types.js';
 
 export const IDENTITY_KINDS = ['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM'] as const;
 
 export type IdentityKind = (typeof IDENTITY_KINDS)[number];
 
+/**
+ * Provider-owned identity reference. The external identifier remains opaque and
+ * is explicitly distinct from Aurora internal canonical IDs.
+ */
 export interface ExternalIdentityRef {
   readonly kind: 'EXTERNAL_IDENTITY';
   readonly provider: string;
-  readonly externalId: string;
+  readonly externalId: ProviderExternalId;
 }
 
 interface ActorRefBase<TKind extends IdentityKind> {

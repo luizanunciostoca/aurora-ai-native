@@ -1,5 +1,5 @@
 import type { TenantContext } from '../../../contracts/src/context/tenant.js';
-import { TenantIdSchema } from '../ids/index.js';
+import { TenantIdSchema } from '../ids/id.schemas.js';
 import {
   asRecord,
   assertExactKeys,

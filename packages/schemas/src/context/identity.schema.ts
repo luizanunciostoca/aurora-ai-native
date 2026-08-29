@@ -5,7 +5,10 @@ import {
   type IdentityKind,
   type SubjectRef,
 } from '../../../contracts/src/context/identity.js';
-import { IdentityIdSchema } from '../ids/index.js';
+import {
+  IdentityIdSchema,
+  ProviderExternalIdSchema,
+} from '../ids/id.schemas.js';
 import {
   asRecord,
   assertExactKeys,
@@ -41,10 +44,7 @@ export const ExternalIdentityRefSchema =
     return {
       kind: 'EXTERNAL_IDENTITY',
       provider: parseNonEmptyString(record.provider, 'ExternalIdentityRef.provider'),
-      externalId: parseNonEmptyString(
-        record.externalId,
-        'ExternalIdentityRef.externalId',
-      ),
+      externalId: ProviderExternalIdSchema.parse(record.externalId),
     };
   });
 
