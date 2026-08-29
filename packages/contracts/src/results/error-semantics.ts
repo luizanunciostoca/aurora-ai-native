@@ -84,7 +84,10 @@ export const ERROR_CODE_DEFINITIONS = {
   },
 } as const satisfies Record<
   string,
-  { readonly category: ErrorCategory; readonly retryability: RetryClassification }
+  {
+    readonly category: ErrorCategory;
+    readonly retryability: RetryClassification;
+  }
 >;
 
 export type ErrorCode = keyof typeof ERROR_CODE_DEFINITIONS;
