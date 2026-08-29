@@ -5,37 +5,25 @@ on:
     branches: [wave/00-integration-remediation]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22.16.0
       - run: npm install --package-lock-only --ignore-scripts
-      - name: Commit lockfile if changed
-        run: |
-          if ! git diff --quiet -- package-lock.json; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package-lock.json
-            git commit -m "chore(w00): regenerate canonical npm lockfile"
-            git push origin HEAD:wave/00-integration-remediation
-          fi
+      - name: Verify lockfile is already canonical
+        run: git diff --exit-code -- package-lock.json
       - run: npm ci
       - run: npm run format
-      - name: Commit formatting if changed
-        run: |
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git commit -m "chore(w00): apply canonical formatting"
-            git push origin HEAD:wave/00-integration-remediation
-          fi
+      - name: Emit canonical formatting diff
+        run: git diff -- .github/dependabot.yml .github/ISSUE_TEMPLATE .github/workflows/security.yml tools/audit/repository-cleanup-audit.mjs
       - run: npm run quality
       - run: npm test
       - run: npm run build
