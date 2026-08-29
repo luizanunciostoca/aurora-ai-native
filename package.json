@@ -1,0 +1,29 @@
+{
+  "name": "aurora-ai-native",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Aurora AI-Native canonical monorepo workspace foundation.",
+  "engines": {
+    "node": ">=22.16.0 <23",
+    "npm": "10.9.2"
+  },
+  "packageManager": "npm@10.9.2",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*",
+    "catalog/*",
+    "infra/*",
+    "evals/*",
+    "tools/*"
+  ],
+  "scripts": {
+    "install": "node ./tools/workspace/verify-install.mjs",
+    "workspace:check": "node ./tools/workspace/check.mjs",
+    "workspace:list": "node ./tools/workspace/check.mjs --list",
+    "lint": "node ./tools/workspace/run-task.mjs lint",
+    "typecheck": "node ./tools/workspace/run-task.mjs typecheck",
+    "test": "node ./tools/workspace/run-task.mjs test",
+    "build": "node ./tools/workspace/run-task.mjs build"
+  }
+}
