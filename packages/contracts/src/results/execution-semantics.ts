@@ -89,15 +89,15 @@ export interface FailedExecutionResult<
   readonly error: CanonicalError<TContractVersion, TCorrelationId, TDataClassification> & {
     readonly code: Exclude<
       CanonicalError<TContractVersion, TCorrelationId, TDataClassification>['code'],
-      'EXECUTION_UNCERTAIN'
+      'EXECUTION_UNCERTAIN',
     >;
     readonly category: Exclude<
       CanonicalError<TContractVersion, TCorrelationId, TDataClassification>['category'],
-      'EXECUTION_UNCERTAIN'
+      'EXECUTION_UNCERTAIN',
     >;
     readonly retryability: Exclude<
       CanonicalError<TContractVersion, TCorrelationId, TDataClassification>['retryability'],
-      'RECONCILE_BEFORE_RETRY'
+      'RECONCILE_BEFORE_RETRY',
     >;
   };
 }
