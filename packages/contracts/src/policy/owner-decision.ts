@@ -1,9 +1,4 @@
-import type {
-  ActorRef,
-  CorrelationContext,
-  Rfc3339Timestamp,
-  TenantContext,
-} from '../context';
+import type { ActorRef, CorrelationContext, Rfc3339Timestamp, TenantContext } from '../context';
 import type { DecisionId } from '../ids/types';
 import type { ContractVersion } from '../versioning/types';
 
