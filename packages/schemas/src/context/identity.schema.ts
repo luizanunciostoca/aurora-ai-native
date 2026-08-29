@@ -5,10 +5,7 @@ import {
   type IdentityKind,
   type SubjectRef,
 } from '../../../contracts/src/context/identity.js';
-import {
-  IdentityIdSchema,
-  ProviderExternalIdSchema,
-} from '../ids/id.schemas.js';
+import { IdentityIdSchema, ProviderExternalIdSchema } from '../ids/id.schemas.js';
 import {
   asRecord,
   assertExactKeys,
@@ -18,17 +15,15 @@ import {
 
 const IDENTITY_KIND_SET = new Set<string>(IDENTITY_KINDS);
 
-export const IdentityKindSchema = createRuntimeSchema<IdentityKind>(
-  (value: unknown) => {
-    if (typeof value !== 'string' || !IDENTITY_KIND_SET.has(value)) {
-      throw new TypeError('IdentityKind is invalid');
-    }
-    return value as IdentityKind;
-  },
-);
+export const IdentityKindSchema = createRuntimeSchema<IdentityKind>((value: unknown) => {
+  if (typeof value !== 'string' || !IDENTITY_KIND_SET.has(value)) {
+    throw new TypeError('IdentityKind is invalid');
+  }
+  return value as IdentityKind;
+});
 
-export const ExternalIdentityRefSchema =
-  createRuntimeSchema<ExternalIdentityRef>((value: unknown) => {
+export const ExternalIdentityRefSchema = createRuntimeSchema<ExternalIdentityRef>(
+  (value: unknown) => {
     const record = asRecord(value, 'ExternalIdentityRef');
     assertExactKeys(
       record,
@@ -46,7 +41,8 @@ export const ExternalIdentityRefSchema =
       provider: parseNonEmptyString(record.provider, 'ExternalIdentityRef.provider'),
       externalId: ProviderExternalIdSchema.parse(record.externalId),
     };
-  });
+  },
+);
 
 export const ActorRefSchema = createRuntimeSchema<ActorRef>((value: unknown) => {
   const record = asRecord(value, 'ActorRef');
@@ -62,11 +58,7 @@ export const ActorRefSchema = createRuntimeSchema<ActorRef>((value: unknown) => 
     identityId: IdentityIdSchema.parse(record.identityId),
     ...(record.externalIdentity === undefined
       ? {}
-      : {
-          externalIdentity: ExternalIdentityRefSchema.parse(
-            record.externalIdentity,
-          ),
-        }),
+      : { externalIdentity: ExternalIdentityRefSchema.parse(record.externalIdentity) }),
   } as ActorRef;
 });
 

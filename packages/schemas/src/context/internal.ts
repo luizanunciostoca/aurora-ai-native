@@ -7,9 +7,7 @@ interface RuntimeSchema<T> {
   readonly safeParse: (value: unknown) => SafeParseResult<T>;
 }
 
-export function createRuntimeSchema<T>(
-  parser: (value: unknown) => T,
-): RuntimeSchema<T> {
+export function createRuntimeSchema<T>(parser: (value: unknown) => T): RuntimeSchema<T> {
   return {
     parse: parser,
     safeParse(value: unknown): SafeParseResult<T> {

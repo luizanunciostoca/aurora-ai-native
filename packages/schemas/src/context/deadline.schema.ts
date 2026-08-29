@@ -3,11 +3,7 @@ import type {
   Expiry,
   Rfc3339Timestamp,
 } from '../../../contracts/src/context/deadline.js';
-import {
-  asRecord,
-  assertExactKeys,
-  createRuntimeSchema,
-} from './internal.js';
+import { asRecord, assertExactKeys, createRuntimeSchema } from './internal.js';
 
 const RFC3339_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-](\d{2}):(\d{2}))$/;
@@ -61,8 +57,7 @@ function parseRfc3339Timestamp(value: unknown): Rfc3339Timestamp {
   return value as Rfc3339Timestamp;
 }
 
-export const Rfc3339TimestampSchema =
-  createRuntimeSchema<Rfc3339Timestamp>(parseRfc3339Timestamp);
+export const Rfc3339TimestampSchema = createRuntimeSchema<Rfc3339Timestamp>(parseRfc3339Timestamp);
 
 export const DeadlineSchema = createRuntimeSchema<Deadline>((value: unknown) => {
   const record = asRecord(value, 'Deadline');

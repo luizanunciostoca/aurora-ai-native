@@ -25,11 +25,7 @@ export type AgentActorRef = ActorRefBase<'AGENT'>;
 export type ServiceActorRef = ActorRefBase<'SERVICE'>;
 export type SystemActorRef = ActorRefBase<'SYSTEM'>;
 
-export type ActorRef =
-  | HumanActorRef
-  | AgentActorRef
-  | ServiceActorRef
-  | SystemActorRef;
+export type ActorRef = HumanActorRef | AgentActorRef | ServiceActorRef | SystemActorRef;
 
 export interface IdentitySubjectRef {
   readonly kind: 'IDENTITY';
