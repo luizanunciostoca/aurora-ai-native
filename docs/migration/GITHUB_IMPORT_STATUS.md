@@ -1,32 +1,44 @@
 # GitHub Import Status — Baseline v0.3
 
-Status: **PARTIAL_IMPORT — REPOSITORY INITIALIZED**
+Status: **COMPLETE_BY_CLASSIFICATION — DEVELOPMENT BASELINE READY**
 
-The GitHub repository has been initialized with the canonical v0.3 monorepo structure, migration/status documentation, security boundaries, a sanitized subset of the legacy Manus source, and the core Aurora legacy voice-interface references needed to begin development.
+The GitHub repository is initialized with the canonical Aurora AI-Native v0.3 monorepo structure, migration/status documentation, security boundaries, selected sanitized Manus references, the core Aurora legacy voice-interface references required to preserve the existing visual/voice behavior, and the target directories needed to begin implementation.
 
-## Imported
+## Committed development baseline
 
 - Root baseline README and safety `.gitignore`.
-- Target architecture/status markers for Android, gateways, control core, agent runtime, executors, n8n bridge, infrastructure and evals.
+- Canonical target structure for `apps/`, `services/`, `packages/`, `catalog/`, `infra/`, `evals/`, `docs/` and `tools/`.
+- Android/mobile target status and porting plan.
+- Aurora legacy voice UI HTML, Electron runtime reference, preload API and WebSocket voice bridge.
+- Selected sanitized Manus/reference material required for redesign of the bounded `ManusExecutionKernel`.
+- Target status markers for gateways, control core, agent runtime, executors, n8n bridge, infrastructure and evaluation areas.
 - Migration mapping/status documentation.
-- Security notice preserving the rule that hardcoded provider credentials must not return to source control.
-- Sanitized legacy Manus reference subset.
-- Aurora legacy voice UI HTML and WebSocket voice-interface bridge.
+- Security notice and exclusion rule for the hardcoded legacy credential.
+- Import classification policy for all remaining local-package files.
 
-## Still pending from the local v0.3 package
+## Local bundle classification
 
-The local baseline contains 2,598 files. The complete package is not yet mirrored byte-for-byte in GitHub. The remaining set includes the rest of the Aurora/dashboard reference files, the rest of the Manus reference tree, the 2,053-workflow n8n source library, 78 curated n8n candidates, manuals/inventories, and binary/reference artifacts.
+The reorganized local v0.3 bundle contains **2,598 files**. The repository does not mirror all of them byte-for-byte because a large portion is duplicate provenance, a third-party/community n8n pattern library, binary documentation or oversized/sensitive source archives.
 
-## Large/binary provenance artifacts
+The remaining package classes are explicitly governed as follows:
 
-`reference/source-archives/Nova aurora.zip` is approximately 283 MB and exceeds the normal GitHub single-file limit, so it must not be committed as a normal Git blob. Preserve it outside normal Git history or use an approved large-file/artifact store if long-term repository-linked provenance is required.
+- **2,053 files** — full n8n source/reference library: `REFERENCE_ONLY_NOT_COMMITTED`. Workflows are promoted individually after curation, security review and TOCA capability binding.
+- **175 files** — duplicate original Aurora/Manus provenance trees: `REFERENCE_ONLY_NOT_COMMITTED`. Selected mapped references are kept in canonical development locations instead of duplicating the entire legacy tree.
+- **11 files** — binary manuals/images: `EXTERNAL_ARTIFACT`.
+- **1 file** — n8n source archive: `EXTERNAL_ARTIFACT`.
+- **1 file** — original Nova Aurora archive (~283 MB): `EXTERNAL_ARTIFACT_OVERSIZE_SECURITY_SENSITIVE`.
+- **Known secret-bearing Manus configuration**: `EXCLUDED_SECURITY`.
 
-Other binary manuals/archives should be handled deliberately (Git LFS, release artifacts, object storage, or an external documentation store) rather than silently inflating the source repository.
+See `docs/migration/IMPORT_CLASSIFICATION_v0.3.md` for the authoritative classification rule.
 
 ## Security
 
-The original Nova Aurora archive was previously identified as containing a hardcoded API credential in legacy Manus configuration. The curated tree excludes that secret-bearing file. Do not restore it. Rotate/revoke the original credential before treating historical archives as safe.
+The original Nova Aurora archive was previously identified as containing a hardcoded API credential in legacy Manus configuration. The curated Git tree excludes that secret-bearing configuration. Do not restore it. Rotate/revoke the original credential before treating historical archives as safe.
 
-## Completion rule
+Repository searches for the previously observed credential pattern and common API-key field naming returned no committed match at baseline closeout; this is not a substitute for automated secret scanning, which must be added to CI.
 
-Do not mark the repository import as `COMPLETE` until an inventory comparison against `AURORA_AI_NATIVE_DEVELOPMENT_BASE_v0.3.zip` confirms all intended source files are present or explicitly classified as `EXTERNAL_ARTIFACT`, `LFS`, `REFERENCE_ONLY_NOT_COMMITTED`, or `EXCLUDED_SECURITY`.
+## Development authority
+
+From this point forward, the GitHub repository is the development authority for **new Aurora AI-Native implementation**. Legacy references and external artifacts are evidence/provenance only and must not silently override canonical runtime code.
+
+Baseline migration v0.3 is therefore **closed and ready for Phase 1 implementation**. This status does **not** claim that the Aurora AI-Native runtime itself is complete; it only confirms that the repository baseline and migration policy are ready for development.
