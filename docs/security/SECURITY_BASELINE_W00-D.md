@@ -1,9 +1,10 @@
 # W00-D Security Baseline — Security CI & Supply Chain Foundation
 
-Status: IMPLEMENTED_PENDING_CI_ACCEPTANCE  
+Status: ACCEPTED_ON_PR_HEAD  
 Wave: W00-D  
 Baseline authority: GitHub live `luizanunciostoca/aurora-ai-native`  
-Initial audited SHA: `c61d1f4c534c54e29006b2fa2d87812822e0903d`
+Initial audited SHA: `c61d1f4c534c54e29006b2fa2d87812822e0903d`  
+Accepted pre-close CI run: `33277845349` (`success`)
 
 ## Scope
 
@@ -43,6 +44,10 @@ Legacy/reference exclusions in dependency scanning are authority boundaries, not
 ## `.gitignore` review
 
 The existing root `.gitignore` already excludes local `.env` variants while allowing `.env.example`, common private-key files, common credential JSON files, and the designated provenance ZIP location. W00-D therefore does not rewrite this shared root file. CI path checks provide an additional fail-closed layer for sensitive files that must never be tracked.
+
+## Live acceptance
+
+GitHub Actions run `33277845349` completed successfully on PR #7 before this close-only documentation commit. Its `secret-scan`, `sensitive-files`, `dependency-hygiene`, `dependency-scan / osv-scan`, and aggregate `security-gate` jobs all passed. The final close-only SHA must receive the same workflow result before W00-D is declared complete.
 
 ## Required-check handoff
 
