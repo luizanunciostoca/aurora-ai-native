@@ -44,11 +44,12 @@ export default tseslint.config(
     },
   },
   {
-    name: 'aurora/quality-tooling',
-    files: ['tools/quality/**/*.{js,mjs,cjs}'],
+    name: 'aurora/node-tooling',
+    files: ['tools/**/*.{js,mjs,cjs}'],
     languageOptions: {
       globals: {
         console: 'readonly',
+        process: 'readonly',
       },
     },
   },
