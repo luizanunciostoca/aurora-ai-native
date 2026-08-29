@@ -1,7 +1,4 @@
-export {
-  validateCanonicalError,
-  validateExecutionResult,
-} from './runtime-schema';
+export { validateCanonicalError, validateExecutionResult } from './runtime-schema';
 export type {
   ResultsPrimitiveValidators,
   ResultsValidationIssue,
