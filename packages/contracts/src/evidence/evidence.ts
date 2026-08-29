@@ -1,20 +1,11 @@
-import type {
-  ActionIntentId,
-  EvidenceId,
-  ExecutionId,
-  ReceiptId,
-} from '../ids/index.js';
+import type { ActionIntentId, EvidenceId, ExecutionId, ReceiptId } from '../ids/index.js';
 import type {
   CorrelationContext,
   DataClassification,
   IdentityReference,
 } from '../context/index.js';
 import type { ContractVersion } from '../versioning/index.js';
-import type {
-  ExternalReference,
-  JsonObject,
-  RestrictedMetadata,
-} from '../actions/index.js';
+import type { ExternalReference, JsonObject, RestrictedMetadata } from '../actions/index.js';
 
 export type EvidenceSubject =
   | Readonly<{ kind: 'ACTION_INTENT'; actionIntentId: ActionIntentId }>

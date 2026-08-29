@@ -1,5 +1,14 @@
-import type { ActionIntentId, EvidenceId, ExecutionId, ReceiptId } from '../../../contracts/src/ids/index.js';
-import type { CorrelationContext, DataClassification, IdentityReference } from '../../../contracts/src/context/index.js';
+import type {
+  ActionIntentId,
+  EvidenceId,
+  ExecutionId,
+  ReceiptId,
+} from '../../../contracts/src/ids/index.js';
+import type {
+  CorrelationContext,
+  DataClassification,
+  IdentityReference,
+} from '../../../contracts/src/context/index.js';
 import type { ContractVersion } from '../../../contracts/src/versioning/index.js';
 import { EvidenceSchema, type EvidenceSchemaDependencies } from './evidence.schema.js';
 
@@ -88,11 +97,17 @@ assert(parsed.subject.kind === 'ACTION_INTENT', 'Evidence must retain subject li
 assert(parsed.verification.state === 'VERIFIED', 'Evidence verification state must be explicit');
 
 const roundTrip = EvidenceSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
-assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'Evidence serialization round trip must be stable');
+assert(
+  JSON.stringify(roundTrip) === JSON.stringify(parsed),
+  'Evidence serialization round trip must be stable',
+);
 
 const withoutSubject = JSON.parse(JSON.stringify(validEvidence)) as Record<string, unknown>;
 delete withoutSubject.subject;
-expectThrows(() => EvidenceSchema.parse(withoutSubject, dependencies), 'subject: missing required field');
+expectThrows(
+  () => EvidenceSchema.parse(withoutSubject, dependencies),
+  'subject: missing required field',
+);
 
 expectThrows(
   () => EvidenceSchema.parse({ ...validEvidence, evidenceType: 'LOG' }, dependencies),
@@ -145,4 +160,3 @@ expectThrows(
   () => EvidenceSchema.parse({ ...validEvidence, schemaVersion: '9.0.0' }, dependencies),
   'unsupported ContractVersion',
 );
-

@@ -40,7 +40,11 @@ const dependencies: ReceiptSchemaDependencies = {
     return input as CorrelationContext;
   },
   parseExecutionOutcome(input) {
-    if (!['SUCCEEDED', 'FAILED', 'REJECTED', 'CANCELLED', 'EXECUTION_UNCERTAIN'].includes(String(input))) {
+    if (
+      !['SUCCEEDED', 'FAILED', 'REJECTED', 'CANCELLED', 'EXECUTION_UNCERTAIN'].includes(
+        String(input),
+      )
+    ) {
       throw new TypeError('unsupported ExecutionOutcome');
     }
     return input as ExecutionOutcome;
@@ -67,15 +71,27 @@ const validReceipt = {
 } as const;
 
 const parsed = ReceiptSchema.parse(validReceipt, dependencies);
-assert(parsed.actionIntentId === validReceipt.actionIntentId, 'Receipt must link to canonical ActionIntent');
-assert(parsed.executionOutcome === 'SUCCEEDED', 'Receipt must reuse canonical execution outcome semantics');
+assert(
+  parsed.actionIntentId === validReceipt.actionIntentId,
+  'Receipt must link to canonical ActionIntent',
+);
+assert(
+  parsed.executionOutcome === 'SUCCEEDED',
+  'Receipt must reuse canonical execution outcome semantics',
+);
 
 const roundTrip = ReceiptSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
-assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'Receipt serialization round trip must be stable');
+assert(
+  JSON.stringify(roundTrip) === JSON.stringify(parsed),
+  'Receipt serialization round trip must be stable',
+);
 
 const withoutIntent = JSON.parse(JSON.stringify(validReceipt)) as Record<string, unknown>;
 delete withoutIntent.actionIntentId;
-expectThrows(() => ReceiptSchema.parse(withoutIntent, dependencies), 'actionIntentId: missing required field');
+expectThrows(
+  () => ReceiptSchema.parse(withoutIntent, dependencies),
+  'actionIntentId: missing required field',
+);
 
 expectThrows(
   () => ReceiptSchema.parse({ ...validReceipt, externalEffectVerified: true }, dependencies),
@@ -114,4 +130,3 @@ expectThrows(
     ),
   'expected cor_ prefixed ID',
 );
-

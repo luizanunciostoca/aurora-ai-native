@@ -74,7 +74,9 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
       ? undefined
       : timestamp(record.acknowledgedAt, 'Receipt.acknowledgedAt');
   const returnedAt =
-    record.returnedAt === undefined ? undefined : timestamp(record.returnedAt, 'Receipt.returnedAt');
+    record.returnedAt === undefined
+      ? undefined
+      : timestamp(record.returnedAt, 'Receipt.returnedAt');
   if (acknowledgedAt && Date.parse(acknowledgedAt) < Date.parse(attemptedAt)) {
     throw new TypeError('Receipt.acknowledgedAt: cannot precede attemptedAt');
   }
@@ -91,7 +93,9 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
     receiptId: dependencies.parseReceiptId(record.receiptId),
     actionIntentId: dependencies.parseActionIntentId(record.actionIntentId),
     executionId:
-      record.executionId === undefined ? undefined : dependencies.parseExecutionId(record.executionId),
+      record.executionId === undefined
+        ? undefined
+        : dependencies.parseExecutionId(record.executionId),
     executor: {
       executor: nonEmptyString(executor.executor, 'Receipt.executor.executor', 256),
       instanceReference: optionalNonEmptyString(
@@ -126,7 +130,9 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
         ? undefined
         : externalReference(record.rawProviderDataReference, 'Receipt.rawProviderDataReference'),
     metadata:
-      record.metadata === undefined ? undefined : restrictedMetadata(record.metadata, 'Receipt.metadata'),
+      record.metadata === undefined
+        ? undefined
+        : restrictedMetadata(record.metadata, 'Receipt.metadata'),
   } as Receipt;
 }
 

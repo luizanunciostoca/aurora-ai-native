@@ -1,4 +1,9 @@
-import type { JsonObject, JsonPrimitive, JsonValue, RestrictedMetadata } from '../../../contracts/src/actions/index.js';
+import type {
+  JsonObject,
+  JsonPrimitive,
+  JsonValue,
+  RestrictedMetadata,
+} from '../../../contracts/src/actions/index.js';
 
 export type DependencyParser<T> = (input: unknown) => T;
 
@@ -61,12 +66,14 @@ function jsonValue(input: unknown, path: string, depth: number): JsonValue {
     if (!Number.isFinite(input)) return fail(path, 'number must be finite');
     return input;
   }
-  if (Array.isArray(input)) return input.map((value, index) => jsonValue(value, `${path}[${index}]`, depth + 1));
+  if (Array.isArray(input))
+    return input.map((value, index) => jsonValue(value, `${path}[${index}]`, depth + 1));
   if (typeof input === 'object') {
     const source = input as Record<string, unknown>;
     const output: Record<string, JsonValue> = {};
     for (const [key, value] of Object.entries(source)) {
-      if (['__proto__', 'prototype', 'constructor'].includes(key)) fail(`${path}.${key}`, 'forbidden key');
+      if (['__proto__', 'prototype', 'constructor'].includes(key))
+        fail(`${path}.${key}`, 'forbidden key');
       output[key] = jsonValue(value, `${path}.${key}`, depth + 1);
     }
     return output;
@@ -79,10 +86,7 @@ export function jsonObject(input: unknown, path: string): JsonObject {
   return jsonValue(record, path, 0) as JsonObject;
 }
 
-export function restrictedMetadata(
-  input: unknown,
-  path: string,
-): RestrictedMetadata {
+export function restrictedMetadata(input: unknown, path: string): RestrictedMetadata {
   const record = asRecord(input, path);
   const entries = Object.entries(record);
   if (entries.length > 32) fail(path, 'maximum 32 metadata keys');

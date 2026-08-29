@@ -102,7 +102,9 @@ function source(
         : dependencies.parseIdentityReference(record.capturedBy),
     provider: optionalNonEmptyString(record.provider, `${path}.provider`, 128),
     reference:
-      record.reference === undefined ? undefined : externalReference(record.reference, `${path}.reference`),
+      record.reference === undefined
+        ? undefined
+        : externalReference(record.reference, `${path}.reference`),
   };
 }
 
@@ -118,9 +120,13 @@ function verification(
     throw new TypeError(`${path}.state: unsupported verification state`);
   }
   const verifiedAt =
-    record.verifiedAt === undefined ? undefined : timestamp(record.verifiedAt, `${path}.verifiedAt`);
+    record.verifiedAt === undefined
+      ? undefined
+      : timestamp(record.verifiedAt, `${path}.verifiedAt`);
   const verifier =
-    record.verifier === undefined ? undefined : dependencies.parseIdentityReference(record.verifier);
+    record.verifier === undefined
+      ? undefined
+      : dependencies.parseIdentityReference(record.verifier);
   const method = optionalNonEmptyString(record.method, `${path}.method`, 256);
   if (record.state === 'VERIFIED' && (!verifiedAt || !verifier || !method)) {
     throw new TypeError(`${path}: VERIFIED requires verifiedAt, verifier, and method`);
@@ -230,10 +236,17 @@ function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Eviden
     sourceReference:
       provenanceRecord.sourceReference === undefined
         ? undefined
-        : externalReference(provenanceRecord.sourceReference, 'Evidence.provenance.sourceReference'),
+        : externalReference(
+            provenanceRecord.sourceReference,
+            'Evidence.provenance.sourceReference',
+          ),
     parentEvidenceReferences,
   };
-  if (!provenance.capturedBy && !provenance.sourceReference && !provenance.parentEvidenceReferences?.length) {
+  if (
+    !provenance.capturedBy &&
+    !provenance.sourceReference &&
+    !provenance.parentEvidenceReferences?.length
+  ) {
     throw new TypeError('Evidence.provenance: at least one provenance reference is required');
   }
 
@@ -248,13 +261,20 @@ function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Eviden
     capturedAt,
     source: source(record.source, 'Evidence.source', dependencies),
     correlation: dependencies.parseCorrelationContext(record.correlation),
-    verification: verification(record.verification, 'Evidence.verification', capturedAt, dependencies),
+    verification: verification(
+      record.verification,
+      'Evidence.verification',
+      capturedAt,
+      dependencies,
+    ),
     readback,
     integrity,
     provenance,
     dataClassification: dependencies.parseDataClassification(record.dataClassification),
     metadata:
-      record.metadata === undefined ? undefined : restrictedMetadata(record.metadata, 'Evidence.metadata'),
+      record.metadata === undefined
+        ? undefined
+        : restrictedMetadata(record.metadata, 'Evidence.metadata'),
   } as Evidence;
 }
 

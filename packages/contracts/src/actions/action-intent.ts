@@ -1,9 +1,4 @@
-import type {
-  ActionIntentId,
-  OwnerDecisionId,
-  PolicyTokenId,
-  TenantId,
-} from '../ids/index.js';
+import type { ActionIntentId, OwnerDecisionId, PolicyTokenId, TenantId } from '../ids/index.js';
 import type { ContractVersion } from '../versioning/index.js';
 import type {
   CorrelationContext,
@@ -55,4 +50,3 @@ export interface ActionIntent {
   readonly dataClassification: DataClassification;
   readonly metadata?: RestrictedMetadata;
 }
-

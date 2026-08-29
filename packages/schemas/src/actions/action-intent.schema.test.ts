@@ -1,5 +1,14 @@
-import type { ActionIntentId, OwnerDecisionId, PolicyTokenId, TenantId } from '../../../contracts/src/ids/index.js';
-import type { CorrelationContext, DataClassification, IdentityReference } from '../../../contracts/src/context/index.js';
+import type {
+  ActionIntentId,
+  OwnerDecisionId,
+  PolicyTokenId,
+  TenantId,
+} from '../../../contracts/src/ids/index.js';
+import type {
+  CorrelationContext,
+  DataClassification,
+  IdentityReference,
+} from '../../../contracts/src/context/index.js';
 import type { ContractVersion } from '../../../contracts/src/versioning/index.js';
 import { ActionIntentSchema, type ActionIntentSchemaDependencies } from './action-intent.schema.js';
 
@@ -82,11 +91,17 @@ const validIntent = {
 } as const;
 
 const parsed = ActionIntentSchema.parse(validIntent, dependencies);
-assert(parsed.actionIntentId === validIntent.actionIntentId, 'valid ActionIntent must retain canonical ID');
+assert(
+  parsed.actionIntentId === validIntent.actionIntentId,
+  'valid ActionIntent must retain canonical ID',
+);
 assert(parsed.idempotency.mode === 'REQUIRED', 'valid ActionIntent must retain idempotency mode');
 
 const roundTrip = ActionIntentSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
-assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'ActionIntent serialization round trip must be stable');
+assert(
+  JSON.stringify(roundTrip) === JSON.stringify(parsed),
+  'ActionIntent serialization round trip must be stable',
+);
 
 expectThrows(
   () =>
@@ -138,4 +153,3 @@ expectThrows(
   () => ActionIntentSchema.parse({ ...validIntent, unexpected: true }, dependencies),
   'unexpected: unknown field',
 );
-

@@ -56,7 +56,11 @@ function providerBinding(input: unknown, path: string): ProviderBinding {
   return {
     provider: nonEmptyString(record.provider, `${path}.provider`, 128),
     targetType: optionalNonEmptyString(record.targetType, `${path}.targetType`, 128),
-    targetReference: optionalNonEmptyString(record.targetReference, `${path}.targetReference`, 1024),
+    targetReference: optionalNonEmptyString(
+      record.targetReference,
+      `${path}.targetReference`,
+      1024,
+    ),
   };
 }
 
@@ -84,9 +88,18 @@ function preconditions(input: unknown, path: string): readonly ActionPreconditio
   return input.map((raw, index) => {
     const itemPath = `${path}[${index}]`;
     const record = asRecord(raw, itemPath);
-    exactKeys(record, ['preconditionType', 'parameters'], ['preconditionType', 'parameters'], itemPath);
+    exactKeys(
+      record,
+      ['preconditionType', 'parameters'],
+      ['preconditionType', 'parameters'],
+      itemPath,
+    );
     return {
-      preconditionType: nonEmptyString(record.preconditionType, `${itemPath}.preconditionType`, 256),
+      preconditionType: nonEmptyString(
+        record.preconditionType,
+        `${itemPath}.preconditionType`,
+        256,
+      ),
       parameters: jsonObject(record.parameters, `${itemPath}.parameters`),
     };
   });
@@ -174,7 +187,8 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
     ],
     'ActionIntent',
   );
-  if (record.kind !== 'ACTION_INTENT') throw new TypeError('ActionIntent.kind: expected ACTION_INTENT');
+  if (record.kind !== 'ACTION_INTENT')
+    throw new TypeError('ActionIntent.kind: expected ACTION_INTENT');
 
   let executionClassification: ActionIntent['executionClassification'];
   if (record.executionClassification !== undefined) {
@@ -197,8 +211,13 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
         512,
       ),
     };
-    if (!executionClassification.riskClassificationRef && !executionClassification.sideEffectClassificationRef) {
-      throw new TypeError('ActionIntent.executionClassification: at least one reference is required');
+    if (
+      !executionClassification.riskClassificationRef &&
+      !executionClassification.sideEffectClassificationRef
+    ) {
+      throw new TypeError(
+        'ActionIntent.executionClassification: at least one reference is required',
+      );
     }
   }
 
@@ -227,7 +246,9 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
     executionClassification,
     dataClassification: dependencies.parseDataClassification(record.dataClassification),
     metadata:
-      record.metadata === undefined ? undefined : restrictedMetadata(record.metadata, 'ActionIntent.metadata'),
+      record.metadata === undefined
+        ? undefined
+        : restrictedMetadata(record.metadata, 'ActionIntent.metadata'),
   } as ActionIntent;
 }
 
