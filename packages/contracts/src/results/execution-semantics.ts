@@ -1,4 +1,4 @@
-import type { CanonicalError } from './error-semantics.ts';
+import type { CanonicalError } from './error-semantics';
 
 /**
  * Canonical execution outcome vocabulary owned exclusively by W01-E.
