@@ -1,6 +1,6 @@
 name: Governance change
 description: Propose a change to Git workflow, ownership, branch rules or repository governance.
-title: "chore: governance — "
+title: 'chore: governance — '
 labels: []
 body:
   - type: input
