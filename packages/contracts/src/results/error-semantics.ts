@@ -87,7 +87,7 @@ export const ERROR_CODE_DEFINITIONS = {
   {
     readonly category: ErrorCategory;
     readonly retryability: RetryClassification;
-  },
+  }
 >;
 
 export type ErrorCode = keyof typeof ERROR_CODE_DEFINITIONS;
@@ -117,11 +117,7 @@ export type SafeErrorDetails = Readonly<Record<string, SafeErrorDetailValue>>;
  * and CorrelationId, while W01-D owns data-classification semantics. W01-E
  * must compose those authorities without redefining them locally.
  */
-export interface CanonicalError<
-  TContractVersion,
-  TCorrelationId,
-  TDataClassification = never,
-> {
+export interface CanonicalError<TContractVersion, TCorrelationId, TDataClassification = never> {
   readonly kind: 'CanonicalError';
   readonly schemaVersion: TContractVersion;
   readonly code: ErrorCode;
