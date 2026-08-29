@@ -44,7 +44,10 @@ function assertFailureCode<T>(
   message: string,
 ): void {
   assert(!result.success, `${message}: expected failure`);
-  assert(result.issues.some((issue) => issue.code === code), `${message}: missing ${code}`);
+  assert(
+    result.issues.some((issue) => issue.code === code),
+    `${message}: missing ${code}`,
+  );
 }
 
 function makeError(
@@ -193,7 +196,10 @@ function testOutcomeVocabulary(): void {
     'VERIFIED',
     'FAILED',
   ];
-  assert(JSON.stringify(EXECUTION_OUTCOMES) === JSON.stringify(expected), 'canonical outcome vocabulary');
+  assert(
+    JSON.stringify(EXECUTION_OUTCOMES) === JSON.stringify(expected),
+    'canonical outcome vocabulary',
+  );
 
   const unknownOutcome = {
     kind: 'ExecutionResult',
@@ -217,7 +223,10 @@ function testSerialization(): void {
     validateCanonicalError(parsed, primitives),
     'serialized CanonicalError round trip',
   );
-  assert(JSON.stringify(validated) === serialized, 'CanonicalError round trip must preserve wire shape');
+  assert(
+    JSON.stringify(validated) === serialized,
+    'CanonicalError round trip must preserve wire shape',
+  );
 
   const result: ExecutionResult<TestContractVersion, TestCorrelationId, TestClassification> = {
     kind: 'ExecutionResult',
