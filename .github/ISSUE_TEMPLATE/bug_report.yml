@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a reproducible defect against an exact Aurora AI-Native revision.
+title: "fix: "
+labels: []
+body:
+  - type: input
+    id: wave
+    attributes:
+      label: Wave ID / affected scope
+      description: Use the owning or affected wave when known.
+      placeholder: W00 / W01 / unknown
+    validations:
+      required: true
+  - type: input
+    id: sha
+    attributes:
+      label: Exact SHA
+      description: Commit SHA where the defect was observed.
+      placeholder: 40-character commit SHA
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: What happened? Do not include secrets, credentials or sensitive personal data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction / evidence
+      description: Minimal steps, commands, logs or artifacts needed to reproduce. Redact sensitive values.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk area
+      options:
+        - Runtime / product behavior
+        - Contracts / schemas
+        - Data / migration
+        - Security / authority
+        - CI / build / test
+        - Infrastructure / deployment
+        - Documentation / governance
+        - Unknown
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Submission checks
+      options:
+        - label: I did not include secrets, tokens or credentials.
+          required: true
+        - label: I checked for an existing issue or active wave covering the same defect.
+          required: true
