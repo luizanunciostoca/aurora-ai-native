@@ -1,0 +1,12 @@
+﻿source,target,disposition,notes
+02_AURORA_MANUS_EXISTING_CODE/face,apps/aurora-desktop/legacy-reference/face,ADAPT,Preserve desktop UI reference; visual source for Android Presence Mode.
+02_AURORA_MANUS_EXISTING_CODE/dashboard,apps/aurora-web/legacy-reference/dashboard,ADAPT,Preserve dashboard UX; backend/data paths must be replaced by TOCA read models and APIs.
+face/interface,apps/aurora-android/reference/legacy-presence-ui/interface,REFERENCE_FOR_PORT,Port visual identity to React Native; do not port Electron runtime directly.
+dashboard/assets,apps/aurora-android/reference/legacy-dashboard-ui/assets,REFERENCE_FOR_PORT,Reference styles/layouts for tablet Workspace.
+manus/src/aurora_bridge/AuroraBridgeInterface.py,services/aurora-gateway/legacy-reference/AuroraBridgeInterface.py,ADAPT_REFERENCE,Message/event semantics reference; replace stdin/stdout bridge with typed API/WebSocket contracts.
+02_AURORA_MANUS_EXISTING_CODE/manus,services/agent-runtime/legacy-manus-reference/manus,REWRITE/ADAPT,"Extract micro-loop, tools, reflection concepts; do not deploy legacy Manus as enterprise orchestrator."
+03_N8N_PATTERN_LIBRARY/workflows,catalog/n8n/source-library/workflows,REUSE_WITH_GOVERNANCE,"2,053 workflow pattern library; every workflow requires audit/binding/policy before activation."
+selected marketing/revenue n8n workflows,catalog/n8n/curated-candidates,CANDIDATE,Automatically curated by filename relevance; still requires manual/runtime validation.
+01_MANUAIS,docs/manuals,CANONICAL_REFERENCE,Architecture/developer manuals.
+04_INVENTARIOS_AUDITORIA,docs/inventories,AUDIT_REFERENCE,Existing source and workflow inventories.
+05_SOURCE_ARCHIVES_REFERENCE,reference/source-archives,REFERENCE_ONLY,Original source archives; may contain sensitive/historical material.

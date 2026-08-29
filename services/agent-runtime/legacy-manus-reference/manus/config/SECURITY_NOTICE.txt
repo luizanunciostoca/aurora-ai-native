@@ -1,0 +1,1 @@
+settings.py was intentionally excluded from the curated development tree because a hardcoded API credential was identified during audit. Rotate/revoke the credential and re-create configuration using environment variables or a managed secret store.

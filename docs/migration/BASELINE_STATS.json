@@ -1,0 +1,7 @@
+{
+  "version": "0.3",
+  "total_files_before_checksum": 2596,
+  "curated_n8n_candidates": 78,
+  "architecture_status": "SCAFFOLD_REORGANIZED_NOT_RUNTIME_COMPLETE",
+  "source_baseline": "AURORA_AI_NATIVE_DEVELOPMENT_BASE_v0.2"
+}
