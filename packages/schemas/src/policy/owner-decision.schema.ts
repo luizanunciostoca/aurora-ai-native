@@ -1,4 +1,4 @@
-import type { OwnerDecision } from "@aurora/contracts/policy";
+import type { OwnerDecision } from '@aurora/contracts/policy';
 
 import {
   asRecord,
@@ -13,67 +13,71 @@ import {
   requireRfc3339,
   requireScope,
   requireSubject,
-} from "./validation.ts";
+} from './validation.js';
 
-const OWNER_DECISION_STATES = new Set(["APPROVED", "DENIED", "REVOKED", "EXPIRED"]);
+const OWNER_DECISION_STATES = new Set(['APPROVED', 'DENIED', 'REVOKED', 'EXPIRED']);
 
 const OWNER_DECISION_KEYS = [
-  "kind",
-  "schemaVersion",
-  "decisionId",
-  "subject",
-  "decision",
-  "actor",
-  "tenant",
-  "decidedAt",
-  "scope",
-  "constraints",
-  "expiresAt",
-  "correlation",
-  "reason",
-  "reasonReference",
-  "authenticationReference",
+  'kind',
+  'schemaVersion',
+  'decisionId',
+  'subject',
+  'decision',
+  'actor',
+  'tenant',
+  'decidedAt',
+  'scope',
+  'constraints',
+  'expiresAt',
+  'correlation',
+  'reason',
+  'reasonReference',
+  'authenticationReference',
 ] as const;
 
 function parseOwnerDecision(input: unknown): OwnerDecision {
-  const value = asRecord(input, "OwnerDecision");
-  assertKnownKeys(value, OWNER_DECISION_KEYS, "OwnerDecision");
+  const value = asRecord(input, 'OwnerDecision');
+  assertKnownKeys(value, OWNER_DECISION_KEYS, 'OwnerDecision');
 
-  if (value.kind !== "OWNER_DECISION") {
-    throw new TypeError("OwnerDecision.kind must be OWNER_DECISION");
+  if (value.kind !== 'OWNER_DECISION') {
+    throw new TypeError('OwnerDecision.kind must be OWNER_DECISION');
   }
 
   requireContractVersion(value.schemaVersion);
-  requireNonEmptyString(value.decisionId, "decisionId");
+  requireNonEmptyString(value.decisionId, 'decisionId');
   requireSubject(value.subject);
 
-  const decision = requireNonEmptyString(value.decision, "decision");
+  const decision = requireNonEmptyString(value.decision, 'decision');
   if (!OWNER_DECISION_STATES.has(decision)) {
     throw new TypeError(`unknown OwnerDecision decision: ${decision}`);
   }
 
-  requireOpaqueContext(value.actor, "actor");
-  requireOpaqueContext(value.tenant, "tenant");
-  const decidedAt = requireRfc3339(value.decidedAt, "decidedAt");
+  requireOpaqueContext(value.actor, 'actor');
+  requireOpaqueContext(value.tenant, 'tenant');
+  const decidedAt = requireRfc3339(value.decidedAt, 'decidedAt');
   requireScope(value.scope);
   optionalConstraints(value.constraints);
   const expiresAt =
-    value.expiresAt === undefined ? undefined : requireRfc3339(value.expiresAt, "expiresAt");
-  requireOpaqueContext(value.correlation, "correlation");
-  optionalNonEmptyString(value.reason, "reason");
-  optionalNonEmptyString(value.reasonReference, "reasonReference");
-  optionalNonEmptyString(value.authenticationReference, "authenticationReference");
+    value.expiresAt === undefined ? undefined : requireRfc3339(value.expiresAt, 'expiresAt');
+  requireOpaqueContext(value.correlation, 'correlation');
+  optionalNonEmptyString(value.reason, 'reason');
+  optionalNonEmptyString(value.reasonReference, 'reasonReference');
+  optionalNonEmptyString(value.authenticationReference, 'authenticationReference');
 
-  if (decision === "APPROVED" && expiresAt !== undefined && compareRfc3339(expiresAt, decidedAt) <= 0) {
-    throw new TypeError("APPROVED OwnerDecision expiresAt must be later than decidedAt");
+  if (
+    decision === 'APPROVED' &&
+    expiresAt !== undefined &&
+    compareRfc3339(expiresAt, decidedAt) <= 0
+  ) {
+    throw new TypeError('APPROVED OwnerDecision expiresAt must be later than decidedAt');
   }
 
-  if (decision === "EXPIRED") {
+  if (decision === 'EXPIRED') {
     if (expiresAt === undefined) {
-      throw new TypeError("EXPIRED OwnerDecision requires expiresAt");
+      throw new TypeError('EXPIRED OwnerDecision requires expiresAt');
     }
     if (compareRfc3339(expiresAt, decidedAt) > 0) {
-      throw new TypeError("EXPIRED OwnerDecision expiresAt must not be later than decidedAt");
+      throw new TypeError('EXPIRED OwnerDecision expiresAt must not be later than decidedAt');
     }
   }
 
@@ -85,7 +89,7 @@ function serializeOwnerDecision(input: unknown): string {
 }
 
 function deserializeOwnerDecision(serialized: string): OwnerDecision {
-  return parseOwnerDecision(parseJsonObject(serialized, "OwnerDecision serialization"));
+  return parseOwnerDecision(parseJsonObject(serialized, 'OwnerDecision serialization'));
 }
 
 export const OwnerDecisionSchema = Object.freeze({

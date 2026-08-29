@@ -1,15 +1,15 @@
-import type { CorrelationContext, IdentityReference, TenantContext } from "../context/index.js";
-import type { OwnerDecisionId } from "../ids/index.js";
-import type { ContractVersion } from "../versioning/index.js";
+import type { CorrelationContext, IdentityReference, TenantContext } from '../context/index.js';
+import type { OwnerDecisionId } from '../ids/index.js';
+import type { ContractVersion } from '../versioning/index.js';
 
 import type {
   AuthorityConstraints,
   AuthorityScope,
   AuthoritySubjectReference,
   OwnerDecisionState,
-} from "./authority-primitives.js";
+} from './authority-primitives.js';
 
-export const OWNER_DECISION_KIND = "OWNER_DECISION" as const;
+export const OWNER_DECISION_KIND = 'OWNER_DECISION' as const;
 
 /**
  * Auditable authorized/human decision over an explicit subject and scope.

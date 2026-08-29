@@ -1,2 +1,2 @@
-export { OwnerDecisionSchema } from "./owner-decision.schema.ts";
-export { PolicyTokenSchema } from "./policy-token.schema.ts";
+export { OwnerDecisionSchema } from './owner-decision.schema.js';
+export { PolicyTokenSchema } from './policy-token.schema.js';

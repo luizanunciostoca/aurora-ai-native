@@ -1,13 +1,8 @@
-export const OWNER_DECISION_STATES = [
-  "APPROVED",
-  "DENIED",
-  "REVOKED",
-  "EXPIRED",
-] as const;
+export const OWNER_DECISION_STATES = ['APPROVED', 'DENIED', 'REVOKED', 'EXPIRED'] as const;
 
 export type OwnerDecisionState = (typeof OWNER_DECISION_STATES)[number];
 
-export const AUTHORITY_CLASSES = ["OWNER_DECISION", "POLICY_GRANT"] as const;
+export const AUTHORITY_CLASSES = ['OWNER_DECISION', 'POLICY_RULE'] as const;
 
 export type AuthorityClass = (typeof AUTHORITY_CLASSES)[number];
 

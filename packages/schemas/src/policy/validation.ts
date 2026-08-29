@@ -2,27 +2,27 @@ import type {
   AuthorityConstraints,
   AuthoritySubjectReference,
   PolicyReference,
-} from "@aurora/contracts/policy";
+} from '@aurora/contracts/policy';
 
 const RFC3339_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 const CONTRACT_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
 
 const SENSITIVE_KEYS = new Set([
-  "apikey",
-  "accesstoken",
-  "bearertoken",
-  "credential",
-  "credentials",
-  "password",
-  "privatekey",
-  "providertoken",
-  "refreshtoken",
-  "secret",
+  'apikey',
+  'accesstoken',
+  'bearertoken',
+  'credential',
+  'credentials',
+  'password',
+  'privatekey',
+  'providertoken',
+  'refreshtoken',
+  'secret',
 ]);
 
 export function asRecord(value: unknown, label: string): Record<string, unknown> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
   }
 
@@ -43,7 +43,7 @@ export function assertKnownKeys(
 }
 
 export function requireNonEmptyString(value: unknown, label: string): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     throw new TypeError(`${label} must be a non-empty string`);
   }
 
@@ -59,9 +59,9 @@ export function optionalNonEmptyString(value: unknown, label: string): string | 
 }
 
 export function requireContractVersion(value: unknown): string {
-  const version = requireNonEmptyString(value, "schemaVersion");
+  const version = requireNonEmptyString(value, 'schemaVersion');
   if (!CONTRACT_VERSION_PATTERN.test(version)) {
-    throw new TypeError("schemaVersion must use major.minor.patch wire version syntax");
+    throw new TypeError('schemaVersion must use major.minor.patch wire version syntax');
   }
 
   return version;
@@ -86,31 +86,31 @@ export function requireOpaqueContext(value: unknown, label: string): Record<stri
 }
 
 export function requireSubject(value: unknown): AuthoritySubjectReference {
-  const subject = asRecord(value, "subject");
-  assertKnownKeys(subject, ["reference", "referenceType"], "subject");
-  requireNonEmptyString(subject.reference, "subject.reference");
-  optionalNonEmptyString(subject.referenceType, "subject.referenceType");
+  const subject = asRecord(value, 'subject');
+  assertKnownKeys(subject, ['reference', 'referenceType'], 'subject');
+  requireNonEmptyString(subject.reference, 'subject.reference');
+  optionalNonEmptyString(subject.referenceType, 'subject.referenceType');
   return subject as unknown as AuthoritySubjectReference;
 }
 
 export function requireScope(value: unknown): readonly string[] {
   if (!Array.isArray(value) || value.length === 0) {
-    throw new TypeError("scope must be a non-empty array");
+    throw new TypeError('scope must be a non-empty array');
   }
 
   const scopes = value.map((entry, index) => requireNonEmptyString(entry, `scope[${index}]`));
   if (new Set(scopes).size !== scopes.length) {
-    throw new TypeError("scope must not contain duplicate entries");
+    throw new TypeError('scope must not contain duplicate entries');
   }
 
   return scopes;
 }
 
 export function requirePolicyReference(value: unknown): PolicyReference {
-  const policy = asRecord(value, "policy");
-  assertKnownKeys(policy, ["reference", "version"], "policy");
-  requireNonEmptyString(policy.reference, "policy.reference");
-  requireNonEmptyString(policy.version, "policy.version");
+  const policy = asRecord(value, 'policy');
+  assertKnownKeys(policy, ['reference', 'version'], 'policy');
+  requireNonEmptyString(policy.reference, 'policy.reference');
+  requireNonEmptyString(policy.version, 'policy.version');
   return policy as unknown as PolicyReference;
 }
 
@@ -119,8 +119,8 @@ export function optionalConstraints(value: unknown): AuthorityConstraints | unde
     return undefined;
   }
 
-  const constraints = asRecord(value, "constraints");
-  assertJsonCompatibleAndSecretFree(constraints, "constraints", new WeakSet<object>());
+  const constraints = asRecord(value, 'constraints');
+  assertJsonCompatibleAndSecretFree(constraints, 'constraints', new WeakSet<object>());
   return constraints as unknown as AuthorityConstraints;
 }
 
@@ -129,15 +129,11 @@ function assertJsonCompatibleAndSecretFree(
   path: string,
   seen: WeakSet<object>,
 ): void {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "boolean"
-  ) {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
     return;
   }
 
-  if (typeof value === "number") {
+  if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
       throw new TypeError(`${path} contains a non-finite number`);
     }
@@ -156,13 +152,13 @@ function assertJsonCompatibleAndSecretFree(
     return;
   }
 
-  if (typeof value === "object" && value !== null) {
+  if (typeof value === 'object' && value !== null) {
     if (seen.has(value)) {
       throw new TypeError(`${path} must be acyclic JSON data`);
     }
     seen.add(value);
     for (const [key, entry] of Object.entries(value)) {
-      const normalizedKey = key.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+      const normalizedKey = key.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
       if (SENSITIVE_KEYS.has(normalizedKey)) {
         throw new TypeError(`${path} may not contain credential or secret material`);
       }

@@ -1,6 +1,6 @@
-import type { CorrelationContext, TenantContext } from "../context/index.js";
-import type { OwnerDecisionId, PolicyTokenId } from "../ids/index.js";
-import type { ContractVersion } from "../versioning/index.js";
+import type { CorrelationContext, TenantContext } from '../context/index.js';
+import type { OwnerDecisionId, PolicyTokenId } from '../ids/index.js';
+import type { ContractVersion } from '../versioning/index.js';
 
 import type {
   AuthorityClass,
@@ -8,9 +8,9 @@ import type {
   AuthorityScope,
   AuthoritySubjectReference,
   PolicyReference,
-} from "./authority-primitives.js";
+} from './authority-primitives.js';
 
-export const POLICY_TOKEN_KIND = "POLICY_TOKEN" as const;
+export const POLICY_TOKEN_KIND = 'POLICY_TOKEN' as const;
 
 /**
  * Portable authorization result already evaluated by the future Policy Core.
@@ -30,7 +30,10 @@ export interface PolicyToken {
   readonly scope: AuthorityScope;
   /** RFC3339 timestamp validated by @aurora/schemas. */
   readonly issuedAt: string;
-  /** RFC3339 timestamp; must be later than issuedAt and can be invalidated at a supplied evaluation time. */
+  /**
+   * RFC3339 timestamp; must be later than issuedAt and can be invalidated at a
+   * supplied evaluation time.
+   */
   readonly expiresAt: string;
   readonly policy: PolicyReference;
   readonly constraints?: AuthorityConstraints;
