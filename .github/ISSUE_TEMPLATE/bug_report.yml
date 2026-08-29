@@ -1,6 +1,6 @@
 name: Bug report
 description: Report a reproducible defect against an exact Aurora AI-Native revision.
-title: "fix: "
+title: 'fix: '
 labels: []
 body:
   - type: input
