@@ -8,8 +8,17 @@ const qualityDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(qualityDir, '../..');
 const canonicalRoots = ['apps', 'services', 'packages', 'catalog', 'infra', 'evals'];
 const ignoredDirectoryNames = new Set([
-  'node_modules', 'dist', 'build', 'coverage', '.cache', '.turbo', '.next', '.expo',
-  'reference', 'legacy-reference', 'legacy-manus-reference',
+  'node_modules',
+  'dist',
+  'build',
+  'coverage',
+  '.cache',
+  '.turbo',
+  '.next',
+  '.expo',
+  'reference',
+  'legacy-reference',
+  'legacy-manus-reference',
 ]);
 
 function localBinary(name) {
@@ -20,7 +29,9 @@ function localBinary(name) {
 function runBinary(name, args) {
   const binary = localBinary(name);
   if (!existsSync(binary)) {
-    console.error(`QUALITY_TOOL_MISSING: ${name} was not found at ${path.relative(rootDir, binary)}. Run npm ci first.`);
+    console.error(
+      `QUALITY_TOOL_MISSING: ${name} was not found at ${path.relative(rootDir, binary)}. Run npm ci first.`,
+    );
     return 127;
   }
   const result = spawnSync(binary, args, { cwd: rootDir, stdio: 'inherit' });
@@ -47,10 +58,13 @@ function typecheck() {
   const projects = [];
   const rootProject = path.join(rootDir, 'tsconfig.json');
   if (existsSync(rootProject)) projects.push(rootProject);
-  for (const rootName of canonicalRoots) collectTypeScriptProjects(path.join(rootDir, rootName), projects);
+  for (const rootName of canonicalRoots)
+    collectTypeScriptProjects(path.join(rootDir, rootName), projects);
   const uniqueProjects = [...new Set(projects)].sort();
   if (uniqueProjects.length === 0) {
-    console.log('TYPECHECK_NO_PROJECTS_YET: no canonical tsconfig.json exists in runtime roots; tsconfig.base.json is ready.');
+    console.log(
+      'TYPECHECK_NO_PROJECTS_YET: no canonical tsconfig.json exists in runtime roots; tsconfig.base.json is ready.',
+    );
     return 0;
   }
   for (const project of uniqueProjects) {
@@ -73,8 +87,11 @@ function runAll() {
 }
 
 const commands = new Map([
-  ['format:check', formatCheck], ['format:write', formatWrite], ['lint', lint],
-  ['typecheck', typecheck], ['all', runAll],
+  ['format:check', formatCheck],
+  ['format:write', formatWrite],
+  ['lint', lint],
+  ['typecheck', typecheck],
+  ['all', runAll],
 ]);
 const command = process.argv[2];
 if (!commands.has(command)) {

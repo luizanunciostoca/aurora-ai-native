@@ -99,17 +99,22 @@ export function validateWorkspace() {
   }
 
   for (const root of canonicalRoots) {
-    if (!fs.existsSync(path.join(repoRoot, root))) errors.push(`missing canonical workspace root: ${root}/`);
+    if (!fs.existsSync(path.join(repoRoot, root)))
+      errors.push(`missing canonical workspace root: ${root}/`);
   }
 
-  if (!fs.existsSync(path.join(repoRoot, 'package-lock.json'))) errors.push('missing canonical package-lock.json');
+  if (!fs.existsSync(path.join(repoRoot, 'package-lock.json')))
+    errors.push('missing canonical package-lock.json');
   for (const lockfile of competingRootLockfiles) {
-    if (fs.existsSync(path.join(repoRoot, lockfile))) errors.push(`competing root lockfile detected: ${lockfile}`);
+    if (fs.existsSync(path.join(repoRoot, lockfile)))
+      errors.push(`competing root lockfile detected: ${lockfile}`);
   }
 
   const discovery = discoverWorkspacePackages();
   if (discovery.unclassified.length) {
-    errors.push(`unclassified package.json outside canonical direct workspace boundary: ${discovery.unclassified.join(', ')}`);
+    errors.push(
+      `unclassified package.json outside canonical direct workspace boundary: ${discovery.unclassified.join(', ')}`,
+    );
   }
 
   if (discovery.excludedReferences.length === 0) {
