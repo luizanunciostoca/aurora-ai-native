@@ -153,9 +153,7 @@ test('OwnerDecision rejects missing or empty authority scope', () => {
 test('OwnerDecision EXPIRED state requires a non-future expiry', () => {
   assert.throws(
     () =>
-      OwnerDecisionValidator.parse(
-        ownerDecision({ decision: 'EXPIRED', expiresAt: undefined }),
-      ),
+      OwnerDecisionValidator.parse(ownerDecision({ decision: 'EXPIRED', expiresAt: undefined })),
     /requires expiresAt/,
   );
   assert.doesNotThrow(() =>
