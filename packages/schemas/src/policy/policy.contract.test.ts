@@ -131,10 +131,7 @@ test('OwnerDecision accepts canonical states and round-trips serialization', () 
 });
 
 test('OwnerDecision rejects unknown decision state', () => {
-  assert.throws(
-    () => OwnerDecisionValidator.parse(ownerDecision({ decision: 'MAYBE' })),
-    /unknown/,
-  );
+  assert.throws(() => OwnerDecisionValidator.parse(ownerDecision({ decision: 'MAYBE' })), /unknown/);
 });
 
 test('OwnerDecision rejects missing subject', () => {
@@ -152,7 +149,10 @@ test('OwnerDecision rejects missing or empty authority scope', () => {
 
 test('OwnerDecision EXPIRED state requires a non-future expiry', () => {
   assert.throws(
-    () => OwnerDecisionValidator.parse(ownerDecision({ decision: 'EXPIRED', expiresAt: undefined })),
+    () =>
+      OwnerDecisionValidator.parse(
+        ownerDecision({ decision: 'EXPIRED', expiresAt: undefined }),
+      ),
     /requires expiresAt/,
   );
   assert.doesNotThrow(() =>
@@ -196,7 +196,10 @@ test('PolicyToken delegates wire-version behavior to the canonical dependency', 
 
 test('PolicyToken round-trips serialization', () => {
   const parsed = PolicyTokenValidator.parse(policyToken());
-  assert.deepEqual(PolicyTokenValidator.deserialize(PolicyTokenValidator.serialize(parsed)), parsed);
+  assert.deepEqual(
+    PolicyTokenValidator.deserialize(PolicyTokenValidator.serialize(parsed)),
+    parsed,
+  );
 });
 
 test('PolicyToken rejects unknown authority class', () => {
@@ -221,7 +224,9 @@ test('PolicyToken rejects implicit authority, credentials, confidence and execut
   );
   assert.throws(
     () =>
-      PolicyTokenValidator.parse(policyToken({ constraints: { nestedClientSecret: 'secret-value' } })),
+      PolicyTokenValidator.parse(
+        policyToken({ constraints: { nestedClientSecret: 'secret-value' } }),
+      ),
     /credential or secret material/,
   );
 });
