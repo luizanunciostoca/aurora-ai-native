@@ -178,8 +178,7 @@ export function parseEnvelopeMetadata(input: unknown, path: string): EnvelopeMet
   const labelsInput = optionalOwn(record, 'labels');
   const extensionsInput = optionalOwn(record, 'extensions');
 
-  const labels =
-    labelsInput === undefined ? undefined : parseLabels(labelsInput, `${path}.labels`);
+  const labels = labelsInput === undefined ? undefined : parseLabels(labelsInput, `${path}.labels`);
   const extensions =
     extensionsInput === undefined
       ? undefined
