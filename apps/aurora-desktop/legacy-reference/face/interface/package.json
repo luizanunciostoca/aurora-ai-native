@@ -1,0 +1,89 @@
+{
+  "type": "module",
+  "name": "aurora-interface",
+  "version": "1.0.0",
+  "description": "Interface nativa Windows para o sistema Aurora inspirada no Jarvis",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "start-simple": "electron main.js",
+    "start-full": "electron main.js",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "test": "jest",
+    "test:jest": "jest --env=jsdom --setupFilesAfterEnv=./jest.setup.js",
+    "install-deps": "npm install",
+    "rebuild": "electron-rebuild"
+  },
+  "keywords": [
+    "aurora",
+    "jarvis",
+    "ai",
+    "interface",
+    "windows",
+    "transcendence"
+  ],
+  "author": "Aurora Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@testing-library/dom": "^9.3.4",
+    "@testing-library/jest-dom": "^6.4.2",
+    "electron": "^32.3.3",
+    "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9",
+    "jest": "^29.7.0",
+    "jsdom": "^24.0.0"
+  },
+  "jest": {
+    "testEnvironment": "jsdom",
+    "setupFilesAfterEnv": [
+      "<rootDir>/jest.setup.js"
+    ],
+    "moduleFileExtensions": [
+      "js",
+      "json"
+    ],
+    "testMatch": [
+      "**/?(*.)+(jest.test).[jt]s?(x)"
+    ]
+  },
+  "dependencies": {
+    "axios": "^1.10.0",
+    "events": "^3.3.0",
+    "fs-extra": "^11.1.1",
+    "node-record-lpcm16": "^1.0.1",
+    "puppeteer": "^24.12.1",
+    "say": "^0.16.0",
+    "screenshot-desktop": "^1.15.1",
+    "socket.io-client": "^4.8.1"
+  },
+  "build": {
+    "appId": "com.aurora.transcendente",
+    "productName": "Aurora Transcendente",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
+      "!node_modules/*.d.ts",
+      "!node_modules/.bin",
+      "!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}",
+      "!.editorconfig",
+      "!**/._*",
+      "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}",
+      "!**/{__pycache__,thumbs.db,.flowconfig,.idea,.vs,.nyc_output}",
+      "!**/{appveyor.yml,.travis.yml,circle.yml}",
+      "!**/{npm-debug.log,yarn.lock,.yarn-integrity,.yarn-metadata.json}"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/aurora-icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
