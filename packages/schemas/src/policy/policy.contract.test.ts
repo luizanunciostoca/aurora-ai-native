@@ -1,7 +1,73 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import type {
+  ActorRef,
+  CorrelationContext,
+  Rfc3339Timestamp,
+  TenantContext,
+} from '@aurora/contracts/context';
+import type { DecisionId, PolicyTokenId } from '@aurora/contracts/ids';
+import type { ContractVersion, Version } from '@aurora/contracts/versioning';
+
 import { OwnerDecisionSchema, PolicyTokenSchema } from './index.js';
+import type { PolicySchemaDependencies } from './index.js';
+
+function parseNonEmptyBranded<T extends string>(value: unknown, label: string): T {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new TypeError(`${label} invalid`);
+  }
+  return value as T;
+}
+
+const dependencies: PolicySchemaDependencies = {
+  contractVersion: {
+    parse: (value) => {
+      if (value !== '1.0.0') throw new TypeError('unsupported schemaVersion');
+      return value as ContractVersion;
+    },
+  },
+  decisionId: { parse: (value) => parseNonEmptyBranded<DecisionId>(value, 'decisionId') },
+  policyTokenId: {
+    parse: (value) => parseNonEmptyBranded<PolicyTokenId>(value, 'policyTokenId'),
+  },
+  actor: {
+    parse: (value) => {
+      if (typeof value !== 'object' || value === null || !('identityId' in value)) {
+        throw new TypeError('actor invalid');
+      }
+      return value as ActorRef;
+    },
+  },
+  tenant: {
+    parse: (value) => {
+      if (typeof value !== 'object' || value === null || !('tenantId' in value)) {
+        throw new TypeError('tenant invalid');
+      }
+      return value as TenantContext;
+    },
+  },
+  correlation: {
+    parse: (value) => {
+      if (typeof value !== 'object' || value === null || !('correlationId' in value)) {
+        throw new TypeError('correlation invalid');
+      }
+      return value as CorrelationContext;
+    },
+  },
+  timestamp: {
+    parse: (value) => {
+      if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
+        throw new TypeError('timestamp invalid');
+      }
+      return value as Rfc3339Timestamp;
+    },
+  },
+  version: { parse: (value) => parseNonEmptyBranded<Version>(value, 'version') },
+};
+
+const OwnerDecisionValidator = OwnerDecisionSchema.create(dependencies);
+const PolicyTokenValidator = PolicyTokenSchema.create(dependencies);
 
 const tenantA = { tenantId: 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAV' };
 const tenantB = { tenantId: 'ten_01BXZ3NDEKTSV4RRFFQ69G5FAV' };
@@ -13,7 +79,7 @@ function ownerDecision(overrides: Record<string, unknown> = {}): Record<string, 
     kind: 'OWNER_DECISION',
     schemaVersion: '1.0.0',
     decisionId: 'odc_01ARZ3NDEKTSV4RRFFQ69G5FAV',
-    subject: { reference: 'action:publish-campaign', referenceType: 'ACTION' },
+    subject: { reference: 'action:publish-campaign' },
     decision: 'APPROVED',
     actor,
     tenant: tenantA,
@@ -34,12 +100,12 @@ function policyToken(overrides: Record<string, unknown> = {}): Record<string, un
     schemaVersion: '1.0.0',
     policyTokenId: 'ptk_01ARZ3NDEKTSV4RRFFQ69G5FAV',
     tenant: tenantA,
-    subject: { reference: 'action:publish-campaign', referenceType: 'ACTION' },
+    subject: { reference: 'action:publish-campaign' },
     action: 'campaign.publish',
     scope: ['campaign:publish'],
     issuedAt: '2026-08-29T20:01:00-03:00',
     expiresAt: '2026-08-29T20:31:00-03:00',
-    policy: { reference: 'policy:marketing-write', version: '2026-08-29' },
+    policy: { reference: 'policy:marketing-write', version: '1.0.0' },
     constraints: { maxBudgetBrl: 5000 },
     authorityClass: 'OWNER_DECISION',
     correlation,
@@ -49,91 +115,110 @@ function policyToken(overrides: Record<string, unknown> = {}): Record<string, un
 }
 
 test('OwnerDecision accepts canonical states and round-trips serialization', () => {
-  const parsed = OwnerDecisionSchema.parse(ownerDecision());
+  const parsed = OwnerDecisionValidator.parse(ownerDecision());
   assert.equal(parsed.decision, 'APPROVED');
   assert.deepEqual(
-    OwnerDecisionSchema.deserialize(OwnerDecisionSchema.serialize(parsed)),
+    OwnerDecisionValidator.deserialize(OwnerDecisionValidator.serialize(parsed)),
     parsed,
   );
 });
 
 test('OwnerDecision rejects unknown decision state', () => {
-  assert.throws(() => OwnerDecisionSchema.parse(ownerDecision({ decision: 'MAYBE' })), /unknown/);
+  assert.throws(() => OwnerDecisionValidator.parse(ownerDecision({ decision: 'MAYBE' })), /unknown/);
 });
 
 test('OwnerDecision rejects missing subject', () => {
   const value = ownerDecision();
   delete value.subject;
-  assert.throws(() => OwnerDecisionSchema.parse(value), /subject/);
+  assert.throws(() => OwnerDecisionValidator.parse(value), /subject/);
 });
 
 test('OwnerDecision rejects missing or empty authority scope', () => {
-  assert.throws(() => OwnerDecisionSchema.parse(ownerDecision({ scope: [] })), /scope/);
+  assert.throws(() => OwnerDecisionValidator.parse(ownerDecision({ scope: [] })), /scope/);
   const value = ownerDecision();
   delete value.scope;
-  assert.throws(() => OwnerDecisionSchema.parse(value), /scope/);
+  assert.throws(() => OwnerDecisionValidator.parse(value), /scope/);
+});
+
+test('OwnerDecision EXPIRED state requires a non-future expiry', () => {
+  assert.throws(
+    () => OwnerDecisionValidator.parse(ownerDecision({ decision: 'EXPIRED', expiresAt: undefined })),
+    /requires expiresAt/,
+  );
+  assert.doesNotThrow(() =>
+    OwnerDecisionValidator.parse(
+      ownerDecision({ decision: 'EXPIRED', expiresAt: '2026-08-29T19:59:59-03:00' }),
+    ),
+  );
 });
 
 test('PolicyToken can be invalidated deterministically when expired', () => {
   assert.throws(
-    () => PolicyTokenSchema.parseAt(policyToken(), '2026-08-29T20:31:00-03:00'),
+    () => PolicyTokenValidator.parseAt(policyToken(), '2026-08-29T20:31:00-03:00'),
     /expired/,
   );
   assert.equal(
-    PolicyTokenSchema.parseAt(policyToken(), '2026-08-29T20:30:59-03:00').policyTokenId,
+    PolicyTokenValidator.parseAt(policyToken(), '2026-08-29T20:30:59-03:00').policyTokenId,
     'ptk_01ARZ3NDEKTSV4RRFFQ69G5FAV',
   );
 });
 
 test('tenant mismatch remains structurally detectable', () => {
-  const decision = OwnerDecisionSchema.parse(ownerDecision());
-  const token = PolicyTokenSchema.parse(policyToken({ tenant: tenantB }));
+  const decision = OwnerDecisionValidator.parse(ownerDecision());
+  const token = PolicyTokenValidator.parse(policyToken({ tenant: tenantB }));
   assert.notDeepEqual(decision.tenant, token.tenant);
 });
 
 test('PolicyToken rejects missing subject and missing authority scope', () => {
   const missingSubject = policyToken();
   delete missingSubject.subject;
-  assert.throws(() => PolicyTokenSchema.parse(missingSubject), /subject/);
-
-  assert.throws(() => PolicyTokenSchema.parse(policyToken({ scope: [] })), /scope/);
+  assert.throws(() => PolicyTokenValidator.parse(missingSubject), /subject/);
+  assert.throws(() => PolicyTokenValidator.parse(policyToken({ scope: [] })), /scope/);
 });
 
-test('PolicyToken rejects malformed wire version and preserves a valid version', () => {
+test('PolicyToken delegates wire-version behavior to the canonical dependency', () => {
   assert.throws(
-    () => PolicyTokenSchema.parse(policyToken({ schemaVersion: 'v1' })),
+    () => PolicyTokenValidator.parse(policyToken({ schemaVersion: '2.0.0' })),
     /schemaVersion/,
   );
-  assert.equal(PolicyTokenSchema.parse(policyToken()).schemaVersion, '1.0.0');
+  assert.equal(PolicyTokenValidator.parse(policyToken()).schemaVersion, '1.0.0');
 });
 
 test('PolicyToken round-trips serialization', () => {
-  const parsed = PolicyTokenSchema.parse(policyToken());
-  assert.deepEqual(PolicyTokenSchema.deserialize(PolicyTokenSchema.serialize(parsed)), parsed);
+  const parsed = PolicyTokenValidator.parse(policyToken());
+  assert.deepEqual(PolicyTokenValidator.deserialize(PolicyTokenValidator.serialize(parsed)), parsed);
+});
+
+test('PolicyToken rejects unknown authority class', () => {
+  assert.throws(
+    () => PolicyTokenValidator.parse(policyToken({ authorityClass: 'MODEL_CONFIDENCE' })),
+    /unknown/,
+  );
 });
 
 test('PolicyToken rejects implicit authority, credentials, confidence and execution state', () => {
   assert.throws(
-    () => PolicyTokenSchema.parse(policyToken({ providerCredential: 'x' })),
+    () => PolicyTokenValidator.parse(policyToken({ providerCredential: 'x' })),
     /unsupported field/,
   );
   assert.throws(
-    () => PolicyTokenSchema.parse(policyToken({ confidence: 0.99 })),
+    () => PolicyTokenValidator.parse(policyToken({ confidence: 0.99 })),
     /unsupported field/,
   );
   assert.throws(
-    () => PolicyTokenSchema.parse(policyToken({ executionStatus: 'SUCCEEDED' })),
+    () => PolicyTokenValidator.parse(policyToken({ executionStatus: 'SUCCEEDED' })),
     /unsupported field/,
   );
   assert.throws(
-    () => PolicyTokenSchema.parse(policyToken({ constraints: { accessToken: 'secret-value' } })),
+    () =>
+      PolicyTokenValidator.parse(policyToken({ constraints: { nestedClientSecret: 'secret-value' } })),
     /credential or secret material/,
   );
 });
 
 test('OWNER_DECISION authority class requires an explicit decision reference', () => {
   assert.throws(
-    () => PolicyTokenSchema.parse(policyToken({ decisionReference: undefined })),
+    () => PolicyTokenValidator.parse(policyToken({ decisionReference: undefined })),
     /requires decisionReference/,
   );
 });

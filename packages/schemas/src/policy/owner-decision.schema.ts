@@ -1,4 +1,4 @@
-import type { OwnerDecision } from '@aurora/contracts/policy';
+import type { OwnerDecision, OwnerDecisionState } from '@aurora/contracts/policy';
 
 import {
   asRecord,
@@ -7,15 +7,18 @@ import {
   optionalConstraints,
   optionalNonEmptyString,
   parseJsonObject,
-  requireContractVersion,
   requireNonEmptyString,
-  requireOpaqueContext,
-  requireRfc3339,
   requireScope,
   requireSubject,
 } from './validation.js';
+import type { PolicySchemaDependencies } from './validation.js';
 
-const OWNER_DECISION_STATES = new Set(['APPROVED', 'DENIED', 'REVOKED', 'EXPIRED']);
+const OWNER_DECISION_STATES = new Set<OwnerDecisionState>([
+  'APPROVED',
+  'DENIED',
+  'REVOKED',
+  'EXPIRED',
+]);
 
 const OWNER_DECISION_KEYS = [
   'kind',
@@ -35,65 +38,75 @@ const OWNER_DECISION_KEYS = [
   'authenticationReference',
 ] as const;
 
-function parseOwnerDecision(input: unknown): OwnerDecision {
-  const value = asRecord(input, 'OwnerDecision');
-  assertKnownKeys(value, OWNER_DECISION_KEYS, 'OwnerDecision');
+export function createOwnerDecisionSchema(dependencies: PolicySchemaDependencies) {
+  const parse = (input: unknown): OwnerDecision => {
+    const value = asRecord(input, 'OwnerDecision');
+    assertKnownKeys(value, OWNER_DECISION_KEYS, 'OwnerDecision');
 
-  if (value.kind !== 'OWNER_DECISION') {
-    throw new TypeError('OwnerDecision.kind must be OWNER_DECISION');
-  }
-
-  requireContractVersion(value.schemaVersion);
-  requireNonEmptyString(value.decisionId, 'decisionId');
-  requireSubject(value.subject);
-
-  const decision = requireNonEmptyString(value.decision, 'decision');
-  if (!OWNER_DECISION_STATES.has(decision)) {
-    throw new TypeError(`unknown OwnerDecision decision: ${decision}`);
-  }
-
-  requireOpaqueContext(value.actor, 'actor');
-  requireOpaqueContext(value.tenant, 'tenant');
-  const decidedAt = requireRfc3339(value.decidedAt, 'decidedAt');
-  requireScope(value.scope);
-  optionalConstraints(value.constraints);
-  const expiresAt =
-    value.expiresAt === undefined ? undefined : requireRfc3339(value.expiresAt, 'expiresAt');
-  requireOpaqueContext(value.correlation, 'correlation');
-  optionalNonEmptyString(value.reason, 'reason');
-  optionalNonEmptyString(value.reasonReference, 'reasonReference');
-  optionalNonEmptyString(value.authenticationReference, 'authenticationReference');
-
-  if (
-    decision === 'APPROVED' &&
-    expiresAt !== undefined &&
-    compareRfc3339(expiresAt, decidedAt) <= 0
-  ) {
-    throw new TypeError('APPROVED OwnerDecision expiresAt must be later than decidedAt');
-  }
-
-  if (decision === 'EXPIRED') {
-    if (expiresAt === undefined) {
-      throw new TypeError('EXPIRED OwnerDecision requires expiresAt');
+    if (value.kind !== 'OWNER_DECISION') {
+      throw new TypeError('OwnerDecision.kind must be OWNER_DECISION');
     }
-    if (compareRfc3339(expiresAt, decidedAt) > 0) {
-      throw new TypeError('EXPIRED OwnerDecision expiresAt must not be later than decidedAt');
+
+    const decisionValue = requireNonEmptyString(value.decision, 'decision');
+    if (!OWNER_DECISION_STATES.has(decisionValue as OwnerDecisionState)) {
+      throw new TypeError(`unknown OwnerDecision decision: ${decisionValue}`);
     }
-  }
+    const decision = decisionValue as OwnerDecisionState;
 
-  return value as unknown as OwnerDecision;
+    const decidedAt = dependencies.timestamp.parse(value.decidedAt);
+    const expiresAt =
+      value.expiresAt === undefined ? undefined : dependencies.timestamp.parse(value.expiresAt);
+    const constraints = optionalConstraints(value.constraints);
+    const reason = optionalNonEmptyString(value.reason, 'reason');
+    const reasonReference = optionalNonEmptyString(value.reasonReference, 'reasonReference');
+    const authenticationReference = optionalNonEmptyString(
+      value.authenticationReference,
+      'authenticationReference',
+    );
+
+    if (
+      decision === 'APPROVED' &&
+      expiresAt !== undefined &&
+      compareRfc3339(expiresAt, decidedAt) <= 0
+    ) {
+      throw new TypeError('APPROVED OwnerDecision expiresAt must be later than decidedAt');
+    }
+
+    if (decision === 'EXPIRED') {
+      if (expiresAt === undefined) {
+        throw new TypeError('EXPIRED OwnerDecision requires expiresAt');
+      }
+      if (compareRfc3339(expiresAt, decidedAt) > 0) {
+        throw new TypeError('EXPIRED OwnerDecision expiresAt must not be later than decidedAt');
+      }
+    }
+
+    return {
+      kind: 'OWNER_DECISION',
+      schemaVersion: dependencies.contractVersion.parse(value.schemaVersion),
+      decisionId: dependencies.decisionId.parse(value.decisionId),
+      subject: requireSubject(value.subject),
+      decision,
+      actor: dependencies.actor.parse(value.actor),
+      tenant: dependencies.tenant.parse(value.tenant),
+      decidedAt,
+      scope: requireScope(value.scope),
+      ...(constraints === undefined ? {} : { constraints }),
+      ...(expiresAt === undefined ? {} : { expiresAt }),
+      correlation: dependencies.correlation.parse(value.correlation),
+      ...(reason === undefined ? {} : { reason }),
+      ...(reasonReference === undefined ? {} : { reasonReference }),
+      ...(authenticationReference === undefined ? {} : { authenticationReference }),
+    };
+  };
+
+  return Object.freeze({
+    parse,
+    serialize: (input: unknown) => JSON.stringify(parse(input)),
+    deserialize: (serialized: string) =>
+      parse(parseJsonObject(serialized, 'OwnerDecision serialization')),
+  });
 }
 
-function serializeOwnerDecision(input: unknown): string {
-  return JSON.stringify(parseOwnerDecision(input));
-}
-
-function deserializeOwnerDecision(serialized: string): OwnerDecision {
-  return parseOwnerDecision(parseJsonObject(serialized, 'OwnerDecision serialization'));
-}
-
-export const OwnerDecisionSchema = Object.freeze({
-  parse: parseOwnerDecision,
-  serialize: serializeOwnerDecision,
-  deserialize: deserializeOwnerDecision,
-});
+/** W01-G composes this factory with accepted W01-D/F validators. */
+export const OwnerDecisionSchema = Object.freeze({ create: createOwnerDecisionSchema });

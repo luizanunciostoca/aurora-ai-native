@@ -1,3 +1,5 @@
+import type { Version } from '../versioning/types.js';
+
 export const OWNER_DECISION_STATES = ['APPROVED', 'DENIED', 'REVOKED', 'EXPIRED'] as const;
 
 export type OwnerDecisionState = (typeof OWNER_DECISION_STATES)[number];
@@ -8,11 +10,10 @@ export type AuthorityClass = (typeof AUTHORITY_CLASSES)[number];
 
 /**
  * Opaque reference to the thing authority is being decided for.
- * W01-C deliberately does not interpret or resolve the reference.
+ * W01-C deliberately does not interpret or resolve the referenced domain object.
  */
 export interface AuthoritySubjectReference {
   readonly reference: string;
-  readonly referenceType?: string;
 }
 
 /**
@@ -33,5 +34,5 @@ export type AuthorityConstraints = Readonly<Record<string, AuthorityConstraintVa
 
 export interface PolicyReference {
   readonly reference: string;
-  readonly version: string;
+  readonly version: Version;
 }

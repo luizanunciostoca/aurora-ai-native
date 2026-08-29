@@ -1,6 +1,11 @@
-import type { CorrelationContext, IdentityReference, TenantContext } from '../context/index.js';
-import type { OwnerDecisionId } from '../ids/index.js';
-import type { ContractVersion } from '../versioning/index.js';
+import type {
+  ActorRef,
+  CorrelationContext,
+  Rfc3339Timestamp,
+  TenantContext,
+} from '../context/index.js';
+import type { DecisionId } from '../ids/types.js';
+import type { ContractVersion } from '../versioning/types.js';
 
 import type {
   AuthorityConstraints,
@@ -24,17 +29,15 @@ export const OWNER_DECISION_KIND = 'OWNER_DECISION' as const;
 export interface OwnerDecision {
   readonly kind: typeof OWNER_DECISION_KIND;
   readonly schemaVersion: ContractVersion;
-  readonly decisionId: OwnerDecisionId;
+  readonly decisionId: DecisionId;
   readonly subject: AuthoritySubjectReference;
   readonly decision: OwnerDecisionState;
-  readonly actor: IdentityReference;
+  readonly actor: ActorRef;
   readonly tenant: TenantContext;
-  /** RFC3339 timestamp validated by @aurora/schemas. */
-  readonly decidedAt: string;
+  readonly decidedAt: Rfc3339Timestamp;
   readonly scope: AuthorityScope;
   readonly constraints?: AuthorityConstraints;
-  /** RFC3339 timestamp validated by @aurora/schemas when present. */
-  readonly expiresAt?: string;
+  readonly expiresAt?: Rfc3339Timestamp;
   readonly correlation: CorrelationContext;
   readonly reason?: string;
   readonly reasonReference?: string;

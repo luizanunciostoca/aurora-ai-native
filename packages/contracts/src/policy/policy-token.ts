@@ -1,6 +1,6 @@
-import type { CorrelationContext, TenantContext } from '../context/index.js';
-import type { OwnerDecisionId, PolicyTokenId } from '../ids/index.js';
-import type { ContractVersion } from '../versioning/index.js';
+import type { CorrelationContext, Rfc3339Timestamp, TenantContext } from '../context/index.js';
+import type { DecisionId, PolicyTokenId } from '../ids/types.js';
+import type { ContractVersion } from '../versioning/types.js';
 
 import type {
   AuthorityClass,
@@ -28,16 +28,12 @@ export interface PolicyToken {
   /** Opaque governed action identifier; W01-C does not reinterpret it. */
   readonly action: string;
   readonly scope: AuthorityScope;
-  /** RFC3339 timestamp validated by @aurora/schemas. */
-  readonly issuedAt: string;
-  /**
-   * RFC3339 timestamp; must be later than issuedAt and can be invalidated at a
-   * supplied evaluation time.
-   */
-  readonly expiresAt: string;
+  readonly issuedAt: Rfc3339Timestamp;
+  /** Must be later than issuedAt and can be invalidated at a supplied evaluation time. */
+  readonly expiresAt: Rfc3339Timestamp;
   readonly policy: PolicyReference;
   readonly constraints?: AuthorityConstraints;
   readonly authorityClass: AuthorityClass;
   readonly correlation: CorrelationContext;
-  readonly decisionReference?: OwnerDecisionId;
+  readonly decisionReference?: DecisionId;
 }

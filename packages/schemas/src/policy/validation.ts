@@ -1,25 +1,47 @@
 import type {
+  ActorRef,
+  CorrelationContext,
+  Rfc3339Timestamp,
+  TenantContext,
+} from '@aurora/contracts/context';
+import type { DecisionId, PolicyTokenId } from '@aurora/contracts/ids';
+import type {
   AuthorityConstraints,
   AuthoritySubjectReference,
   PolicyReference,
 } from '@aurora/contracts/policy';
+import type { ContractVersion, Version } from '@aurora/contracts/versioning';
 
-const RFC3339_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
-const CONTRACT_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+interface RuntimeValidator<T> {
+  parse(input: unknown): T;
+}
 
-const SENSITIVE_KEYS = new Set([
+/**
+ * Validators owned by W01-D/W01-F and composed by W01-G.
+ * W01-C never redefines their ID, context, timestamp or version semantics.
+ */
+export interface PolicySchemaDependencies {
+  readonly contractVersion: RuntimeValidator<ContractVersion>;
+  readonly decisionId: RuntimeValidator<DecisionId>;
+  readonly policyTokenId: RuntimeValidator<PolicyTokenId>;
+  readonly actor: RuntimeValidator<ActorRef>;
+  readonly tenant: RuntimeValidator<TenantContext>;
+  readonly correlation: RuntimeValidator<CorrelationContext>;
+  readonly timestamp: RuntimeValidator<Rfc3339Timestamp>;
+  readonly version: RuntimeValidator<Version>;
+}
+
+const SENSITIVE_KEY_MARKERS = [
   'apikey',
   'accesstoken',
   'bearertoken',
   'credential',
-  'credentials',
   'password',
   'privatekey',
   'providertoken',
   'refreshtoken',
   'secret',
-]);
+] as const;
 
 export function asRecord(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -58,39 +80,10 @@ export function optionalNonEmptyString(value: unknown, label: string): string | 
   return requireNonEmptyString(value, label);
 }
 
-export function requireContractVersion(value: unknown): string {
-  const version = requireNonEmptyString(value, 'schemaVersion');
-  if (!CONTRACT_VERSION_PATTERN.test(version)) {
-    throw new TypeError('schemaVersion must use major.minor.patch wire version syntax');
-  }
-
-  return version;
-}
-
-export function requireRfc3339(value: unknown, label: string): string {
-  const timestamp = requireNonEmptyString(value, label);
-  if (!RFC3339_PATTERN.test(timestamp) || Number.isNaN(Date.parse(timestamp))) {
-    throw new TypeError(`${label} must be a valid RFC3339 timestamp`);
-  }
-
-  return timestamp;
-}
-
-export function requireOpaqueContext(value: unknown, label: string): Record<string, unknown> {
-  const context = asRecord(value, label);
-  if (Object.keys(context).length === 0) {
-    throw new TypeError(`${label} must not be empty`);
-  }
-
-  return context;
-}
-
 export function requireSubject(value: unknown): AuthoritySubjectReference {
   const subject = asRecord(value, 'subject');
-  assertKnownKeys(subject, ['reference', 'referenceType'], 'subject');
-  requireNonEmptyString(subject.reference, 'subject.reference');
-  optionalNonEmptyString(subject.referenceType, 'subject.referenceType');
-  return subject as unknown as AuthoritySubjectReference;
+  assertKnownKeys(subject, ['reference'], 'subject');
+  return { reference: requireNonEmptyString(subject.reference, 'subject.reference') };
 }
 
 export function requireScope(value: unknown): readonly string[] {
@@ -106,12 +99,16 @@ export function requireScope(value: unknown): readonly string[] {
   return scopes;
 }
 
-export function requirePolicyReference(value: unknown): PolicyReference {
+export function requirePolicyReference(
+  value: unknown,
+  versionValidator: RuntimeValidator<Version>,
+): PolicyReference {
   const policy = asRecord(value, 'policy');
   assertKnownKeys(policy, ['reference', 'version'], 'policy');
-  requireNonEmptyString(policy.reference, 'policy.reference');
-  requireNonEmptyString(policy.version, 'policy.version');
-  return policy as unknown as PolicyReference;
+  return {
+    reference: requireNonEmptyString(policy.reference, 'policy.reference'),
+    version: versionValidator.parse(policy.version),
+  };
 }
 
 export function optionalConstraints(value: unknown): AuthorityConstraints | undefined {
@@ -121,7 +118,7 @@ export function optionalConstraints(value: unknown): AuthorityConstraints | unde
 
   const constraints = asRecord(value, 'constraints');
   assertJsonCompatibleAndSecretFree(constraints, 'constraints', new WeakSet<object>());
-  return constraints as unknown as AuthorityConstraints;
+  return constraints as AuthorityConstraints;
 }
 
 function assertJsonCompatibleAndSecretFree(
@@ -159,7 +156,7 @@ function assertJsonCompatibleAndSecretFree(
     seen.add(value);
     for (const [key, entry] of Object.entries(value)) {
       const normalizedKey = key.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-      if (SENSITIVE_KEYS.has(normalizedKey)) {
+      if (SENSITIVE_KEY_MARKERS.some((marker) => normalizedKey.includes(marker))) {
         throw new TypeError(`${path} may not contain credential or secret material`);
       }
       assertJsonCompatibleAndSecretFree(entry, `${path}.${key}`, seen);
@@ -171,7 +168,7 @@ function assertJsonCompatibleAndSecretFree(
   throw new TypeError(`${path} must contain only JSON-compatible values`);
 }
 
-export function compareRfc3339(left: string, right: string): number {
+export function compareRfc3339(left: Rfc3339Timestamp, right: Rfc3339Timestamp): number {
   return Date.parse(left) - Date.parse(right);
 }
 
