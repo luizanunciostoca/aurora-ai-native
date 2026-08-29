@@ -1,14 +1,14 @@
 import type {
   PropagationContext,
   PropagationMetadata,
-} from '../../../contracts/src/context/propagation.js';
-import { ContractVersionSchema } from '../versioning/version.schemas.js';
-import { asRecord, assertExactKeys, createRuntimeSchema } from './internal.js';
-import { CorrelationContextSchema } from './correlation.schema.js';
-import { DataClassificationSchema } from './data-classification.schema.js';
-import { DeadlineSchema, ExpirySchema } from './deadline.schema.js';
-import { ActorRefSchema } from './identity.schema.js';
-import { TenantContextSchema } from './tenant.schema.js';
+} from '../../../contracts/src/context/propagation';
+import { ContractVersionSchema } from '../versioning/version.schemas';
+import { asRecord, assertExactKeys, createRuntimeSchema } from './internal';
+import { CorrelationContextSchema } from './correlation.schema';
+import { DataClassificationSchema } from './data-classification.schema';
+import { DeadlineSchema, ExpirySchema } from './deadline.schema';
+import { ActorRefSchema } from './identity.schema';
+import { TenantContextSchema } from './tenant.schema';
 
 export const PropagationMetadataSchema = createRuntimeSchema<PropagationMetadata>(
   (value: unknown) => {

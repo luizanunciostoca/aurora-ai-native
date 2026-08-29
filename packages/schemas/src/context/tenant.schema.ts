@@ -1,6 +1,6 @@
-import type { TenantContext } from '../../../contracts/src/context/tenant.js';
-import { TenantIdSchema } from '../ids/id.schemas.js';
-import { asRecord, assertExactKeys, createRuntimeSchema } from './internal.js';
+import type { TenantContext } from '../../../contracts/src/context/tenant';
+import { TenantIdSchema } from '../ids/id.schemas';
+import { asRecord, assertExactKeys, createRuntimeSchema } from './internal';
 
 export const TenantContextSchema = createRuntimeSchema<TenantContext>((value: unknown) => {
   const record = asRecord(value, 'TenantContext');

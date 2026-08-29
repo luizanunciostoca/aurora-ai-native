@@ -1,9 +1,9 @@
-import type { ContractVersion } from '../versioning/types.js';
-import type { CorrelationContext } from './correlation.js';
-import type { DataClassification } from './data-classification.js';
-import type { Deadline, Expiry } from './deadline.js';
-import type { ActorRef } from './identity.js';
-import type { TenantContext } from './tenant.js';
+import type { ContractVersion } from '../versioning/types';
+import type { CorrelationContext } from './correlation';
+import type { DataClassification } from './data-classification';
+import type { Deadline, Expiry } from './deadline';
+import type { ActorRef } from './identity';
+import type { TenantContext } from './tenant';
 
 export interface PropagationMetadata {
   readonly dataClassification: DataClassification;

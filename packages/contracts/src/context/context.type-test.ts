@@ -4,14 +4,14 @@ import type {
   IdentityId,
   ProviderExternalId,
   TenantId,
-} from '../ids/types.js';
+} from '../ids/types';
 import type {
   ActorRef,
   CorrelationContext,
   ExternalIdentityRef,
   PropagationContext,
   TenantContext,
-} from './index.js';
+} from './index';
 
 declare const tenantId: TenantId;
 declare const identityId: IdentityId;

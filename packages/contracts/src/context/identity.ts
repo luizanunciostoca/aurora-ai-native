@@ -1,4 +1,4 @@
-import type { IdentityId, ProviderExternalId } from '../ids/types.js';
+import type { IdentityId, ProviderExternalId } from '../ids/types';
 
 export const IDENTITY_KINDS = ['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM'] as const;
 

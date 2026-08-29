@@ -1,4 +1,4 @@
-import type { CausationId, CorrelationId } from '../ids/types.js';
+import type { CausationId, CorrelationId } from '../ids/types';
 
 export interface CausationRef {
   readonly causationId: CausationId;

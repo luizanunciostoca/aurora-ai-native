@@ -4,7 +4,7 @@ import {
   DeadlineSchema,
   PropagationContextSchema,
   TenantContextSchema,
-} from './index.js';
+} from './index';
 
 const VALID_TENANT_ID = 'ten_01J00000000000000000000000';
 const VALID_IDENTITY_ID = 'idn_01J00000000000000000000000';

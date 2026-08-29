@@ -4,14 +4,14 @@ import {
   type ExternalIdentityRef,
   type IdentityKind,
   type SubjectRef,
-} from '../../../contracts/src/context/identity.js';
-import { IdentityIdSchema, ProviderExternalIdSchema } from '../ids/id.schemas.js';
+} from '../../../contracts/src/context/identity';
+import { IdentityIdSchema, ProviderExternalIdSchema } from '../ids/id.schemas';
 import {
   asRecord,
   assertExactKeys,
   createRuntimeSchema,
   parseNonEmptyString,
-} from './internal.js';
+} from './internal';
 
 const IDENTITY_KIND_SET = new Set<string>(IDENTITY_KINDS);
 

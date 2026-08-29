@@ -1,9 +1,9 @@
 import type {
   CausationRef,
   CorrelationContext,
-} from '../../../contracts/src/context/correlation.js';
-import { CausationIdSchema, CorrelationIdSchema } from '../ids/id.schemas.js';
-import { asRecord, assertExactKeys, createRuntimeSchema } from './internal.js';
+} from '../../../contracts/src/context/correlation';
+import { CausationIdSchema, CorrelationIdSchema } from '../ids/id.schemas';
+import { asRecord, assertExactKeys, createRuntimeSchema } from './internal';
 
 export const CausationRefSchema = createRuntimeSchema<CausationRef>((value: unknown) => {
   const record = asRecord(value, 'CausationRef');
