@@ -1,8 +1,6 @@
-import type {
-  ContractVersion,
-  Version,
-  VersionParts,
-} from '../../../contracts/src/versioning/types';
+import type { ContractVersion } from '../../../contracts/src/versioning/types';
+import type { Version } from '../../../contracts/src/versioning/types';
+import type { VersionParts } from '../../../contracts/src/versioning/types';
 import { CONTRACT_VERSION_REGISTRY } from '../../../registries/src/versioning/contract-version.registry';
 
 export interface VersionStringSchema<T extends string> {
@@ -27,8 +25,9 @@ function parseParts(value: string): VersionParts {
 }
 
 function makeVersionSchema<T extends string>(): VersionStringSchema<T> {
-  const is = (value: unknown): value is T =>
-    typeof value === 'string' && STABLE_SEMVER_CORE_PATTERN.test(value);
+  const is = (value: unknown): value is T => {
+    return typeof value === 'string' && STABLE_SEMVER_CORE_PATTERN.test(value);
+  };
 
   return Object.freeze({
     is,
@@ -50,24 +49,21 @@ function makeVersionSchema<T extends string>(): VersionStringSchema<T> {
   });
 }
 
+function isSupported(value: ContractVersion): boolean {
+  return CONTRACT_VERSION_REGISTRY.supportedRead.includes(value);
+}
+
 export const VersionSchema = makeVersionSchema<Version>();
 export const ContractVersionSchema = makeVersionSchema<ContractVersion>();
 
 export const SupportedContractVersionSchema = Object.freeze({
   ...ContractVersionSchema,
   is(value: unknown): value is ContractVersion {
-    if (!ContractVersionSchema.is(value)) return false;
-    return CONTRACT_VERSION_REGISTRY.supportedRead.some(
-      (supported) => String(supported) === value,
-    );
+    return ContractVersionSchema.is(value) && isSupported(value);
   },
   parse(value: unknown): ContractVersion {
     const parsed = ContractVersionSchema.parse(value);
-    if (
-      !CONTRACT_VERSION_REGISTRY.supportedRead.some(
-        (supported) => String(supported) === parsed,
-      )
-    ) {
+    if (!isSupported(parsed)) {
       throw new TypeError(`Unsupported contract version: ${parsed}`);
     }
     return parsed;
