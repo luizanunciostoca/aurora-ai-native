@@ -20,10 +20,7 @@ function assertThrows(fn: () => unknown, message: string): void {
 }
 
 const version = ContractVersionSchema.parse('1.0.0');
-assert(
-  ContractVersionSchema.serialize(version) === '1.0.0',
-  'contract version round-trip failed',
-);
+assert(ContractVersionSchema.serialize(version) === '1.0.0', 'contract version round-trip failed');
 
 const parsedParts = VersionSchema.parts(VersionSchema.parse('12.34.56'));
 assert(parsedParts.major === 12, 'major parsing failed');
