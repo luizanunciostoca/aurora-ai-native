@@ -71,7 +71,10 @@ assert(
   'provider external ID did not preserve exact provider value',
 );
 assert(!CommandIdSchema.is(external), 'provider external ID crossed into internal namespace');
-assertThrows(() => ProviderExternalIdSchema.parse('   '), 'blank provider external ID was accepted');
+assertThrows(
+  () => ProviderExternalIdSchema.parse('   '),
+  'blank provider external ID was accepted',
+);
 
 const prefixes = Object.values(ID_NAMESPACE_REGISTRY).map((entry) => entry.prefix);
 assert(new Set(prefixes).size === prefixes.length, 'duplicate ID namespace prefix detected');
