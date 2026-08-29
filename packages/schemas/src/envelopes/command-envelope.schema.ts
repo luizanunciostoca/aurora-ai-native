@@ -2,13 +2,13 @@ import type {
   CorrelationContext,
   DataClassification,
   Deadline,
-  IdentityReference,
+  ActorRef,
   TenantContext,
-} from "@aurora/contracts/context";
-import type { CommandEnvelope, CommandType } from "@aurora/contracts/envelopes";
-import { COMMAND_ENVELOPE_KIND } from "@aurora/contracts/envelopes";
-import type { CommandId } from "@aurora/contracts/ids";
-import type { ContractVersion } from "@aurora/contracts/versioning";
+} from '@aurora/contracts/context';
+import type { CommandEnvelope, CommandType } from '@aurora/contracts/envelopes';
+import { COMMAND_ENVELOPE_KIND } from '@aurora/contracts/envelopes';
+import type { CommandId } from '@aurora/contracts/ids';
+import type { ContractVersion } from '@aurora/contracts/versioning';
 import {
   asRecord,
   assertExactKeys,
@@ -20,86 +20,84 @@ import {
   parseRfc3339Timestamp,
   requireOwn,
   stableStringify,
-} from "./envelope-common.js";
-import type { RuntimeSchema, RuntimeValidator } from "./runtime-schema.js";
-import { safeParseWith } from "./runtime-schema.js";
+} from './envelope-common.js';
+import type { RuntimeSchema, RuntimeValidator } from './runtime-schema.js';
+import { safeParseWith } from './runtime-schema.js';
 
 export interface CommandEnvelopeSchemaDependencies {
   readonly contractVersion: RuntimeValidator<ContractVersion>;
   readonly commandId: RuntimeValidator<CommandId>;
   readonly correlation: RuntimeValidator<CorrelationContext>;
   readonly tenant: RuntimeValidator<TenantContext>;
-  readonly identityReference: RuntimeValidator<IdentityReference>;
+  readonly actorRef: RuntimeValidator<ActorRef>;
   readonly deadline: RuntimeValidator<Deadline>;
   readonly dataClassification: RuntimeValidator<DataClassification>;
 }
 
 const COMMAND_KEYS = new Set([
-  "kind",
-  "schemaVersion",
-  "commandId",
-  "commandType",
-  "requestedAt",
-  "correlation",
-  "tenant",
-  "actor",
-  "deadline",
-  "dataClassification",
-  "payload",
-  "metadata",
+  'kind',
+  'schemaVersion',
+  'commandId',
+  'commandType',
+  'requestedAt',
+  'correlation',
+  'tenant',
+  'actor',
+  'deadline',
+  'dataClassification',
+  'payload',
+  'metadata',
 ]);
 
 export function createCommandEnvelopeSchema(
   dependencies: CommandEnvelopeSchemaDependencies,
 ): RuntimeSchema<CommandEnvelope> {
   const parse = (input: unknown): CommandEnvelope => {
-    const record = asRecord(input, "$command");
-    assertExactKeys(record, COMMAND_KEYS, "$command");
+    const record = asRecord(input, '$command');
+    assertExactKeys(record, COMMAND_KEYS, '$command');
 
-    const deadlineInput = optionalOwn(record, "deadline");
-    const classificationInput = optionalOwn(record, "dataClassification");
-    const metadataInput = optionalOwn(record, "metadata");
+    const deadlineInput = optionalOwn(record, 'deadline');
+    const classificationInput = optionalOwn(record, 'dataClassification');
+    const metadataInput = optionalOwn(record, 'metadata');
 
     return {
       kind: parseFixedLiteral(
-        requireOwn(record, "kind", "$command"),
+        requireOwn(record, 'kind', '$command'),
         COMMAND_ENVELOPE_KIND,
-        "$command.kind",
+        '$command.kind',
       ),
       schemaVersion: dependencies.contractVersion.parse(
-        requireOwn(record, "schemaVersion", "$command"),
+        requireOwn(record, 'schemaVersion', '$command'),
       ),
-      commandId: dependencies.commandId.parse(requireOwn(record, "commandId", "$command")),
+      commandId: dependencies.commandId.parse(requireOwn(record, 'commandId', '$command')),
       commandType: parseNamespacedType(
-        requireOwn(record, "commandType", "$command"),
-        "$command.commandType",
+        requireOwn(record, 'commandType', '$command'),
+        '$command.commandType',
       ) as CommandType,
       requestedAt: parseRfc3339Timestamp(
-        requireOwn(record, "requestedAt", "$command"),
-        "$command.requestedAt",
+        requireOwn(record, 'requestedAt', '$command'),
+        '$command.requestedAt',
       ),
-      correlation: dependencies.correlation.parse(
-        requireOwn(record, "correlation", "$command"),
-      ),
-      tenant: dependencies.tenant.parse(requireOwn(record, "tenant", "$command")),
-      actor: dependencies.identityReference.parse(requireOwn(record, "actor", "$command")),
+      correlation: dependencies.correlation.parse(requireOwn(record, 'correlation', '$command')),
+      tenant: dependencies.tenant.parse(requireOwn(record, 'tenant', '$command')),
+      actor: dependencies.actorRef.parse(requireOwn(record, 'actor', '$command')),
       ...(deadlineInput === undefined
         ? {}
         : { deadline: dependencies.deadline.parse(deadlineInput) }),
       ...(classificationInput === undefined
         ? {}
         : { dataClassification: dependencies.dataClassification.parse(classificationInput) }),
-      payload: normalizeJsonValue(requireOwn(record, "payload", "$command"), "$command.payload"),
+      payload: normalizeJsonValue(requireOwn(record, 'payload', '$command'), '$command.payload'),
       ...(metadataInput === undefined
         ? {}
-        : { metadata: parseEnvelopeMetadata(metadataInput, "$command.metadata") }),
+        : { metadata: parseEnvelopeMetadata(metadataInput, '$command.metadata') }),
     };
   };
 
   return {
     parse,
     safeParse: (input) => safeParseWith(parse, input),
-    serialize: (input) => stableStringify(normalizeJsonValue(parse(input), "$command")),
+    serialize: (input) => stableStringify(normalizeJsonValue(parse(input), '$command')),
   };
 }
 

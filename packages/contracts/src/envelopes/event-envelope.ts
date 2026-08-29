@@ -1,16 +1,16 @@
 import type {
   CorrelationContext,
   DataClassification,
-  IdentityReference,
+  ActorRef,
   TenantContext,
-} from "../context/index.js";
-import type { EventId } from "../ids/index.js";
-import type { ContractVersion } from "../versioning/index.js";
-import type { EnvelopeMetadata } from "./envelope-metadata.js";
-import type { EnvelopeSource } from "./envelope-source.js";
-import type { JsonValue } from "./json-value.js";
+} from '../context/index.js';
+import type { EventId } from '../ids/types.js';
+import type { ContractVersion } from '../versioning/types.js';
+import type { EnvelopeMetadata } from './envelope-metadata.js';
+import type { EnvelopeSource } from './envelope-source.js';
+import type { JsonValue } from './json-value.js';
 
-export const EVENT_ENVELOPE_KIND = "EVENT" as const;
+export const EVENT_ENVELOPE_KIND = 'EVENT' as const;
 
 export type EventEnvelopeKind = typeof EVENT_ENVELOPE_KIND;
 
@@ -29,7 +29,7 @@ export interface EventEnvelope<TPayload extends JsonValue = JsonValue> {
   readonly eventType: EventType;
   /** RFC3339 timestamp representing when the fact occurred. */
   readonly occurredAt: string;
-  readonly producer: IdentityReference;
+  readonly producer: ActorRef;
   readonly source: EnvelopeSource;
   /**
    * Canonical W01-D propagation context. It carries correlationId and, when

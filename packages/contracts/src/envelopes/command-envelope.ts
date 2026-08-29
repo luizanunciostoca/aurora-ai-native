@@ -2,15 +2,15 @@ import type {
   CorrelationContext,
   DataClassification,
   Deadline,
-  IdentityReference,
+  ActorRef,
   TenantContext,
-} from "../context/index.js";
-import type { CommandId } from "../ids/index.js";
-import type { ContractVersion } from "../versioning/index.js";
-import type { EnvelopeMetadata } from "./envelope-metadata.js";
-import type { JsonValue } from "./json-value.js";
+} from '../context/index.js';
+import type { CommandId } from '../ids/types.js';
+import type { ContractVersion } from '../versioning/types.js';
+import type { EnvelopeMetadata } from './envelope-metadata.js';
+import type { JsonValue } from './json-value.js';
 
-export const COMMAND_ENVELOPE_KIND = "COMMAND" as const;
+export const COMMAND_ENVELOPE_KIND = 'COMMAND' as const;
 
 export type CommandEnvelopeKind = typeof COMMAND_ENVELOPE_KIND;
 
@@ -36,7 +36,7 @@ export interface CommandEnvelope<TPayload extends JsonValue = JsonValue> {
    */
   readonly correlation: CorrelationContext;
   readonly tenant: TenantContext;
-  readonly actor: IdentityReference;
+  readonly actor: ActorRef;
   readonly deadline?: Deadline;
   readonly dataClassification?: DataClassification;
   readonly payload: TPayload;
