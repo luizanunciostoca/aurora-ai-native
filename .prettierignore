@@ -1,0 +1,25 @@
+# Dependency and generated output
+node_modules/
+dist/
+build/
+coverage/
+.cache/
+.turbo/
+.next/
+.expo/
+
+# Package-manager generated files are owned by W00-A
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Non-runtime/reference material is intentionally outside runtime quality gates
+reference/**
+**/legacy-reference/**
+**/legacy-manus-reference/**
+docs/migration/**
+
+# W00-B formatting gate is code/config focused; prose remains documentation-owned
+**/*.md
+**/*.txt
+**/*.csv
