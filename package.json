@@ -21,9 +21,21 @@
     "install": "node ./tools/workspace/verify-install.mjs",
     "workspace:check": "node ./tools/workspace/check.mjs",
     "workspace:list": "node ./tools/workspace/check.mjs --list",
-    "lint": "node ./tools/workspace/run-task.mjs lint",
-    "typecheck": "node ./tools/workspace/run-task.mjs typecheck",
-    "test": "node ./tools/workspace/run-task.mjs test",
-    "build": "node ./tools/workspace/run-task.mjs build"
+    "format": "node ./tools/quality/run.mjs format:write",
+    "format:check": "node ./tools/quality/run.mjs format:check",
+    "lint": "node ./tools/quality/run.mjs lint",
+    "typecheck": "node ./tools/quality/run.mjs typecheck",
+    "quality": "node ./tools/quality/run.mjs all",
+    "test": "node ./tools/test/run-tests.mjs && node ./tools/workspace/run-task.mjs test",
+    "test:smoke": "node ./tools/test/run-tests.mjs",
+    "build": "node ./tools/workspace/run-task.mjs build",
+    "audit:cleanup": "node ./tools/audit/repository-cleanup-audit.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.0.0"
   }
 }

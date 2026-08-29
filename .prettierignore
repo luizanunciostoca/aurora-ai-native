@@ -1,0 +1,25 @@
+# Dependency and generated output
+node_modules/
+dist/
+build/
+coverage/
+.cache/
+.turbo/
+.next/
+.expo/
+
+# Package-manager generated files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Non-runtime/reference material is intentionally outside runtime quality gates
+reference/**
+**/legacy-reference/**
+**/legacy-manus-reference/**
+docs/migration/**
+
+# Formatting gate is code/config focused
+**/*.md
+**/*.txt
+**/*.csv
