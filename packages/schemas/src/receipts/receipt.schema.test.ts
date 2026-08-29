@@ -66,7 +66,10 @@ const validReceipt = {
   providerReference: { system: 'meta', reference: 'reply-456' },
   executionOutcome: 'SUCCEEDED',
   correlation: { correlationId: 'cor_01ARZ3NDEKTSV4RRFFQ69G5FAZ' },
-  rawProviderDataReference: { system: 'object-store', reference: 'provider/meta/receipt-456.json' },
+  rawProviderDataReference: {
+    system: 'object-store',
+    reference: 'provider/meta/receipt-456.json',
+  },
   metadata: { responseClass: 'provider-ack' },
 } as const;
 
