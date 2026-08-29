@@ -20,12 +20,13 @@ At the start of W00-E:
 - Open PRs observed: none.
 - `.github/` directory: absent.
 - Repository rulesets endpoint: no rulesets returned.
-- Branch-protection read: unavailable to the current integration (`403 Resource not accessible by integration`).
-- Branch-protection/ruleset write capability: not exposed by the available repository tools in W00-E.
+- `main` branch summary reports `protected: false` and no required status checks.
+- Detailed branch-protection endpoint is unavailable to the current integration (`403 Resource not accessible by integration`).
+- Branch-protection/ruleset write capability is not exposed by the available repository tools in W00-E.
 - Merge methods currently allowed by repository metadata: merge commit, squash and rebase.
 - Auto-merge: disabled.
 
-Therefore W00-E does not claim branch protection is active. The target configuration is specified below for an authorized future application after capability and check names are verified.
+Therefore W00-E records `main` as currently unprotected and does not claim any GitHub-enforced protection is active. The target configuration is specified below for an authorized future application after capability and check names are verified.
 
 ## 3. Branch naming
 
