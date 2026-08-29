@@ -50,8 +50,7 @@ export interface ResultsPrimitiveValidators<
   readonly dataClassification?: (value: unknown) => value is TDataClassification;
 }
 
-const RFC3339_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+const RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 const PUBLIC_SECRET_PATTERNS = [
   /-----BEGIN [^-\r\n]*PRIVATE KEY-----/i,
@@ -111,9 +110,7 @@ function containsUnsafePublicText(value: string): boolean {
 
 function isRfc3339Timestamp(value: unknown): value is string {
   return (
-    typeof value === 'string' &&
-    RFC3339_PATTERN.test(value) &&
-    Number.isFinite(Date.parse(value))
+    typeof value === 'string' && RFC3339_PATTERN.test(value) && Number.isFinite(Date.parse(value))
   );
 }
 
@@ -213,7 +210,8 @@ function validateSafeDetailValue(
       issues.push({
         code: 'UNSAFE_DETAIL',
         path: `${path}.${key}`,
-        message: 'Secret-bearing, raw-provider or stack fields are forbidden in public error details.',
+        message:
+          'Secret-bearing, raw-provider or stack fields are forbidden in public error details.',
       });
       valid = false;
       continue;
@@ -338,7 +336,8 @@ export function validateCanonicalError<
     issues.push({
       code: 'UNSAFE_PUBLIC_TEXT',
       path: '$.message',
-      message: 'Public error message must be short, sanitized and free of credential/stack material.',
+      message:
+        'Public error message must be short, sanitized and free of credential/stack material.',
     });
   }
 
@@ -377,11 +376,7 @@ export function validateCanonicalError<
   if (issues.length > 0) return { success: false, issues };
   return {
     success: true,
-    data: input as unknown as CanonicalError<
-      TContractVersion,
-      TCorrelationId,
-      TDataClassification
-    >,
+    data: input as unknown as CanonicalError<TContractVersion, TCorrelationId, TDataClassification>,
   };
 }
 
