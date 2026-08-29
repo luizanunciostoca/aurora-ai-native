@@ -1,0 +1,26 @@
+# Aurora AI-Native — canonical ownership baseline
+# W00-E establishes an explicit default owner and reinforces sensitive areas.
+# More granular teams/users may replace these entries only through a governance PR.
+
+* @luizanunciostoca
+
+# Git governance and CI metadata
+/.github/ @luizanunciostoca
+/docs/governance/git/ @luizanunciostoca
+
+# High-authority contracts, schemas, registries and infrastructure
+/packages/contracts/ @luizanunciostoca
+/packages/schemas/ @luizanunciostoca
+/catalog/ @luizanunciostoca
+/infra/ @luizanunciostoca
+
+# Runtime surfaces and executors/services
+/apps/ @luizanunciostoca
+/services/ @luizanunciostoca
+
+# Evaluation and security-sensitive tooling
+/evals/ @luizanunciostoca
+/tools/security/ @luizanunciostoca
+
+# Legacy/reference material is protected from casual changes
+/reference/ @luizanunciostoca
