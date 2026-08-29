@@ -26,8 +26,10 @@ interface ExecutionResultBase<TContractVersion, TCorrelationId> {
   readonly timestamp: string;
 }
 
-export interface NotAttemptedExecutionResult<TContractVersion, TCorrelationId>
-  extends ExecutionResultBase<TContractVersion, TCorrelationId> {
+export interface NotAttemptedExecutionResult<
+  TContractVersion,
+  TCorrelationId,
+> extends ExecutionResultBase<TContractVersion, TCorrelationId> {
   readonly outcome: 'NOT_ATTEMPTED';
   readonly error?: never;
 }
@@ -42,8 +44,10 @@ export interface RejectedExecutionResult<
   readonly error: CanonicalError<TContractVersion, TCorrelationId, TDataClassification>;
 }
 
-export interface AcknowledgedExecutionResult<TContractVersion, TCorrelationId>
-  extends ExecutionResultBase<TContractVersion, TCorrelationId> {
+export interface AcknowledgedExecutionResult<
+  TContractVersion,
+  TCorrelationId,
+> extends ExecutionResultBase<TContractVersion, TCorrelationId> {
   /**
    * Execution/provider acknowledgement exists, but evidence is insufficient to
    * claim the intended external state is verified.
@@ -69,8 +73,10 @@ export interface UncertainExecutionResult<
   };
 }
 
-export interface VerifiedExecutionResult<TContractVersion, TCorrelationId>
-  extends ExecutionResultBase<TContractVersion, TCorrelationId> {
+export interface VerifiedExecutionResult<
+  TContractVersion,
+  TCorrelationId,
+> extends ExecutionResultBase<TContractVersion, TCorrelationId> {
   /** Sufficient authoritative evidence proves the intended external effect. */
   readonly outcome: 'VERIFIED';
   readonly error?: never;
@@ -89,24 +95,20 @@ export interface FailedExecutionResult<
   readonly error: CanonicalError<TContractVersion, TCorrelationId, TDataClassification> & {
     readonly code: Exclude<
       CanonicalError<TContractVersion, TCorrelationId, TDataClassification>['code'],
-      'EXECUTION_UNCERTAIN',
+      'EXECUTION_UNCERTAIN'
     >;
     readonly category: Exclude<
       CanonicalError<TContractVersion, TCorrelationId, TDataClassification>['category'],
-      'EXECUTION_UNCERTAIN',
+      'EXECUTION_UNCERTAIN'
     >;
     readonly retryability: Exclude<
       CanonicalError<TContractVersion, TCorrelationId, TDataClassification>['retryability'],
-      'RECONCILE_BEFORE_RETRY',
+      'RECONCILE_BEFORE_RETRY'
     >;
   };
 }
 
-export type ExecutionResult<
-  TContractVersion,
-  TCorrelationId,
-  TDataClassification = never,
-> =
+export type ExecutionResult<TContractVersion, TCorrelationId, TDataClassification = never> =
   | NotAttemptedExecutionResult<TContractVersion, TCorrelationId>
   | RejectedExecutionResult<TContractVersion, TCorrelationId, TDataClassification>
   | AcknowledgedExecutionResult<TContractVersion, TCorrelationId>
