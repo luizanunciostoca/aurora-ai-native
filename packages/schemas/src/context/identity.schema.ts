@@ -6,12 +6,7 @@ import {
   type SubjectRef,
 } from '../../../contracts/src/context/identity';
 import { IdentityIdSchema, ProviderExternalIdSchema } from '../ids/id.schemas';
-import {
-  asRecord,
-  assertExactKeys,
-  createRuntimeSchema,
-  parseNonEmptyString,
-} from './internal';
+import { asRecord, assertExactKeys, createRuntimeSchema, parseNonEmptyString } from './internal';
 
 const IDENTITY_KIND_SET = new Set<string>(IDENTITY_KINDS);
 

@@ -1,8 +1,4 @@
-import type {
-  Deadline,
-  Expiry,
-  Rfc3339Timestamp,
-} from '../../../contracts/src/context/deadline';
+import type { Deadline, Expiry, Rfc3339Timestamp } from '../../../contracts/src/context/deadline';
 import { asRecord, assertExactKeys, createRuntimeSchema } from './internal';
 
 const RFC3339_PATTERN =

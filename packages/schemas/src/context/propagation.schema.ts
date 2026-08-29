@@ -22,12 +22,8 @@ export const PropagationMetadataSchema = createRuntimeSchema<PropagationMetadata
 
     return {
       dataClassification: DataClassificationSchema.parse(record.dataClassification),
-      ...(record.deadline === undefined
-        ? {}
-        : { deadline: DeadlineSchema.parse(record.deadline) }),
-      ...(record.expiry === undefined
-        ? {}
-        : { expiry: ExpirySchema.parse(record.expiry) }),
+      ...(record.deadline === undefined ? {} : { deadline: DeadlineSchema.parse(record.deadline) }),
+      ...(record.expiry === undefined ? {} : { expiry: ExpirySchema.parse(record.expiry) }),
     };
   },
 );
