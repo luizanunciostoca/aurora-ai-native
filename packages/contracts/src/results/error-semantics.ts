@@ -87,7 +87,7 @@ export const ERROR_CODE_DEFINITIONS = {
   {
     readonly category: ErrorCategory;
     readonly retryability: RetryClassification;
-  }
+  },
 >;
 
 export type ErrorCode = keyof typeof ERROR_CODE_DEFINITIONS;
