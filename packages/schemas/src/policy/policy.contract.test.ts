@@ -131,7 +131,10 @@ test('OwnerDecision accepts canonical states and round-trips serialization', () 
 });
 
 test('OwnerDecision rejects unknown decision state', () => {
-  assert.throws(() => OwnerDecisionValidator.parse(ownerDecision({ decision: 'MAYBE' })), /unknown/);
+  assert.throws(
+    () => OwnerDecisionValidator.parse(ownerDecision({ decision: 'MAYBE' })),
+    /unknown/,
+  );
 });
 
 test('OwnerDecision rejects missing subject', () => {
