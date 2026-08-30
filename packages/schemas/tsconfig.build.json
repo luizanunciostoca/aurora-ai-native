@@ -2,6 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "paths": {},
+    "module": "Node16",
+    "moduleResolution": "Node16",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
