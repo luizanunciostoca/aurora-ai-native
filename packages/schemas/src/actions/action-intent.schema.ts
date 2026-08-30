@@ -49,14 +49,16 @@ function capability(input: unknown, path: string): CapabilityActionReference {
 function providerBinding(input: unknown, path: string): ProviderBinding {
   const record = asRecord(input, path);
   exactKeys(record, ['provider', 'targetType', 'targetReference'], ['provider'], path);
+  const targetType = optionalNonEmptyString(record.targetType, `${path}.targetType`, 128);
+  const targetReference = optionalNonEmptyString(
+    record.targetReference,
+    `${path}.targetReference`,
+    1024,
+  );
   return {
     provider: nonEmptyString(record.provider, `${path}.provider`, 128),
-    targetType: optionalNonEmptyString(record.targetType, `${path}.targetType`, 128),
-    targetReference: optionalNonEmptyString(
-      record.targetReference,
-      `${path}.targetReference`,
-      1024,
-    ),
+    ...(targetType === undefined ? {} : { targetType }),
+    ...(targetReference === undefined ? {} : { targetReference }),
   };
 }
 
@@ -65,10 +67,11 @@ function idempotency(input: unknown, path: string): ActionIdempotency {
   const mode = nonEmptyString(record.mode, `${path}.mode`, 32);
   if (mode === 'REQUIRED') {
     exactKeys(record, ['mode', 'key', 'reference'], ['mode', 'key'], path);
+    const reference = optionalNonEmptyString(record.reference, `${path}.reference`, 1024);
     return {
       mode,
       key: nonEmptyString(record.key, `${path}.key`, 512),
-      reference: optionalNonEmptyString(record.reference, `${path}.reference`, 1024),
+      ...(reference === undefined ? {} : { reference }),
     };
   }
   if (mode === 'NOT_APPLICABLE') {
@@ -196,37 +199,46 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
       [],
       'ActionIntent.executionClassification',
     );
-    executionClassification = {
-      riskClassificationRef: optionalNonEmptyString(
-        value.riskClassificationRef,
-        'ActionIntent.executionClassification.riskClassificationRef',
-        512,
-      ),
-      sideEffectClassificationRef: optionalNonEmptyString(
-        value.sideEffectClassificationRef,
-        'ActionIntent.executionClassification.sideEffectClassificationRef',
-        512,
-      ),
-    };
-    if (
-      !executionClassification.riskClassificationRef &&
-      !executionClassification.sideEffectClassificationRef
-    ) {
+    const riskClassificationRef = optionalNonEmptyString(
+      value.riskClassificationRef,
+      'ActionIntent.executionClassification.riskClassificationRef',
+      512,
+    );
+    const sideEffectClassificationRef = optionalNonEmptyString(
+      value.sideEffectClassificationRef,
+      'ActionIntent.executionClassification.sideEffectClassificationRef',
+      512,
+    );
+    if (riskClassificationRef === undefined && sideEffectClassificationRef === undefined) {
       throw new TypeError(
         'ActionIntent.executionClassification: at least one reference is required',
       );
     }
+    executionClassification = {
+      ...(riskClassificationRef === undefined ? {} : { riskClassificationRef }),
+      ...(sideEffectClassificationRef === undefined ? {} : { sideEffectClassificationRef }),
+    };
   }
+
+  const providerBindingValue =
+    record.providerBinding === undefined
+      ? undefined
+      : providerBinding(record.providerBinding, 'ActionIntent.providerBinding');
+  const expectedStateValue =
+    record.expectedState === undefined
+      ? undefined
+      : expectedState(record.expectedState, 'ActionIntent.expectedState');
+  const metadata =
+    record.metadata === undefined
+      ? undefined
+      : restrictedMetadata(record.metadata, 'ActionIntent.metadata');
 
   return {
     kind: 'ACTION_INTENT',
     schemaVersion: dependencies.parseContractVersion(record.schemaVersion),
     actionIntentId: dependencies.parseActionIntentId(record.actionIntentId),
     capability: capability(record.capability, 'ActionIntent.capability'),
-    providerBinding:
-      record.providerBinding === undefined
-        ? undefined
-        : providerBinding(record.providerBinding, 'ActionIntent.providerBinding'),
+    ...(providerBindingValue === undefined ? {} : { providerBinding: providerBindingValue }),
     tenant: dependencies.parseTenantContext(record.tenant),
     actor: dependencies.parseActorRef(record.actor),
     requestOrigin: dependencies.parseActorRef(record.requestOrigin),
@@ -234,18 +246,12 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
     resolvedParameters: jsonObject(record.resolvedParameters, 'ActionIntent.resolvedParameters'),
     idempotency: idempotency(record.idempotency, 'ActionIntent.idempotency'),
     preconditions: preconditions(record.preconditions, 'ActionIntent.preconditions'),
-    expectedState:
-      record.expectedState === undefined
-        ? undefined
-        : expectedState(record.expectedState, 'ActionIntent.expectedState'),
+    ...(expectedStateValue === undefined ? {} : { expectedState: expectedStateValue }),
     deadlineAt: timestamp(record.deadlineAt, 'ActionIntent.deadlineAt'),
     authority: authority(record.authority, 'ActionIntent.authority', dependencies),
-    executionClassification,
+    ...(executionClassification === undefined ? {} : { executionClassification }),
     dataClassification: dependencies.parseDataClassification(record.dataClassification),
-    metadata:
-      record.metadata === undefined
-        ? undefined
-        : restrictedMetadata(record.metadata, 'ActionIntent.metadata'),
+    ...(metadata === undefined ? {} : { metadata }),
   };
 }
 
