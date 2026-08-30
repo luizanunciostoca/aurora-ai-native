@@ -4,11 +4,11 @@ import type {
   Deadline,
   ActorRef,
   TenantContext,
-} from '../context/index.js';
-import type { CommandId } from '../ids/types.js';
-import type { ContractVersion } from '../versioning/types.js';
-import type { EnvelopeMetadata } from './envelope-metadata.js';
-import type { JsonValue } from './json-value.js';
+} from '../context/index';
+import type { CommandId } from '../ids/types';
+import type { ContractVersion } from '../versioning/types';
+import type { EnvelopeMetadata } from './envelope-metadata';
+import type { JsonValue } from './json-value';
 
 export const COMMAND_ENVELOPE_KIND = 'COMMAND' as const;
 

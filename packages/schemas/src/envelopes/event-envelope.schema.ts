@@ -21,9 +21,9 @@ import {
   parseRfc3339Timestamp,
   requireOwn,
   stableStringify,
-} from './envelope-common.js';
-import type { RuntimeSchema, RuntimeValidator } from './runtime-schema.js';
-import { safeParseWith } from './runtime-schema.js';
+} from './envelope-common';
+import type { RuntimeSchema, RuntimeValidator } from './runtime-schema';
+import { safeParseWith } from './runtime-schema';
 
 export interface EventEnvelopeSchemaDependencies {
   readonly contractVersion: RuntimeValidator<ContractVersion>;

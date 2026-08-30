@@ -3,13 +3,13 @@ export {
   type CommandEnvelope,
   type CommandEnvelopeKind,
   type CommandType,
-} from './command-envelope.js';
-export type { EnvelopeMetadata } from './envelope-metadata.js';
-export type { EnvelopeSource } from './envelope-source.js';
+} from './command-envelope';
+export type { EnvelopeMetadata } from './envelope-metadata';
+export type { EnvelopeSource } from './envelope-source';
 export {
   EVENT_ENVELOPE_KIND,
   type EventEnvelope,
   type EventEnvelopeKind,
   type EventType,
-} from './event-envelope.js';
-export type { JsonPrimitive, JsonValue } from './json-value.js';
+} from './event-envelope';
+export type { JsonPrimitive, JsonValue } from './json-value';

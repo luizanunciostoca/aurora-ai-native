@@ -3,12 +3,12 @@ import type {
   DataClassification,
   ActorRef,
   TenantContext,
-} from '../context/index.js';
-import type { EventId } from '../ids/types.js';
-import type { ContractVersion } from '../versioning/types.js';
-import type { EnvelopeMetadata } from './envelope-metadata.js';
-import type { EnvelopeSource } from './envelope-source.js';
-import type { JsonValue } from './json-value.js';
+} from '../context/index';
+import type { EventId } from '../ids/types';
+import type { ContractVersion } from '../versioning/types';
+import type { EnvelopeMetadata } from './envelope-metadata';
+import type { EnvelopeSource } from './envelope-source';
+import type { JsonValue } from './json-value';
 
 export const EVENT_ENVELOPE_KIND = 'EVENT' as const;
 
