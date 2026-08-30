@@ -10,10 +10,7 @@ import type {
   IdentityReference,
 } from '../../../contracts/src/context/index.js';
 import type { ContractVersion } from '../../../contracts/src/versioning/index.js';
-import {
-  ActionIntentSchema,
-  type ActionIntentSchemaDependencies,
-} from './action-intent.schema.js';
+import { ActionIntentSchema, type ActionIntentSchemaDependencies } from './action-intent.schema.js';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -81,9 +78,7 @@ const validIntent = {
   correlation: { correlationId: 'cor_01ARZ3NDEKTSV4RRFFQ69G5FAZ' },
   resolvedParameters: { text: 'Obrigado!', postId: 'post-123' },
   idempotency: { mode: 'REQUIRED', key: 'instagram:comment-123:reply-v1' },
-  preconditions: [
-    { preconditionType: 'COMMENT_EXISTS', parameters: { commentId: 'comment-123' } },
-  ],
+  preconditions: [{ preconditionType: 'COMMENT_EXISTS', parameters: { commentId: 'comment-123' } }],
   expectedState: { stateType: 'REPLY_PRESENT', value: { commentId: 'comment-123' } },
   deadlineAt: '2026-08-29T23:30:00-03:00',
   authority: { kind: 'POLICY_TOKEN', policyTokenId: 'ptk_01ARZ3NDEKTSV4RRFFQ69G5FB0' },
@@ -119,10 +114,7 @@ expectThrows(
 
 expectThrows(
   () =>
-    ActionIntentSchema.parse(
-      { ...validIntent, idempotency: { mode: 'REQUIRED' } },
-      dependencies,
-    ),
+    ActionIntentSchema.parse({ ...validIntent, idempotency: { mode: 'REQUIRED' } }, dependencies),
   'idempotency.key: missing required field',
 );
 
