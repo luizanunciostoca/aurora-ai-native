@@ -1,8 +1,8 @@
-import type { ActionIntentId, ExecutionId, ReceiptId } from '../ids/index.js';
-import type { CorrelationContext } from '../context/index.js';
-import type { ExecutionOutcome } from '../results/index.js';
-import type { ContractVersion } from '../versioning/index.js';
-import type { ExternalReference, RestrictedMetadata } from '../actions/index.js';
+import type { ExternalReference, RestrictedMetadata } from '../actions';
+import type { CorrelationContext, Rfc3339Timestamp } from '../context';
+import type { ActionIntentId, ExecutionId, ReceiptId } from '../ids';
+import type { ExecutionOutcome } from '../results';
+import type { ContractVersion } from '../versioning';
 
 export interface ReceiptExecutorReference {
   readonly executor: string;
@@ -27,9 +27,9 @@ export interface Receipt {
   readonly executor: ReceiptExecutorReference;
   readonly provider: ReceiptProviderReference;
   readonly attempt: number;
-  readonly attemptedAt: string;
-  readonly acknowledgedAt?: string;
-  readonly returnedAt?: string;
+  readonly attemptedAt: Rfc3339Timestamp;
+  readonly acknowledgedAt?: Rfc3339Timestamp;
+  readonly returnedAt?: Rfc3339Timestamp;
   readonly providerReference?: ExternalReference;
   readonly executionOutcome?: ExecutionOutcome;
   readonly correlation: CorrelationContext;
