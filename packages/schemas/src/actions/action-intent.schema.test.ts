@@ -17,10 +17,7 @@ function expectThrows(fn: () => unknown, contains: string): void {
     fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    assert(
-      message.includes(contains),
-      `expected error containing "${contains}", got "${message}"`,
-    );
+    assert(message.includes(contains), `expected error containing "${contains}", got "${message}"`);
     return;
   }
   throw new Error(`expected function to throw: ${contains}`);
@@ -85,9 +82,7 @@ const validIntent = {
   correlation: { correlationId: 'cor_01ARZ3NDEKTSV4RRFFQ69G5FAZ' },
   resolvedParameters: { text: 'Obrigado!', postId: 'post-123' },
   idempotency: { mode: 'REQUIRED', key: 'instagram:comment-123:reply-v1' },
-  preconditions: [
-    { preconditionType: 'COMMENT_EXISTS', parameters: { commentId: 'comment-123' } },
-  ],
+  preconditions: [{ preconditionType: 'COMMENT_EXISTS', parameters: { commentId: 'comment-123' } }],
   expectedState: { stateType: 'REPLY_PRESENT', value: { commentId: 'comment-123' } },
   deadlineAt: '2026-08-29T23:30:00-03:00',
   authority: { kind: 'POLICY_TOKEN', policyTokenId: 'ptk_test' },
@@ -127,10 +122,7 @@ expectThrows(
 
 expectThrows(
   () =>
-    ActionIntentSchema.parse(
-      { ...validIntent, idempotency: { mode: 'REQUIRED' } },
-      dependencies,
-    ),
+    ActionIntentSchema.parse({ ...validIntent, idempotency: { mode: 'REQUIRED' } }, dependencies),
   'idempotency.key: missing required field',
 );
 
