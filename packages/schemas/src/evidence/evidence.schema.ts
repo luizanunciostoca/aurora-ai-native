@@ -1,4 +1,8 @@
-import type { ActorRef, CorrelationContext, DataClassification } from '../../../contracts/src/context';
+import type {
+  ActorRef,
+  CorrelationContext,
+  DataClassification,
+} from '../../../contracts/src/context';
 import type {
   Evidence,
   EvidenceSource,
@@ -110,7 +114,11 @@ function verification(
 ): EvidenceVerification {
   const record = asRecord(input, path);
   exactKeys(record, ['state', 'verifiedAt', 'verifier', 'method'], ['state'], path);
-  if (record.state !== 'UNVERIFIED' && record.state !== 'VERIFIED' && record.state !== 'REJECTED') {
+  if (
+    record.state !== 'UNVERIFIED' &&
+    record.state !== 'VERIFIED' &&
+    record.state !== 'REJECTED'
+  ) {
     throw new TypeError(`${path}.state: unsupported verification state`);
   }
   const verifiedAt =
