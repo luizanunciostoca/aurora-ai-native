@@ -19,10 +19,7 @@ function expectThrows(fn: () => unknown, contains: string): void {
     fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    assert(
-      message.includes(contains),
-      `expected error containing "${contains}", got "${message}"`,
-    );
+    assert(message.includes(contains), `expected error containing "${contains}", got "${message}"`);
     return;
   }
   throw new Error(`expected function to throw: ${contains}`);
@@ -75,10 +72,7 @@ const validCommand = {
 
 const command: CommandEnvelope = commandValidator.parse(validCommand);
 assert(command.kind === 'COMMAND', 'CommandEnvelope kind drifted');
-assert(
-  command.tenant.tenantId === validCommand.tenant.tenantId,
-  'CommandEnvelope tenant drifted',
-);
+assert(command.tenant.tenantId === validCommand.tenant.tenantId, 'CommandEnvelope tenant drifted');
 
 const commandWire = commandValidator.serialize(command);
 const commandRoundTrip: CommandEnvelope = commandValidator.parse(
@@ -93,10 +87,7 @@ expectThrows(
   () => commandValidator.parse({ ...validCommand, schemaVersion: '2.0.0' }),
   'Unsupported contract version',
 );
-expectThrows(
-  () => commandValidator.parse({ ...validCommand, kind: 'EVENT' }),
-  'expected COMMAND',
-);
+expectThrows(() => commandValidator.parse({ ...validCommand, kind: 'EVENT' }), 'expected COMMAND');
 expectThrows(
   () => commandValidator.parse({ ...validCommand, commandId: `evt_${ulids.command}` }),
   'Expected canonical cmd_',
@@ -169,10 +160,7 @@ expectThrows(
   () => eventValidator.parse({ ...validEvent, schemaVersion: '2.0.0' }),
   'Unsupported contract version',
 );
-expectThrows(
-  () => eventValidator.parse({ ...validEvent, kind: 'COMMAND' }),
-  'expected EVENT',
-);
+expectThrows(() => eventValidator.parse({ ...validEvent, kind: 'COMMAND' }), 'expected EVENT');
 expectThrows(
   () => eventValidator.parse({ ...validEvent, eventType: 'notnamespaced' }),
   'namespaced type string',
