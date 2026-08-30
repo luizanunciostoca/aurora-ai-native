@@ -3,8 +3,7 @@ import type { EnvelopeMetadata, EnvelopeSource, JsonValue } from '@aurora/contra
 const TYPE_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/;
 const LABEL_KEY_PATTERN = /^[a-z][a-z0-9_.-]{0,63}$/;
 const EXTENSION_KEY_PATTERN = /^x-[a-z][a-z0-9_.-]{0,125}$/;
-const RFC3339_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+const RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 const RESERVED_METADATA_EXTENSIONS = new Set([
   'x-authorization',
