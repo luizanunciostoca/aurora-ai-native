@@ -1,7 +1,7 @@
-import type { CorrelationContext } from '../../../contracts/src/context';
-import type { ActionIntentId, ExecutionId, ReceiptId } from '../../../contracts/src/ids';
-import type { ExecutionOutcome } from '../../../contracts/src/results';
-import type { ContractVersion } from '../../../contracts/src/versioning';
+import type { CorrelationContext } from '@aurora/contracts/context';
+import type { ActionIntentId, ExecutionId, ReceiptId } from '@aurora/contracts/ids';
+import type { ExecutionOutcome } from '@aurora/contracts/results';
+import type { ContractVersion } from '@aurora/contracts/versioning';
 import { ReceiptSchema, type ReceiptSchemaDependencies } from './receipt.schema';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -26,6 +26,15 @@ const prefixed = <T>(prefix: string, input: unknown): T => {
   return input as T;
 };
 
+const canonicalOutcomes = new Set<string>([
+  'NOT_ATTEMPTED',
+  'REJECTED',
+  'EXECUTED_ACKNOWLEDGED',
+  'EXECUTION_UNCERTAIN',
+  'VERIFIED',
+  'FAILED',
+]);
+
 const dependencies: ReceiptSchemaDependencies = {
   parseContractVersion(input) {
     if (input !== '1.0.0') throw new TypeError('unsupported ContractVersion');
@@ -40,11 +49,7 @@ const dependencies: ReceiptSchemaDependencies = {
     return input as CorrelationContext;
   },
   parseExecutionOutcome(input) {
-    if (
-      !['SUCCEEDED', 'FAILED', 'REJECTED', 'CANCELLED', 'EXECUTION_UNCERTAIN'].includes(
-        String(input),
-      )
-    ) {
+    if (!canonicalOutcomes.has(String(input))) {
       throw new TypeError('unsupported ExecutionOutcome');
     }
     return input as ExecutionOutcome;
@@ -64,7 +69,7 @@ const validReceipt = {
   acknowledgedAt: '2026-08-29T23:20:01-03:00',
   returnedAt: '2026-08-29T23:20:02-03:00',
   providerReference: { system: 'meta', reference: 'reply-456' },
-  executionOutcome: 'SUCCEEDED',
+  executionOutcome: 'EXECUTED_ACKNOWLEDGED',
   correlation: { correlationId: 'cor_01ARZ3NDEKTSV4RRFFQ69G5FAZ' },
   rawProviderDataReference: {
     system: 'object-store',
@@ -79,8 +84,8 @@ assert(
   'Receipt must link to canonical ActionIntent',
 );
 assert(
-  parsed.executionOutcome === 'SUCCEEDED',
-  'Receipt must reuse canonical execution outcome semantics',
+  parsed.executionOutcome === 'EXECUTED_ACKNOWLEDGED',
+  'Receipt provider acknowledgement must not imply VERIFIED external state',
 );
 
 const roundTrip = ReceiptSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
@@ -102,7 +107,7 @@ expectThrows(
 );
 
 expectThrows(
-  () => ReceiptSchema.parse({ ...validReceipt, executionOutcome: 'VERIFIED' }, dependencies),
+  () => ReceiptSchema.parse({ ...validReceipt, executionOutcome: 'SUCCEEDED' }, dependencies),
   'unsupported ExecutionOutcome',
 );
 

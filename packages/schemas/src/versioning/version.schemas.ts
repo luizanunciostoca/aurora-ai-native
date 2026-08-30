@@ -1,7 +1,7 @@
-import type { ContractVersion } from '../../../contracts/src/versioning/types';
-import type { Version } from '../../../contracts/src/versioning/types';
-import type { VersionParts } from '../../../contracts/src/versioning/types';
-import { CONTRACT_VERSION_REGISTRY } from '../../../registries/src/versioning/contract-version.registry';
+import type { ContractVersion } from '@aurora/contracts/versioning';
+import type { Version } from '@aurora/contracts/versioning';
+import type { VersionParts } from '@aurora/contracts/versioning';
+import { CONTRACT_VERSION_REGISTRY } from '@aurora/registries/versioning';
 
 export interface VersionStringSchema<T extends string> {
   is(value: unknown): value is T;

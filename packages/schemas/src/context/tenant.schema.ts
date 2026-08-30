@@ -1,4 +1,4 @@
-import type { TenantContext } from '../../../contracts/src/context/tenant';
+import type { TenantContext } from '@aurora/contracts/context';
 import { TenantIdSchema } from '../ids/id.schemas';
 import { asRecord, assertExactKeys, createRuntimeSchema } from './internal';
 

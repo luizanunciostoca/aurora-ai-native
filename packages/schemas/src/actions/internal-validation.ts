@@ -3,8 +3,8 @@ import type {
   JsonPrimitive,
   JsonValue,
   RestrictedMetadata,
-} from '../../../contracts/src/actions';
-import type { Rfc3339Timestamp } from '../../../contracts/src/context';
+} from '@aurora/contracts/actions';
+import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 
 export type DependencyParser<T> = (input: unknown) => T;
 

@@ -12,8 +12,8 @@ import { PolicyTokenIdSchema } from './id.schemas';
 import { ProviderExternalIdSchema } from './id.schemas';
 import { ReceiptIdSchema } from './id.schemas';
 import { TenantIdSchema } from './id.schemas';
-import { ID_NAMESPACE_REGISTRY } from '../../../registries/src/ids/id-namespace.registry';
-import { PROVIDER_IDENTIFIER_POLICY } from '../../../registries/src/ids/id-namespace.registry';
+import { ID_NAMESPACE_REGISTRY } from '@aurora/registries/ids';
+import { PROVIDER_IDENTIFIER_POLICY } from '@aurora/registries/ids';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {

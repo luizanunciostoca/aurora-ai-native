@@ -4,7 +4,7 @@ import {
   type ExternalIdentityRef,
   type IdentityKind,
   type SubjectRef,
-} from '../../../contracts/src/context/identity';
+} from '@aurora/contracts/context';
 import { IdentityIdSchema, ProviderExternalIdSchema } from '../ids/id.schemas';
 import { asRecord, assertExactKeys, createRuntimeSchema, parseNonEmptyString } from './internal';
 

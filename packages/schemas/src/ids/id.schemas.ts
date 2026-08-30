@@ -1,17 +1,17 @@
-import type { ActionIntentId } from '../../../contracts/src/ids/types';
-import type { CausationId } from '../../../contracts/src/ids/types';
-import type { CommandId } from '../../../contracts/src/ids/types';
-import type { CorrelationId } from '../../../contracts/src/ids/types';
-import type { DecisionId } from '../../../contracts/src/ids/types';
-import type { EventId } from '../../../contracts/src/ids/types';
-import type { EvidenceId } from '../../../contracts/src/ids/types';
-import type { ExecutionId } from '../../../contracts/src/ids/types';
-import type { IdentityId } from '../../../contracts/src/ids/types';
-import type { PolicyTokenId } from '../../../contracts/src/ids/types';
-import type { ProviderExternalId } from '../../../contracts/src/ids/types';
-import type { ReceiptId } from '../../../contracts/src/ids/types';
-import type { TenantId } from '../../../contracts/src/ids/types';
-import { ID_NAMESPACE_REGISTRY } from '../../../registries/src/ids/id-namespace.registry';
+import type { ActionIntentId } from '@aurora/contracts/ids';
+import type { CausationId } from '@aurora/contracts/ids';
+import type { CommandId } from '@aurora/contracts/ids';
+import type { CorrelationId } from '@aurora/contracts/ids';
+import type { DecisionId } from '@aurora/contracts/ids';
+import type { EventId } from '@aurora/contracts/ids';
+import type { EvidenceId } from '@aurora/contracts/ids';
+import type { ExecutionId } from '@aurora/contracts/ids';
+import type { IdentityId } from '@aurora/contracts/ids';
+import type { PolicyTokenId } from '@aurora/contracts/ids';
+import type { ProviderExternalId } from '@aurora/contracts/ids';
+import type { ReceiptId } from '@aurora/contracts/ids';
+import type { TenantId } from '@aurora/contracts/ids';
+import { ID_NAMESPACE_REGISTRY } from '@aurora/registries/ids';
 
 export interface StringSchema<T extends string> {
   is(value: unknown): value is T;
