@@ -21,10 +21,7 @@ function expectThrows(fn: () => unknown, contains: string): void {
     fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    assert(
-      message.includes(contains),
-      `expected error containing "${contains}", got "${message}"`,
-    );
+    assert(message.includes(contains), `expected error containing "${contains}", got "${message}"`);
     return;
   }
   throw new Error(`expected function to throw: ${contains}`);
