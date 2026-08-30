@@ -207,10 +207,7 @@ function parseLabels(input: unknown, path: string): Readonly<Record<string, stri
   return labels;
 }
 
-function parseExtensions(
-  input: unknown,
-  path: string,
-): Readonly<Record<`x-${string}`, JsonValue>> {
+function parseExtensions(input: unknown, path: string): Readonly<Record<`x-${string}`, JsonValue>> {
   const record = asRecord(input, path);
   const keys = Object.keys(record);
   if (keys.length > 32) {
