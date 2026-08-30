@@ -3,7 +3,8 @@ import type {
   JsonPrimitive,
   JsonValue,
   RestrictedMetadata,
-} from '../../../contracts/src/actions/index.js';
+} from '../../../contracts/src/actions';
+import type { Rfc3339Timestamp } from '../../../contracts/src/context';
 
 export type DependencyParser<T> = (input: unknown) => T;
 
@@ -51,12 +52,12 @@ export function optionalNonEmptyString(
 
 const RFC3339 = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
-export function timestamp(input: unknown, path: string): string {
+export function timestamp(input: unknown, path: string): Rfc3339Timestamp {
   const value = nonEmptyString(input, path, 64);
   if (!RFC3339.test(value) || Number.isNaN(Date.parse(value))) {
     return fail(path, 'expected valid RFC3339 timestamp');
   }
-  return value;
+  return value as Rfc3339Timestamp;
 }
 
 function jsonValue(input: unknown, path: string, depth: number): JsonValue {
