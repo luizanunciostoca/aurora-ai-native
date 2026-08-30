@@ -113,10 +113,7 @@ expectThrows(
 
 expectThrows(
   () =>
-    ReceiptSchema.parse(
-      { ...validReceipt, returnedAt: '2026-08-29T23:19:59-03:00' },
-      dependencies,
-    ),
+    ReceiptSchema.parse({ ...validReceipt, returnedAt: '2026-08-29T23:19:59-03:00' }, dependencies),
   'cannot precede attemptedAt',
 );
 
