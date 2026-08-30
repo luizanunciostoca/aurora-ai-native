@@ -1,4 +1,9 @@
-import type { ActorRef, CorrelationContext, DataClassification, TenantContext } from '../../../contracts/src/context';
+import type {
+  ActorRef,
+  CorrelationContext,
+  DataClassification,
+  TenantContext,
+} from '../../../contracts/src/context';
 import type { ActionIntentId, DecisionId, PolicyTokenId } from '../../../contracts/src/ids';
 import type { ContractVersion } from '../../../contracts/src/versioning';
 import { ActionIntentSchema, type ActionIntentSchemaDependencies } from './action-intent.schema';
@@ -12,7 +17,10 @@ function expectThrows(fn: () => unknown, contains: string): void {
     fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    assert(message.includes(contains), `expected error containing "${contains}", got "${message}"`);
+    assert(
+      message.includes(contains),
+      `expected error containing "${contains}", got "${message}"`,
+    );
     return;
   }
   throw new Error(`expected function to throw: ${contains}`);
@@ -66,17 +74,23 @@ const validIntent = {
   schemaVersion: '1.0.0',
   actionIntentId: 'act_01ARZ3NDEKTSV4RRFFQ69G5FAV',
   capability: { capability: 'instagram.comment.reply', actionType: 'CREATE_REPLY' },
-  providerBinding: { provider: 'meta', targetType: 'comment', targetReference: 'comment-123' },
+  providerBinding: {
+    provider: 'meta',
+    targetType: 'comment',
+    targetReference: 'comment-123',
+  },
   tenant: { tenantId: 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAW' },
   actor: { identityId: 'idn_01ARZ3NDEKTSV4RRFFQ69G5FAX', kind: 'AGENT' },
   requestOrigin: { identityId: 'idn_01ARZ3NDEKTSV4RRFFQ69G5FAY', kind: 'HUMAN' },
   correlation: { correlationId: 'cor_01ARZ3NDEKTSV4RRFFQ69G5FAZ' },
   resolvedParameters: { text: 'Obrigado!', postId: 'post-123' },
   idempotency: { mode: 'REQUIRED', key: 'instagram:comment-123:reply-v1' },
-  preconditions: [{ preconditionType: 'COMMENT_EXISTS', parameters: { commentId: 'comment-123' } }],
+  preconditions: [
+    { preconditionType: 'COMMENT_EXISTS', parameters: { commentId: 'comment-123' } },
+  ],
   expectedState: { stateType: 'REPLY_PRESENT', value: { commentId: 'comment-123' } },
   deadlineAt: '2026-08-29T23:30:00-03:00',
-  authority: { kind: 'POLICY_TOKEN', policyTokenId: 'ptk_01ARZ3NDEKTSV4RRFFQ69G5FB0' },
+  authority: { kind: 'POLICY_TOKEN', policyTokenId: 'ptk_test' },
   executionClassification: {
     riskClassificationRef: 'risk:external-write',
     sideEffectClassificationRef: 'side-effect:write-external',
@@ -86,25 +100,46 @@ const validIntent = {
 } as const;
 
 const parsed = ActionIntentSchema.parse(validIntent, dependencies);
-assert(parsed.actionIntentId === validIntent.actionIntentId, 'valid ActionIntent must retain canonical ID');
-assert(parsed.tenant.tenantId === validIntent.tenant.tenantId, 'ActionIntent must retain canonical tenant context');
+assert(
+  parsed.actionIntentId === validIntent.actionIntentId,
+  'valid ActionIntent must retain canonical ID',
+);
+assert(
+  parsed.tenant.tenantId === validIntent.tenant.tenantId,
+  'ActionIntent must retain canonical tenant context',
+);
 assert(parsed.idempotency.mode === 'REQUIRED', 'valid ActionIntent must retain idempotency mode');
 
 const roundTrip = ActionIntentSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
-assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'ActionIntent serialization round trip must be stable');
+assert(
+  JSON.stringify(roundTrip) === JSON.stringify(parsed),
+  'ActionIntent serialization round trip must be stable',
+);
 
 expectThrows(
-  () => ActionIntentSchema.parse({ ...validIntent, resolvedParameters: ['ambiguous', 'array'] }, dependencies),
+  () =>
+    ActionIntentSchema.parse(
+      { ...validIntent, resolvedParameters: ['ambiguous', 'array'] },
+      dependencies,
+    ),
   'resolvedParameters: expected object',
 );
 
 expectThrows(
-  () => ActionIntentSchema.parse({ ...validIntent, idempotency: { mode: 'REQUIRED' } }, dependencies),
+  () =>
+    ActionIntentSchema.parse(
+      { ...validIntent, idempotency: { mode: 'REQUIRED' } },
+      dependencies,
+    ),
   'idempotency.key: missing required field',
 );
 
 expectThrows(
-  () => ActionIntentSchema.parse({ ...validIntent, authority: { ...validIntent.authority, grantedAuthority: 'ADMIN' } }, dependencies),
+  () =>
+    ActionIntentSchema.parse(
+      { ...validIntent, authority: { ...validIntent.authority, grantedAuthority: 'ADMIN' } },
+      dependencies,
+    ),
   'grantedAuthority: unknown field',
 );
 
@@ -115,7 +150,10 @@ const ownerDecisionIntent = ActionIntentSchema.parse(
   },
   dependencies,
 );
-assert(ownerDecisionIntent.authority.kind === 'OWNER_DECISION', 'OwnerDecision authority must use canonical DecisionId');
+assert(
+  ownerDecisionIntent.authority.kind === 'OWNER_DECISION',
+  'OwnerDecision authority must use canonical DecisionId',
+);
 
 expectThrows(
   () => ActionIntentSchema.parse({ ...validIntent, schemaVersion: '2.0.0' }, dependencies),
@@ -123,7 +161,11 @@ expectThrows(
 );
 
 expectThrows(
-  () => ActionIntentSchema.parse({ ...validIntent, correlation: { correlationId: 'not-canonical' } }, dependencies),
+  () =>
+    ActionIntentSchema.parse(
+      { ...validIntent, correlation: { correlationId: 'not-canonical' } },
+      dependencies,
+    ),
   'expected cor_ prefixed ID',
 );
 
@@ -133,7 +175,11 @@ expectThrows(
 );
 
 expectThrows(
-  () => ActionIntentSchema.parse({ ...validIntent, tenantId: validIntent.tenant.tenantId }, dependencies),
+  () =>
+    ActionIntentSchema.parse(
+      { ...validIntent, tenantId: validIntent.tenant.tenantId },
+      dependencies,
+    ),
   'tenantId: unknown field',
 );
 
