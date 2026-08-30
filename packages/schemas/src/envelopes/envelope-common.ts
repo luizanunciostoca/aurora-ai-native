@@ -158,9 +158,7 @@ export function normalizeJsonValue(input: unknown, path: string, depth = 0): Jso
   }
 
   if (Array.isArray(input)) {
-    return input.map((value, index) =>
-      normalizeJsonValue(value, `${path}[${index}]`, depth + 1),
-    );
+    return input.map((value, index) => normalizeJsonValue(value, `${path}[${index}]`, depth + 1));
   }
 
   const record = asRecord(input, path);
