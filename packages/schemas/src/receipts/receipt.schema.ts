@@ -1,8 +1,8 @@
-import type { Receipt } from '../../../contracts/src/receipts/index.js';
-import type { ActionIntentId, ExecutionId, ReceiptId } from '../../../contracts/src/ids/index.js';
-import type { CorrelationContext } from '../../../contracts/src/context/index.js';
-import type { ExecutionOutcome } from '../../../contracts/src/results/index.js';
-import type { ContractVersion } from '../../../contracts/src/versioning/index.js';
+import type { CorrelationContext } from '../../../contracts/src/context';
+import type { ActionIntentId, ExecutionId, ReceiptId } from '../../../contracts/src/ids';
+import type { Receipt } from '../../../contracts/src/receipts';
+import type { ExecutionOutcome } from '../../../contracts/src/results';
+import type { ContractVersion } from '../../../contracts/src/versioning';
 import {
   asRecord,
   exactKeys,
@@ -12,7 +12,7 @@ import {
   restrictedMetadata,
   timestamp,
   type DependencyParser,
-} from '../actions/internal-validation.js';
+} from '../actions/internal-validation';
 
 export interface ReceiptSchemaDependencies {
   readonly parseContractVersion: DependencyParser<ContractVersion>;
@@ -133,7 +133,7 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
       record.metadata === undefined
         ? undefined
         : restrictedMetadata(record.metadata, 'Receipt.metadata'),
-  } as Receipt;
+  };
 }
 
 export const ReceiptSchema = Object.freeze({ parse });
