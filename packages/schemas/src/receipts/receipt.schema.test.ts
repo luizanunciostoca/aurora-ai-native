@@ -13,10 +13,7 @@ function expectThrows(fn: () => unknown, contains: string): void {
     fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    assert(
-      message.includes(contains),
-      `expected error containing "${contains}", got "${message}"`,
-    );
+    assert(message.includes(contains), `expected error containing "${contains}", got "${message}"`);
     return;
   }
   throw new Error(`expected function to throw: ${contains}`);
@@ -116,10 +113,7 @@ expectThrows(
 
 expectThrows(
   () =>
-    ReceiptSchema.parse(
-      { ...validReceipt, returnedAt: '2026-08-29T23:19:59-03:00' },
-      dependencies,
-    ),
+    ReceiptSchema.parse({ ...validReceipt, returnedAt: '2026-08-29T23:19:59-03:00' }, dependencies),
   'cannot precede attemptedAt',
 );
 
