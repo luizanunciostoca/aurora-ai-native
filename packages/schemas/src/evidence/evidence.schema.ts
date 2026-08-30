@@ -114,15 +114,13 @@ function verification(
 ): EvidenceVerification {
   const record = asRecord(input, path);
   exactKeys(record, ['state', 'verifiedAt', 'verifier', 'method'], ['state'], path);
-  if (
-    record.state !== 'UNVERIFIED' &&
-    record.state !== 'VERIFIED' &&
-    record.state !== 'REJECTED'
-  ) {
+  if (record.state !== 'UNVERIFIED' && record.state !== 'VERIFIED' && record.state !== 'REJECTED') {
     throw new TypeError(`${path}.state: unsupported verification state`);
   }
   const verifiedAt =
-    record.verifiedAt === undefined ? undefined : timestamp(record.verifiedAt, `${path}.verifiedAt`);
+    record.verifiedAt === undefined
+      ? undefined
+      : timestamp(record.verifiedAt, `${path}.verifiedAt`);
   const verifier =
     record.verifier === undefined ? undefined : dependencies.parseActorRef(record.verifier);
   const method = optionalNonEmptyString(record.method, `${path}.method`, 256);
