@@ -1,16 +1,7 @@
-import type {
-  ActionIntentId,
-  OwnerDecisionId,
-  PolicyTokenId,
-  TenantId,
-} from '../../../contracts/src/ids/index.js';
-import type {
-  CorrelationContext,
-  DataClassification,
-  IdentityReference,
-} from '../../../contracts/src/context/index.js';
-import type { ContractVersion } from '../../../contracts/src/versioning/index.js';
-import { ActionIntentSchema, type ActionIntentSchemaDependencies } from './action-intent.schema.js';
+import type { ActorRef, CorrelationContext, DataClassification, TenantContext } from '../../../contracts/src/context';
+import type { ActionIntentId, DecisionId, PolicyTokenId } from '../../../contracts/src/ids';
+import type { ContractVersion } from '../../../contracts/src/versioning';
+import { ActionIntentSchema, type ActionIntentSchemaDependencies } from './action-intent.schema';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -40,15 +31,19 @@ const dependencies: ActionIntentSchemaDependencies = {
     return input as ContractVersion;
   },
   parseActionIntentId: (input) => prefixed<ActionIntentId>('act', input),
-  parseTenantId: (input) => prefixed<TenantId>('ten', input),
-  parseIdentityReference(input) {
-    if (input === null || typeof input !== 'object') throw new TypeError('invalid identity');
+  parseTenantContext(input) {
+    if (input === null || typeof input !== 'object') throw new TypeError('invalid tenant');
+    prefixed('ten', (input as { tenantId?: unknown }).tenantId);
+    return input as TenantContext;
+  },
+  parseActorRef(input) {
+    if (input === null || typeof input !== 'object') throw new TypeError('invalid actor');
     const value = input as { identityId?: unknown; kind?: unknown };
     prefixed('idn', value.identityId);
     if (!['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM'].includes(String(value.kind))) {
-      throw new TypeError('invalid identity kind');
+      throw new TypeError('invalid actor kind');
     }
-    return input as IdentityReference;
+    return input as ActorRef;
   },
   parseCorrelationContext(input) {
     if (input === null || typeof input !== 'object') throw new TypeError('invalid correlation');
@@ -63,7 +58,7 @@ const dependencies: ActionIntentSchemaDependencies = {
     return input as DataClassification;
   },
   parsePolicyTokenId: (input) => prefixed<PolicyTokenId>('ptk', input),
-  parseOwnerDecisionId: (input) => prefixed<OwnerDecisionId>('odc', input),
+  parseDecisionId: (input) => prefixed<DecisionId>('dec', input),
 };
 
 const validIntent = {
@@ -72,7 +67,7 @@ const validIntent = {
   actionIntentId: 'act_01ARZ3NDEKTSV4RRFFQ69G5FAV',
   capability: { capability: 'instagram.comment.reply', actionType: 'CREATE_REPLY' },
   providerBinding: { provider: 'meta', targetType: 'comment', targetReference: 'comment-123' },
-  tenantId: 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAW',
+  tenant: { tenantId: 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAW' },
   actor: { identityId: 'idn_01ARZ3NDEKTSV4RRFFQ69G5FAX', kind: 'AGENT' },
   requestOrigin: { identityId: 'idn_01ARZ3NDEKTSV4RRFFQ69G5FAY', kind: 'HUMAN' },
   correlation: { correlationId: 'cor_01ARZ3NDEKTSV4RRFFQ69G5FAZ' },
@@ -91,41 +86,36 @@ const validIntent = {
 } as const;
 
 const parsed = ActionIntentSchema.parse(validIntent, dependencies);
-assert(
-  parsed.actionIntentId === validIntent.actionIntentId,
-  'valid ActionIntent must retain canonical ID',
-);
+assert(parsed.actionIntentId === validIntent.actionIntentId, 'valid ActionIntent must retain canonical ID');
+assert(parsed.tenant.tenantId === validIntent.tenant.tenantId, 'ActionIntent must retain canonical tenant context');
 assert(parsed.idempotency.mode === 'REQUIRED', 'valid ActionIntent must retain idempotency mode');
 
 const roundTrip = ActionIntentSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
-assert(
-  JSON.stringify(roundTrip) === JSON.stringify(parsed),
-  'ActionIntent serialization round trip must be stable',
-);
+assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'ActionIntent serialization round trip must be stable');
 
 expectThrows(
-  () =>
-    ActionIntentSchema.parse(
-      { ...validIntent, resolvedParameters: ['ambiguous', 'array'] },
-      dependencies,
-    ),
+  () => ActionIntentSchema.parse({ ...validIntent, resolvedParameters: ['ambiguous', 'array'] }, dependencies),
   'resolvedParameters: expected object',
 );
 
 expectThrows(
-  () =>
-    ActionIntentSchema.parse({ ...validIntent, idempotency: { mode: 'REQUIRED' } }, dependencies),
+  () => ActionIntentSchema.parse({ ...validIntent, idempotency: { mode: 'REQUIRED' } }, dependencies),
   'idempotency.key: missing required field',
 );
 
 expectThrows(
-  () =>
-    ActionIntentSchema.parse(
-      { ...validIntent, authority: { ...validIntent.authority, grantedAuthority: 'ADMIN' } },
-      dependencies,
-    ),
+  () => ActionIntentSchema.parse({ ...validIntent, authority: { ...validIntent.authority, grantedAuthority: 'ADMIN' } }, dependencies),
   'grantedAuthority: unknown field',
 );
+
+const ownerDecisionIntent = ActionIntentSchema.parse(
+  {
+    ...validIntent,
+    authority: { kind: 'OWNER_DECISION', decisionId: 'dec_01ARZ3NDEKTSV4RRFFQ69G5FB1' },
+  },
+  dependencies,
+);
+assert(ownerDecisionIntent.authority.kind === 'OWNER_DECISION', 'OwnerDecision authority must use canonical DecisionId');
 
 expectThrows(
   () => ActionIntentSchema.parse({ ...validIntent, schemaVersion: '2.0.0' }, dependencies),
@@ -133,17 +123,18 @@ expectThrows(
 );
 
 expectThrows(
-  () =>
-    ActionIntentSchema.parse(
-      { ...validIntent, correlation: { correlationId: 'not-canonical' } },
-      dependencies,
-    ),
+  () => ActionIntentSchema.parse({ ...validIntent, correlation: { correlationId: 'not-canonical' } }, dependencies),
   'expected cor_ prefixed ID',
 );
 
 expectThrows(
   () => ActionIntentSchema.parse({ ...validIntent, deadlineAt: 'tomorrow' }, dependencies),
   'expected valid RFC3339 timestamp',
+);
+
+expectThrows(
+  () => ActionIntentSchema.parse({ ...validIntent, tenantId: validIntent.tenant.tenantId }, dependencies),
+  'tenantId: unknown field',
 );
 
 expectThrows(
