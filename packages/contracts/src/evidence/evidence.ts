@@ -1,11 +1,7 @@
-import type { ActionIntentId, EvidenceId, ExecutionId, ReceiptId } from '../ids/index.js';
-import type {
-  CorrelationContext,
-  DataClassification,
-  IdentityReference,
-} from '../context/index.js';
-import type { ContractVersion } from '../versioning/index.js';
-import type { ExternalReference, JsonObject, RestrictedMetadata } from '../actions/index.js';
+import type { ActorRef, CorrelationContext, DataClassification, Rfc3339Timestamp } from '../context';
+import type { ActionIntentId, EvidenceId, ExecutionId, ReceiptId } from '../ids';
+import type { ContractVersion } from '../versioning';
+import type { ExternalReference, JsonObject, RestrictedMetadata } from '../actions';
 
 export type EvidenceSubject =
   | Readonly<{ kind: 'ACTION_INTENT'; actionIntentId: ActionIntentId }>
@@ -20,15 +16,15 @@ export type EvidenceVerificationState = 'UNVERIFIED' | 'VERIFIED' | 'REJECTED';
 
 export interface EvidenceSource {
   readonly sourceType: 'PROVIDER_READBACK' | 'EXECUTOR' | 'SYSTEM' | 'HUMAN';
-  readonly capturedBy?: IdentityReference;
+  readonly capturedBy?: ActorRef;
   readonly provider?: string;
   readonly reference?: ExternalReference;
 }
 
 export interface EvidenceVerification {
   readonly state: EvidenceVerificationState;
-  readonly verifiedAt?: string;
-  readonly verifier?: IdentityReference;
+  readonly verifiedAt?: Rfc3339Timestamp;
+  readonly verifier?: ActorRef;
   readonly method?: string;
 }
 
@@ -44,7 +40,7 @@ export interface EvidenceIntegrity {
 }
 
 export interface EvidenceProvenance {
-  readonly capturedBy?: IdentityReference;
+  readonly capturedBy?: ActorRef;
   readonly sourceReference?: ExternalReference;
   readonly parentEvidenceReferences?: readonly ExternalReference[];
 }
@@ -59,7 +55,7 @@ export interface Evidence {
   readonly evidenceId: EvidenceId;
   readonly subject: EvidenceSubject;
   readonly evidenceType: EvidenceType;
-  readonly capturedAt: string;
+  readonly capturedAt: Rfc3339Timestamp;
   readonly source: EvidenceSource;
   readonly correlation: CorrelationContext;
   readonly verification: EvidenceVerification;
