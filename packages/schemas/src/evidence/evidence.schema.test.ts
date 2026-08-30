@@ -1,16 +1,12 @@
+import type { ActorRef, CorrelationContext, DataClassification } from '../../../contracts/src/context';
 import type {
   ActionIntentId,
   EvidenceId,
   ExecutionId,
   ReceiptId,
-} from '../../../contracts/src/ids/index.js';
-import type {
-  CorrelationContext,
-  DataClassification,
-  IdentityReference,
-} from '../../../contracts/src/context/index.js';
-import type { ContractVersion } from '../../../contracts/src/versioning/index.js';
-import { EvidenceSchema, type EvidenceSchemaDependencies } from './evidence.schema.js';
+} from '../../../contracts/src/ids';
+import type { ContractVersion } from '../../../contracts/src/versioning';
+import { EvidenceSchema, type EvidenceSchemaDependencies } from './evidence.schema';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -43,10 +39,14 @@ const dependencies: EvidenceSchemaDependencies = {
   parseActionIntentId: (input) => prefixed<ActionIntentId>('act', input),
   parseReceiptId: (input) => prefixed<ReceiptId>('rcp', input),
   parseExecutionId: (input) => prefixed<ExecutionId>('exe', input),
-  parseIdentityReference(input) {
-    if (input === null || typeof input !== 'object') throw new TypeError('invalid identity');
-    prefixed('idn', (input as { identityId?: unknown }).identityId);
-    return input as IdentityReference;
+  parseActorRef(input) {
+    if (input === null || typeof input !== 'object') throw new TypeError('invalid actor');
+    const value = input as { identityId?: unknown; kind?: unknown };
+    prefixed('idn', value.identityId);
+    if (!['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM'].includes(String(value.kind))) {
+      throw new TypeError('invalid actor kind');
+    }
+    return input as ActorRef;
   },
   parseCorrelationContext(input) {
     if (input === null || typeof input !== 'object') throw new TypeError('invalid correlation');
@@ -97,10 +97,7 @@ assert(parsed.subject.kind === 'ACTION_INTENT', 'Evidence must retain subject li
 assert(parsed.verification.state === 'VERIFIED', 'Evidence verification state must be explicit');
 
 const roundTrip = EvidenceSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
-assert(
-  JSON.stringify(roundTrip) === JSON.stringify(parsed),
-  'Evidence serialization round trip must be stable',
-);
+assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'Evidence serialization round trip must be stable');
 
 const withoutSubject = JSON.parse(JSON.stringify(validEvidence)) as Record<string, unknown>;
 delete withoutSubject.subject;
