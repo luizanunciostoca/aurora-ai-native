@@ -9,6 +9,11 @@ const repoRoot = path.resolve(packageDir, '../..');
 const packageRoots = ['contracts', 'registries', 'schemas'].map((name) =>
   path.join(repoRoot, 'packages', name, 'src'),
 );
+const protectedReferenceMarkers = [
+  ['legacy', 'reference'].join('-'),
+  ['legacy', 'manus', 'reference'].join('-'),
+  'source-archives',
+];
 
 function walk(dir) {
   if (!fs.existsSync(dir)) return [];
@@ -37,6 +42,10 @@ function resolveRelativeImport(fromFile, specifier) {
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
+function containsProtectedReferenceMaterial(source) {
+  return protectedReferenceMarkers.some((marker) => source.includes(marker));
+}
+
 test('package dependency direction has no runtime/service or legacy inversion', () => {
   const violations = [];
   for (const file of walk(path.join(repoRoot, 'packages', 'contracts', 'src'))) {
@@ -48,9 +57,7 @@ test('package dependency direction has no runtime/service or legacy inversion', 
     ) {
       violations.push(`${relative(file)} imports schema/registry implementation`);
     }
-    if (
-      /(apps\/|services\/|legacy-reference|legacy-manus-reference|source-archives)/.test(source)
-    ) {
+    if (/(apps\/|services\/)/.test(source) || containsProtectedReferenceMaterial(source)) {
       violations.push(`${relative(file)} depends on runtime/reference material`);
     }
   }
@@ -60,7 +67,7 @@ test('package dependency direction has no runtime/service or legacy inversion', 
       if (/\.\.\/\.\.\/\.\.\/(contracts|registries)\/src\//.test(source)) {
         violations.push(`${relative(file)} bypasses a public package export`);
       }
-      if (/(legacy-reference|legacy-manus-reference|source-archives)/.test(source)) {
+      if (containsProtectedReferenceMaterial(source)) {
         violations.push(`${relative(file)} depends on protected reference material`);
       }
     }
