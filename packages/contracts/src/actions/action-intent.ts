@@ -1,10 +1,6 @@
-import type { ActionIntentId, OwnerDecisionId, PolicyTokenId, TenantId } from '../ids/index.js';
-import type { ContractVersion } from '../versioning/index.js';
-import type {
-  CorrelationContext,
-  DataClassification,
-  IdentityReference,
-} from '../context/index.js';
+import type { ActorRef, CorrelationContext, DataClassification, Rfc3339Timestamp, TenantContext } from '../context';
+import type { ActionIntentId, DecisionId, PolicyTokenId } from '../ids';
+import type { ContractVersion } from '../versioning';
 import type {
   ActionIdempotency,
   ActionPrecondition,
@@ -14,15 +10,15 @@ import type {
   JsonObject,
   ProviderBinding,
   RestrictedMetadata,
-} from './execution-values.js';
+} from './execution-values';
 
 export type ActionAuthorityReference =
   | Readonly<{ kind: 'POLICY_TOKEN'; policyTokenId: PolicyTokenId }>
-  | Readonly<{ kind: 'OWNER_DECISION'; ownerDecisionId: OwnerDecisionId }>
+  | Readonly<{ kind: 'OWNER_DECISION'; decisionId: DecisionId }>
   | Readonly<{
       kind: 'POLICY_AND_OWNER_DECISION';
       policyTokenId: PolicyTokenId;
-      ownerDecisionId: OwnerDecisionId;
+      decisionId: DecisionId;
     }>;
 
 /**
@@ -36,15 +32,15 @@ export interface ActionIntent {
   readonly actionIntentId: ActionIntentId;
   readonly capability: CapabilityActionReference;
   readonly providerBinding?: ProviderBinding;
-  readonly tenantId: TenantId;
-  readonly actor: IdentityReference;
-  readonly requestOrigin: IdentityReference;
+  readonly tenant: TenantContext;
+  readonly actor: ActorRef;
+  readonly requestOrigin: ActorRef;
   readonly correlation: CorrelationContext;
   readonly resolvedParameters: JsonObject;
   readonly idempotency: ActionIdempotency;
   readonly preconditions: readonly ActionPrecondition[];
   readonly expectedState?: ExpectedState;
-  readonly deadlineAt: string;
+  readonly deadlineAt: Rfc3339Timestamp;
   readonly authority: ActionAuthorityReference;
   readonly executionClassification?: ExecutionClassificationReference;
   readonly dataClassification: DataClassification;
