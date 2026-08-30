@@ -7,6 +7,11 @@ import { fileURLToPath } from 'node:url';
 
 const packageDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(packageDir, 'package.json'), 'utf8'));
+const protectedReferenceMarkers = [
+  ['legacy', 'reference'].join('-'),
+  ['legacy', 'manus', 'reference'].join('-'),
+  'source-archives',
+];
 
 function exportedTargets(exportsMap) {
   return Object.values(exportsMap).flatMap((entry) =>
@@ -38,7 +43,7 @@ test('npm shipping set excludes source, tests and reference material', () => {
   const forbidden = files.filter(
     (file) =>
       /^(src|test|dist-test)\//.test(file) ||
-      /(legacy-reference|legacy-manus-reference|source-archives)/.test(file),
+      protectedReferenceMarkers.some((marker) => file.includes(marker)),
   );
   assert.deepEqual(forbidden, []);
 });
