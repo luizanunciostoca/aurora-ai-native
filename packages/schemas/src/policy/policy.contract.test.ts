@@ -1,6 +1,3 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
-
 import type {
   ActorRef,
   CorrelationContext,
@@ -12,6 +9,43 @@ import type { ContractVersion, Version } from '@aurora/contracts/versioning';
 
 import { OwnerDecisionSchema, PolicyTokenSchema } from './index';
 import type { PolicySchemaDependencies } from './index';
+
+function fail(message: string): never {
+  throw new Error(message);
+}
+
+const assert = {
+  equal(actual: unknown, expected: unknown): void {
+    if (actual !== expected) fail(`expected ${String(expected)}, got ${String(actual)}`);
+  },
+  deepEqual(actual: unknown, expected: unknown): void {
+    if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+      fail('expected values to be deeply equal');
+    }
+  },
+  notDeepEqual(actual: unknown, expected: unknown): void {
+    if (JSON.stringify(actual) === JSON.stringify(expected)) {
+      fail('expected values to differ');
+    }
+  },
+  throws(callback: () => unknown, pattern: RegExp): void {
+    try {
+      callback();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!pattern.test(message)) fail(`expected error matching ${pattern}, got ${message}`);
+      return;
+    }
+    fail(`expected function to throw ${pattern}`);
+  },
+  doesNotThrow(callback: () => unknown): void {
+    callback();
+  },
+};
+
+function test(_name: string, callback: () => void): void {
+  callback();
+}
 
 function parseNonEmptyBranded<T extends string>(value: unknown, label: string): T {
   if (typeof value !== 'string' || value.length === 0) {
