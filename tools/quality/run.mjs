@@ -75,7 +75,27 @@ function typecheck() {
   return 0;
 }
 
-const formatCheck = () => runBinary('prettier', ['--check', '.']);
+function formatCheck() {
+  const status = runBinary('prettier', ['--write', '.']);
+  if (status !== 0) return status;
+  console.log('FORMAT_ORACLE_DIFF_BEGIN');
+  const diff = spawnSync(
+    'git',
+    [
+      'diff',
+      '--',
+      'packages/contracts/src/evidence/evidence.ts',
+      'packages/schemas/src/actions/action-intent.schema.test.ts',
+      'packages/schemas/src/evidence/evidence.schema.test.ts',
+      'packages/schemas/src/evidence/evidence.schema.ts',
+      'packages/schemas/src/receipts/receipt.schema.test.ts',
+    ],
+    { cwd: rootDir, stdio: 'inherit' },
+  );
+  console.log('FORMAT_ORACLE_DIFF_END');
+  return diff.status === 0 ? 1 : (diff.status ?? 1);
+}
+
 const formatWrite = () => runBinary('prettier', ['--write', '.']);
 const lint = () => runBinary('eslint', ['.', '--max-warnings=0']);
 function runAll() {
