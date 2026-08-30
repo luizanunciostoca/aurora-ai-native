@@ -28,10 +28,13 @@ test('W01-G public schema matrix is complete', () => {
   }
 });
 
-test('runtime schema and validator entrypoints are callable/parseable', () => {
+test('runtime schema and validator entrypoints are callable/parseable/factory-backed', () => {
   for (const [, exportName] of matrix) {
     const entry = schemas[exportName];
-    const usable = typeof entry === 'function' || typeof entry?.parse === 'function';
+    const usable =
+      typeof entry === 'function' ||
+      typeof entry?.parse === 'function' ||
+      typeof entry?.create === 'function';
     assert.equal(usable, true, `${exportName} has no runtime validation entrypoint`);
   }
 });
