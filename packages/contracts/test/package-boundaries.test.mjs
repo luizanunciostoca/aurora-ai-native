@@ -35,6 +35,11 @@ function relative(file) {
   return path.relative(repoRoot, file).split(path.sep).join('/');
 }
 
+function importSpecifiers(source) {
+  const pattern = /(?:from\s+|import\s*\()(['"])([^'"]+)\1/g;
+  return [...source.matchAll(pattern)].map((match) => match[2]);
+}
+
 function resolveRelativeImport(fromFile, specifier) {
   if (!specifier.startsWith('.')) return null;
   const base = path.resolve(path.dirname(fromFile), specifier.replace(/\.js$/, ''));
@@ -42,36 +47,43 @@ function resolveRelativeImport(fromFile, specifier) {
   return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
 }
 
-function containsProtectedReferenceMaterial(source) {
-  return protectedReferenceMarkers.some((marker) => source.includes(marker));
+function containsProtectedReferenceMaterial(specifier) {
+  return protectedReferenceMarkers.some((marker) => specifier.includes(marker));
 }
 
 test('package dependency direction has no runtime/service or legacy inversion', () => {
   const violations = [];
+
   for (const file of walk(path.join(repoRoot, 'packages', 'contracts', 'src'))) {
-    const source = text(file);
-    if (
-      /(@aurora\/(schemas|registries)|packages\/(schemas|registries)|\.\.\/.*\/(schemas|registries)\/)/.test(
-        source,
-      )
-    ) {
-      violations.push(`${relative(file)} imports schema/registry implementation`);
-    }
-    if (/(apps\/|services\/)/.test(source) || containsProtectedReferenceMaterial(source)) {
-      violations.push(`${relative(file)} depends on runtime/reference material`);
+    for (const specifier of importSpecifiers(text(file))) {
+      if (
+        /^@aurora\/(schemas|registries)(?:\/|$)/.test(specifier) ||
+        /(?:^|\/)packages\/(schemas|registries)(?:\/|$)/.test(specifier)
+      ) {
+        violations.push(`${relative(file)} imports schema/registry implementation`);
+      }
+      if (
+        /(?:^|\/)(apps|services)\//.test(specifier) ||
+        containsProtectedReferenceMaterial(specifier)
+      ) {
+        violations.push(`${relative(file)} depends on runtime/reference material`);
+      }
     }
   }
+
   for (const packageName of ['registries', 'schemas']) {
     for (const file of walk(path.join(repoRoot, 'packages', packageName, 'src'))) {
-      const source = text(file);
-      if (/\.\.\/\.\.\/\.\.\/(contracts|registries)\/src\//.test(source)) {
-        violations.push(`${relative(file)} bypasses a public package export`);
-      }
-      if (containsProtectedReferenceMaterial(source)) {
-        violations.push(`${relative(file)} depends on protected reference material`);
+      for (const specifier of importSpecifiers(text(file))) {
+        if (/^\.\.\/\.\.\/\.\.\/(contracts|registries)\/src\//.test(specifier)) {
+          violations.push(`${relative(file)} bypasses a public package export`);
+        }
+        if (containsProtectedReferenceMaterial(specifier)) {
+          violations.push(`${relative(file)} depends on protected reference material`);
+        }
       }
     }
   }
+
   assert.deepEqual(violations, []);
 });
 
@@ -96,12 +108,10 @@ test('relative source-module graph has no cycles', () => {
     const files = walk(root);
     const fileSet = new Set(files);
     const graph = new Map();
-    const importPattern = /(?:from\s+|import\s*\()(['"])(\.[^'"]+)\1/g;
     for (const file of files) {
       const edges = [];
-      const source = text(file);
-      for (const match of source.matchAll(importPattern)) {
-        const target = resolveRelativeImport(file, match[2]);
+      for (const specifier of importSpecifiers(text(file))) {
+        const target = resolveRelativeImport(file, specifier);
         if (target && fileSet.has(target)) edges.push(target);
       }
       graph.set(file, edges);
