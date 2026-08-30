@@ -19,7 +19,10 @@ function expectThrows(fn: () => unknown, contains: string): void {
     fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    assert(message.includes(contains), `expected error containing "${contains}", got "${message}"`);
+    assert(
+      message.includes(contains),
+      `expected error containing "${contains}", got "${message}"`,
+    );
     return;
   }
   throw new Error(`expected function to throw: ${contains}`);
@@ -72,10 +75,15 @@ const validCommand = {
 
 const command: CommandEnvelope = commandValidator.parse(validCommand);
 assert(command.kind === 'COMMAND', 'CommandEnvelope kind drifted');
-assert(command.tenant.tenantId === validCommand.tenant.tenantId, 'CommandEnvelope tenant drifted');
+assert(
+  command.tenant.tenantId === validCommand.tenant.tenantId,
+  'CommandEnvelope tenant drifted',
+);
 
 const commandWire = commandValidator.serialize(command);
-const commandRoundTrip: CommandEnvelope = commandValidator.parse(JSON.parse(commandWire) as unknown);
+const commandRoundTrip: CommandEnvelope = commandValidator.parse(
+  JSON.parse(commandWire) as unknown,
+);
 assert(
   commandValidator.serialize(commandRoundTrip) === commandWire,
   'CommandEnvelope serialization must be deterministic',
@@ -85,7 +93,10 @@ expectThrows(
   () => commandValidator.parse({ ...validCommand, schemaVersion: '2.0.0' }),
   'Unsupported contract version',
 );
-expectThrows(() => commandValidator.parse({ ...validCommand, kind: 'EVENT' }), 'expected COMMAND');
+expectThrows(
+  () => commandValidator.parse({ ...validCommand, kind: 'EVENT' }),
+  'expected COMMAND',
+);
 expectThrows(
   () => commandValidator.parse({ ...validCommand, commandId: `evt_${ulids.command}` }),
   'Expected canonical cmd_',
@@ -130,7 +141,11 @@ const validEvent = {
   eventType: 'marketing.campaign-published',
   occurredAt: '2026-08-29T21:01:00-03:00',
   producer: { kind: 'SERVICE', identityId: `idn_${ulids.actor}` },
-  source: { service: 'marketing-executor', component: 'publisher', instance: 'instance-01' },
+  source: {
+    service: 'marketing-executor',
+    component: 'publisher',
+    instance: 'instance-01',
+  },
   correlation: { correlationId: `cor_${ulids.correlation}` },
   tenant: { tenantId: `ten_${ulids.tenant}` },
   subject: 'campaign:42',
@@ -154,7 +169,10 @@ expectThrows(
   () => eventValidator.parse({ ...validEvent, schemaVersion: '2.0.0' }),
   'Unsupported contract version',
 );
-expectThrows(() => eventValidator.parse({ ...validEvent, kind: 'COMMAND' }), 'expected EVENT');
+expectThrows(
+  () => eventValidator.parse({ ...validEvent, kind: 'COMMAND' }),
+  'expected EVENT',
+);
 expectThrows(
   () => eventValidator.parse({ ...validEvent, eventType: 'notnamespaced' }),
   'namespaced type string',
@@ -180,5 +198,3 @@ assert(
   !eventValidator.safeParse({ ...validEvent, eventId: 'invalid' }).success,
   'EventEnvelope safeParse must fail closed for invalid ID',
 );
-
-process.stdout.write('W01-G envelope contract tests: PASS\n');
