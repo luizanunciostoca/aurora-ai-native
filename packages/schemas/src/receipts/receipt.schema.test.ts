@@ -1,8 +1,8 @@
-import type { ActionIntentId, ExecutionId, ReceiptId } from '../../../contracts/src/ids/index.js';
-import type { CorrelationContext } from '../../../contracts/src/context/index.js';
-import type { ExecutionOutcome } from '../../../contracts/src/results/index.js';
-import type { ContractVersion } from '../../../contracts/src/versioning/index.js';
-import { ReceiptSchema, type ReceiptSchemaDependencies } from './receipt.schema.js';
+import type { CorrelationContext } from '../../../contracts/src/context';
+import type { ActionIntentId, ExecutionId, ReceiptId } from '../../../contracts/src/ids';
+import type { ExecutionOutcome } from '../../../contracts/src/results';
+import type { ContractVersion } from '../../../contracts/src/versioning';
+import { ReceiptSchema, type ReceiptSchemaDependencies } from './receipt.schema';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -84,10 +84,7 @@ assert(
 );
 
 const roundTrip = ReceiptSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
-assert(
-  JSON.stringify(roundTrip) === JSON.stringify(parsed),
-  'Receipt serialization round trip must be stable',
-);
+assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'Receipt serialization round trip must be stable');
 
 const withoutIntent = JSON.parse(JSON.stringify(validReceipt)) as Record<string, unknown>;
 delete withoutIntent.actionIntentId;
@@ -112,8 +109,7 @@ expectThrows(
 );
 
 expectThrows(
-  () =>
-    ReceiptSchema.parse({ ...validReceipt, returnedAt: '2026-08-29T23:19:59-03:00' }, dependencies),
+  () => ReceiptSchema.parse({ ...validReceipt, returnedAt: '2026-08-29T23:19:59-03:00' }, dependencies),
   'cannot precede attemptedAt',
 );
 
@@ -123,10 +119,6 @@ expectThrows(
 );
 
 expectThrows(
-  () =>
-    ReceiptSchema.parse(
-      { ...validReceipt, correlation: { correlationId: 'invalid-correlation' } },
-      dependencies,
-    ),
+  () => ReceiptSchema.parse({ ...validReceipt, correlation: { correlationId: 'invalid-correlation' } }, dependencies),
   'expected cor_ prefixed ID',
 );
