@@ -13,7 +13,10 @@ function expectThrows(fn: () => unknown, contains: string): void {
     fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    assert(message.includes(contains), `expected error containing "${contains}", got "${message}"`);
+    assert(
+      message.includes(contains),
+      `expected error containing "${contains}", got "${message}"`,
+    );
     return;
   }
   throw new Error(`expected function to throw: ${contains}`);
@@ -84,7 +87,10 @@ assert(
 );
 
 const roundTrip = ReceiptSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
-assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'Receipt serialization round trip must be stable');
+assert(
+  JSON.stringify(roundTrip) === JSON.stringify(parsed),
+  'Receipt serialization round trip must be stable',
+);
 
 const withoutIntent = JSON.parse(JSON.stringify(validReceipt)) as Record<string, unknown>;
 delete withoutIntent.actionIntentId;
@@ -109,7 +115,11 @@ expectThrows(
 );
 
 expectThrows(
-  () => ReceiptSchema.parse({ ...validReceipt, returnedAt: '2026-08-29T23:19:59-03:00' }, dependencies),
+  () =>
+    ReceiptSchema.parse(
+      { ...validReceipt, returnedAt: '2026-08-29T23:19:59-03:00' },
+      dependencies,
+    ),
   'cannot precede attemptedAt',
 );
 
@@ -119,6 +129,10 @@ expectThrows(
 );
 
 expectThrows(
-  () => ReceiptSchema.parse({ ...validReceipt, correlation: { correlationId: 'invalid-correlation' } }, dependencies),
+  () =>
+    ReceiptSchema.parse(
+      { ...validReceipt, correlation: { correlationId: 'invalid-correlation' } },
+      dependencies,
+    ),
   'expected cor_ prefixed ID',
 );
