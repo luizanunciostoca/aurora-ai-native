@@ -1,4 +1,10 @@
-import type { ActorRef, CorrelationContext, DataClassification, Rfc3339Timestamp, TenantContext } from '../context';
+import type {
+  ActorRef,
+  CorrelationContext,
+  DataClassification,
+  Rfc3339Timestamp,
+  TenantContext,
+} from '../context';
 import type { ActionIntentId, DecisionId, PolicyTokenId } from '../ids';
 import type { ContractVersion } from '../versioning';
 import type {
