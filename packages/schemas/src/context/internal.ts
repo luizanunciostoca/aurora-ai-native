@@ -1,7 +1,8 @@
 export type SafeParseResult<T> =
-  { readonly success: true; readonly data: T } | { readonly success: false; readonly error: Error };
+  | { readonly success: true; readonly data: T }
+  | { readonly success: false; readonly error: Error };
 
-interface RuntimeSchema<T> {
+export interface RuntimeSchema<T> {
   readonly parse: (value: unknown) => T;
   readonly safeParse: (value: unknown) => SafeParseResult<T>;
 }
