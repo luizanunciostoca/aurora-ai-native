@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -19,14 +20,14 @@ const tests = walk(outputDir)
   .sort();
 
 if (tests.length === 0) {
-  console.error('CONTRACT_TEST_DISCOVERY_FAILED: no compiled contract tests found');
+  process.stderr.write('CONTRACT_TEST_DISCOVERY_FAILED: no compiled contract tests found\n');
   process.exit(1);
 }
 
 for (const file of tests) {
-  console.log(`CONTRACT_TEST: ${path.relative(packageDir, file)}`);
+  process.stdout.write(`CONTRACT_TEST: ${path.relative(packageDir, file)}\n`);
   const result = spawnSync(process.execPath, [file], { cwd: packageDir, stdio: 'inherit' });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
-console.log(`CONTRACT_TEST_MATRIX_EXECUTED: ${tests.length} compiled test files`);
+process.stdout.write(`CONTRACT_TEST_MATRIX_EXECUTED: ${tests.length} compiled test files\n`);
