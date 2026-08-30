@@ -15,11 +15,7 @@ export type EvidenceSubject =
   | Readonly<{ kind: 'EXTERNAL_REFERENCE'; reference: ExternalReference }>;
 
 export type EvidenceType =
-  | 'READBACK'
-  | 'PROVIDER_RECEIPT'
-  | 'STATE_SNAPSHOT'
-  | 'SIGNED_ATTESTATION'
-  | 'REFERENCE';
+  'READBACK' | 'PROVIDER_RECEIPT' | 'STATE_SNAPSHOT' | 'SIGNED_ATTESTATION' | 'REFERENCE';
 
 export type EvidenceVerificationState = 'UNVERIFIED' | 'VERIFIED' | 'REJECTED';
 
