@@ -1,0 +1,33 @@
+{
+  "name": "@aurora/schemas",
+  "version": "0.1.0",
+  "description": "Runtime validation schemas for Aurora AI-Native canonical contracts.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "sideEffects": false,
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "require": "./dist/index.js", "default": "./dist/index.js" },
+    "./actions": { "types": "./dist/actions/index.d.ts", "require": "./dist/actions/index.js", "default": "./dist/actions/index.js" },
+    "./context": { "types": "./dist/context/index.d.ts", "require": "./dist/context/index.js", "default": "./dist/context/index.js" },
+    "./envelopes": { "types": "./dist/envelopes/index.d.ts", "require": "./dist/envelopes/index.js", "default": "./dist/envelopes/index.js" },
+    "./evidence": { "types": "./dist/evidence/index.d.ts", "require": "./dist/evidence/index.js", "default": "./dist/evidence/index.js" },
+    "./ids": { "types": "./dist/ids/index.d.ts", "require": "./dist/ids/index.js", "default": "./dist/ids/index.js" },
+    "./policy": { "types": "./dist/policy/index.d.ts", "require": "./dist/policy/index.js", "default": "./dist/policy/index.js" },
+    "./receipts": { "types": "./dist/receipts/index.d.ts", "require": "./dist/receipts/index.js", "default": "./dist/receipts/index.js" },
+    "./results": { "types": "./dist/results/index.d.ts", "require": "./dist/results/index.js", "default": "./dist/results/index.js" },
+    "./versioning": { "types": "./dist/versioning/index.d.ts", "require": "./dist/versioning/index.js", "default": "./dist/versioning/index.js" }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test:compile": "rm -rf dist-test && tsc -p tsconfig.test.json",
+    "test": "npm run typecheck && npm run build && npm run test:compile && node test/run-compiled-tests.mjs && node --test test/shipping.test.mjs test/contract-matrix.test.mjs test/consumer-fixture.test.mjs",
+    "clean": "rm -rf dist dist-test"
+  },
+  "dependencies": {
+    "@aurora/contracts": "0.1.0",
+    "@aurora/registries": "0.1.0"
+  },
+  "engines": { "node": ">=22.16.0 <23", "npm": "10.9.2" }
+}
