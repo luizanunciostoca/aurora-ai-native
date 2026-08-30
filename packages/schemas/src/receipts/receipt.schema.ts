@@ -87,52 +87,60 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
     throw new TypeError('Receipt.returnedAt: cannot precede acknowledgedAt');
   }
 
+  const instanceReference = optionalNonEmptyString(
+    executor.instanceReference,
+    'Receipt.executor.instanceReference',
+    512,
+  );
+  const accountReference = optionalNonEmptyString(
+    provider.accountReference,
+    'Receipt.provider.accountReference',
+    512,
+  );
+  const executionId =
+    record.executionId === undefined
+      ? undefined
+      : dependencies.parseExecutionId(record.executionId);
+  const providerReference =
+    record.providerReference === undefined
+      ? undefined
+      : externalReference(record.providerReference, 'Receipt.providerReference');
+  const executionOutcome =
+    record.executionOutcome === undefined
+      ? undefined
+      : dependencies.parseExecutionOutcome(record.executionOutcome);
+  const rawProviderDataReference =
+    record.rawProviderDataReference === undefined
+      ? undefined
+      : externalReference(record.rawProviderDataReference, 'Receipt.rawProviderDataReference');
+  const metadata =
+    record.metadata === undefined
+      ? undefined
+      : restrictedMetadata(record.metadata, 'Receipt.metadata');
+
   return {
     kind: 'RECEIPT',
     schemaVersion: dependencies.parseContractVersion(record.schemaVersion),
     receiptId: dependencies.parseReceiptId(record.receiptId),
     actionIntentId: dependencies.parseActionIntentId(record.actionIntentId),
-    executionId:
-      record.executionId === undefined
-        ? undefined
-        : dependencies.parseExecutionId(record.executionId),
+    ...(executionId === undefined ? {} : { executionId }),
     executor: {
       executor: nonEmptyString(executor.executor, 'Receipt.executor.executor', 256),
-      instanceReference: optionalNonEmptyString(
-        executor.instanceReference,
-        'Receipt.executor.instanceReference',
-        512,
-      ),
+      ...(instanceReference === undefined ? {} : { instanceReference }),
     },
     provider: {
       provider: nonEmptyString(provider.provider, 'Receipt.provider.provider', 128),
-      accountReference: optionalNonEmptyString(
-        provider.accountReference,
-        'Receipt.provider.accountReference',
-        512,
-      ),
+      ...(accountReference === undefined ? {} : { accountReference }),
     },
     attempt: record.attempt as number,
     attemptedAt,
-    acknowledgedAt,
-    returnedAt,
-    providerReference:
-      record.providerReference === undefined
-        ? undefined
-        : externalReference(record.providerReference, 'Receipt.providerReference'),
-    executionOutcome:
-      record.executionOutcome === undefined
-        ? undefined
-        : dependencies.parseExecutionOutcome(record.executionOutcome),
+    ...(acknowledgedAt === undefined ? {} : { acknowledgedAt }),
+    ...(returnedAt === undefined ? {} : { returnedAt }),
+    ...(providerReference === undefined ? {} : { providerReference }),
+    ...(executionOutcome === undefined ? {} : { executionOutcome }),
     correlation: dependencies.parseCorrelationContext(record.correlation),
-    rawProviderDataReference:
-      record.rawProviderDataReference === undefined
-        ? undefined
-        : externalReference(record.rawProviderDataReference, 'Receipt.rawProviderDataReference'),
-    metadata:
-      record.metadata === undefined
-        ? undefined
-        : restrictedMetadata(record.metadata, 'Receipt.metadata'),
+    ...(rawProviderDataReference === undefined ? {} : { rawProviderDataReference }),
+    ...(metadata === undefined ? {} : { metadata }),
   };
 }
 
