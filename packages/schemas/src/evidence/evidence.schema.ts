@@ -85,15 +85,20 @@ function source(
   ) {
     throw new TypeError(`${path}.sourceType: unsupported evidence source type`);
   }
+
+  const capturedBy =
+    record.capturedBy === undefined ? undefined : dependencies.parseActorRef(record.capturedBy);
+  const provider = optionalNonEmptyString(record.provider, `${path}.provider`, 128);
+  const reference =
+    record.reference === undefined
+      ? undefined
+      : externalReference(record.reference, `${path}.reference`);
+
   return {
     sourceType: record.sourceType,
-    capturedBy:
-      record.capturedBy === undefined ? undefined : dependencies.parseActorRef(record.capturedBy),
-    provider: optionalNonEmptyString(record.provider, `${path}.provider`, 128),
-    reference:
-      record.reference === undefined
-        ? undefined
-        : externalReference(record.reference, `${path}.reference`),
+    ...(capturedBy === undefined ? {} : { capturedBy }),
+    ...(provider === undefined ? {} : { provider }),
+    ...(reference === undefined ? {} : { reference }),
   };
 }
 
@@ -124,7 +129,12 @@ function verification(
   if (record.state === 'UNVERIFIED' && (verifiedAt || verifier)) {
     throw new TypeError(`${path}: UNVERIFIED cannot carry verifier/verifiedAt`);
   }
-  return { state: record.state, verifiedAt, verifier, method };
+  return {
+    state: record.state,
+    ...(verifiedAt === undefined ? {} : { verifiedAt }),
+    ...(verifier === undefined ? {} : { verifier }),
+    ...(method === undefined ? {} : { method }),
+  };
 }
 
 function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Evidence {
@@ -168,12 +178,13 @@ function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Eviden
   if (record.readback !== undefined) {
     const value = asRecord(record.readback, 'Evidence.readback');
     exactKeys(value, ['reference', 'observedState'], ['reference'], 'Evidence.readback');
+    const observedState =
+      value.observedState === undefined
+        ? undefined
+        : jsonObject(value.observedState, 'Evidence.readback.observedState');
     readback = {
       reference: externalReference(value.reference, 'Evidence.readback.reference'),
-      observedState:
-        value.observedState === undefined
-          ? undefined
-          : jsonObject(value.observedState, 'Evidence.readback.observedState'),
+      ...(observedState === undefined ? {} : { observedState }),
     };
   }
 
@@ -186,13 +197,14 @@ function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Eviden
       ['algorithm', 'digest'],
       'Evidence.integrity',
     );
+    const signatureReference =
+      value.signatureReference === undefined
+        ? undefined
+        : externalReference(value.signatureReference, 'Evidence.integrity.signatureReference');
     integrity = {
       algorithm: nonEmptyString(value.algorithm, 'Evidence.integrity.algorithm', 64),
       digest: nonEmptyString(value.digest, 'Evidence.integrity.digest', 1024),
-      signatureReference:
-        value.signatureReference === undefined
-          ? undefined
-          : externalReference(value.signatureReference, 'Evidence.integrity.signatureReference'),
+      ...(signatureReference === undefined ? {} : { signatureReference }),
     };
   }
 
@@ -215,19 +227,18 @@ function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Eviden
       externalReference(value, `Evidence.provenance.parentEvidenceReferences[${index}]`),
     );
   }
+  const provenanceCapturedBy =
+    provenanceRecord.capturedBy === undefined
+      ? undefined
+      : dependencies.parseActorRef(provenanceRecord.capturedBy);
+  const sourceReference =
+    provenanceRecord.sourceReference === undefined
+      ? undefined
+      : externalReference(provenanceRecord.sourceReference, 'Evidence.provenance.sourceReference');
   const provenance: Evidence['provenance'] = {
-    capturedBy:
-      provenanceRecord.capturedBy === undefined
-        ? undefined
-        : dependencies.parseActorRef(provenanceRecord.capturedBy),
-    sourceReference:
-      provenanceRecord.sourceReference === undefined
-        ? undefined
-        : externalReference(
-            provenanceRecord.sourceReference,
-            'Evidence.provenance.sourceReference',
-          ),
-    parentEvidenceReferences,
+    ...(provenanceCapturedBy === undefined ? {} : { capturedBy: provenanceCapturedBy }),
+    ...(sourceReference === undefined ? {} : { sourceReference }),
+    ...(parentEvidenceReferences === undefined ? {} : { parentEvidenceReferences }),
   };
   if (
     !provenance.capturedBy &&
@@ -238,6 +249,10 @@ function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Eviden
   }
 
   const capturedAt = timestamp(record.capturedAt, 'Evidence.capturedAt');
+  const metadata =
+    record.metadata === undefined
+      ? undefined
+      : restrictedMetadata(record.metadata, 'Evidence.metadata');
 
   return {
     kind: 'EVIDENCE',
@@ -254,14 +269,11 @@ function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Eviden
       capturedAt,
       dependencies,
     ),
-    readback,
-    integrity,
+    ...(readback === undefined ? {} : { readback }),
+    ...(integrity === undefined ? {} : { integrity }),
     provenance,
     dataClassification: dependencies.parseDataClassification(record.dataClassification),
-    metadata:
-      record.metadata === undefined
-        ? undefined
-        : restrictedMetadata(record.metadata, 'Evidence.metadata'),
+    ...(metadata === undefined ? {} : { metadata }),
   };
 }
 
