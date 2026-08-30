@@ -1,7 +1,4 @@
-import {
-  DATA_CLASSIFICATIONS,
-  type DataClassification,
-} from '../../../contracts/src/context/data-classification';
+import { DATA_CLASSIFICATIONS, type DataClassification } from '@aurora/contracts/context';
 import { createRuntimeSchema } from './internal';
 
 const DATA_CLASSIFICATION_SET = new Set<string>(DATA_CLASSIFICATIONS);

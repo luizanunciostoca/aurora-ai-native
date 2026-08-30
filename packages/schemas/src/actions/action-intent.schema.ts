@@ -6,15 +6,15 @@ import type {
   CapabilityActionReference,
   ExpectedState,
   ProviderBinding,
-} from '../../../contracts/src/actions';
+} from '@aurora/contracts/actions';
 import type {
   ActorRef,
   CorrelationContext,
   DataClassification,
   TenantContext,
-} from '../../../contracts/src/context';
-import type { ActionIntentId, DecisionId, PolicyTokenId } from '../../../contracts/src/ids';
-import type { ContractVersion } from '../../../contracts/src/versioning';
+} from '@aurora/contracts/context';
+import type { ActionIntentId, DecisionId, PolicyTokenId } from '@aurora/contracts/ids';
+import type { ContractVersion } from '@aurora/contracts/versioning';
 import {
   asRecord,
   exactKeys,

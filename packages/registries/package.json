@@ -4,12 +4,26 @@
   "description": "Canonical Aurora AI-Native registries used by shared schemas.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "require": "./dist/index.js", "default": "./dist/index.js" },
-    "./ids": { "types": "./dist/ids/index.d.ts", "require": "./dist/ids/index.js", "default": "./dist/ids/index.js" },
-    "./versioning": { "types": "./dist/versioning/index.d.ts", "require": "./dist/versioning/index.js", "default": "./dist/versioning/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./ids": {
+      "types": "./dist/ids/index.d.ts",
+      "require": "./dist/ids/index.js",
+      "default": "./dist/ids/index.js"
+    },
+    "./versioning": {
+      "types": "./dist/versioning/index.d.ts",
+      "require": "./dist/versioning/index.js",
+      "default": "./dist/versioning/index.js"
+    }
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
@@ -17,6 +31,11 @@
     "test": "npm run typecheck && npm run build && node --test test/shipping.test.mjs",
     "clean": "rm -rf dist dist-test"
   },
-  "dependencies": { "@aurora/contracts": "0.1.0" },
-  "engines": { "node": ">=22.16.0 <23", "npm": "10.9.2" }
+  "dependencies": {
+    "@aurora/contracts": "0.1.0"
+  },
+  "engines": {
+    "node": ">=22.16.0 <23",
+    "npm": "10.9.2"
+  }
 }

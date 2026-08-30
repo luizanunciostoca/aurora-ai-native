@@ -1,7 +1,7 @@
 import { ContractVersionSchema } from './version.schemas';
 import { SupportedContractVersionSchema } from './version.schemas';
 import { VersionSchema } from './version.schemas';
-import { CONTRACT_VERSION_REGISTRY } from '../../../registries/src/versioning/contract-version.registry';
+import { CONTRACT_VERSION_REGISTRY } from '@aurora/registries/versioning';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {

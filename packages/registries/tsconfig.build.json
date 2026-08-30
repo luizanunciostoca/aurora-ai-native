@@ -9,5 +9,12 @@
     "outDir": "dist"
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.contract-test.ts", "src/**/*.type-test.ts", "dist", "dist-test", "node_modules"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.contract-test.ts",
+    "src/**/*.type-test.ts",
+    "dist",
+    "dist-test",
+    "node_modules"
+  ]
 }

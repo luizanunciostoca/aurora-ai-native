@@ -1,7 +1,4 @@
-import type {
-  PropagationContext,
-  PropagationMetadata,
-} from '../../../contracts/src/context/propagation';
+import type { PropagationContext, PropagationMetadata } from '@aurora/contracts/context';
 import { ContractVersionSchema } from '../versioning/version.schemas';
 import { asRecord, assertExactKeys, createRuntimeSchema } from './internal';
 import { CorrelationContextSchema } from './correlation.schema';

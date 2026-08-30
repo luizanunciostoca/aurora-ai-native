@@ -5,7 +5,7 @@ import {
   type ErrorCode,
   type ExecutionResult,
   type SafeErrorDetailValue,
-} from '../../../contracts/src/results';
+} from '@aurora/contracts/results';
 
 export type ResultsValidationIssueCode =
   | 'INVALID_TYPE'

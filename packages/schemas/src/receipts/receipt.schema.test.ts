@@ -1,7 +1,7 @@
-import type { CorrelationContext } from '../../../contracts/src/context';
-import type { ActionIntentId, ExecutionId, ReceiptId } from '../../../contracts/src/ids';
-import type { ExecutionOutcome } from '../../../contracts/src/results';
-import type { ContractVersion } from '../../../contracts/src/versioning';
+import type { CorrelationContext } from '@aurora/contracts/context';
+import type { ActionIntentId, ExecutionId, ReceiptId } from '@aurora/contracts/ids';
+import type { ExecutionOutcome } from '@aurora/contracts/results';
+import type { ContractVersion } from '@aurora/contracts/versioning';
 import { ReceiptSchema, type ReceiptSchemaDependencies } from './receipt.schema';
 
 function assert(condition: unknown, message: string): asserts condition {

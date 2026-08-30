@@ -18,7 +18,11 @@ test('all public export targets exist in built output', () => {
   for (const target of exportedTargets(manifest.exports ?? {})) {
     assert.equal(typeof target, 'string');
     assert.equal(target.startsWith('./dist/'), true, `non-dist export target: ${target}`);
-    assert.equal(fs.existsSync(path.resolve(packageDir, target)), true, `missing export target: ${target}`);
+    assert.equal(
+      fs.existsSync(path.resolve(packageDir, target)),
+      true,
+      `missing export target: ${target}`,
+    );
   }
 });
 
@@ -31,8 +35,10 @@ test('npm shipping set excludes source, tests and reference material', () => {
   const report = JSON.parse(result.stdout);
   const files = report[0]?.files?.map((entry) => entry.path) ?? [];
   assert.ok(files.length > 0, 'npm pack dry-run returned no files');
-  const forbidden = files.filter((file) =>
-    /^(src|test|dist-test)\//.test(file) || /(legacy-reference|legacy-manus-reference|source-archives)/.test(file),
+  const forbidden = files.filter(
+    (file) =>
+      /^(src|test|dist-test)\//.test(file) ||
+      /(legacy-reference|legacy-manus-reference|source-archives)/.test(file),
   );
   assert.deepEqual(forbidden, []);
 });

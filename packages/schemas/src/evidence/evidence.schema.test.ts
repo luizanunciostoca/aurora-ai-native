@@ -1,15 +1,6 @@
-import type {
-  ActorRef,
-  CorrelationContext,
-  DataClassification,
-} from '../../../contracts/src/context';
-import type {
-  ActionIntentId,
-  EvidenceId,
-  ExecutionId,
-  ReceiptId,
-} from '../../../contracts/src/ids';
-import type { ContractVersion } from '../../../contracts/src/versioning';
+import type { ActorRef, CorrelationContext, DataClassification } from '@aurora/contracts/context';
+import type { ActionIntentId, EvidenceId, ExecutionId, ReceiptId } from '@aurora/contracts/ids';
+import type { ContractVersion } from '@aurora/contracts/versioning';
 import { EvidenceSchema, type EvidenceSchemaDependencies } from './evidence.schema';
 
 function assert(condition: unknown, message: string): asserts condition {

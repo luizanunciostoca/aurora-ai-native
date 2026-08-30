@@ -5,7 +5,7 @@ import {
   type ErrorCode,
   type ExecutionResult,
   type RetryClassification,
-} from '../../../contracts/src/results';
+} from '@aurora/contracts/results';
 import {
   validateCanonicalError,
   validateExecutionResult,

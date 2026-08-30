@@ -1,4 +1,4 @@
-import type { CausationRef, CorrelationContext } from '../../../contracts/src/context/correlation';
+import type { CausationRef, CorrelationContext } from '@aurora/contracts/context';
 import { CausationIdSchema, CorrelationIdSchema } from '../ids/id.schemas';
 import { asRecord, assertExactKeys, createRuntimeSchema } from './internal';
 

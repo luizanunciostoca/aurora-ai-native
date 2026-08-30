@@ -2,7 +2,7 @@ export {
   ERROR_CATEGORIES,
   ERROR_CODE_DEFINITIONS,
   RETRY_CLASSIFICATIONS,
-} from './error-semantics.ts';
+} from './error-semantics.js';
 export type {
   AuroraError,
   CanonicalError,
@@ -13,9 +13,9 @@ export type {
   RetryClassification,
   SafeErrorDetails,
   SafeErrorDetailValue,
-} from './error-semantics.ts';
+} from './error-semantics.js';
 
-export { EXECUTION_OUTCOMES } from './execution-semantics.ts';
+export { EXECUTION_OUTCOMES } from './execution-semantics.js';
 export type {
   AcknowledgedExecutionResult,
   ExecutionOutcome,
@@ -25,4 +25,4 @@ export type {
   RejectedExecutionResult,
   UncertainExecutionResult,
   VerifiedExecutionResult,
-} from './execution-semantics.ts';
+} from './execution-semantics.js';

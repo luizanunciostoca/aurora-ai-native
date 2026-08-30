@@ -1,4 +1,4 @@
-import type { ContractVersion } from '../../../contracts/src/versioning/types';
+import type { ContractVersion } from '@aurora/contracts/versioning';
 
 export const CONTRACT_VERSION_1_0_0 = '1.0.0' as ContractVersion;
 

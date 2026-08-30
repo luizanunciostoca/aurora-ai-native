@@ -14,7 +14,11 @@ function walk(dir) {
   if (!fs.existsSync(dir)) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const absolute = path.join(dir, entry.name);
-    return entry.isDirectory() ? walk(absolute) : entry.isFile() && entry.name.endsWith('.ts') ? [absolute] : [];
+    return entry.isDirectory()
+      ? walk(absolute)
+      : entry.isFile() && entry.name.endsWith('.ts')
+        ? [absolute]
+        : [];
   });
 }
 
@@ -37,10 +41,16 @@ test('package dependency direction has no runtime/service or legacy inversion', 
   const violations = [];
   for (const file of walk(path.join(repoRoot, 'packages', 'contracts', 'src'))) {
     const source = text(file);
-    if (/(@aurora\/(schemas|registries)|packages\/(schemas|registries)|\.\.\/.*\/(schemas|registries)\/)/.test(source)) {
+    if (
+      /(@aurora\/(schemas|registries)|packages\/(schemas|registries)|\.\.\/.*\/(schemas|registries)\/)/.test(
+        source,
+      )
+    ) {
       violations.push(`${relative(file)} imports schema/registry implementation`);
     }
-    if (/(apps\/|services\/|legacy-reference|legacy-manus-reference|source-archives)/.test(source)) {
+    if (
+      /(apps\/|services\/|legacy-reference|legacy-manus-reference|source-archives)/.test(source)
+    ) {
       violations.push(`${relative(file)} depends on runtime/reference material`);
     }
   }
@@ -67,7 +77,9 @@ test('canonical shared primitives have one defining source', () => {
     ['ContractVersion', /export type ContractVersion\s*=/g],
   ]);
   for (const [name, pattern] of checks) {
-    const definitions = files.flatMap((file) => (text(file).match(pattern) ?? []).map(() => relative(file)));
+    const definitions = files.flatMap((file) =>
+      (text(file).match(pattern) ?? []).map(() => relative(file)),
+    );
     assert.deepEqual(definitions.length, 1, `${name} definitions: ${definitions.join(', ')}`);
   }
 });

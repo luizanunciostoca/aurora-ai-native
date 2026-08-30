@@ -1,22 +1,13 @@
-import type {
-  ActorRef,
-  CorrelationContext,
-  DataClassification,
-} from '../../../contracts/src/context';
+import type { ActorRef, CorrelationContext, DataClassification } from '@aurora/contracts/context';
 import type {
   Evidence,
   EvidenceSource,
   EvidenceSubject,
   EvidenceType,
   EvidenceVerification,
-} from '../../../contracts/src/evidence';
-import type {
-  ActionIntentId,
-  EvidenceId,
-  ExecutionId,
-  ReceiptId,
-} from '../../../contracts/src/ids';
-import type { ContractVersion } from '../../../contracts/src/versioning';
+} from '@aurora/contracts/evidence';
+import type { ActionIntentId, EvidenceId, ExecutionId, ReceiptId } from '@aurora/contracts/ids';
+import type { ContractVersion } from '@aurora/contracts/versioning';
 import {
   asRecord,
   exactKeys,

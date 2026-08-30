@@ -3,9 +3,9 @@ import type {
   CorrelationContext,
   DataClassification,
   TenantContext,
-} from '../../../contracts/src/context';
-import type { ActionIntentId, DecisionId, PolicyTokenId } from '../../../contracts/src/ids';
-import type { ContractVersion } from '../../../contracts/src/versioning';
+} from '@aurora/contracts/context';
+import type { ActionIntentId, DecisionId, PolicyTokenId } from '@aurora/contracts/ids';
+import type { ContractVersion } from '@aurora/contracts/versioning';
 import { ActionIntentSchema, type ActionIntentSchemaDependencies } from './action-intent.schema';
 
 function assert(condition: unknown, message: string): asserts condition {
