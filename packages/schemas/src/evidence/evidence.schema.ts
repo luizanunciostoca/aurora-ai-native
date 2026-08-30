@@ -1,22 +1,18 @@
+import type { ActorRef, CorrelationContext, DataClassification } from '../../../contracts/src/context';
 import type {
   Evidence,
   EvidenceSource,
   EvidenceSubject,
   EvidenceType,
   EvidenceVerification,
-} from '../../../contracts/src/evidence/index.js';
+} from '../../../contracts/src/evidence';
 import type {
   ActionIntentId,
   EvidenceId,
   ExecutionId,
   ReceiptId,
-} from '../../../contracts/src/ids/index.js';
-import type {
-  CorrelationContext,
-  DataClassification,
-  IdentityReference,
-} from '../../../contracts/src/context/index.js';
-import type { ContractVersion } from '../../../contracts/src/versioning/index.js';
+} from '../../../contracts/src/ids';
+import type { ContractVersion } from '../../../contracts/src/versioning';
 import {
   asRecord,
   exactKeys,
@@ -27,7 +23,7 @@ import {
   restrictedMetadata,
   timestamp,
   type DependencyParser,
-} from '../actions/internal-validation.js';
+} from '../actions/internal-validation';
 
 export interface EvidenceSchemaDependencies {
   readonly parseContractVersion: DependencyParser<ContractVersion>;
@@ -35,7 +31,7 @@ export interface EvidenceSchemaDependencies {
   readonly parseActionIntentId: DependencyParser<ActionIntentId>;
   readonly parseReceiptId: DependencyParser<ReceiptId>;
   readonly parseExecutionId: DependencyParser<ExecutionId>;
-  readonly parseIdentityReference: DependencyParser<IdentityReference>;
+  readonly parseActorRef: DependencyParser<ActorRef>;
   readonly parseCorrelationContext: DependencyParser<CorrelationContext>;
   readonly parseDataClassification: DependencyParser<DataClassification>;
 }
@@ -97,9 +93,7 @@ function source(
   return {
     sourceType: record.sourceType,
     capturedBy:
-      record.capturedBy === undefined
-        ? undefined
-        : dependencies.parseIdentityReference(record.capturedBy),
+      record.capturedBy === undefined ? undefined : dependencies.parseActorRef(record.capturedBy),
     provider: optionalNonEmptyString(record.provider, `${path}.provider`, 128),
     reference:
       record.reference === undefined
@@ -111,7 +105,7 @@ function source(
 function verification(
   input: unknown,
   path: string,
-  capturedAt: string,
+  capturedAt: Evidence['capturedAt'],
   dependencies: EvidenceSchemaDependencies,
 ): EvidenceVerification {
   const record = asRecord(input, path);
@@ -120,13 +114,9 @@ function verification(
     throw new TypeError(`${path}.state: unsupported verification state`);
   }
   const verifiedAt =
-    record.verifiedAt === undefined
-      ? undefined
-      : timestamp(record.verifiedAt, `${path}.verifiedAt`);
+    record.verifiedAt === undefined ? undefined : timestamp(record.verifiedAt, `${path}.verifiedAt`);
   const verifier =
-    record.verifier === undefined
-      ? undefined
-      : dependencies.parseIdentityReference(record.verifier);
+    record.verifier === undefined ? undefined : dependencies.parseActorRef(record.verifier);
   const method = optionalNonEmptyString(record.method, `${path}.method`, 256);
   if (record.state === 'VERIFIED' && (!verifiedAt || !verifier || !method)) {
     throw new TypeError(`${path}: VERIFIED requires verifiedAt, verifier, and method`);
@@ -232,7 +222,7 @@ function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Eviden
     capturedBy:
       provenanceRecord.capturedBy === undefined
         ? undefined
-        : dependencies.parseIdentityReference(provenanceRecord.capturedBy),
+        : dependencies.parseActorRef(provenanceRecord.capturedBy),
     sourceReference:
       provenanceRecord.sourceReference === undefined
         ? undefined
@@ -275,7 +265,7 @@ function parse(input: unknown, dependencies: EvidenceSchemaDependencies): Eviden
       record.metadata === undefined
         ? undefined
         : restrictedMetadata(record.metadata, 'Evidence.metadata'),
-  } as Evidence;
+  };
 }
 
 export const EvidenceSchema = Object.freeze({ parse });
