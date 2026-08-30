@@ -1,4 +1,8 @@
-import type { ActorRef, CorrelationContext, DataClassification } from '../../../contracts/src/context';
+import type {
+  ActorRef,
+  CorrelationContext,
+  DataClassification,
+} from '../../../contracts/src/context';
 import type {
   ActionIntentId,
   EvidenceId,
@@ -17,7 +21,10 @@ function expectThrows(fn: () => unknown, contains: string): void {
     fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    assert(message.includes(contains), `expected error containing "${contains}", got "${message}"`);
+    assert(
+      message.includes(contains),
+      `expected error containing "${contains}", got "${message}"`,
+    );
     return;
   }
   throw new Error(`expected function to throw: ${contains}`);
@@ -97,7 +104,10 @@ assert(parsed.subject.kind === 'ACTION_INTENT', 'Evidence must retain subject li
 assert(parsed.verification.state === 'VERIFIED', 'Evidence verification state must be explicit');
 
 const roundTrip = EvidenceSchema.parse(JSON.parse(JSON.stringify(parsed)), dependencies);
-assert(JSON.stringify(roundTrip) === JSON.stringify(parsed), 'Evidence serialization round trip must be stable');
+assert(
+  JSON.stringify(roundTrip) === JSON.stringify(parsed),
+  'Evidence serialization round trip must be stable',
+);
 
 const withoutSubject = JSON.parse(JSON.stringify(validEvidence)) as Record<string, unknown>;
 delete withoutSubject.subject;
