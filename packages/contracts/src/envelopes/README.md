@@ -16,3 +16,7 @@ This directory owns the canonical `CommandEnvelope` and `EventEnvelope` contract
 10. Serialization validates first and emits canonical JSON with recursively sorted object keys, producing deterministic bytes for structurally equivalent JSON values.
 11. W01-A does not implement event bus, persistence, handlers, retries, scheduling or authorization behavior.
 12. Backward/forward compatibility is explicit: no unknown-version coercion, and compatibility adapters belong to the W01-G integration path.
+
+## Canonical dependency state
+
+W01-A is validated against the accepted W01-F ID/version primitives and W01-D propagation primitives from the synchronized canonical `main`; it does not rely on local substitutes for either dependency.
