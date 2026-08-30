@@ -14,8 +14,8 @@ test('consumer can resolve root packages and governed subpaths', () => {
   const registryIds = require('@aurora/registries/ids');
   const registryVersions = require('@aurora/registries/versioning');
 
-  assert.equal(contracts.COMMAND_ENVELOPE_KIND, 'COMMAND_ENVELOPE');
-  assert.equal(contracts.EVENT_ENVELOPE_KIND, 'EVENT_ENVELOPE');
+  assert.equal(contracts.COMMAND_ENVELOPE_KIND, 'COMMAND');
+  assert.equal(contracts.EVENT_ENVELOPE_KIND, 'EVENT');
   assert.equal(contractIds.CANONICAL_ID_GENERATION_RESPONSIBILITY, 'PRODUCER');
   assert.ok(Array.isArray(contractResults.EXECUTION_OUTCOMES));
   assert.equal(typeof schemas.TenantIdSchema.parse, 'function');
