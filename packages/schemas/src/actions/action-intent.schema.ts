@@ -1,24 +1,20 @@
 import type {
-  ActionIntent,
   ActionAuthorityReference,
   ActionIdempotency,
+  ActionIntent,
   ActionPrecondition,
   CapabilityActionReference,
   ExpectedState,
   ProviderBinding,
-} from '../../../contracts/src/actions/index.js';
+} from '../../../contracts/src/actions';
 import type {
-  ActionIntentId,
-  OwnerDecisionId,
-  PolicyTokenId,
-  TenantId,
-} from '../../../contracts/src/ids/index.js';
-import type {
+  ActorRef,
   CorrelationContext,
   DataClassification,
-  IdentityReference,
-} from '../../../contracts/src/context/index.js';
-import type { ContractVersion } from '../../../contracts/src/versioning/index.js';
+  TenantContext,
+} from '../../../contracts/src/context';
+import type { ActionIntentId, DecisionId, PolicyTokenId } from '../../../contracts/src/ids';
+import type { ContractVersion } from '../../../contracts/src/versioning';
 import {
   asRecord,
   exactKeys,
@@ -28,17 +24,17 @@ import {
   restrictedMetadata,
   timestamp,
   type DependencyParser,
-} from './internal-validation.js';
+} from './internal-validation';
 
 export interface ActionIntentSchemaDependencies {
   readonly parseContractVersion: DependencyParser<ContractVersion>;
   readonly parseActionIntentId: DependencyParser<ActionIntentId>;
-  readonly parseTenantId: DependencyParser<TenantId>;
-  readonly parseIdentityReference: DependencyParser<IdentityReference>;
+  readonly parseTenantContext: DependencyParser<TenantContext>;
+  readonly parseActorRef: DependencyParser<ActorRef>;
   readonly parseCorrelationContext: DependencyParser<CorrelationContext>;
   readonly parseDataClassification: DependencyParser<DataClassification>;
   readonly parsePolicyTokenId: DependencyParser<PolicyTokenId>;
-  readonly parseOwnerDecisionId: DependencyParser<OwnerDecisionId>;
+  readonly parseDecisionId: DependencyParser<DecisionId>;
 }
 
 function capability(input: unknown, path: string): CapabilityActionReference {
@@ -126,20 +122,20 @@ function authority(
     return { kind, policyTokenId: dependencies.parsePolicyTokenId(record.policyTokenId) };
   }
   if (kind === 'OWNER_DECISION') {
-    exactKeys(record, ['kind', 'ownerDecisionId'], ['kind', 'ownerDecisionId'], path);
-    return { kind, ownerDecisionId: dependencies.parseOwnerDecisionId(record.ownerDecisionId) };
+    exactKeys(record, ['kind', 'decisionId'], ['kind', 'decisionId'], path);
+    return { kind, decisionId: dependencies.parseDecisionId(record.decisionId) };
   }
   if (kind === 'POLICY_AND_OWNER_DECISION') {
     exactKeys(
       record,
-      ['kind', 'policyTokenId', 'ownerDecisionId'],
-      ['kind', 'policyTokenId', 'ownerDecisionId'],
+      ['kind', 'policyTokenId', 'decisionId'],
+      ['kind', 'policyTokenId', 'decisionId'],
       path,
     );
     return {
       kind,
       policyTokenId: dependencies.parsePolicyTokenId(record.policyTokenId),
-      ownerDecisionId: dependencies.parseOwnerDecisionId(record.ownerDecisionId),
+      decisionId: dependencies.parseDecisionId(record.decisionId),
     };
   }
   throw new TypeError(`${path}.kind: unsupported authority reference kind`);
@@ -155,7 +151,7 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
       'actionIntentId',
       'capability',
       'providerBinding',
-      'tenantId',
+      'tenant',
       'actor',
       'requestOrigin',
       'correlation',
@@ -174,7 +170,7 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
       'schemaVersion',
       'actionIntentId',
       'capability',
-      'tenantId',
+      'tenant',
       'actor',
       'requestOrigin',
       'correlation',
@@ -187,8 +183,9 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
     ],
     'ActionIntent',
   );
-  if (record.kind !== 'ACTION_INTENT')
+  if (record.kind !== 'ACTION_INTENT') {
     throw new TypeError('ActionIntent.kind: expected ACTION_INTENT');
+  }
 
   let executionClassification: ActionIntent['executionClassification'];
   if (record.executionClassification !== undefined) {
@@ -230,9 +227,9 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
       record.providerBinding === undefined
         ? undefined
         : providerBinding(record.providerBinding, 'ActionIntent.providerBinding'),
-    tenantId: dependencies.parseTenantId(record.tenantId),
-    actor: dependencies.parseIdentityReference(record.actor),
-    requestOrigin: dependencies.parseIdentityReference(record.requestOrigin),
+    tenant: dependencies.parseTenantContext(record.tenant),
+    actor: dependencies.parseActorRef(record.actor),
+    requestOrigin: dependencies.parseActorRef(record.requestOrigin),
     correlation: dependencies.parseCorrelationContext(record.correlation),
     resolvedParameters: jsonObject(record.resolvedParameters, 'ActionIntent.resolvedParameters'),
     idempotency: idempotency(record.idempotency, 'ActionIntent.idempotency'),
@@ -249,7 +246,7 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
       record.metadata === undefined
         ? undefined
         : restrictedMetadata(record.metadata, 'ActionIntent.metadata'),
-  } as ActionIntent;
+  };
 }
 
 export const ActionIntentSchema = Object.freeze({ parse });
