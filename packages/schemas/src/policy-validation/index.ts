@@ -11,25 +11,22 @@ import {
   Rfc3339TimestampSchema,
   SubjectRefSchema,
   TenantContextSchema,
-} from '../context/index.js';
+} from '../context/index';
 import {
   asRecord,
   assertExactKeys,
   createRuntimeSchema,
   parseNonEmptyString,
-} from '../context/internal.js';
-import { DecisionIdSchema, PolicyTokenIdSchema } from '../ids/index.js';
-import {
-  createOwnerDecisionSchema,
-  createPolicyTokenSchema,
-} from '../policy/index.js';
-import { optionalConstraints } from '../policy/validation.js';
+} from '../context/internal';
+import { DecisionIdSchema, PolicyTokenIdSchema } from '../ids/index';
+import { createOwnerDecisionSchema, createPolicyTokenSchema } from '../policy/index';
+import { optionalConstraints } from '../policy/validation';
 import {
   PolicyEvaluationDecisionSchema,
   PolicyEvaluationRequestSchema,
   PolicyEvaluationResultSchema,
-} from '../policy-engine/index.js';
-import { ContractVersionSchema, VersionSchema } from '../versioning/index.js';
+} from '../policy-engine/index';
+import { ContractVersionSchema, VersionSchema } from '../versioning/index';
 
 const policyDependencies = {
   contractVersion: ContractVersionSchema,
@@ -90,7 +87,8 @@ function parseCanonicalError(value: unknown, label: string): void {
     'correlationId',
     'timestamp',
   ] as const) {
-    if (!(required in record)) throw new TypeError(`${label} is missing required field: ${required}`);
+    if (!(required in record))
+      throw new TypeError(`${label} is missing required field: ${required}`);
   }
   if (record.kind !== 'CanonicalError') throw new TypeError(`${label}.kind is invalid`);
   parseNonEmptyString(record.schemaVersion, `${label}.schemaVersion`);
@@ -239,10 +237,16 @@ export const PolicyTokenValidationRequestSchema = createRuntimeSchema<PolicyToke
     if (record.operationConstraints !== undefined) optionalConstraints(record.operationConstraints);
     if (record.ownerDecision !== undefined) OwnerDecisionWireSchema.parse(record.ownerDecision);
     if (record.revokedPolicyTokenIds !== undefined) {
-      parseRevocationIds(record.revokedPolicyTokenIds, 'PolicyTokenValidationRequest.revokedPolicyTokenIds');
+      parseRevocationIds(
+        record.revokedPolicyTokenIds,
+        'PolicyTokenValidationRequest.revokedPolicyTokenIds',
+      );
     }
     if (record.requireCorrelationMatch !== undefined) {
-      parseBoolean(record.requireCorrelationMatch, 'PolicyTokenValidationRequest.requireCorrelationMatch');
+      parseBoolean(
+        record.requireCorrelationMatch,
+        'PolicyTokenValidationRequest.requireCorrelationMatch',
+      );
     }
     return record as unknown as PolicyTokenValidationRequest;
   },
@@ -337,10 +341,16 @@ export const AuthorityEvaluationRequestSchema = createRuntimeSchema<AuthorityEva
     }
     if (record.operationConstraints !== undefined) optionalConstraints(record.operationConstraints);
     if (record.revokedPolicyTokenIds !== undefined) {
-      parseRevocationIds(record.revokedPolicyTokenIds, 'AuthorityEvaluationRequest.revokedPolicyTokenIds');
+      parseRevocationIds(
+        record.revokedPolicyTokenIds,
+        'AuthorityEvaluationRequest.revokedPolicyTokenIds',
+      );
     }
     if (record.requireCorrelationMatch !== undefined) {
-      parseBoolean(record.requireCorrelationMatch, 'AuthorityEvaluationRequest.requireCorrelationMatch');
+      parseBoolean(
+        record.requireCorrelationMatch,
+        'AuthorityEvaluationRequest.requireCorrelationMatch',
+      );
     }
     return record as unknown as AuthorityEvaluationRequest;
   },
@@ -406,7 +416,9 @@ export const AuthorityEvaluationResultSchema = createRuntimeSchema<AuthorityEval
     }
     if (authorized) {
       if (record.effectiveScope.length === 0) {
-        throw new TypeError('authorized AuthorityEvaluationResult requires non-empty effectiveScope');
+        throw new TypeError(
+          'authorized AuthorityEvaluationResult requires non-empty effectiveScope',
+        );
       }
       if (record.policyDecision !== 'ALLOW') {
         throw new TypeError('authorized AuthorityEvaluationResult requires policyDecision ALLOW');
