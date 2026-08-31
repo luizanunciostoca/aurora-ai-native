@@ -1,0 +1,42 @@
+path_area,git_tree_or_blob_sha,role,aurora_consumers,priority,classification
+ROOT,8a6cfe055be9b34e498cfbdb481e8232dc51df05,Repository snapshot/root,CROSS_WAVE,P0,IMMUTABLE_GIT_PROVENANCE
+.github,91986679dbcf7c7e2eae054158d8e09858eb2283,"CI/CD, deployment and safety gates",W17/W19/W20,P1,CI_GOVERNANCE_REFERENCE
+control,c88fe9b803b078cb371612a5dfd81854aea09afe,Control-plane configuration/evidence,W04/W17/W20,P1,GOVERNANCE_REFERENCE
+docs,3d0470e71cecd2ca6408ba1682f655889e6737a2,"Runbooks, evidence and operational documentation",W17/W20,P2,HISTORICAL_OPERATIONAL_REFERENCE
+infra,c6e7f51d6923ff9bf8afb0eb55963136301bc8f8,Infrastructure/deployment definitions,W17/W19/W20,P1,INFRA_REFERENCE_ONLY
+migrations,d873078ac3d1e14576d68cf8c4094956e6bfe373,Durable Postgres schemas,W03/W07/W10-W13/W17/W19,P0,SCHEMA_PATTERN_CANDIDATE
+ops,e3241627001a8c340d73749ba12ea12238e803ca,Operational probes/readiness/evidence,W17/W19/W20,P1,OPS_REFERENCE
+publication,4334cb9e9f4c2e5520cb74f8b8f9114ed3d14f7a,Publication operational artifacts,W11/W20,P2,DOMAIN_REFERENCE
+scripts,6256a3f382a5ae5c68ccc1dfce9d1ce016e1770c,Architecture checks/build/verification scripts,W17/W19/W20,P1,CI_GOVERNANCE_REFERENCE
+src,e295087ed9c1208c4931b6128fa39f2052d20cd9,Application/platform source tree,W02-W20,P0,CURATED_BELOW
+test,30cc9262a5c1deed5d6495f0296a2a5b56090dab,Primary test corpus,W03-W20,P0,TEST_SCENARIO_REFERENCE
+tests,e3f972727bb617e62583177e08ec5ad85a0108b6,Additional test/eval corpus,W17-W20,P1,TEST_SCENARIO_REFERENCE
+src/assets,e565333b9000bf79ee877bfd53b0d706712dc298,Asset intelligence,W06/W11/W18,P2,DOMAIN_CONCEPT_REFERENCE
+src/content,b2bb294993d94d0be0f93586218fdabfcca7f641,Content contracts/runtime,W04/W10/W11,P1,DOMAIN_PLATFORM_BOUNDARY_REFERENCE
+src/contracts,89f6520736b7dbf0ab2713dcd52260fbda3534f8,Creative/media contracts,W04/W11,P2,DOMAIN_CONTRACT_REFERENCE
+src/core,1f6a685e7c771db64438e7926b57c5d9597097fa,"Authority, executor, audit, secrets, reliability",W02/W07/W17/W19,P0,PLATFORM_PATTERN_CANDIDATE
+src/creative,5582559ef56b0481dc94b760076ad0794f5ca166,Deterministic creative pipelines and local subprocess tooling,W07/W08/W11,P1,MIXED_DOMAIN_AND_LOCAL_EXECUTION
+src/crm,640cc89bd3bad622a5ec46852228f461448749c7,CRM lifecycle,W10,P1,VERTICAL_REFERENCE
+src/events,75570fed5daff1fd85883da664352faac1012cb5,"Events, transactional outbox and consumers",W03,P0,PLATFORM_PATTERN_CANDIDATE
+src/governance,6bd8c6491d81f55d6ecbfc59e1f1af4c12a51a13,"Approvals, capability lifecycle, autonomy rollout",W02/W04/W07/W18,P0,PLATFORM_PATTERN_CANDIDATE
+src/health,1bfc6b4a15538ebe9ad520f5b33896d5e320011b,Readiness/provider health,W07/W17,P1,PLATFORM_PATTERN_CANDIDATE
+src/instagram-engagement,8ee878c8fbfaf978486dd2e67a9fb3db88dc9ef2,Instagram engagement runtime,W11,P1,VERTICAL_REFERENCE
+src/learning,e512abbacdf81c97f121a918d0338e0717fab2b5,Experimentation and closed-loop learning,W18,P0,EVAL_LEARNING_REFERENCE
+src/local-discovery,c3eff4bc44ae74ad9d09c37663c5cb6b093d4941,Local discovery,W10/W11,P2,VERTICAL_REFERENCE
+src/mcp,8310d9c7cd2568d1f66ab3bbd4ec7b2a592f486a,"MCP surfaces, human control and runtime resolution",W09/W16,P0,PLATFORM_INTERFACE_REFERENCE
+src/measurement,b767b1a67052334a618f1b104375f9d2c9848e87,"Analytics, attribution, capacity",W10/W17/W18,P1,PLATFORM_AND_VERTICAL_REFERENCE
+src/omnichannel,8b6e9100b040e83402c706c3d3b5427a464d3ae1,Omnichannel messaging,W10/W11,P1,VERTICAL_REFERENCE
+src/operations,8b33f96f69aabc80c157a8ea9aaef72edf0a89c7,Operational domain code,W17/W20,P2,OPS_REFERENCE
+src/ops,adaf2de66ef9e652457cd3cfe173f0e50066e418,Runtime operational checks,W17/W20,P1,OPS_REFERENCE
+src/orchestrator,222bc4e1d2a125a82721e3ee9a658b3394d4f2ee,Planning/orchestration/model adapter,W05/W14,P1,BEHAVIOR_REFERENCE_NOT_AUTHORITY
+src/paid-media,4112f298005621703edba369a01dda745d570dfc,Paid-media decisions,W12/W13,P1,VERTICAL_REFERENCE
+src/persistence,33bf9562667eb46eadf9fa25e1deaeb0764df0bc,Postgres stores/read models,W03/W10-W13/W17,P0,PERSISTENCE_PATTERN_CANDIDATE
+src/policy,af5f021cd0d326ae9323f7b18e51add6a9cb69bb,Engagement-specific policy,W11,P2,VERTICAL_POLICY_REFERENCE_ONLY
+src/privacy,66b688e823279cdc2277ca1596cdda54f228b847,Privacy/LGPD-style governance,W02/W19,P0,PLATFORM_GOVERNANCE_REFERENCE
+src/providers,aa56bb5de945adb82bb7821ca9e3ab69b0f713bf,Provider adapters: Meta/Instagram/Google/GCP/local,W08/W11-W13,P0,PROVIDER_PATTERN_CANDIDATE
+src/runtime,e6d62a276a4849f63c717ad13c1243bf4cca0122,Runtime composition,W07/W09/W17,P1,PLATFORM_RUNTIME_REFERENCE
+src/scheduler,5002318088e1818296123353ccf029e0388e3144,Durable scheduler/reconciler/watchdog,W03/W11,P0,PLATFORM_PATTERN_CANDIDATE
+src/tenancy,daaf6d29cf71859304c3ca4b3766e78ab21617c7,Tenant boundary/config/credentials/RBAC,W02/W19,P0,PLATFORM_GOVERNANCE_REFERENCE
+src/tools,b7787176e2963eab29401cb6679ebcab2589068b,Tool implementations/registrations,W04/W07/W08,P1,CAPABILITY_REFERENCE
+src/worker,0cc8b35079e267534ef29e10b6a121b1eb46e666,Worker/DLQ processing,W03/W17,P1,PLATFORM_PATTERN_CANDIDATE
+src/workflow,274e4f0d2a95f3343e38f0ece390b46026419e14,Workflow contracts/store,W03/W09,P1,PLATFORM_PATTERN_CANDIDATE
