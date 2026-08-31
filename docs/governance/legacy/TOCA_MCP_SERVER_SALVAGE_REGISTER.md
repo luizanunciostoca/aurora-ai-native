@@ -1,6 +1,6 @@
 # TOCA MCP SERVER → AURORA SALVAGE REGISTER
 
-Status: `ACTIVE_CANONICAL_PLANNING_INPUT_CANDIDATE`
+Status: `ACTIVE_CANONICAL_PLANNING_INPUT`
 Audit date: 2026-08-31
 Source repository: `luizanunciostoca/toca-mcp-server`
 Audited exact `main`: `8a6cfe055be9b34e498cfbdb481e8232dc51df05`
@@ -116,3 +116,17 @@ These observations are not a substitute for W19 security acceptance.
 - Git machine-readable CSV mirrors for source areas, wave handoff and risk register. The full curated platform-pattern catalog remains in the Drive workbook to avoid duplicating a large derived table in Git.
 
 The immutable TOCA Git repository at the exact audited commit is the byte-level source archive; Drive should not become a second source tree.
+
+## 9. Governance acceptance
+
+Aurora GitHub PR #57 accepted the TOCA MCP salvage input as governance/reference-only planning input.
+
+- PR #57: MERGED.
+- exact accepted HEAD: `8b8068a022c6cb3d7ea65e13ce14765c86e402a1`.
+- merge/main: `923222a39b17bf4a4a5849441d76638e330a3aa4`.
+- Quality `33442348643`: SUCCESS.
+- Test Build `33442348609`: SUCCESS.
+- Security `33442349986`: SUCCESS.
+- source snapshot was revalidated immediately before acceptance and remained `8a6cfe055be9b34e498cfbdb481e8232dc51df05`.
+
+This status synchronization does not release W03+, change W02 state, or grant runtime authority to any TOCA source, policy, approval, provider or MCP surface.
