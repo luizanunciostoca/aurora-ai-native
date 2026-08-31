@@ -133,10 +133,7 @@ const lookupFound = lookupCurrentPolicy(lookupRequest(), {
 });
 assert(lookupFound.found, 'lookup found: expected current policy');
 assert(observedTenant === tenantA, 'lookup found: source must receive tenant binding');
-assert(
-  lookupFound.tenant.tenantId === tenantA,
-  'lookup found: result must retain tenant context',
-);
+assert(lookupFound.tenant.tenantId === tenantA, 'lookup found: result must retain tenant context');
 assert(lookupFound.currentPolicy.version === policyVersion, 'lookup found: wrong current version');
 assert(lookupFound.authorizesExecution === false, 'lookup found: must never authorize execution');
 assert(
