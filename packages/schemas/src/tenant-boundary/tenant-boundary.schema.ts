@@ -77,8 +77,8 @@ export const IdentityTenantBindingSchema = createRuntimeSchema<TenantBindingSche
   },
 );
 
-export const TenantBoundaryContextSchema =
-  createRuntimeSchema<TenantBoundaryContextSchemaValue>((value: unknown) => {
+export const TenantBoundaryContextSchema = createRuntimeSchema<TenantBoundaryContextSchemaValue>(
+  (value: unknown) => {
     const record = asRecord(value, 'TenantBoundaryContext');
     assertExactKeys(
       record,
@@ -93,13 +93,10 @@ export const TenantBoundaryContextSchema =
       subject: SubjectRefSchema.parse(record.subject),
       correlationId: CorrelationIdSchema.parse(record.correlationId),
     };
-  });
+  },
+);
 
-function parseArray<T>(
-  value: unknown,
-  label: string,
-  parse: (item: unknown) => T,
-): readonly T[] {
+function parseArray<T>(value: unknown, label: string, parse: (item: unknown) => T): readonly T[] {
   if (!Array.isArray(value)) {
     throw new TypeError(`${label} must be an array`);
   }
