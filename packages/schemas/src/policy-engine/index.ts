@@ -1,13 +1,17 @@
+import type {
+  PolicyEvaluationDecision,
+  PolicyEvaluationRequest,
+  PolicyEvaluationResult,
+  PolicyRule,
+  PolicySnapshot,
+  PolicySnapshotState,
+} from '@aurora/contracts/policy-engine';
 import {
   asRecord,
   assertExactKeys,
   createRuntimeSchema,
   parseNonEmptyString,
 } from '../context/internal';
-
-type DecisionValue = 'ALLOW' | 'DENY' | 'REQUIRE_APPROVAL';
-type SnapshotStateValue = 'ACTIVE' | 'UNKNOWN';
-type ParsedPolicyObject = Readonly<Record<string, unknown>>;
 
 const DECISIONS = new Set<string>(['ALLOW', 'DENY', 'REQUIRE_APPROVAL']);
 const SNAPSHOT_STATES = new Set<string>(['ACTIVE', 'UNKNOWN']);
@@ -17,31 +21,25 @@ function parseStringArray(value: unknown, label: string): readonly string[] {
   return value.map((item, index) => parseNonEmptyString(item, `${label}[${index}]`));
 }
 
-/**
- * W02-D leaf runtime schemas intentionally avoid importing the unpublished
- * `@aurora/contracts/policy-engine` package subpath. PB2 owns the coordinator
- * publication/export binding. Runtime validation semantics remain identical
- * and are structurally compatible with the canonical D contracts.
- */
-export const PolicyEvaluationDecisionSchema = createRuntimeSchema<DecisionValue>(
+export const PolicyEvaluationDecisionSchema = createRuntimeSchema<PolicyEvaluationDecision>(
   (value: unknown) => {
     if (typeof value !== 'string' || !DECISIONS.has(value)) {
       throw new TypeError('PolicyEvaluationDecision is invalid');
     }
-    return value as DecisionValue;
+    return value as PolicyEvaluationDecision;
   },
 );
 
-export const PolicySnapshotStateSchema = createRuntimeSchema<SnapshotStateValue>(
+export const PolicySnapshotStateSchema = createRuntimeSchema<PolicySnapshotState>(
   (value: unknown) => {
     if (typeof value !== 'string' || !SNAPSHOT_STATES.has(value)) {
       throw new TypeError('PolicySnapshotState is invalid');
     }
-    return value as SnapshotStateValue;
+    return value as PolicySnapshotState;
   },
 );
 
-export const PolicyRuleSchema = createRuntimeSchema<ParsedPolicyObject>((value: unknown) => {
+export const PolicyRuleSchema = createRuntimeSchema<PolicyRule>((value: unknown) => {
   const record = asRecord(value, 'PolicyRule');
   assertExactKeys(
     record,
@@ -87,10 +85,10 @@ export const PolicyRuleSchema = createRuntimeSchema<ParsedPolicyObject>((value: 
   if (record.reasonReference !== undefined) {
     parseNonEmptyString(record.reasonReference, 'PolicyRule.reasonReference');
   }
-  return record;
+  return record as unknown as PolicyRule;
 });
 
-export const PolicySnapshotSchema = createRuntimeSchema<ParsedPolicyObject>((value: unknown) => {
+export const PolicySnapshotSchema = createRuntimeSchema<PolicySnapshot>((value: unknown) => {
   const record = asRecord(value, 'PolicySnapshot');
   assertExactKeys(
     record,
@@ -111,10 +109,10 @@ export const PolicySnapshotSchema = createRuntimeSchema<ParsedPolicyObject>((val
   PolicySnapshotStateSchema.parse(record.state);
   if (!Array.isArray(record.rules)) throw new TypeError('PolicySnapshot.rules must be an array');
   record.rules.forEach((rule) => PolicyRuleSchema.parse(rule));
-  return record;
+  return record as unknown as PolicySnapshot;
 });
 
-export const PolicyEvaluationRequestSchema = createRuntimeSchema<ParsedPolicyObject>(
+export const PolicyEvaluationRequestSchema = createRuntimeSchema<PolicyEvaluationRequest>(
   (value: unknown) => {
     const record = asRecord(value, 'PolicyEvaluationRequest');
     assertExactKeys(
@@ -184,11 +182,11 @@ export const PolicyEvaluationRequestSchema = createRuntimeSchema<ParsedPolicyObj
     ) {
       throw new TypeError('PolicyEvaluationRequest.jurisdictionRestrictions must be an array');
     }
-    return record;
+    return record as unknown as PolicyEvaluationRequest;
   },
 );
 
-export const PolicyEvaluationResultSchema = createRuntimeSchema<ParsedPolicyObject>(
+export const PolicyEvaluationResultSchema = createRuntimeSchema<PolicyEvaluationResult>(
   (value: unknown) => {
     const record = asRecord(value, 'PolicyEvaluationResult');
     assertExactKeys(
@@ -232,6 +230,6 @@ export const PolicyEvaluationResultSchema = createRuntimeSchema<ParsedPolicyObje
     if (decision !== 'DENY' && record.error !== undefined) {
       throw new TypeError('PolicyEvaluationResult non-DENY must not carry error');
     }
-    return record;
+    return record as unknown as PolicyEvaluationResult;
   },
 );
