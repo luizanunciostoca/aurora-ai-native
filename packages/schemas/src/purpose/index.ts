@@ -1,13 +1,12 @@
 import type { PurposeContext } from '@aurora/contracts/purpose';
-import type { ContractVersion } from '@aurora/contracts/versioning';
 import {
   asRecord,
   assertExactKeys,
   createRuntimeSchema,
   parseNonEmptyString,
-} from '../context/internal.js';
+} from '../context/internal';
 
-function parsePurpose(value: unknown): PurposeContext {
+export const PurposeContextSchema = createRuntimeSchema<PurposeContext>((value: unknown) => {
   const record = asRecord(value, 'PurposeContext');
   assertExactKeys(
     record,
@@ -15,27 +14,15 @@ function parsePurpose(value: unknown): PurposeContext {
     ['kind', 'purposeId', 'version', 'status'],
     'PurposeContext',
   );
+
   if (record.kind !== 'PurposeContext') {
     throw new TypeError('PurposeContext.kind is invalid');
   }
   if (record.status !== 'ACTIVE' && record.status !== 'DISABLED') {
     throw new TypeError('PurposeContext.status is invalid');
   }
-  return {
-    kind: 'PurposeContext',
-    purposeId: parseNonEmptyString(record.purposeId, 'purposeId'),
-    version: parseNonEmptyString(record.version, 'version') as ContractVersion,
-    status: record.status,
-    ...(record.description === undefined
-      ? {}
-      : { description: parseNonEmptyString(record.description, 'description') }),
-    ...(record.allowedDataClassifications === undefined
-      ? {}
-      : {
-          allowedDataClassifications:
-            record.allowedDataClassifications as PurposeContext['allowedDataClassifications'],
-        }),
-  };
-}
+  parseNonEmptyString(record.purposeId, 'purposeId');
+  parseNonEmptyString(record.version, 'version');
 
-export const PurposeContextSchema = createRuntimeSchema(parsePurpose);
+  return record as unknown as PurposeContext;
+});
