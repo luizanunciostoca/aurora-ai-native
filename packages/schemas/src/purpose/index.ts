@@ -1,4 +1,3 @@
-import type { PurposeContext } from '@aurora/contracts/purpose';
 import {
   asRecord,
   assertExactKeys,
@@ -6,7 +5,7 @@ import {
   parseNonEmptyString,
 } from '../context/internal';
 
-export const PurposeContextSchema = createRuntimeSchema<PurposeContext>((value: unknown) => {
+export const PurposeContextSchema = createRuntimeSchema<Record<string, unknown>>((value: unknown) => {
   const record = asRecord(value, 'PurposeContext');
   assertExactKeys(
     record,
@@ -24,5 +23,5 @@ export const PurposeContextSchema = createRuntimeSchema<PurposeContext>((value: 
   parseNonEmptyString(record.purposeId, 'purposeId');
   parseNonEmptyString(record.version, 'version');
 
-  return record as unknown as PurposeContext;
+  return record;
 });
