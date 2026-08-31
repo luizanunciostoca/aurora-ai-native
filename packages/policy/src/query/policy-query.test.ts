@@ -133,7 +133,10 @@ const lookupFound = lookupCurrentPolicy(lookupRequest(), {
 });
 assert(lookupFound.found, 'lookup found: expected current policy');
 assert(observedTenant === tenantA, 'lookup found: source must receive tenant binding');
-assert(lookupFound.tenant.tenantId === tenantA, 'lookup found: result must retain tenant context');
+assert(
+  lookupFound.tenant.tenantId === tenantA,
+  'lookup found: result must retain tenant context',
+);
 assert(lookupFound.currentPolicy.version === policyVersion, 'lookup found: wrong current version');
 assert(lookupFound.authorizesExecution === false, 'lookup found: must never authorize execution');
 assert(
@@ -199,7 +202,10 @@ const authorityRule: PolicyRule = {
   authorityRequired: true,
 };
 const authorityRequired = precheckPolicy(precheck({ snapshot: snapshot([authorityRule]) }));
-assert(authorityRequired.decision === 'DENY', 'authority precheck: expected DENY without authority');
+assert(
+  authorityRequired.decision === 'DENY',
+  'authority precheck: expected DENY without authority',
+);
 assert(
   authorityRequired.reasons.includes('AUTHORITY_REQUIRED'),
   'authority precheck: missing AUTHORITY_REQUIRED',
