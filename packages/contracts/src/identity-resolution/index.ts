@@ -24,6 +24,7 @@ export interface IdentityResolutionEvidence {
   readonly resolvedAt: string;
   readonly normalizedReference: string;
   readonly candidateCount: number;
+  /** Identity resolution is descriptive only and never creates authorization. */
   readonly authorityGranted: false;
 }
 
@@ -49,7 +50,11 @@ export interface IdentityResolutionFailure {
 
 export type IdentityResolutionResult = IdentityResolutionSuccess | IdentityResolutionFailure;
 
-export interface IdentityBindingRecord {
+/**
+ * Read-only resolver directory entry. This is not the W02-B tenant-binding
+ * authority model; it is only lookup material consumed by W02-A.
+ */
+export interface IdentityResolutionRecord {
   readonly tenantId: TenantId;
   readonly identityId: IdentityId;
   readonly kind: IdentityKind;
