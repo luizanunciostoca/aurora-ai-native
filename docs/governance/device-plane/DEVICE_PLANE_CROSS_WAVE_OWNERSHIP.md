@@ -37,4 +37,4 @@ Prevent Android/device work from creating duplicate capability, policy, executor
 
 ## Current state
 
-W02 remains the current active wave. W02-D is READY after PB1 release. This ownership document does not modify W02 scope or unlock W04/W07/W14/W15 implementation.
+W02 remains the current active wave. PB1 is `COMPLETE_RELEASED`. W02-D is now `IN_PROGRESS` in draft/open PR #41, while W02-E/F/G remain dependency-gated. The W02-D branch predates the Device Plane planning merge and must rebase/revalidate against the latest main before its own acceptance. This ownership document does not alter W02-D semantics or unlock W04/W07/W14/W15 implementation.
