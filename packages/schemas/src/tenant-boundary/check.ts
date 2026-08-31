@@ -1,22 +1,38 @@
-import type {
-  IdentityTenantBinding,
-  TenantBoundaryCheck,
-  TenantBoundaryDecision,
-  TenantBoundaryReason,
-} from '../../../contracts/src/tenant-boundary/types';
+import { TenantBoundaryCheckSchema } from './tenant-boundary.schema';
+
+type BoundaryCheckInput = ReturnType<(typeof TenantBoundaryCheckSchema)['parse']>;
+type BoundaryBinding = BoundaryCheckInput['bindings'][number];
+type BoundaryReason =
+  | 'BOUNDARY_CONFIRMED'
+  | 'TENANT_UNKNOWN'
+  | 'IDENTITY_NOT_BOUND'
+  | 'CROSS_TENANT_IDENTITY'
+  | 'SUBJECT_MISMATCH'
+  | 'EXTERNAL_IDENTITY_MISMATCH'
+  | 'BINDING_KIND_MISMATCH'
+  | 'BINDING_AMBIGUOUS';
+
+type BoundaryDecision = {
+  readonly status: 'WITHIN_BOUNDARY' | 'OUTSIDE_BOUNDARY';
+  readonly reason: BoundaryReason;
+  readonly correlationId: BoundaryCheckInput['context']['correlationId'];
+  readonly evidence: {
+    readonly evaluatedTenantId: BoundaryCheckInput['context']['tenantId'];
+    readonly actorIdentityId: BoundaryCheckInput['context']['actor']['identityId'];
+    readonly matchedBindingCount: number;
+    readonly observedBindingTenantIds: readonly BoundaryCheckInput['context']['tenantId'][];
+  };
+};
 
 function sameExternalIdentity(
-  left: IdentityTenantBinding['externalIdentity'] | undefined,
-  right: IdentityTenantBinding['externalIdentity'] | undefined,
+  left: BoundaryBinding['externalIdentity'] | undefined,
+  right: BoundaryBinding['externalIdentity'] | undefined,
 ): boolean {
   if (left === undefined || right === undefined) return left === right;
   return left.provider === right.provider && left.externalId === right.externalId;
 }
 
-function outside(
-  input: TenantBoundaryCheck,
-  reason: TenantBoundaryReason,
-): TenantBoundaryDecision {
+function outside(input: BoundaryCheckInput, reason: BoundaryReason): BoundaryDecision {
   const actorBindings = input.bindings.filter(
     (binding) => binding.identityId === input.context.actor.identityId,
   );
@@ -37,7 +53,7 @@ function outside(
   };
 }
 
-export function checkTenantBoundary(input: TenantBoundaryCheck): TenantBoundaryDecision {
+export function checkTenantBoundary(input: BoundaryCheckInput): BoundaryDecision {
   if (!input.knownTenantIds.includes(input.context.tenantId)) {
     return outside(input, 'TENANT_UNKNOWN');
   }
