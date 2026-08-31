@@ -1,5 +1,5 @@
-import type { DataClassification } from '../context/index.js';
-import type { ContractVersion } from '../versioning/types.js';
+import type { DataClassification } from '../context';
+import type { ContractVersion } from '../versioning';
 
 export const PURPOSE_STATUSES = ['ACTIVE', 'DISABLED'] as const;
 export type PurposeStatus = (typeof PURPOSE_STATUSES)[number];
