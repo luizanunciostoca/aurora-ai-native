@@ -1,7 +1,4 @@
-import type {
-  JurisdictionContext,
-  JurisdictionRestriction,
-} from '@aurora/contracts/jurisdiction';
+import type { JurisdictionContext, JurisdictionRestriction } from '@aurora/contracts/jurisdiction';
 import {
   asRecord,
   assertExactKeys,

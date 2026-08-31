@@ -56,67 +56,62 @@ function request(record?: ConsentRecord): ConsentEvaluationRequest {
 }
 
 test('active consent is satisfied', () => {
-  assert.equal(evaluateConsent(request(consent())).reason, 'ACTIVE_CONSENT');
+  const result = evaluateConsent(request(consent()));
+  assert.equal(result.reason, 'ACTIVE_CONSENT');
 });
 
 test('missing consent never becomes implicit consent', () => {
-  assert.equal(evaluateConsent(request()).reason, 'CONSENT_REQUIRED');
+  const result = evaluateConsent(request());
+  assert.equal(result.reason, 'CONSENT_REQUIRED');
 });
 
 test('expired consent fails deterministically', () => {
-  assert.equal(
-    evaluateConsent(
-      request(consent({ expiresAt: '2026-08-30T00:00:00Z' as Rfc3339Timestamp })),
-    ).reason,
-    'CONSENT_EXPIRED',
-  );
+  const expiredConsent = consent({
+    expiresAt: '2026-08-30T00:00:00Z' as Rfc3339Timestamp,
+  });
+  const result = evaluateConsent(request(expiredConsent));
+  assert.equal(result.reason, 'CONSENT_EXPIRED');
 });
 
 test('revoked consent fails deterministically', () => {
-  assert.equal(
-    evaluateConsent(request(consent({ status: 'REVOKED', revokedAt: now }))).reason,
-    'CONSENT_REVOKED',
-  );
+  const revokedConsent = consent({ status: 'REVOKED', revokedAt: now });
+  const result = evaluateConsent(request(revokedConsent));
+  assert.equal(result.reason, 'CONSENT_REVOKED');
 });
 
 test('wrong purpose is representable', () => {
-  assert.equal(
-    evaluateConsent({
-      ...request(consent()),
-      purpose: {
-        kind: 'PurposeContext',
-        purposeId: 'sales.crm',
-        version,
-        status: 'ACTIVE',
-      },
-    }).reason,
-    'PURPOSE_MISMATCH',
-  );
+  const result = evaluateConsent({
+    ...request(consent()),
+    purpose: {
+      kind: 'PurposeContext',
+      purposeId: 'sales.crm',
+      version,
+      status: 'ACTIVE',
+    },
+  });
+  assert.equal(result.reason, 'PURPOSE_MISMATCH');
 });
 
 test('wrong jurisdiction is representable', () => {
-  assert.equal(
-    evaluateConsent({
-      ...request(consent()),
-      jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'US-CA', version },
-    }).reason,
-    'JURISDICTION_MISMATCH',
-  );
+  const result = evaluateConsent({
+    ...request(consent()),
+    jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'US-CA', version },
+  });
+  assert.equal(result.reason, 'JURISDICTION_MISMATCH');
 });
 
 test('wrong subject is rejected', () => {
-  assert.equal(
-    evaluateConsent({
-      ...request(consent()),
-      subject: {
-        kind: 'IDENTITY',
-        identityId: 'idn_01J11111111111111111111111' as IdentityId,
-      },
-    }).reason,
-    'SUBJECT_MISMATCH',
-  );
+  const result = evaluateConsent({
+    ...request(consent()),
+    subject: {
+      kind: 'IDENTITY',
+      identityId: 'idn_01J11111111111111111111111' as IdentityId,
+    },
+  });
+  assert.equal(result.reason, 'SUBJECT_MISMATCH');
 });
 
 test('missing provenance is rejected by schema', () => {
-  assert.equal(ConsentRecordSchema.safeParse({ ...consent(), provenance: {} }).success, false);
+  const parsed = ConsentRecordSchema.safeParse({ ...consent(), provenance: {} });
+  assert.equal(parsed.success, false);
 });
