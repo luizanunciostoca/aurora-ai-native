@@ -4,12 +4,13 @@ Date: 2026-08-31
 Wave: W02-A — Identity Resolution Contracts & Runtime
 Branch: `wave/02a-identity-resolution`
 PR: #38
+Validated implementation HEAD: `5fa87be3788f901f97d06ec5b345d56ee33af7f2`
 
 ## Acceptance state
 
-**CONDITIONALLY COMPLETE — GATES PENDING**
+**CONDITIONALLY COMPLETE — COORDINATOR PUBLICATION REQUIRED**
 
-The implementation scope is complete against the W02-A charter, but this document intentionally does not mark the wave ACCEPTED until official repository gates are green on the exact final PR HEAD and coordinator publication requirements are satisfied.
+The implementation scope satisfies the W02-A charter, but final `ACCEPTED` is blocked until the coordinator publishes the required root workspace/lock surface and official repository gates are green on the resulting exact HEAD.
 
 ## Acceptance checklist
 
@@ -17,23 +18,25 @@ The implementation scope is complete against the W02-A charter, but this documen
 - [x] No parallel `IdentityId` or provider-ID promotion to canonical identity.
 - [x] HUMAN / AGENT / SERVICE / SYSTEM semantics preserved.
 - [x] Deterministic canonical identity resolution implemented.
-- [x] Deterministic external/provider binding resolution implemented.
+- [x] Deterministic external/provider resolution implemented.
 - [x] Unknown identity fails closed.
 - [x] Ambiguous identity fails closed.
 - [x] Malformed external reference rejected by schema.
 - [x] Cross-tenant misuse fails closed.
 - [x] Identity-kind mismatch fails closed.
 - [x] Identity resolution cannot grant authority (`authorityGranted: false`).
+- [x] Request/result runtime schemas added.
+- [x] Runtime/schema contract tests added, including deterministic replay and authority-escalation rejection.
 - [x] No Policy Engine implementation.
 - [x] No identity graph persistence or provider side effects.
-- [x] Runtime/schema tests added.
-- [x] Deterministic replay test added.
 - [x] Changes confined to W02-A exclusive leaf paths.
-- [ ] Official format/lint/typecheck/test/build/security/cleanup evidence green on exact final HEAD.
-- [ ] Coordinator exact-main rebase/ownership verification.
-- [ ] Coordinator PB1 public export publication when A/B/C are accepted.
-- [ ] Drive handoff synchronized to final accepted HEAD.
+- [x] Security workflow PASS on validated implementation HEAD.
+- [ ] Quality workflow PASS — currently blocked at `npm ci` before quality steps.
+- [ ] Test Build workflow PASS — currently blocked at `npm ci` before test/build/cleanup.
+- [ ] Coordinator publishes the new workspace into the coordinator-locked root `package-lock.json`/required shared surfaces.
+- [ ] Official gates rerun green on the exact post-publication HEAD.
+- [ ] Final accepted SHA synchronized to Drive.
 
 ## Decision
 
-The code is ready for CI/coordinator validation. Merge/acceptance must remain blocked if any official gate fails, if main advances incompatibly, or if coordinator detects a W02-B ownership collision.
+Do not merge yet. W02-A implementation is ready for coordinator integration; the remaining blocker is outside W02-A ownership and must not be bypassed by an unauthorized root-lockfile edit.
