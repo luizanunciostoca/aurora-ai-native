@@ -76,8 +76,9 @@ function evaluationError(
   if (policyResult?.decision === 'DENY') return policyResult.error;
   const validationRequest = makeValidationRequest(request);
   if (validationRequest !== undefined) {
-    const validationReasons = reasons.filter((reason): reason is AuthorityValidationReason =>
-      !policyResult?.reasons.includes(reason as never),
+    const validationReasons = reasons.filter(
+      (reason): reason is AuthorityValidationReason =>
+        !policyResult?.reasons.includes(reason as never),
     );
     if (validationReasons.length > 0) {
       return makeAuthorityValidationError(validationRequest, validationReasons);
@@ -104,7 +105,10 @@ function evaluationError(
   };
 }
 
-function evaluationEvidence(request: AuthorityEvaluationRequest, effectiveScope: readonly string[]) {
+function evaluationEvidence(
+  request: AuthorityEvaluationRequest,
+  effectiveScope: readonly string[],
+) {
   const policy = request.policyEvaluation;
   return {
     tenantId: policy.tenant.tenantId,
@@ -125,7 +129,8 @@ function evaluationEvidence(request: AuthorityEvaluationRequest, effectiveScope:
 export function evaluateAuthority(request: AuthorityEvaluationRequest): AuthorityEvaluationResult {
   const policy = request.policyEvaluation;
   const tokenRequest = makeValidationRequest(request);
-  const tokenValidation = tokenRequest === undefined ? undefined : validatePolicyToken(tokenRequest);
+  const tokenValidation =
+    tokenRequest === undefined ? undefined : validatePolicyToken(tokenRequest);
   const ownerReasons = standaloneOwnerReasons(request);
 
   const malformedToken = tokenValidation?.reasons.includes('MALFORMED_POLICY_TOKEN') === true;
