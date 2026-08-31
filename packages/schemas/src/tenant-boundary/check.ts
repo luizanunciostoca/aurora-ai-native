@@ -1,8 +1,10 @@
-import { TenantBoundaryCheckSchema } from './tenant-boundary.schema';
+import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
+import type {
+  TenantBindingSchemaValue,
+  TenantBoundaryCheckSchemaValue,
+} from './tenant-boundary.schema';
 
-type BoundaryCheckInput = ReturnType<(typeof TenantBoundaryCheckSchema)['parse']>;
-type BoundaryBinding = BoundaryCheckInput['bindings'][number];
-type BoundaryReason =
+export type TenantBoundarySchemaReason =
   | 'BOUNDARY_CONFIRMED'
   | 'TENANT_UNKNOWN'
   | 'IDENTITY_NOT_BOUND'
@@ -12,30 +14,39 @@ type BoundaryReason =
   | 'BINDING_KIND_MISMATCH'
   | 'BINDING_AMBIGUOUS';
 
-type BoundaryDecision = {
+export interface TenantBoundarySchemaDecision {
   readonly status: 'WITHIN_BOUNDARY' | 'OUTSIDE_BOUNDARY';
-  readonly reason: BoundaryReason;
-  readonly correlationId: BoundaryCheckInput['context']['correlationId'];
+  readonly reason: TenantBoundarySchemaReason;
+  readonly correlationId: CorrelationId;
   readonly evidence: {
-    readonly evaluatedTenantId: BoundaryCheckInput['context']['tenantId'];
-    readonly actorIdentityId: BoundaryCheckInput['context']['actor']['identityId'];
+    readonly evaluatedTenantId: TenantId;
+    readonly actorIdentityId: IdentityId;
     readonly matchedBindingCount: number;
-    readonly observedBindingTenantIds: readonly BoundaryCheckInput['context']['tenantId'][];
+    readonly observedBindingTenantIds: readonly TenantId[];
   };
-};
+}
 
 function sameExternalIdentity(
-  left: BoundaryBinding['externalIdentity'] | undefined,
-  right: BoundaryBinding['externalIdentity'] | undefined,
+  left: TenantBindingSchemaValue['externalIdentity'] | undefined,
+  right: TenantBindingSchemaValue['externalIdentity'] | undefined,
 ): boolean {
-  if (left === undefined || right === undefined) return left === right;
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
   return left.provider === right.provider && left.externalId === right.externalId;
 }
 
-function outside(input: BoundaryCheckInput, reason: BoundaryReason): BoundaryDecision {
+function outside(
+  input: TenantBoundaryCheckSchemaValue,
+  reason: TenantBoundarySchemaReason,
+): TenantBoundarySchemaDecision {
   const actorBindings = input.bindings.filter(
     (binding) => binding.identityId === input.context.actor.identityId,
   );
+  const targetBindings = actorBindings.filter(
+    (binding) => binding.tenantId === input.context.tenantId,
+  );
+
   return {
     status: 'OUTSIDE_BOUNDARY',
     reason,
@@ -43,9 +54,7 @@ function outside(input: BoundaryCheckInput, reason: BoundaryReason): BoundaryDec
     evidence: {
       evaluatedTenantId: input.context.tenantId,
       actorIdentityId: input.context.actor.identityId,
-      matchedBindingCount: actorBindings.filter(
-        (binding) => binding.tenantId === input.context.tenantId,
-      ).length,
+      matchedBindingCount: targetBindings.length,
       observedBindingTenantIds: [
         ...new Set(actorBindings.map((binding) => binding.tenantId)),
       ],
@@ -53,19 +62,24 @@ function outside(input: BoundaryCheckInput, reason: BoundaryReason): BoundaryDec
   };
 }
 
-export function checkTenantBoundary(input: BoundaryCheckInput): BoundaryDecision {
+export function checkTenantBoundary(
+  input: TenantBoundaryCheckSchemaValue,
+): TenantBoundarySchemaDecision {
   if (!input.knownTenantIds.includes(input.context.tenantId)) {
     return outside(input, 'TENANT_UNKNOWN');
   }
 
   const { actor, subject } = input.context;
+
   if (subject.kind === 'IDENTITY' && subject.identityId !== actor.identityId) {
     return outside(input, 'SUBJECT_MISMATCH');
   }
+
   if (subject.kind === 'EXTERNAL_IDENTITY') {
     if (actor.externalIdentity === undefined) {
       return outside(input, 'EXTERNAL_IDENTITY_MISMATCH');
     }
+
     if (
       actor.externalIdentity.provider !== subject.externalIdentity.provider ||
       actor.externalIdentity.externalId !== subject.externalIdentity.externalId
@@ -82,19 +96,28 @@ export function checkTenantBoundary(input: BoundaryCheckInput): BoundaryDecision
   );
 
   if (targetBindings.length === 0) {
-    return outside(
-      input,
-      actorBindings.length > 0 ? 'CROSS_TENANT_IDENTITY' : 'IDENTITY_NOT_BOUND',
-    );
+    const reason =
+      actorBindings.length > 0 ? 'CROSS_TENANT_IDENTITY' : 'IDENTITY_NOT_BOUND';
+    return outside(input, reason);
   }
-  if (targetBindings.length !== 1) return outside(input, 'BINDING_AMBIGUOUS');
+
+  if (targetBindings.length !== 1) {
+    return outside(input, 'BINDING_AMBIGUOUS');
+  }
 
   const binding = targetBindings[0];
-  if (binding === undefined) return outside(input, 'IDENTITY_NOT_BOUND');
-  if (binding.identityKind !== actor.kind) return outside(input, 'BINDING_KIND_MISMATCH');
+  if (binding === undefined) {
+    return outside(input, 'IDENTITY_NOT_BOUND');
+  }
+
+  if (binding.identityKind !== actor.kind) {
+    return outside(input, 'BINDING_KIND_MISMATCH');
+  }
+
   if (actor.kind === 'SYSTEM' && binding.bindingKind !== 'SYSTEM') {
     return outside(input, 'BINDING_KIND_MISMATCH');
   }
+
   if (actor.kind !== 'SYSTEM' && binding.bindingKind === 'SYSTEM') {
     return outside(input, 'BINDING_KIND_MISMATCH');
   }
