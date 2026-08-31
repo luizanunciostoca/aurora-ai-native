@@ -2,20 +2,21 @@
 
 Status: `ACTIVE_CANONICAL_FOR_PROGRAM_COORDINATION`  
 Audit date: 2026-08-31  
-Current implementation main at W02-E acceptance: `17e452356abd6e43f959a2cbb0bcf47de35abbfd`  
+Current PB3 technical publication main: `fc5634488c84e382ee69efc0444ff9b70c004d77`  
+Immutable W02-E technical acceptance: `17e452356abd6e43f959a2cbb0bcf47de35abbfd`  
 Risk-framework acceptance main: `5490f8e7961fa258042b462d4699d698c2b23e9a`
 
 ## Authority order
 
 1. GitHub `main` is implementation/code authority.
-2. Accepted PR/exact-SHA evidence governs implementation acceptance.
+2. Accepted PR/exact-SHA evidence governs implementation and publication acceptance.
 3. Google Drive `AURORA_AI_NATIVE_DEVELOPMENT_GOVERNANCE` is the live operational governance/evidence registry.
-4. Current planning authority is Developer Manual v0.4.2 Risk Validation + ADR-001 + ADR-002 until a later accepted manual/amendment supersedes it.
+4. Developer Manual v0.4.2 Risk Validation + ADR-001 + ADR-002 govern current planning until superseded by later accepted governance.
 5. Risk & Architecture Validation Framework v1.0 is active canonical cross-wave governance for W03+ acceptance.
-6. Accepted wave charters/ownership/dependency matrices govern their allocated scope.
-7. Historical migration, predecessor manual and superseded wave documents are provenance only.
+6. Accepted wave charters/ownership/dependency matrices govern allocated scope.
+7. Historical and superseded documents are provenance only.
 
-A historical file cannot override a later accepted PR, ADR, publication barrier or registry record.
+A historical file cannot override a later accepted PR, publication barrier, ADR or acceptance record.
 
 ## Current wave state
 
@@ -24,125 +25,90 @@ A historical file cannot override a later accepted PR, ADR, publication barrier 
 - W02: `IN_PROGRESS_COORDINATED`.
 - W02-00: `COMPLETE_ACCEPTED`.
 - W02-A/B/C: `COMPLETE_ACCEPTED_MERGED`.
-- PB1: `COMPLETE_RELEASED`; technical acceptance main remains `b48953cd4a7913e154fe2804248217ffe0c0952d`.
-- W02-D: `COMPLETE_ACCEPTED_MERGED`; accepted implementation HEAD `e9ca04a4b5ffe66619f092bd37614c68b7aa2600`, acceptance PR #46; D merge main `9bbcc26481d40885b443928ac21b38438e72ff78`.
-- PB2: `COMPLETE_RELEASED`; accepted publication HEAD `2dd9d77e1062ae03d95268bd2de99b28376878fc`, PR #47; publication main `8894021ae00b257b940fe3ac8bd7c73f5da36c28`.
-- W02-E: `COMPLETE_ACCEPTED_MERGED`; accepted/merged exact SHA `17e452356abd6e43f959a2cbb0bcf47de35abbfd`, PR #50.
-- PB3: `ELIGIBLE_NOT_EXECUTED`.
-- W02-F: `DEPENDENCY_GATED_PB3 / NOT_STARTED`.
+- PB1: `COMPLETE_RELEASED`; immutable technical acceptance main `b48953cd4a7913e154fe2804248217ffe0c0952d`.
+- W02-D: `COMPLETE_ACCEPTED_MERGED`; PR #46; exact accepted HEAD `e9ca04a4b5ffe66619f092bd37614c68b7aa2600`; D merge main `9bbcc26481d40885b443928ac21b38438e72ff78`.
+- PB2: `COMPLETE_RELEASED`; PR #47; exact publication HEAD `2dd9d77e1062ae03d95268bd2de99b28376878fc`; publication main `8894021ae00b257b940fe3ac8bd7c73f5da36c28`.
+- W02-E: `COMPLETE_ACCEPTED_MERGED`; PR #50; exact accepted/merged SHA `17e452356abd6e43f959a2cbb0bcf47de35abbfd`.
+- PB3: `COMPLETE_RELEASED_MERGED`; PR #53; exact publication HEAD `cece292115c0dfa91da2b9694934348ea04b6b4d`; publication main `fc5634488c84e382ee69efc0444ff9b70c004d77`.
+- W02-F: `RELEASED_NOT_STARTED / READY_FOR_IMPLEMENTATION`.
 - PB4: `PENDING`.
 - W02-G: `DEPENDENCY_GATED_PB4`.
 - PB5 / W02 final acceptance: `PENDING`.
 - W03-W20: `PLANNED_DEPENDENCY_GATED` unless later accepted governance explicitly releases them.
 
-## W02-D / PB2 / W02-E accepted chain
+## PB3 publication evidence
 
-W02-D deterministic policy runtime is accepted/merged. Its public policy surfaces were subsequently published by coordinator-owned PB2. W02-E then implemented the canonical fail-closed `PolicyToken` / `OwnerDecision` authority-validation boundary without creating a second Policy Engine or any execution/provider semantics.
+PB3 publishes the already accepted W02-E authority-validation boundary through coordinator-owned public package surfaces. It does not change W02-E semantic runtime behavior and it does not implement W02-F.
 
-W02-E exact-head evidence:
+Published canonical boundaries:
 
-- Quality `33435840491`: SUCCESS.
-- Test Build `33435840492`: SUCCESS, including executable W02-E authority-validation matrix, build and cleanup.
-- Security `33435841084`: SUCCESS.
-- 23-scenario authority/attack matrix: PASS.
-- cleanup: PASS; canonical broken relative refs = 0.
+- `@aurora/contracts/policy-validation`.
+- `@aurora/contracts` root re-export of policy-validation contracts.
+- `@aurora/schemas/policy-validation`.
+- `@aurora/schemas` root re-export of policy-validation schemas.
+- `@aurora/policy-core/authority` exposing `evaluateAuthority`, `validatePolicyToken` and explicit subject-reference bridge functions.
+- consumer fixture proving all public package/subpath boundaries resolve after build.
 
-Accepted invariants include least authority, no scope widening, stale/current-policy precedence, cross-tenant rejection, explicit `SubjectRef` ↔ `AuthoritySubjectReference` bridging, deterministic replay and confidence-not-authority.
+Exact PB3 publication HEAD `cece292115c0dfa91da2b9694934348ea04b6b4d`:
 
-Historical draft PR #41 remains superseded W02-D evidence. The W02-E connector draft-transition defect is also historical tooling evidence: the accepted tested W02-E HEAD was a direct descendant of live main and `main` was advanced non-force to that exact HEAD, after which GitHub recorded PR #50 merged with the same SHA. No untested merge tree was introduced.
+- Quality `33439372557`: SUCCESS.
+- Test Build `33439372604`: SUCCESS, including consumer fixture, build and cleanup.
+- Security `33439373811`: SUCCESS.
 
-PB3 has **not** been executed. W02-E acceptance does not itself publish E shared package surfaces and does not authorize W02-F to start.
+No `package-lock.json`, workflow, CODEOWNERS, root workspace, provider, executor, persistence, planner, router or model semantic change occurred in PB3.
+
+## W02-F release guard
+
+PB3 satisfies the dependency barrier for W02-F only. W02-F has not been started by this publication.
+
+When explicitly started under its own subwave/ownership, W02-F may implement read-only, side-effect-free current-policy query/precheck APIs by composing accepted D/E semantics. Precheck remains informational and never:
+
+- mints executable authority;
+- substitutes execution-time authority validation;
+- weakens current-policy checks;
+- authorizes provider/device/executor side effects.
 
 ## W02 ownership state
 
 - W02-A/B/C/D/E leaf locks are closed/released after acceptance.
-- The temporary W02-E acceptance transfer for `packages/policy/test/w02e-authority-validation.test.ts` and `packages/schemas/tsconfig.build.json` is closed and reverted to coordinator/shared-integration ownership.
-- Shared barrels, package manifests/export maps, root workspace files, `package-lock.json`, CI and CODEOWNERS remain coordinator-controlled.
-- PB3 publication remains coordinator-owned.
-- W02-F ownership remains gated by PB3.
+- PB3 coordinator publication lock is closed/released after PR #53.
+- W02-F leaf paths are released but inactive until W02-F is explicitly started.
+- Shared barrels, manifests/export maps, root workspace files, `package-lock.json`, CI/workflows and CODEOWNERS remain coordinator-controlled.
 - W02-G ownership remains gated by PB4.
 
 ## Risk & architecture validation governance
 
-Risk & Architecture Validation Framework v1.0 is `ACTIVE_CANONICAL_CROSS_WAVE_GOVERNANCE` for W03+ and retrospective baseline analysis against W02. It does not reopen W00/W01 and does not move W18 adaptive-evaluation runtime ownership earlier.
+Risk & Architecture Validation Framework v1.0 remains `ACTIVE_CANONICAL_CROSS_WAVE_GOVERNANCE` for W03+ and retrospective baseline analysis against W02. It does not reopen W00/W01 and does not move W18 adaptive-evaluation runtime ownership earlier.
 
-Acceptance evidence:
+Risk-framework acceptance remains PR #48, exact accepted HEAD `10dde7dbbe404cb4c127a28cac603307fea64fbf`, merge main `5490f8e7961fa258042b462d4699d698c2b23e9a`, with Quality `33431280921`, Test Build `33431280901` and Security `33431281893` SUCCESS.
 
-- PR #48: merged.
-- exact accepted HEAD: `10dde7dbbe404cb4c127a28cac603307fea64fbf`.
-- merge main: `5490f8e7961fa258042b462d4699d698c2b23e9a`.
-- Quality run `33431280921`: SUCCESS.
-- Test Build run `33431280901`: SUCCESS.
-- Security run `33431281893`: SUCCESS.
-- Drive framework, audit, acceptance record and Developer Manual v0.4.2 mirror: completed.
-
-Future applicable wave acceptance records must separately assess correctness, safety/authority, performance/economics and failure/recoverability. The framework does not itself release W03 runtime work.
-
-## Initial cross-wave risk baseline
-
-Highest-priority architecture risks recorded on 2026-08-31:
-
-- `RSK-008` duplicate/uncertain external execution — CRITICAL.
-- `RSK-011` evidence/observability gaps — CRITICAL.
-- architecture complexity/control-plane overgrowth — HIGH.
-- Context Engine bottleneck/staleness — HIGH.
-- precheck/authority stale-state misuse — HIGH.
-- event poisoning/replay/ordering — HIGH.
-- economic runaway — HIGH.
-- `RSK-012` governance/live-state drift — OBSERVED and controlled through mandatory reconciliation.
-
-Risk scores are architecture baselines and must be recalibrated with runtime evidence/telemetry as owner waves mature.
+Highest-priority architecture risks remain tracked, including duplicate/uncertain execution, evidence gaps, stale precheck/authority misuse, event poisoning/replay/ordering, economic runaway and governance/live-state drift.
 
 ## Device Plane planning state
 
-ADR-002 is `ACCEPTED_FOR_PLANNING`. DEVICE is a first-class future execution target alongside PROVIDER, WORKFLOW and LOCAL_SERVICE. Runtime work remains dependency-gated:
-
-- W04 owns target-neutral capability planning/registry.
-- W07 owns generic execution-target/executor semantics.
-- W14 owns device gateway/session/trust.
-- W15 owns Android Device Runtime.
-- W17/W19/W20 own telemetry, hardening and physical release acceptance respectively.
-
-No Device Plane document claims that Android execution is currently implemented.
-
-## Historical-document rule
-
-The following classes are intentionally retained rather than deleted:
-
-- v0.3 migration baseline inventories/classifications;
-- W00/W01 accepted evidence and superseded remediation records;
-- W02 historical draft/publication/acceptance snapshots;
-- legacy/reference provenance;
-- predecessor manual/action-plan revisions;
-- superseded PR/branch references where required for auditability.
-
-They must be labelled or indexed as historical/superseded when their title or location could otherwise be mistaken for current authority.
-
-## Future-wave folder rule
-
-Empty W03-W20 Drive wave folders are valid. Do not pre-create runtime contracts, charters or implementation evidence before the owning wave is released. Planning/governance artifacts may be prepared when explicitly allowed, but they do not release implementation.
+ADR-002 remains `ACCEPTED_FOR_PLANNING`. DEVICE is a future execution target alongside PROVIDER, WORKFLOW and LOCAL_SERVICE. Device/runtime ownership remains in W04/W07/W14/W15/W17/W19/W20 as previously accepted; PB3 changes none of those assignments.
 
 ## Drift control
 
-Before releasing any dependent wave/subwave, reconcile:
+Before releasing a dependent wave/subwave, reconcile:
 
 - latest `main` SHA;
 - merged/open PR state;
 - accepted exact-HEAD evidence;
 - publication barriers;
 - this status file;
-- Drive acceptance/handoff/evidence records;
-- W02 charter/ownership/dependency/acceptance mirrors where applicable;
-- active developer manual/ADR/framework authority.
+- Drive acceptance/evidence/task registries;
+- active W02 charter/ownership/dependency/acceptance mirrors;
+- active developer manual/ADR/risk-framework authority.
 
-A disagreement must be reconciled or explicitly recorded before dependent work relies on the stale record.
+A disagreement must be reconciled or explicitly recorded before dependent work relies on stale state.
 
 ## Safety invariants
 
 - Intelligence != Authority != Execution.
 - Confidence, model output, session state, Android permission, cache or precheck cannot elevate authority.
-- Current policy validation is mandatory where execution semantics require it.
+- Current policy validation remains mandatory where execution semantics require it.
 - Precheck is informational and never an execution credential.
-- No side-effect path may treat `EXECUTION_UNCERTAIN` as ordinary failure/retry.
-- No canonical runtime may silently depend on legacy/reference material.
+- `EXECUTION_UNCERTAIN` is not ordinary failure/retry.
+- Canonical runtime may not silently depend on legacy/reference material.
 - Duplicate/replayed events or reconnects must never create duplicate side effects where idempotency/reconciliation is required.
