@@ -126,7 +126,9 @@ function validationEvidence(
  * Deterministic, fail-closed PolicyToken validation. No clock, persistence,
  * provider, network, model, planner or credential exchange is consulted.
  */
-export function validatePolicyToken(request: PolicyTokenValidationRequest): PolicyTokenValidationResult {
+export function validatePolicyToken(
+  request: PolicyTokenValidationRequest,
+): PolicyTokenValidationResult {
   if (!validPolicyTokenShape(request.token)) {
     const reasons: readonly AuthorityValidationReason[] = ['MALFORMED_POLICY_TOKEN'];
     return {
