@@ -5,7 +5,7 @@ type SpawnSync = (
   command: string,
   args: readonly string[],
   options: { cwd: string; encoding: 'utf8' },
-) => { status: number | null; stdout: string; stderr: string };
+) => { status: number | null; stdout?: string; stderr?: string };
 
 type ReadFileSync = (path: string, encoding: 'utf8') => string;
 type Resolve = (...parts: string[]) => string;
@@ -14,7 +14,7 @@ const childProcess = require('node:child_process') as { spawnSync: SpawnSync };
 const fs = require('node:fs') as { readFileSync: ReadFileSync };
 const path = require('node:path') as { resolve: Resolve };
 
-const packageDir = path.resolve(__dirname, '../../..');
+const packageDir = path.resolve(__dirname, '../../../..');
 const rootDir = path.resolve(packageDir, '../..');
 const prettier = path.resolve(rootDir, 'node_modules/.bin/prettier');
 const files = [
@@ -29,7 +29,9 @@ const result = childProcess.spawnSync(prettier, ['--write', ...files], {
 });
 
 if (result.status !== 0) {
-  throw new Error(`prettier diagnostic failed: ${result.stderr}`);
+  throw new Error(
+    `prettier diagnostic failed: ${result.stderr ?? result.stdout ?? 'unknown'}`,
+  );
 }
 
 for (const file of files) {
