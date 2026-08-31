@@ -84,7 +84,9 @@ function evaluation(
     dataClassification: 'INTERNAL',
     ...overrides,
   };
-  const { ownerDecision: _ownerDecision, policyToken: _policyToken, ...informational } = base;
+  const { ownerDecision, policyToken, ...informational } = base;
+  void ownerDecision;
+  void policyToken;
   return informational;
 }
 
