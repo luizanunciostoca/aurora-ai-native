@@ -63,4 +63,4 @@ These are additional Device Plane guards and never replace canonical program-wav
 
 ## Current program state
 
-DP0 is planning-complete only. DP1-DP7 remain pending/dependency-gated. Current implementation sequence remains W02-D -> PB2 -> W02-E -> PB3 -> W02-F -> PB4 -> W02-G -> PB5 before downstream waves are released according to the main roadmap.
+DP0 is planning-complete only. DP1-DP7 remain pending/dependency-gated. W02-D is currently `IN_PROGRESS` in draft/open PR #41 after PB1 release; PB2 remains closed until W02-D is accepted and published. Because the W02-D branch started before the Device Plane planning merge, its final acceptance must first rebase/revalidate against the latest main. The canonical W02 sequence remains D -> PB2 -> E -> PB3 -> F -> PB4 -> G -> PB5 before downstream waves are released according to the main roadmap.
