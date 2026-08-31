@@ -1,0 +1,24 @@
+{
+  "source_archive": "Nova aurora.zip",
+  "source_sha256": "d3df1ea55e0ae68f8c6c009e683edae538e4b5d9a45952ae06f0835cff60c23f",
+  "entries": 36957,
+  "compressed_bytes": 271389631,
+  "uncompressed_bytes": 808177418,
+  "first_party_candidates": 176,
+  "exact_duplicates_of_prior_salvage": 165,
+  "unique_delta": 11,
+  "preserved_unique_delta": 10,
+  "excluded_unique_delta": 1,
+  "key_unique_items": [
+    "dashboard/main.js",
+    "dashboard/plugin/DashboardPlugin.js",
+    "face/interface/html/index.html",
+    "face/interface/main.js",
+    "face/interface/voice-websocket-bridge.js",
+    "manus/src/aurora_bridge/AuroraBridgeInterface.py",
+    "manus/src/main.py",
+    "manus/tests/test_report.log"
+  ],
+  "decision": "DELTA_ONLY_REFERENCE_PRESERVATION",
+  "note": "Do not duplicate the 165 files already preserved in the prior master salvage."
+}
