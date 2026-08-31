@@ -6,4 +6,5 @@ export * from './actions/index.js';
 export * from './receipts/index.js';
 export * from './evidence/index.js';
 export * from './policy/index.js';
+export * from './policy-engine/index.js';
 export * from './results/index.js';
