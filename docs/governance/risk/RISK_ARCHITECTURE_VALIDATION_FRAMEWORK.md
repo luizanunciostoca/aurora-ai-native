@@ -1,9 +1,11 @@
 # Aurora AI-Native — Risk & Architecture Validation Framework
 
-Status: `PROPOSED_CANONICAL_CROSS_WAVE_GOVERNANCE`
+Status: `ACTIVE_CANONICAL_CROSS_WAVE_GOVERNANCE`
 Version: `1.0`
 Date: `2026-08-31`
-Activation target: W03+; retrospective baseline applies immediately to current W02 artifacts without reopening accepted W00/W01 work.
+Activation: W03+; retrospective baseline applies to current W02 artifacts without reopening accepted W00/W01 work.
+Acceptance: PR #48, exact HEAD `10dde7dbbe404cb4c127a28cac603307fea64fbf`, merge main `5490f8e7961fa258042b462d4699d698c2b23e9a`.
+Acceptance gates: Quality `33431280921` SUCCESS; Test Build `33431280901` SUCCESS; Security `33431281893` SUCCESS.
 
 ## 1. Purpose
 
@@ -244,4 +246,4 @@ The coordinator owns the framework and cross-wave consistency. Individual waves 
 
 ## 13. Acceptance rule
 
-The framework becomes effective for future-wave governance when merged through the normal exact-HEAD PR process and mirrored into the Drive governance registry. Until then it is proposed governance and must not be cited as an already accepted runtime contract.
+This framework is active canonical cross-wave governance following exact-HEAD acceptance through PR #48 and its Drive governance/evidence mirror. It governs W03+ acceptance but does not itself release W03 runtime work or create runtime authority/contracts.

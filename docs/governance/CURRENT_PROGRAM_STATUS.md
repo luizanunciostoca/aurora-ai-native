@@ -2,16 +2,18 @@
 
 Status: `ACTIVE_CANONICAL_FOR_PROGRAM_COORDINATION`  
 Audit date: 2026-08-31  
-Audit starting main: `8894021ae00b257b940fe3ac8bd7c73f5da36c28`
+Audit starting main: `8894021ae00b257b940fe3ac8bd7c73f5da36c28`  
+Risk-framework acceptance main: `5490f8e7961fa258042b462d4699d698c2b23e9a`
 
 ## Authority order
 
 1. GitHub `main` is implementation/code authority.
 2. Accepted PR/exact-SHA evidence governs implementation acceptance.
 3. Google Drive `AURORA_AI_NATIVE_DEVELOPMENT_GOVERNANCE` is the live operational governance/evidence registry.
-4. Current planning authority is Developer Manual v0.4.1 + ADR-001 + ADR-002 until a later accepted manual/amendment supersedes it.
-5. Accepted wave charters/ownership/dependency matrices govern their allocated scope.
-6. Historical migration, predecessor manual and superseded wave documents are provenance only.
+4. Current planning authority is Developer Manual v0.4.2 Risk Validation + ADR-001 + ADR-002 until a later accepted manual/amendment supersedes it.
+5. Risk & Architecture Validation Framework v1.0 is active canonical cross-wave governance for W03+ acceptance.
+6. Accepted wave charters/ownership/dependency matrices govern their allocated scope.
+7. Historical migration, predecessor manual and superseded wave documents are provenance only.
 
 A historical file cannot override a later accepted PR, ADR, publication barrier or registry record.
 
@@ -24,7 +26,7 @@ A historical file cannot override a later accepted PR, ADR, publication barrier 
 - W02-A/B/C: `COMPLETE_ACCEPTED_MERGED`.
 - PB1: `COMPLETE_RELEASED`; technical acceptance main remains `b48953cd4a7913e154fe2804248217ffe0c0952d`.
 - W02-D: `COMPLETE_ACCEPTED_MERGED`; accepted implementation HEAD `e9ca04a4b5ffe66619f092bd37614c68b7aa2600`, merged through PR #46; W02-D merge main `9bbcc26481d40885b443928ac21b38438e72ff78`.
-- PB2: `COMPLETE_RELEASED`; accepted publication HEAD `2dd9d77e1062ae03d95268bd2de99b28376878fc`, merged through PR #47; current publication main `8894021ae00b257b940fe3ac8bd7c73f5da36c28`.
+- PB2: `COMPLETE_RELEASED`; accepted publication HEAD `2dd9d77e1062ae03d95268bd2de99b28376878fc`, merged through PR #47; publication main `8894021ae00b257b940fe3ac8bd7c73f5da36c28`.
 - W02-E: `RELEASED_NOT_STARTED` at this audit point; consumes PB2.
 - W02-F: `DEPENDENCY_GATED_PB3`.
 - W02-G: `DEPENDENCY_GATED_PB4`.
@@ -38,9 +40,34 @@ Historical draft PR #41 remains superseded evidence and must not be interpreted 
 
 ## Risk & architecture validation governance
 
-A cross-wave Risk & Architecture Validation Framework is being introduced as a documentation/governance change for W03+ with retrospective baseline analysis against current W02 state. It does not reopen W00/W01 and does not move W18 adaptive-evaluation runtime ownership earlier.
+Risk & Architecture Validation Framework v1.0 is `ACTIVE_CANONICAL_CROSS_WAVE_GOVERNANCE` for W03+ and retrospective baseline analysis against W02. It does not reopen W00/W01 and does not move W18 adaptive-evaluation runtime ownership earlier.
 
-The framework is authoritative only after its normal exact-HEAD PR acceptance/merge and Drive governance mirror are complete. Once accepted, future wave acceptance records must separately assess correctness, safety/authority, performance/economics and failure/recoverability where applicable.
+Acceptance evidence:
+
+- PR #48: merged.
+- exact accepted HEAD: `10dde7dbbe404cb4c127a28cac603307fea64fbf`.
+- merge main: `5490f8e7961fa258042b462d4699d698c2b23e9a`.
+- Quality run `33431280921`: SUCCESS.
+- Test Build run `33431280901`: SUCCESS.
+- Security run `33431281893`: SUCCESS.
+- Drive framework, audit, acceptance record and Developer Manual v0.4.2 mirror: completed.
+
+Future applicable wave acceptance records must separately assess correctness, safety/authority, performance/economics and failure/recoverability. The framework does not itself release W03 runtime work.
+
+## Initial cross-wave risk baseline
+
+Highest-priority architecture risks recorded on 2026-08-31:
+
+- `RSK-008` duplicate/uncertain external execution — CRITICAL.
+- `RSK-011` evidence/observability gaps — CRITICAL.
+- architecture complexity/control-plane overgrowth — HIGH.
+- Context Engine bottleneck/staleness — HIGH.
+- precheck/authority stale-state misuse — HIGH.
+- event poisoning/replay/ordering — HIGH.
+- economic runaway — HIGH.
+- `RSK-012` governance/live-state drift — OBSERVED during this audit and now governed by mandatory reconciliation.
+
+Risk scores are architecture baselines and must be recalibrated with runtime evidence/telemetry as owner waves mature.
 
 ## Device Plane planning state
 
@@ -72,7 +99,7 @@ Empty W03-W20 Drive wave folders are valid. Do not pre-create runtime contracts,
 
 ## Drift control
 
-The previous status document drifted behind live W02-D/PB2 acceptance while implementation advanced concurrently. From this update onward, live-state mismatch is treated as an explicit program risk.
+The previous status document drifted behind live W02-D/PB2 acceptance while implementation advanced concurrently. Live-state mismatch is therefore an explicit program risk, not merely a documentation concern.
 
 Before releasing a dependent wave/subwave, reconcile:
 
@@ -82,7 +109,7 @@ Before releasing a dependent wave/subwave, reconcile:
 - publication barriers;
 - this status file;
 - Drive acceptance/handoff/evidence records;
-- active developer manual/ADR authority.
+- active developer manual/ADR/framework authority.
 
 A disagreement must be reconciled or explicitly recorded before dependent work relies on the stale record.
 
