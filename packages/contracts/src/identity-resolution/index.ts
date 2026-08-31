@@ -3,7 +3,12 @@ import type { CorrelationId, IdentityId, TenantId } from '../ids/types';
 import type { CanonicalError } from '../results/error-semantics';
 import type { ContractVersion } from '../versioning/types';
 
-export const IDENTITY_RESOLUTION_STATUSES = ['RESOLVED', 'NOT_FOUND', 'AMBIGUOUS', 'CONFLICT'] as const;
+export const IDENTITY_RESOLUTION_STATUSES = [
+  'RESOLVED',
+  'NOT_FOUND',
+  'AMBIGUOUS',
+  'CONFLICT',
+] as const;
 export type IdentityResolutionStatus = (typeof IDENTITY_RESOLUTION_STATUSES)[number];
 
 export const IDENTITY_RESOLUTION_METHODS = ['CANONICAL_ID', 'EXTERNAL_BINDING'] as const;

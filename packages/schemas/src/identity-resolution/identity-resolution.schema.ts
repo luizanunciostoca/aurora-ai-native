@@ -1,7 +1,4 @@
-import {
-  IDENTITY_KINDS,
-  type IdentityKind,
-} from '@aurora/contracts/context';
+import { IDENTITY_KINDS, type IdentityKind } from '@aurora/contracts/context';
 import type { CorrelationId, TenantId } from '@aurora/contracts/ids';
 import type {
   IdentityResolutionEvidence,
@@ -20,11 +17,7 @@ import {
   createRuntimeSchema,
   parseNonEmptyString,
 } from '../context/internal';
-import {
-  CorrelationIdSchema,
-  IdentityIdSchema,
-  TenantIdSchema,
-} from '../ids/id.schemas';
+import { CorrelationIdSchema, IdentityIdSchema, TenantIdSchema } from '../ids/id.schemas';
 import { validateCanonicalError } from '../results/runtime-schema';
 import { ContractVersionSchema } from '../versioning/version.schemas';
 
@@ -155,7 +148,9 @@ function parseResolvedIdentity(value: unknown): ResolvedIdentity {
     actor,
     ...(record.matchedExternalIdentity === undefined
       ? {}
-      : { matchedExternalIdentity: ExternalIdentityRefSchema.parse(record.matchedExternalIdentity) }),
+      : {
+          matchedExternalIdentity: ExternalIdentityRefSchema.parse(record.matchedExternalIdentity),
+        }),
   };
 }
 

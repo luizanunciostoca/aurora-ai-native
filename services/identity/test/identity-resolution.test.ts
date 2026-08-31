@@ -1,9 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { ExternalIdentityRef } from '@aurora/contracts/context';
-import type { CorrelationId, IdentityId, ProviderExternalId, TenantId } from '@aurora/contracts/ids';
+import type {
+  CorrelationId,
+  IdentityId,
+  ProviderExternalId,
+  TenantId,
+} from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
-import type { IdentityResolutionRecord, IdentityResolutionRequest } from '@aurora/contracts/identity-resolution';
+import type {
+  IdentityResolutionRecord,
+  IdentityResolutionRequest,
+} from '@aurora/contracts/identity-resolution';
 import { DeterministicIdentityResolver } from '../src/index';
 
 const version = '1.0.0' as ContractVersion;
@@ -24,7 +32,10 @@ const records: readonly IdentityResolutionRecord[] = [
   { tenantId: tenantB, identityId: agentId, kind: 'AGENT' },
 ];
 
-function request(subject: IdentityResolutionRequest['subject'], tenantId = tenantA): IdentityResolutionRequest {
+function request(
+  subject: IdentityResolutionRequest['subject'],
+  tenantId = tenantA,
+): IdentityResolutionRequest {
   return { schemaVersion: version, tenantId, correlationId, subject };
 }
 

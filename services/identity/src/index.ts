@@ -117,7 +117,9 @@ export class DeterministicIdentityResolver {
       actor: {
         kind: record.kind,
         identityId: record.identityId,
-        ...(matchedExternalIdentity === undefined ? {} : { externalIdentity: matchedExternalIdentity }),
+        ...(matchedExternalIdentity === undefined
+          ? {}
+          : { externalIdentity: matchedExternalIdentity }),
       },
       ...(matchedExternalIdentity === undefined ? {} : { matchedExternalIdentity }),
     };
