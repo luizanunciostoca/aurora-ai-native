@@ -8,7 +8,9 @@ const IDENTITY_B = 'idn_01J00000000000000000000001';
 const CORRELATION = 'cor_01J00000000000000000000000';
 
 function assert(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(message);
+  if (!condition) {
+    throw new Error(message);
+  }
 }
 
 function assertThrows(fn: () => unknown, message: string): void {
@@ -53,8 +55,13 @@ export function runTenantBoundaryTests(): void {
 
   const unknownTenant = baseCheck();
   unknownTenant.context.tenantId = 'ten_01J00000000000000000000009';
-  const unknownDecision = checkTenantBoundary(TenantBoundaryCheckSchema.parse(unknownTenant));
-  assert(unknownDecision.reason === 'TENANT_UNKNOWN', 'unknown tenant must fail closed');
+  const unknownDecision = checkTenantBoundary(
+    TenantBoundaryCheckSchema.parse(unknownTenant),
+  );
+  assert(
+    unknownDecision.reason === 'TENANT_UNKNOWN',
+    'unknown tenant must fail closed',
+  );
 
   const crossTenant = baseCheck();
   crossTenant.bindings = [
@@ -65,7 +72,9 @@ export function runTenantBoundaryTests(): void {
       bindingKind: 'MEMBER',
     },
   ];
-  const crossDecision = checkTenantBoundary(TenantBoundaryCheckSchema.parse(crossTenant));
+  const crossDecision = checkTenantBoundary(
+    TenantBoundaryCheckSchema.parse(crossTenant),
+  );
   assert(
     crossDecision.reason === 'CROSS_TENANT_IDENTITY',
     'cross-tenant identity must fail closed',
@@ -82,11 +91,12 @@ export function runTenantBoundaryTests(): void {
   );
 
   assertThrows(
-    () =>
+    () => {
       TenantBoundaryCheckSchema.parse({
         ...baseCheck(),
         context: { ...baseCheck().context, tenantId: '' },
-      }),
+      });
+    },
     'malformed tenant must be rejected',
   );
 
