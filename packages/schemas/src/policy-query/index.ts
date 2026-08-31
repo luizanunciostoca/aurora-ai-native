@@ -1,15 +1,18 @@
-import {
-  POLICY_QUERY_REASONS,
-  type ApplicablePolicyConstraint,
-  type CurrentPolicyLookupRequest,
-  type CurrentPolicyLookupResult,
-  type PolicyPrecheckRequest,
-  type PolicyPrecheckResult,
-  type RequiredAuthorityDescriptor,
+import type {
+  ApplicablePolicyConstraint,
+  CurrentPolicyLookupRequest,
+  CurrentPolicyLookupResult,
+  PolicyPrecheckRequest,
+  PolicyPrecheckResult,
+  RequiredAuthorityDescriptor,
 } from '@aurora/contracts/policy-query';
-import { POLICY_EVALUATION_REASONS } from '@aurora/contracts/policy-engine';
 
-import { CorrelationContextSchema, Rfc3339TimestampSchema } from '../context/index';
+import {
+  ActorRefSchema,
+  CorrelationContextSchema,
+  Rfc3339TimestampSchema,
+  TenantContextSchema,
+} from '../context/index';
 import {
   asRecord,
   assertExactKeys,
@@ -23,12 +26,6 @@ import {
   PolicySnapshotStateSchema,
 } from '../policy-engine/index';
 import { ContractVersionSchema, VersionSchema } from '../versioning/index';
-
-const QUERY_REASON_SET = new Set<string>(POLICY_QUERY_REASONS);
-const PRECHECK_REASON_SET = new Set<string>([
-  ...POLICY_QUERY_REASONS,
-  ...POLICY_EVALUATION_REASONS,
-]);
 
 function parseBoolean(value: unknown, label: string): boolean {
   if (typeof value !== 'boolean') throw new TypeError(`${label} must be boolean`);
@@ -62,20 +59,6 @@ function parsePolicyReference(value: unknown, label: string) {
   const reference = parseNonEmptyString(record.reference, `${label}.reference`);
   const version = VersionSchema.parse(record.version);
   return { reference, version };
-}
-
-function parseReasons(
-  value: unknown,
-  label: string,
-  allowed: ReadonlySet<string>,
-): readonly string[] {
-  const reasons = parseStringArray(value, label);
-  for (const reason of reasons) {
-    if (!allowed.has(reason)) {
-      throw new TypeError(`${label} contains unsupported reason: ${reason}`);
-    }
-  }
-  return reasons;
 }
 
 function parseRequiredAuthority(value: unknown): RequiredAuthorityDescriptor {
@@ -288,8 +271,24 @@ export const CurrentPolicyLookupRequestSchema =
     const record = asRecord(value, 'CurrentPolicyLookupRequest');
     assertExactKeys(
       record,
-      ['kind', 'schemaVersion', 'expectedPolicy', 'correlation', 'evaluatedAt'],
-      ['kind', 'schemaVersion', 'expectedPolicy', 'correlation', 'evaluatedAt'],
+      [
+        'kind',
+        'schemaVersion',
+        'expectedPolicy',
+        'correlation',
+        'evaluatedAt',
+        'tenant',
+        'actor',
+      ],
+      [
+        'kind',
+        'schemaVersion',
+        'expectedPolicy',
+        'correlation',
+        'evaluatedAt',
+        'tenant',
+        'actor',
+      ],
       'CurrentPolicyLookupRequest',
     );
     if (record.kind !== 'CurrentPolicyLookupRequest') {
@@ -302,6 +301,8 @@ export const CurrentPolicyLookupRequestSchema =
     );
     CorrelationContextSchema.parse(record.correlation);
     Rfc3339TimestampSchema.parse(record.evaluatedAt);
+    TenantContextSchema.parse(record.tenant);
+    ActorRefSchema.parse(record.actor);
     return record as unknown as CurrentPolicyLookupRequest;
   });
 
@@ -316,6 +317,8 @@ export const CurrentPolicyLookupResultSchema =
         'expectedPolicy',
         'correlation',
         'evaluatedAt',
+        'tenant',
+        'actor',
         'informationalOnly',
         'authorizesExecution',
         'requiresExecutionTimeValidation',
@@ -332,6 +335,8 @@ export const CurrentPolicyLookupResultSchema =
         'expectedPolicy',
         'correlation',
         'evaluatedAt',
+        'tenant',
+        'actor',
         'informationalOnly',
         'authorizesExecution',
         'requiresExecutionTimeValidation',
@@ -350,6 +355,8 @@ export const CurrentPolicyLookupResultSchema =
     );
     CorrelationContextSchema.parse(record.correlation);
     Rfc3339TimestampSchema.parse(record.evaluatedAt);
+    TenantContextSchema.parse(record.tenant);
+    ActorRefSchema.parse(record.actor);
     if (record.informationalOnly !== true) {
       throw new TypeError(
         'CurrentPolicyLookupResult.informationalOnly must be true',
@@ -366,11 +373,7 @@ export const CurrentPolicyLookupResultSchema =
       );
     }
     const found = parseBoolean(record.found, 'CurrentPolicyLookupResult.found');
-    parseReasons(
-      record.reasons,
-      'CurrentPolicyLookupResult.reasons',
-      QUERY_REASON_SET,
-    );
+    parseStringArray(record.reasons, 'CurrentPolicyLookupResult.reasons');
 
     if (!found) {
       if (
@@ -522,11 +525,7 @@ export const PolicyPrecheckResultSchema =
       );
     }
     record.applicableConstraints.forEach(parseConstraint);
-    parseReasons(
-      record.reasons,
-      'PolicyPrecheckResult.reasons',
-      PRECHECK_REASON_SET,
-    );
+    parseStringArray(record.reasons, 'PolicyPrecheckResult.reasons');
     parseStringArray(
       record.reasonReferences,
       'PolicyPrecheckResult.reasonReferences',
