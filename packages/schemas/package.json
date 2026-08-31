@@ -59,6 +59,11 @@
       "require": "./dist/policy/index.js",
       "default": "./dist/policy/index.js"
     },
+    "./policy-engine": {
+      "types": "./dist/policy-engine/index.d.ts",
+      "require": "./dist/policy-engine/index.js",
+      "default": "./dist/policy-engine/index.js"
+    },
     "./purpose": {
       "types": "./dist/purpose/index.d.ts",
       "require": "./dist/purpose/index.js",
