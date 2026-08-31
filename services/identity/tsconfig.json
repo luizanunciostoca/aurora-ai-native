@@ -4,11 +4,12 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "../..",
     "declaration": true,
     "baseUrl": ".",
     "paths": {
-      "@aurora/contracts/identity-resolution": ["../../packages/contracts/src/identity-resolution/index.ts"]
+      "@aurora/contracts/identity-resolution": ["../../packages/contracts/src/identity-resolution/index.ts"],
+      "@aurora/schemas/identity-resolution": ["../../packages/schemas/src/identity-resolution/identity-resolution.schema.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
