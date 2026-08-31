@@ -97,7 +97,9 @@ function deny(
       kind: 'CanonicalError',
       schemaVersion: request.schemaVersion,
       code: normalizedReasons.includes('POLICY_VERSION_MISMATCH') ? 'CONFLICT' : 'POLICY_DENIED',
-      category: normalizedReasons.includes('POLICY_VERSION_MISMATCH') ? 'CONFLICT' : 'POLICY_DENIED',
+      category: normalizedReasons.includes('POLICY_VERSION_MISMATCH')
+        ? 'CONFLICT'
+        : 'POLICY_DENIED',
       message: 'Policy evaluation denied the requested action.',
       retryability: normalizedReasons.includes('POLICY_VERSION_MISMATCH')
         ? 'RETRY_AFTER_GUARDS'
@@ -154,13 +156,16 @@ function validateOwnerDecision(
 ): readonly PolicyEvaluationReason[] {
   const reasons: PolicyEvaluationReason[] = [];
   if (decision.actor.kind === 'AGENT') reasons.push('AGENT_AUTHORITY_FORBIDDEN');
-  if (decision.tenant.tenantId !== request.tenant.tenantId) reasons.push('AUTHORITY_TENANT_MISMATCH');
+  if (decision.tenant.tenantId !== request.tenant.tenantId)
+    reasons.push('AUTHORITY_TENANT_MISMATCH');
   if (!sameActor(decision.actor, request.actor)) reasons.push('AUTHORITY_ACTOR_MISMATCH');
   if (decision.subject.reference !== toAuthoritySubjectReference(request.subject)) {
     reasons.push('AUTHORITY_SUBJECT_MISMATCH');
   }
-  if (!scopeCovers(decision.scope, request.requestedScope)) reasons.push('AUTHORITY_SCOPE_INSUFFICIENT');
-  if (decision.expiresAt && decision.expiresAt <= request.evaluatedAt) reasons.push('AUTHORITY_EXPIRED');
+  if (!scopeCovers(decision.scope, request.requestedScope))
+    reasons.push('AUTHORITY_SCOPE_INSUFFICIENT');
+  if (decision.expiresAt && decision.expiresAt <= request.evaluatedAt)
+    reasons.push('AUTHORITY_EXPIRED');
   if (decision.decision === 'DENIED') reasons.push('AUTHORITY_DENIED');
   if (decision.decision === 'REVOKED') reasons.push('AUTHORITY_REVOKED');
   if (decision.decision === 'EXPIRED') reasons.push('AUTHORITY_EXPIRED');
@@ -177,7 +182,8 @@ function validatePolicyToken(
     reasons.push('AUTHORITY_SUBJECT_MISMATCH');
   }
   if (token.action !== request.action) reasons.push('AUTHORITY_ACTION_MISMATCH');
-  if (!scopeCovers(token.scope, request.requestedScope)) reasons.push('AUTHORITY_SCOPE_INSUFFICIENT');
+  if (!scopeCovers(token.scope, request.requestedScope))
+    reasons.push('AUTHORITY_SCOPE_INSUFFICIENT');
   if (token.expiresAt <= request.evaluatedAt) reasons.push('AUTHORITY_EXPIRED');
   if (!samePolicy(token.policy, request.policy)) reasons.push('AUTHORITY_POLICY_MISMATCH');
   return uniqueSorted(reasons);
@@ -206,7 +212,9 @@ function nearMatchReason(
 ): PolicyEvaluationReason {
   const actionRules = rules.filter((rule) => rule.action === request.action);
   if (actionRules.length === 0) return 'NO_APPLICABLE_RULE';
-  if (actionRules.some((rule) => rule.actorKinds && !rule.actorKinds.includes(request.actor.kind))) {
+  if (
+    actionRules.some((rule) => rule.actorKinds && !rule.actorKinds.includes(request.actor.kind))
+  ) {
     return 'ACTOR_NOT_ALLOWED';
   }
   if (
@@ -224,7 +232,11 @@ function nearMatchReason(
   ) {
     return 'SUBJECT_NOT_ALLOWED';
   }
-  if (actionRules.some((rule) => rule.purposeIds && !rule.purposeIds.includes(request.purpose.purposeId))) {
+  if (
+    actionRules.some(
+      (rule) => rule.purposeIds && !rule.purposeIds.includes(request.purpose.purposeId),
+    )
+  ) {
     return 'PURPOSE_MISMATCH';
   }
   if (

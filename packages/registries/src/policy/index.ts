@@ -21,7 +21,9 @@ export class InMemoryPolicySnapshotRegistry implements PolicySnapshotRegistry {
     for (const snapshot of snapshots) {
       const key = keyOf(snapshot.policy);
       if (entries.has(key)) {
-        throw new Error(`duplicate policy snapshot: ${snapshot.policy.reference}@${snapshot.policy.version}`);
+        throw new Error(
+          `duplicate policy snapshot: ${snapshot.policy.reference}@${snapshot.policy.version}`,
+        );
       }
       entries.set(key, snapshot);
     }

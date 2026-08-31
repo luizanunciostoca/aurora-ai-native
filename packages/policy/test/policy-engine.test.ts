@@ -1,8 +1,18 @@
 import type { ConsentRecord } from '@aurora/contracts/consent';
 import type { Rfc3339Timestamp } from '@aurora/contracts/context';
-import type { CorrelationId, DecisionId, IdentityId, PolicyTokenId, TenantId } from '@aurora/contracts/ids';
+import type {
+  CorrelationId,
+  DecisionId,
+  IdentityId,
+  PolicyTokenId,
+  TenantId,
+} from '@aurora/contracts/ids';
 import type { OwnerDecision, PolicyReference, PolicyToken } from '@aurora/contracts/policy';
-import type { PolicyEvaluationRequest, PolicyRule, PolicySnapshot } from '@aurora/contracts/policy-engine';
+import type {
+  PolicyEvaluationRequest,
+  PolicyRule,
+  PolicySnapshot,
+} from '@aurora/contracts/policy-engine';
 import type { ContractVersion, Version } from '@aurora/contracts/versioning';
 import { evaluatePolicy, toAuthoritySubjectReference } from '../src/index';
 
@@ -143,15 +153,29 @@ function assertDecision(
   const result = evaluatePolicy(input);
   assert(result.decision === expected, `${name}: expected ${expected}, got ${result.decision}`);
   if (expectedReason) {
-    assert(result.reasons.includes(expectedReason as never), `${name}: missing reason ${expectedReason}`);
+    assert(
+      result.reasons.includes(expectedReason as never),
+      `${name}: missing reason ${expectedReason}`,
+    );
   }
   if (expected === 'DENY') {
-    assert(result.decision === 'DENY' && result.error.kind === 'CanonicalError', `${name}: DENY must carry CanonicalError`);
+    assert(
+      result.decision === 'DENY' && result.error.kind === 'CanonicalError',
+      `${name}: DENY must carry CanonicalError`,
+    );
   }
 }
 
-const consentRule: PolicyRule = { ...allowRule, ruleId: 'rule.allow.consent', consentRequired: true };
-const authorityRule: PolicyRule = { ...allowRule, ruleId: 'rule.allow.authority', authorityRequired: true };
+const consentRule: PolicyRule = {
+  ...allowRule,
+  ruleId: 'rule.allow.consent',
+  consentRequired: true,
+};
+const authorityRule: PolicyRule = {
+  ...allowRule,
+  ruleId: 'rule.allow.authority',
+  authorityRequired: true,
+};
 
 const cases: readonly {
   readonly name: string;
@@ -162,7 +186,9 @@ const cases: readonly {
   { name: 'allow', input: request(), expected: 'ALLOW', reason: 'POLICY_ALLOWED' },
   {
     name: 'explicit deny',
-    input: request({ snapshot: snapshot([{ ...allowRule, effect: 'DENY', ruleId: 'rule.deny.publish' }]) }),
+    input: request({
+      snapshot: snapshot([{ ...allowRule, effect: 'DENY', ruleId: 'rule.deny.publish' }]),
+    }),
     expected: 'DENY',
     reason: 'EXPLICIT_DENY',
   },
@@ -319,25 +345,64 @@ assertDecision('valid consent', consentAllow, 'ALLOW', 'POLICY_ALLOWED');
 const tokenAllow = request({ snapshot: snapshot([authorityRule]), policyToken: policyToken() });
 assertDecision('valid policy token', tokenAllow, 'ALLOW', 'POLICY_ALLOWED');
 
-const replayInput = request({ snapshot: snapshot([consentRule]), consent: consent(), policyToken: policyToken() });
+const replayInput = request({
+  snapshot: snapshot([consentRule]),
+  consent: consent(),
+  policyToken: policyToken(),
+});
 const replayA = evaluatePolicy(replayInput);
 const replayB = evaluatePolicy(replayInput);
-assert(JSON.stringify(replayA) === JSON.stringify(replayB), 'same canonical input + policy version must replay identically');
-assert(replayA.evidence.inputFingerprint === replayB.evidence.inputFingerprint, 'replay fingerprint must be stable');
+assert(
+  JSON.stringify(replayA) === JSON.stringify(replayB),
+  'same canonical input + policy version must replay identically',
+);
+assert(
+  replayA.evidence.inputFingerprint === replayB.evidence.inputFingerprint,
+  'replay fingerprint must be stable',
+);
 
-const orderedA = evaluatePolicy(request({ snapshot: snapshot([allowRule, { ...allowRule, ruleId: 'rule.approval', effect: 'REQUIRE_APPROVAL' }]) }));
-const orderedB = evaluatePolicy(request({ snapshot: snapshot([{ ...allowRule, ruleId: 'rule.approval', effect: 'REQUIRE_APPROVAL' }, allowRule]) }));
-assert(orderedA.decision === orderedB.decision, 'rule insertion order must not change authority decision');
-assert(JSON.stringify(orderedA.reasons) === JSON.stringify(orderedB.reasons), 'rule insertion order must not change reason semantics');
+const orderedA = evaluatePolicy(
+  request({
+    snapshot: snapshot([
+      allowRule,
+      { ...allowRule, ruleId: 'rule.approval', effect: 'REQUIRE_APPROVAL' },
+    ]),
+  }),
+);
+const orderedB = evaluatePolicy(
+  request({
+    snapshot: snapshot([
+      { ...allowRule, ruleId: 'rule.approval', effect: 'REQUIRE_APPROVAL' },
+      allowRule,
+    ]),
+  }),
+);
+assert(
+  orderedA.decision === orderedB.decision,
+  'rule insertion order must not change authority decision',
+);
+assert(
+  JSON.stringify(orderedA.reasons) === JSON.stringify(orderedB.reasons),
+  'rule insertion order must not change reason semantics',
+);
 
 const subjectReference = toAuthoritySubjectReference({ kind: 'IDENTITY', identityId: subjectA });
-assert(subjectReference === `identity:${subjectA}`, 'SubjectRef bridge must be explicit and deterministic');
+assert(
+  subjectReference === `identity:${subjectA}`,
+  'SubjectRef bridge must be explicit and deterministic',
+);
 
 const base = request();
 const highConfidence = evaluatePolicy({ ...base, modelConfidence: 1 } as PolicyEvaluationRequest);
 const lowConfidence = evaluatePolicy({ ...base, modelConfidence: 0 } as PolicyEvaluationRequest);
-assert(highConfidence.decision === lowConfidence.decision, 'model confidence must not influence authority');
-assert(highConfidence.decision === 'ALLOW', 'confidence-independent allow fixture must remain allowed');
+assert(
+  highConfidence.decision === lowConfidence.decision,
+  'model confidence must not influence authority',
+);
+assert(
+  highConfidence.decision === 'ALLOW',
+  'confidence-independent allow fixture must remain allowed',
+);
 
 // @ts-expect-error model confidence is intentionally outside the canonical policy request contract.
 const forbiddenIntelligenceField: PolicyEvaluationRequest = { ...base, modelConfidence: 0.99 };
