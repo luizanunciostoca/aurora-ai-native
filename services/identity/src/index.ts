@@ -7,8 +7,8 @@ import {
 } from '@aurora/contracts/results';
 import type { ContractVersion } from '@aurora/contracts/versioning';
 import type {
-  IdentityBindingRecord,
   IdentityResolutionEvidence,
+  IdentityResolutionRecord,
   IdentityResolutionRequest,
   IdentityResolutionResult,
   ResolvedIdentity,
@@ -45,26 +45,23 @@ function errorFor(
 }
 
 export class DeterministicIdentityResolver {
-  readonly #bindings: readonly IdentityBindingRecord[];
+  readonly #records: readonly IdentityResolutionRecord[];
   readonly #now: () => string;
 
-  constructor(
-    bindings: readonly IdentityBindingRecord[],
-    now: () => string = () => new Date().toISOString(),
-  ) {
-    this.#bindings = [...bindings];
+  constructor(records: readonly IdentityResolutionRecord[], now: () => string) {
+    this.#records = [...records];
     this.#now = now;
   }
 
   resolve(request: IdentityResolutionRequest): IdentityResolutionResult {
     const timestamp = this.#now();
     const method = request.subject.kind === 'IDENTITY' ? 'CANONICAL_ID' : 'EXTERNAL_BINDING';
-    const inTenant = this.#bindings.filter((binding) => binding.tenantId === request.tenantId);
+    const inTenant = this.#records.filter((record) => record.tenantId === request.tenantId);
     const candidates = this.#findCandidates(request.subject, inTenant);
     const evidence = this.#evidence(request, method, timestamp, candidates.length);
 
     if (candidates.length === 0) {
-      const existsInOtherTenant = this.#findCandidates(request.subject, this.#bindings).length > 0;
+      const existsInOtherTenant = this.#findCandidates(request.subject, this.#records).length > 0;
       return {
         status: existsInOtherTenant ? 'CONFLICT' : 'NOT_FOUND',
         error: errorFor(
@@ -94,10 +91,10 @@ export class DeterministicIdentityResolver {
       };
     }
 
-    const binding = candidates[0];
-    if (binding === undefined) throw new Error('Unreachable identity candidate state');
+    const record = candidates[0];
+    if (record === undefined) throw new Error('Unreachable identity candidate state');
 
-    if (request.expectedKind !== undefined && binding.kind !== request.expectedKind) {
+    if (request.expectedKind !== undefined && record.kind !== request.expectedKind) {
       return {
         status: 'CONFLICT',
         error: errorFor(
@@ -114,12 +111,12 @@ export class DeterministicIdentityResolver {
     const matchedExternalIdentity =
       request.subject.kind === 'EXTERNAL_IDENTITY' ? request.subject.externalIdentity : undefined;
     const identity: ResolvedIdentity = {
-      identityId: binding.identityId,
-      tenantId: binding.tenantId,
-      kind: binding.kind,
+      identityId: record.identityId,
+      tenantId: record.tenantId,
+      kind: record.kind,
       actor: {
-        kind: binding.kind,
-        identityId: binding.identityId,
+        kind: record.kind,
+        identityId: record.identityId,
         ...(matchedExternalIdentity === undefined ? {} : { externalIdentity: matchedExternalIdentity }),
       },
       ...(matchedExternalIdentity === undefined ? {} : { matchedExternalIdentity }),
@@ -130,14 +127,14 @@ export class DeterministicIdentityResolver {
 
   #findCandidates(
     subject: SubjectRef,
-    source: readonly IdentityBindingRecord[],
-  ): IdentityBindingRecord[] {
+    source: readonly IdentityResolutionRecord[],
+  ): IdentityResolutionRecord[] {
     if (subject.kind === 'IDENTITY') {
-      return source.filter((binding) => binding.identityId === subject.identityId);
+      return source.filter((record) => record.identityId === subject.identityId);
     }
     const key = externalKey(subject.externalIdentity);
-    return source.filter((binding) =>
-      (binding.externalIdentities ?? []).some((reference) => externalKey(reference) === key),
+    return source.filter((record) =>
+      (record.externalIdentities ?? []).some((reference) => externalKey(reference) === key),
     );
   }
 
