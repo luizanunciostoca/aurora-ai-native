@@ -1,4 +1,3 @@
-import type { ConsentRecord } from '@aurora/contracts/consent';
 import {
   asRecord,
   assertExactKeys,
@@ -33,7 +32,7 @@ const requiredConsentKeys = [
   'provenance',
 ] as const;
 
-export const ConsentRecordSchema = createRuntimeSchema<ConsentRecord>((value: unknown) => {
+export const ConsentRecordSchema = createRuntimeSchema<Record<string, unknown>>((value: unknown) => {
   const record = asRecord(value, 'ConsentRecord');
   assertExactKeys(record, consentKeys, requiredConsentKeys, 'ConsentRecord');
 
@@ -61,5 +60,5 @@ export const ConsentRecordSchema = createRuntimeSchema<ConsentRecord>((value: un
   parseNonEmptyString(provenance.reference, 'ConsentRecord.provenance.reference');
   parseNonEmptyString(provenance.capturedAt, 'ConsentRecord.provenance.capturedAt');
 
-  return record as unknown as ConsentRecord;
+  return record;
 });
