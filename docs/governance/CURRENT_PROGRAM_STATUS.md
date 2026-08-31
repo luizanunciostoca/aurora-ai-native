@@ -11,12 +11,20 @@ Risk-framework acceptance main: `5490f8e7961fa258042b462d4699d698c2b23e9a`
 1. GitHub `main` is implementation/code authority.
 2. Accepted PR/exact-SHA evidence governs implementation and publication acceptance.
 3. Google Drive `AURORA_AI_NATIVE_DEVELOPMENT_GOVERNANCE` is the live operational governance/evidence registry.
-4. Developer Manual v0.4.2 Risk Validation + ADR-001 + ADR-002 govern current planning until superseded by later accepted governance.
+4. Developer Manual v0.5 Audit-Consolidated + ADR-001 + ADR-002 govern current architecture/planning after acceptance of the v0.5 governance change.
 5. Risk & Architecture Validation Framework v1.0 is active canonical cross-wave governance for W03+ acceptance.
 6. Accepted wave charters/ownership/dependency matrices govern allocated scope.
 7. Historical and superseded documents are provenance only.
 
 A historical file cannot override a later accepted PR, publication barrier, ADR or acceptance record.
+
+## Drive audit and manual consolidation
+
+The 2026-08-31 Drive technical-governance audit identified document-authority drift without finding a runtime architecture failure. The full audit is stored in Drive as `AURORA_DRIVE_TECHNICAL_GOVERNANCE_AUDIT_2026-08-31` and mirrored in this repository at `docs/governance/AURORA_DRIVE_TECHNICAL_GOVERNANCE_AUDIT_2026-08-31.md`.
+
+The consolidated Developer Manual v0.5 is stored in Drive as `AURORA_AI_NATIVE_MANUAL_TECNICO_DESENVOLVEDOR_v0.5_AUDIT_CONSOLIDATED`, with repository authority pointer at `docs/governance/DEVELOPER_MANUAL_V0_5_REFERENCE.md`.
+
+The audit does not change runtime/contracts/schemas/migrations or W02 technical acceptance. It clarifies that `MASTER_WAVE_REGISTRY` is a historical ledger rather than the primary current-state lookup, and that W02-F is released by PB3 but not started.
 
 ## Current wave state
 
