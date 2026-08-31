@@ -99,11 +99,7 @@ export interface PolicyTokenValidationEvidence {
   readonly inputFingerprint: string;
 }
 
-type AuthorityValidationError = CanonicalError<
-  ContractVersion,
-  CorrelationId,
-  DataClassification
->;
+type AuthorityValidationError = CanonicalError<ContractVersion, CorrelationId, DataClassification>;
 
 interface PolicyTokenValidationResultBase {
   readonly kind: 'PolicyTokenValidationResult';
