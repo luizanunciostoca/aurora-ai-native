@@ -9,6 +9,7 @@ test('consumer can resolve root packages and governed subpaths', () => {
   const contractIds = require('@aurora/contracts/ids');
   const contractIdentityResolution = require('@aurora/contracts/identity-resolution');
   const contractPolicyEngine = require('@aurora/contracts/policy-engine');
+  const contractPolicyValidation = require('@aurora/contracts/policy-validation');
   const contractResults = require('@aurora/contracts/results');
   const contractTenantBoundary = require('@aurora/contracts/tenant-boundary');
 
@@ -18,6 +19,7 @@ test('consumer can resolve root packages and governed subpaths', () => {
   const schemaIds = require('@aurora/schemas/ids');
   const schemaJurisdiction = require('@aurora/schemas/jurisdiction');
   const schemaPolicyEngine = require('@aurora/schemas/policy-engine');
+  const schemaPolicyValidation = require('@aurora/schemas/policy-validation');
   const schemaPurpose = require('@aurora/schemas/purpose');
   const schemaTenantBoundary = require('@aurora/schemas/tenant-boundary');
 
@@ -27,12 +29,15 @@ test('consumer can resolve root packages and governed subpaths', () => {
   const registryVersions = require('@aurora/registries/versioning');
 
   const policyCore = require('@aurora/policy-core');
+  const policyAuthority = require('@aurora/policy-core/authority');
 
   assert.equal(contracts.COMMAND_ENVELOPE_KIND, 'COMMAND');
   assert.equal(contracts.EVENT_ENVELOPE_KIND, 'EVENT');
   assert.equal(contractIds.CANONICAL_ID_GENERATION_RESPONSIBILITY, 'PRODUCER');
   assert.ok(Array.isArray(contractIdentityResolution.IDENTITY_RESOLUTION_STATUSES));
   assert.ok(Array.isArray(contractPolicyEngine.POLICY_EVALUATION_DECISIONS));
+  assert.ok(Array.isArray(contractPolicyValidation.AUTHORITY_VALIDATION_REASONS));
+  assert.ok(Array.isArray(contracts.AUTHORITY_VALIDATION_REASONS));
   assert.ok(Array.isArray(contractResults.EXECUTION_OUTCOMES));
   assert.ok(Array.isArray(contractTenantBoundary.TENANT_BOUNDARY_REASONS));
 
@@ -44,6 +49,12 @@ test('consumer can resolve root packages and governed subpaths', () => {
   assert.equal(typeof schemaJurisdiction.JurisdictionContextSchema.parse, 'function');
   assert.equal(typeof schemaPolicyEngine.PolicyEvaluationRequestSchema.parse, 'function');
   assert.equal(typeof schemaPolicyEngine.PolicyEvaluationResultSchema.parse, 'function');
+  assert.equal(typeof schemaPolicyValidation.PolicyTokenValidationRequestSchema.parse, 'function');
+  assert.equal(typeof schemaPolicyValidation.PolicyTokenValidationResultSchema.parse, 'function');
+  assert.equal(typeof schemaPolicyValidation.AuthorityEvaluationRequestSchema.parse, 'function');
+  assert.equal(typeof schemaPolicyValidation.AuthorityEvaluationResultSchema.parse, 'function');
+  assert.equal(typeof schemas.AuthorityEvaluationRequestSchema.parse, 'function');
+  assert.equal(typeof schemas.AuthorityEvaluationResultSchema.parse, 'function');
   assert.equal(typeof schemaPurpose.PurposeContextSchema.parse, 'function');
   assert.equal(typeof schemaTenantBoundary.TenantBoundaryContextSchema.parse, 'function');
 
@@ -56,4 +67,8 @@ test('consumer can resolve root packages and governed subpaths', () => {
 
   assert.equal(typeof policyCore.evaluatePolicy, 'function');
   assert.equal(typeof policyCore.toAuthoritySubjectReference, 'function');
+  assert.equal(typeof policyAuthority.evaluateAuthority, 'function');
+  assert.equal(typeof policyAuthority.validatePolicyToken, 'function');
+  assert.equal(typeof policyAuthority.subjectRefToAuthoritySubjectReference, 'function');
+  assert.equal(typeof policyAuthority.authoritySubjectReferenceToSubjectRef, 'function');
 });
