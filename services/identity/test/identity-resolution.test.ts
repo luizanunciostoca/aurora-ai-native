@@ -67,8 +67,10 @@ test('unknown identity fails not found', () => {
 });
 
 test('ambiguous external binding fails closed', () => {
+  const firstRecord = records[0];
+  assert.ok(firstRecord);
   const ambiguous: readonly IdentityResolutionRecord[] = [
-    records[0]!,
+    firstRecord,
     { tenantId: tenantA, identityId: agentId, kind: 'AGENT', externalIdentities: [external] },
   ];
   const result = new DeterministicIdentityResolver(ambiguous, now).resolve(
