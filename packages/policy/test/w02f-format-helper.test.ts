@@ -1,5 +1,6 @@
 declare const require: (id: string) => unknown;
 declare const process: { cwd(): string };
+declare const Buffer: { from(value: string, encoding: 'utf8'): { toString(encoding: 'base64'): string } };
 
 interface FsModule {
   readFileSync(path: string, encoding: 'utf8'): string;
@@ -10,10 +11,7 @@ interface PathModule {
 }
 
 interface PrettierModule {
-  format(
-    source: string,
-    options: Readonly<Record<string, unknown>>,
-  ): Promise<string>;
+  format(source: string, options: Readonly<Record<string, unknown>>): Promise<string>;
 }
 
 interface NodeTestModule {
@@ -49,8 +47,7 @@ test('temporary W02-F canonical formatter output', async () => {
   for (const target of targets) {
     const source = readFileSync(target, 'utf8');
     const formatted = await format(source, options);
-    console.log(`W02F_FORMAT_BEGIN:${target}`);
-    console.log(formatted);
-    console.log(`W02F_FORMAT_END:${target}`);
+    const encoded = Buffer.from(formatted, 'utf8').toString('base64');
+    console.log(`W02F_FORMAT_B64:${target}:${encoded}`);
   }
 });
