@@ -109,10 +109,10 @@ These observations are not a substitute for W19 security acceptance.
 - Drive `TOCA_MCP_SERVER_SALVAGE_CATALOG_2026-08-31.xlsx`
   - Snapshot
   - Source Areas
-  - Platform Patterns
+  - Platform Patterns (full curated file-level pattern catalog)
   - Wave Handoff
   - Risk Register
 - `TOCA_MCP_SERVER_SALVAGE_AUDIT_SUMMARY.json`
-- Git machine-readable CSV mirrors for source areas, curated platform patterns, wave handoff and risk register.
+- Git machine-readable CSV mirrors for source areas, wave handoff and risk register. The full curated platform-pattern catalog remains in the Drive workbook to avoid duplicating a large derived table in Git.
 
 The immutable TOCA Git repository at the exact audited commit is the byte-level source archive; Drive should not become a second source tree.
