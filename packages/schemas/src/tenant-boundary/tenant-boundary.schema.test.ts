@@ -55,13 +55,8 @@ export function runTenantBoundaryTests(): void {
 
   const unknownTenant = baseCheck();
   unknownTenant.context.tenantId = 'ten_01J00000000000000000000009';
-  const unknownDecision = checkTenantBoundary(
-    TenantBoundaryCheckSchema.parse(unknownTenant),
-  );
-  assert(
-    unknownDecision.reason === 'TENANT_UNKNOWN',
-    'unknown tenant must fail closed',
-  );
+  const unknownDecision = checkTenantBoundary(TenantBoundaryCheckSchema.parse(unknownTenant));
+  assert(unknownDecision.reason === 'TENANT_UNKNOWN', 'unknown tenant must fail closed');
 
   const crossTenant = baseCheck();
   crossTenant.bindings = [
@@ -72,9 +67,7 @@ export function runTenantBoundaryTests(): void {
       bindingKind: 'MEMBER',
     },
   ];
-  const crossDecision = checkTenantBoundary(
-    TenantBoundaryCheckSchema.parse(crossTenant),
-  );
+  const crossDecision = checkTenantBoundary(TenantBoundaryCheckSchema.parse(crossTenant));
   assert(
     crossDecision.reason === 'CROSS_TENANT_IDENTITY',
     'cross-tenant identity must fail closed',
@@ -82,23 +75,15 @@ export function runTenantBoundaryTests(): void {
 
   const mismatchedSubject = baseCheck();
   mismatchedSubject.context.subject.identityId = IDENTITY_B;
-  const subjectDecision = checkTenantBoundary(
-    TenantBoundaryCheckSchema.parse(mismatchedSubject),
-  );
-  assert(
-    subjectDecision.reason === 'SUBJECT_MISMATCH',
-    'mismatched subject must fail closed',
-  );
+  const subjectDecision = checkTenantBoundary(TenantBoundaryCheckSchema.parse(mismatchedSubject));
+  assert(subjectDecision.reason === 'SUBJECT_MISMATCH', 'mismatched subject must fail closed');
 
-  assertThrows(
-    () => {
-      TenantBoundaryCheckSchema.parse({
-        ...baseCheck(),
-        context: { ...baseCheck().context, tenantId: '' },
-      });
-    },
-    'malformed tenant must be rejected',
-  );
+  assertThrows(() => {
+    TenantBoundaryCheckSchema.parse({
+      ...baseCheck(),
+      context: { ...baseCheck().context, tenantId: '' },
+    });
+  }, 'malformed tenant must be rejected');
 
   const withoutTenant = baseCheck() as Record<string, unknown>;
   const contextWithoutTenant = {
