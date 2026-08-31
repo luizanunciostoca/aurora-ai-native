@@ -1,9 +1,9 @@
-import type { SubjectRef, DataClassification, Rfc3339Timestamp } from '../context/index.js';
-import type { CorrelationId, TenantId } from '../ids/types.js';
-import type { CanonicalError } from '../results/error-semantics.js';
-import type { ContractVersion } from '../versioning/types.js';
-import type { JurisdictionContext } from '../jurisdiction/index.js';
-import type { PurposeContext } from '../purpose/index.js';
+import type { SubjectRef, DataClassification, Rfc3339Timestamp } from '../context';
+import type { CorrelationId, TenantId } from '../ids';
+import type { CanonicalError } from '../results/error-semantics';
+import type { ContractVersion } from '../versioning';
+import type { JurisdictionContext } from '../jurisdiction';
+import type { PurposeContext } from '../purpose';
 
 export const CONSENT_STATUSES = ['ACTIVE', 'EXPIRED', 'REVOKED'] as const;
 export type ConsentStatus = (typeof CONSENT_STATUSES)[number];
