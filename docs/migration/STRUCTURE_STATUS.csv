@@ -2,7 +2,7 @@ path,status,authority_or_owner,notes
 .github/ISSUE_TEMPLATE,ACTIVE_CANONICAL,W00 Git governance,Accepted governance templates
 .github/workflows,ACTIVE_CANONICAL,W00 permanent CI,Quality/Test Build/Security are active; wave-specific workflow changes still follow ownership
 apps/aurora-android,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W15,No accepted Android Device Runtime
-a​pps/aurora-desktop/legacy-reference,LEGACY_REFERENCE,reference only,Visual/runtime provenance is non-authoritative
+apps/aurora-desktop/legacy-reference,LEGACY_REFERENCE,reference only,Visual/runtime provenance is non-authoritative
 catalog/n8n,REFERENCE_GOVERNED,W09 future consumers,Pattern library; not production approval
 docs/architecture,ACTIVE_CANONICAL,program architecture,ADR-002 repository mirror; Drive ADR index is live governance index
 docs/deprecation,HISTORICAL_AND_ACTIVE_GOVERNANCE,W00 cleanup provenance,Historical cleanup evidence retained
