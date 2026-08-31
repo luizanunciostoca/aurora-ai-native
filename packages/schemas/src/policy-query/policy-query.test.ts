@@ -15,6 +15,8 @@ const actorIdentityId = 'idn_01J00000000000000000000000';
 const subjectIdentityId = 'idn_01J00000000000000000000002';
 const evaluatedAt = '2026-08-31T18:00:00.000Z';
 const policy = { reference: 'policy:toca:marketing', version: policyVersion };
+const tenant = { tenantId };
+const actor = { kind: 'HUMAN', identityId: actorIdentityId };
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
@@ -59,7 +61,7 @@ const policyEvaluation = {
   snapshot,
   correlation: { correlationId },
   evaluatedAt,
-  tenant: { tenantId },
+  tenant,
   tenantBoundary: {
     status: 'WITHIN_BOUNDARY',
     reason: 'BOUNDARY_CONFIRMED',
@@ -71,7 +73,7 @@ const policyEvaluation = {
       observedBindingTenantIds: [tenantId],
     },
   },
-  actor: { kind: 'HUMAN', identityId: actorIdentityId },
+  actor,
   subject: { kind: 'IDENTITY', identityId: subjectIdentityId },
   action: 'social.publish',
   requestedScope: ['instagram:publish'],
@@ -92,7 +94,20 @@ CurrentPolicyLookupRequestSchema.parse({
   expectedPolicy: policy,
   correlation: { correlationId },
   evaluatedAt,
+  tenant,
+  actor,
 });
+
+expectReject('lookup requires tenant binding', () =>
+  CurrentPolicyLookupRequestSchema.parse({
+    kind: 'CurrentPolicyLookupRequest',
+    schemaVersion,
+    expectedPolicy: policy,
+    correlation: { correlationId },
+    evaluatedAt,
+    actor,
+  }),
+);
 
 CurrentPolicyLookupResultSchema.parse({
   kind: 'CurrentPolicyLookupResult',
@@ -100,6 +115,8 @@ CurrentPolicyLookupResultSchema.parse({
   expectedPolicy: policy,
   correlation: { correlationId },
   evaluatedAt,
+  tenant,
+  actor,
   informationalOnly: true,
   authorizesExecution: false,
   requiresExecutionTimeValidation: true,
@@ -117,6 +134,8 @@ CurrentPolicyLookupResultSchema.parse({
   expectedPolicy: policy,
   correlation: { correlationId },
   evaluatedAt,
+  tenant,
+  actor,
   informationalOnly: true,
   authorizesExecution: false,
   requiresExecutionTimeValidation: true,
@@ -131,6 +150,8 @@ expectReject('lookup cannot authorize execution', () =>
     expectedPolicy: policy,
     correlation: { correlationId },
     evaluatedAt,
+    tenant,
+    actor,
     informationalOnly: true,
     authorizesExecution: true,
     requiresExecutionTimeValidation: true,
@@ -150,7 +171,7 @@ expectReject('precheck rejects executable authority evidence', () =>
         kind: 'POLICY_TOKEN',
         schemaVersion,
         policyTokenId: 'ptk_01J00000000000000000000000',
-        tenant: { tenantId },
+        tenant,
         subject: { reference: `identity:${subjectIdentityId}` },
         action: 'social.publish',
         scope: ['instagram:publish'],
