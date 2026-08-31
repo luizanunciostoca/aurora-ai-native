@@ -1,11 +1,8 @@
+import type { PolicySnapshot } from '@aurora/contracts/policy-engine';
 import type { PolicyReference } from '@aurora/contracts/policy';
 
-export interface PolicySnapshotLike {
-  readonly policy: PolicyReference;
-}
-
-export interface PolicySnapshotRegistry<TSnapshot extends PolicySnapshotLike = PolicySnapshotLike> {
-  get(reference: PolicyReference): TSnapshot | undefined;
+export interface PolicySnapshotRegistry {
+  get(reference: PolicyReference): PolicySnapshot | undefined;
 }
 
 function keyOf(reference: PolicyReference): string {
@@ -13,19 +10,15 @@ function keyOf(reference: PolicyReference): string {
 }
 
 /**
- * W02-D test/runtime adapter only. Exact policy reference + version lookup has
+ * W02-D in-memory runtime adapter. Exact policy reference + version lookup has
  * no fallback to latest, nearest, or default versions. Persistence belongs to W03.
- *
- * The adapter is intentionally structural/generic so W02-D does not require
- * publishing the new policy-engine contract subpath before coordinator-owned PB2.
+ * PB2 publishes the canonical PolicySnapshot contract consumed here.
  */
-export class InMemoryPolicySnapshotRegistry<
-  TSnapshot extends PolicySnapshotLike,
-> implements PolicySnapshotRegistry<TSnapshot> {
-  readonly #snapshots: ReadonlyMap<string, TSnapshot>;
+export class InMemoryPolicySnapshotRegistry implements PolicySnapshotRegistry {
+  readonly #snapshots: ReadonlyMap<string, PolicySnapshot>;
 
-  constructor(snapshots: readonly TSnapshot[]) {
-    const entries = new Map<string, TSnapshot>();
+  constructor(snapshots: readonly PolicySnapshot[]) {
+    const entries = new Map<string, PolicySnapshot>();
     for (const snapshot of snapshots) {
       const key = keyOf(snapshot.policy);
       if (entries.has(key)) {
@@ -38,7 +31,7 @@ export class InMemoryPolicySnapshotRegistry<
     this.#snapshots = entries;
   }
 
-  get(reference: PolicyReference): TSnapshot | undefined {
+  get(reference: PolicyReference): PolicySnapshot | undefined {
     return this.#snapshots.get(keyOf(reference));
   }
 }
