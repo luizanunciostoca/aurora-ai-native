@@ -3,6 +3,7 @@ import type {
   CorrelationContext,
   DataClassification,
   Rfc3339Timestamp,
+  TenantContext,
 } from '../context/index';
 import type { IdentityId, TenantId } from '../ids/types';
 import type { AuthorityScope, PolicyReference } from '../policy/index';
@@ -28,9 +29,9 @@ export type PolicyQueryReason = (typeof POLICY_QUERY_REASONS)[number];
 export type PolicyPrecheckReason = PolicyQueryReason | PolicyEvaluationReason;
 
 /**
- * Current-policy lookup is point-in-time information only. A caller supplies
- * the policy reference/version it currently expects so version drift is
- * explicit instead of silently selecting a different authority context.
+ * Current-policy lookup is point-in-time information only. Tenant and actor
+ * context are mandatory so an adapter cannot silently turn this API into a
+ * reference-only cross-tenant lookup.
  */
 export interface CurrentPolicyLookupRequest {
   readonly kind: 'CurrentPolicyLookupRequest';
@@ -38,6 +39,8 @@ export interface CurrentPolicyLookupRequest {
   readonly expectedPolicy: PolicyReference;
   readonly correlation: CorrelationContext;
   readonly evaluatedAt: Rfc3339Timestamp;
+  readonly tenant: TenantContext;
+  readonly actor: ActorRef;
 }
 
 interface CurrentPolicyLookupResultBase {
@@ -46,6 +49,8 @@ interface CurrentPolicyLookupResultBase {
   readonly expectedPolicy: PolicyReference;
   readonly correlation: CorrelationContext;
   readonly evaluatedAt: Rfc3339Timestamp;
+  readonly tenant: TenantContext;
+  readonly actor: ActorRef;
   readonly informationalOnly: true;
   readonly authorizesExecution: false;
   readonly requiresExecutionTimeValidation: true;
