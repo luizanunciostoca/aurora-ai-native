@@ -5,12 +5,11 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "build": "rm -rf dist && tsc -p tsconfig.json",
-    "test": "npm run typecheck && npm run build && node --test dist/test/*.test.js",
+    "test": "npm run typecheck && npm run build && node --test dist/services/identity/test/*.test.js",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@aurora/contracts": "0.1.0",
-    "@aurora/schemas": "0.1.0"
+    "@aurora/contracts": "0.1.0"
   },
   "engines": {
     "node": ">=22.16.0 <23"
