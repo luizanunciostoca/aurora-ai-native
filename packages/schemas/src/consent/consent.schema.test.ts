@@ -1,5 +1,3 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
 import {
   evaluateConsent,
   type ConsentEvaluationRequest,
@@ -9,6 +7,10 @@ import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
 import { ConsentRecordSchema } from './index.js';
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(message);
+}
 
 const version = '1.0.0' as ContractVersion;
 const tenantId = 'ten_01J00000000000000000000000' as TenantId;
@@ -55,63 +57,50 @@ function request(record?: ConsentRecord): ConsentEvaluationRequest {
   };
 }
 
-test('active consent is satisfied', () => {
-  const result = evaluateConsent(request(consent()));
-  assert.equal(result.reason, 'ACTIVE_CONSENT');
-});
+const active = evaluateConsent(request(consent()));
+assert(active.reason === 'ACTIVE_CONSENT', 'active consent must be satisfied');
 
-test('missing consent never becomes implicit consent', () => {
-  const result = evaluateConsent(request());
-  assert.equal(result.reason, 'CONSENT_REQUIRED');
-});
+const missing = evaluateConsent(request());
+assert(missing.reason === 'CONSENT_REQUIRED', 'missing consent must never become implicit consent');
 
-test('expired consent fails deterministically', () => {
-  const expiredConsent = consent({
-    expiresAt: '2026-08-30T00:00:00Z' as Rfc3339Timestamp,
-  });
-  const result = evaluateConsent(request(expiredConsent));
-  assert.equal(result.reason, 'CONSENT_EXPIRED');
+const expiredConsent = consent({
+  expiresAt: '2026-08-30T00:00:00Z' as Rfc3339Timestamp,
 });
+const expired = evaluateConsent(request(expiredConsent));
+assert(expired.reason === 'CONSENT_EXPIRED', 'expired consent must fail deterministically');
 
-test('revoked consent fails deterministically', () => {
-  const revokedConsent = consent({ status: 'REVOKED', revokedAt: now });
-  const result = evaluateConsent(request(revokedConsent));
-  assert.equal(result.reason, 'CONSENT_REVOKED');
-});
+const revokedConsent = consent({ status: 'REVOKED', revokedAt: now });
+const revoked = evaluateConsent(request(revokedConsent));
+assert(revoked.reason === 'CONSENT_REVOKED', 'revoked consent must fail deterministically');
 
-test('wrong purpose is representable', () => {
-  const result = evaluateConsent({
-    ...request(consent()),
-    purpose: {
-      kind: 'PurposeContext',
-      purposeId: 'sales.crm',
-      version,
-      status: 'ACTIVE',
-    },
-  });
-  assert.equal(result.reason, 'PURPOSE_MISMATCH');
+const wrongPurpose = evaluateConsent({
+  ...request(consent()),
+  purpose: {
+    kind: 'PurposeContext',
+    purposeId: 'sales.crm',
+    version,
+    status: 'ACTIVE',
+  },
 });
+assert(wrongPurpose.reason === 'PURPOSE_MISMATCH', 'wrong purpose must be representable');
 
-test('wrong jurisdiction is representable', () => {
-  const result = evaluateConsent({
-    ...request(consent()),
-    jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'US-CA', version },
-  });
-  assert.equal(result.reason, 'JURISDICTION_MISMATCH');
+const wrongJurisdiction = evaluateConsent({
+  ...request(consent()),
+  jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'US-CA', version },
 });
+assert(
+  wrongJurisdiction.reason === 'JURISDICTION_MISMATCH',
+  'wrong jurisdiction must be representable',
+);
 
-test('wrong subject is rejected', () => {
-  const result = evaluateConsent({
-    ...request(consent()),
-    subject: {
-      kind: 'IDENTITY',
-      identityId: 'idn_01J11111111111111111111111' as IdentityId,
-    },
-  });
-  assert.equal(result.reason, 'SUBJECT_MISMATCH');
+const wrongSubject = evaluateConsent({
+  ...request(consent()),
+  subject: {
+    kind: 'IDENTITY',
+    identityId: 'idn_01J11111111111111111111111' as IdentityId,
+  },
 });
+assert(wrongSubject.reason === 'SUBJECT_MISMATCH', 'wrong subject must fail closed');
 
-test('missing provenance is rejected by schema', () => {
-  const parsed = ConsentRecordSchema.safeParse({ ...consent(), provenance: {} });
-  assert.equal(parsed.success, false);
-});
+const missingProvenance = ConsentRecordSchema.safeParse({ ...consent(), provenance: {} });
+assert(!missingProvenance.success, 'missing provenance must be rejected by runtime schema');
