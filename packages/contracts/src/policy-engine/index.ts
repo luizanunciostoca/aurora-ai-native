@@ -9,12 +9,7 @@ import type {
 import type { CorrelationId, IdentityId, TenantId } from '../ids/types';
 import type { ConsentRecord } from '../consent/index';
 import type { JurisdictionContext, JurisdictionRestriction } from '../jurisdiction/index';
-import type {
-  AuthorityScope,
-  OwnerDecision,
-  PolicyReference,
-  PolicyToken,
-} from '../policy/index';
+import type { AuthorityScope, OwnerDecision, PolicyReference, PolicyToken } from '../policy/index';
 import type { PurposeContext } from '../purpose/index';
 import type { CanonicalError } from '../results/error-semantics';
 import type { TenantBoundaryDecision } from '../tenant-boundary/types';
