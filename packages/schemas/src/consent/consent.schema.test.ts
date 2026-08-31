@@ -46,17 +46,66 @@ function request(record?: ConsentRecord): ConsentEvaluationRequest {
     tenantId,
     subject,
     evaluatedAt: now,
-    purpose: { kind: 'PurposeContext', purposeId: 'marketing.analytics', version, status: 'ACTIVE' },
+    purpose: {
+      kind: 'PurposeContext',
+      purposeId: 'marketing.analytics',
+      version,
+      status: 'ACTIVE',
+    },
     jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'BR', version },
     ...(record ? { consent: record } : {}),
   };
 }
 
-assert(evaluateConsent(request(consent())).reason === 'ACTIVE_CONSENT', 'active consent must pass');
-assert(evaluateConsent(request()).reason === 'CONSENT_REQUIRED', 'missing consent must fail closed');
-assert(evaluateConsent(request(consent({ expiresAt: '2026-08-30T00:00:00Z' as Rfc3339Timestamp }))).reason === 'CONSENT_EXPIRED', 'expired consent must fail');
-assert(evaluateConsent(request(consent({ status: 'REVOKED', revokedAt: now }))).reason === 'CONSENT_REVOKED', 'revoked consent must fail');
-assert(evaluateConsent({ ...request(consent()), purpose: { kind: 'PurposeContext', purposeId: 'sales.crm', version, status: 'ACTIVE' } }).reason === 'PURPOSE_MISMATCH', 'wrong purpose must fail');
-assert(evaluateConsent({ ...request(consent()), jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'US-CA', version } }).reason === 'JURISDICTION_MISMATCH', 'wrong jurisdiction must fail');
-assert(evaluateConsent({ ...request(consent()), subject: { kind: 'IDENTITY', identityId: 'idn_01J11111111111111111111111' as IdentityId } }).reason === 'SUBJECT_MISMATCH', 'wrong subject must fail');
-assert(!ConsentRecordSchema.safeParse({ ...consent(), provenance: {} }).success, 'missing provenance must be rejected');
+assert(
+  evaluateConsent(request(consent())).reason === 'ACTIVE_CONSENT',
+  'active consent must pass',
+);
+assert(
+  evaluateConsent(request()).reason === 'CONSENT_REQUIRED',
+  'missing consent must fail closed',
+);
+assert(
+  evaluateConsent(
+    request(consent({ expiresAt: '2026-08-30T00:00:00Z' as Rfc3339Timestamp })),
+  ).reason === 'CONSENT_EXPIRED',
+  'expired consent must fail',
+);
+assert(
+  evaluateConsent(request(consent({ status: 'REVOKED', revokedAt: now }))).reason ===
+    'CONSENT_REVOKED',
+  'revoked consent must fail',
+);
+assert(
+  evaluateConsent({
+    ...request(consent()),
+    purpose: {
+      kind: 'PurposeContext',
+      purposeId: 'sales.crm',
+      version,
+      status: 'ACTIVE',
+    },
+  }).reason === 'PURPOSE_MISMATCH',
+  'wrong purpose must fail',
+);
+assert(
+  evaluateConsent({
+    ...request(consent()),
+    jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'US-CA', version },
+  }).reason === 'JURISDICTION_MISMATCH',
+  'wrong jurisdiction must fail',
+);
+assert(
+  evaluateConsent({
+    ...request(consent()),
+    subject: {
+      kind: 'IDENTITY',
+      identityId: 'idn_01J11111111111111111111111' as IdentityId,
+    },
+  }).reason === 'SUBJECT_MISMATCH',
+  'wrong subject must fail',
+);
+assert(
+  !ConsentRecordSchema.safeParse({ ...consent(), provenance: {} }).success,
+  'missing provenance must be rejected',
+);
