@@ -46,6 +46,11 @@
       "require": "./dist/ids/index.js",
       "default": "./dist/ids/index.js"
     },
+    "./identity-resolution": {
+      "types": "./dist/identity-resolution/index.d.ts",
+      "require": "./dist/identity-resolution/index.js",
+      "default": "./dist/identity-resolution/index.js"
+    },
     "./jurisdiction": {
       "types": "./dist/jurisdiction/index.d.ts",
       "require": "./dist/jurisdiction/index.js",
@@ -70,6 +75,11 @@
       "types": "./dist/results/index.d.ts",
       "require": "./dist/results/index.js",
       "default": "./dist/results/index.js"
+    },
+    "./tenant-boundary": {
+      "types": "./dist/tenant-boundary/index.d.ts",
+      "require": "./dist/tenant-boundary/index.js",
+      "default": "./dist/tenant-boundary/index.js"
     },
     "./versioning": {
       "types": "./dist/versioning/index.d.ts",

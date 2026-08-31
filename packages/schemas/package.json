@@ -19,6 +19,11 @@
       "require": "./dist/actions/index.js",
       "default": "./dist/actions/index.js"
     },
+    "./consent": {
+      "types": "./dist/consent/index.d.ts",
+      "require": "./dist/consent/index.js",
+      "default": "./dist/consent/index.js"
+    },
     "./context": {
       "types": "./dist/context/index.d.ts",
       "require": "./dist/context/index.js",
@@ -39,10 +44,25 @@
       "require": "./dist/ids/index.js",
       "default": "./dist/ids/index.js"
     },
+    "./identity-resolution": {
+      "types": "./dist/identity-resolution/index.d.ts",
+      "require": "./dist/identity-resolution/index.js",
+      "default": "./dist/identity-resolution/index.js"
+    },
+    "./jurisdiction": {
+      "types": "./dist/jurisdiction/index.d.ts",
+      "require": "./dist/jurisdiction/index.js",
+      "default": "./dist/jurisdiction/index.js"
+    },
     "./policy": {
       "types": "./dist/policy/index.d.ts",
       "require": "./dist/policy/index.js",
       "default": "./dist/policy/index.js"
+    },
+    "./purpose": {
+      "types": "./dist/purpose/index.d.ts",
+      "require": "./dist/purpose/index.js",
+      "default": "./dist/purpose/index.js"
     },
     "./receipts": {
       "types": "./dist/receipts/index.d.ts",
@@ -53,6 +73,11 @@
       "types": "./dist/results/index.d.ts",
       "require": "./dist/results/index.js",
       "default": "./dist/results/index.js"
+    },
+    "./tenant-boundary": {
+      "types": "./dist/tenant-boundary/index.d.ts",
+      "require": "./dist/tenant-boundary/index.js",
+      "default": "./dist/tenant-boundary/index.js"
     },
     "./versioning": {
       "types": "./dist/versioning/index.d.ts",
