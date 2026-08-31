@@ -29,7 +29,9 @@ function parseAuthorityReference(reference: string): SubjectRef | undefined {
 }
 
 /** Explicit W01 SubjectRef -> AuthoritySubjectReference bridge. */
-export function subjectRefToAuthoritySubjectReference(subject: SubjectRef): AuthoritySubjectReference {
+export function subjectRefToAuthoritySubjectReference(
+  subject: SubjectRef,
+): AuthoritySubjectReference {
   return { reference: toAuthoritySubjectReference(subject) };
 }
 
