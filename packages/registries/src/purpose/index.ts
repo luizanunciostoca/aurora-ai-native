@@ -5,6 +5,9 @@ export interface PurposeRegistrySnapshot {
   readonly purposes: readonly PurposeContext[];
 }
 
-export function resolvePurpose(snapshot: PurposeRegistrySnapshot, purposeId: string): PurposeContext | undefined {
+export function resolvePurpose(
+  snapshot: PurposeRegistrySnapshot,
+  purposeId: string,
+): PurposeContext | undefined {
   return snapshot.purposes.find((purpose) => purpose.purposeId === purposeId);
 }

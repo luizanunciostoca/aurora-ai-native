@@ -108,15 +108,21 @@ function fail(
 export function evaluateConsent(request: ConsentEvaluationRequest): ConsentEvaluationResult {
   const consent = request.consent;
   if (!consent) return fail(request, 'CONSENT_REQUIRED');
-  if (!consent.provenance?.source || !consent.provenance.reference) return fail(request, 'MISSING_PROVENANCE');
+  if (!consent.provenance?.source || !consent.provenance.reference) {
+    return fail(request, 'MISSING_PROVENANCE');
+  }
   if (consent.tenantId !== request.tenantId || !sameSubject(consent.subject, request.subject)) {
     return fail(request, 'SUBJECT_MISMATCH');
   }
-  if (consent.status === 'REVOKED' || consent.revokedAt) return fail(request, 'CONSENT_REVOKED');
+  if (consent.status === 'REVOKED' || consent.revokedAt) {
+    return fail(request, 'CONSENT_REVOKED');
+  }
   if (consent.status === 'EXPIRED' || (consent.expiresAt && consent.expiresAt <= request.evaluatedAt)) {
     return fail(request, 'CONSENT_EXPIRED');
   }
-  if (!consent.scope.purposeIds.includes(request.purpose.purposeId)) return fail(request, 'PURPOSE_MISMATCH');
+  if (!consent.scope.purposeIds.includes(request.purpose.purposeId)) {
+    return fail(request, 'PURPOSE_MISMATCH');
+  }
   if (
     consent.scope.jurisdictions &&
     !consent.scope.jurisdictions.includes(request.jurisdiction.jurisdiction)
