@@ -2,9 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "@aurora/contracts/policy-validation": [
-        "../contracts/dist/policy-validation/index.d.ts"
-      ]
+      "@aurora/contracts/policy-validation": ["../contracts/dist/policy-validation/index.d.ts"]
     },
     "module": "Node16",
     "moduleResolution": "Node16",
