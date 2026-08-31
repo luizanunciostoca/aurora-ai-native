@@ -54,6 +54,6 @@ test('consumer can resolve root packages and governed subpaths', () => {
     registries.InMemoryPolicySnapshotRegistry,
   );
 
-  assert.equal(typeof policyCore.DeterministicPolicyEngine, 'function');
-  assert.equal(typeof policyCore.canonicalSubjectReference, 'function');
+  assert.equal(typeof policyCore.evaluatePolicy, 'function');
+  assert.equal(typeof policyCore.toAuthoritySubjectReference, 'function');
 });
