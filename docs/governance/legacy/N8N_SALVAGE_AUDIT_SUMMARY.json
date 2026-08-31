@@ -1,0 +1,36 @@
+{
+  "source_archive": "n8n-workflows-main.zip",
+  "source_sha256": "4173960e9aed58b773482b2e660976533dabcc982ddd3e14d6790a670eebd89b",
+  "entries": 2058,
+  "workflow_json": 2053,
+  "parse_errors": 0,
+  "exact_unique": 1997,
+  "structural_unique": 1979,
+  "structural_duplicate_rows": 74,
+  "empty_or_invalid_workflows": 10,
+  "sanitized_preserved_patterns": 1937,
+  "high_risk_execution_index_only": 32,
+  "source_active_true": 215,
+  "workflow_node_stats": {
+    "min": 0,
+    "median": 11.0,
+    "mean": 14.34242571846079,
+    "max": 246
+  },
+  "downstream_preserved_reference_counts": {
+    "W10_REVENUE_CRM": 167,
+    "W11_ORGANIC_COMMUNITY": 343,
+    "W12_META_ADS": 1,
+    "W13_GOOGLE_ADS": 0,
+    "W17_OBSERVABILITY": 41,
+    "W18_AI_EVALS": 758,
+    "MARKETING_ANALYTICS": 8
+  },
+  "critical_findings": [
+    "Collection README states workflows were gathered from multiple public sources; provenance/license is mixed and must be verified before direct promotion.",
+    "All preserved patterns are sanitized and enveloped so they are not direct n8n imports.",
+    "Execute Command/SSH workflows are index-only high-risk references.",
+    "No direct Google Ads workflow/node was found; W13 remains a coverage gap rather than being filled with unrelated Google Analytics/Search Console flows.",
+    "Only one Meta Ads-specific lead-ad trigger pattern was found; this is not evidence of full Meta Ads operational coverage."
+  ]
+}
