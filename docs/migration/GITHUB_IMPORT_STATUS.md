@@ -1,44 +1,33 @@
-# GitHub Import Status — Baseline v0.3
+# GitHub Import Status — Historical Baseline v0.3
 
-Status: **COMPLETE_BY_CLASSIFICATION — DEVELOPMENT BASELINE READY**
+Status: **HISTORICAL_BASELINE_COMPLETE_BY_CLASSIFICATION**
 
-The GitHub repository is initialized with the canonical Aurora AI-Native v0.3 monorepo structure, migration/status documentation, security boundaries, selected sanitized Manus references, the core Aurora legacy voice-interface references required to preserve the existing visual/voice behavior, and the target directories needed to begin implementation.
+This document records the repository-import baseline that preceded the accepted W00/W01 foundations. It is retained for migration provenance and must not be interpreted as the current roadmap or runtime status.
 
-## Committed development baseline
+## Baseline outcome
 
-- Root baseline README and safety `.gitignore`.
-- Canonical target structure for `apps/`, `services/`, `packages/`, `catalog/`, `infra/`, `evals/`, `docs/` and `tools/`.
-- Android/mobile target status and porting plan.
-- Aurora legacy voice UI HTML, Electron runtime reference, preload API and WebSocket voice bridge.
-- Selected sanitized Manus/reference material required for redesign of the bounded `ManusExecutionKernel`.
-- Target status markers for gateways, control core, agent runtime, executors, n8n bridge, infrastructure and evaluation areas.
-- Migration mapping/status documentation.
-- Security notice and exclusion rule for the hardcoded legacy credential.
-- Import classification policy for all remaining local-package files.
+The repository was initialized with the Aurora AI-Native v0.3 monorepo structure, migration/status documentation, security boundaries, selected sanitized legacy references and future target directories. The baseline deliberately classified rather than blindly mirrored the entire local bundle.
 
-## Local bundle classification
+The v0.3 migration classification remains valid historical evidence:
 
-The reorganized local v0.3 bundle contains **2,598 files**. The repository does not mirror all of them byte-for-byte because a large portion is duplicate provenance, a third-party/community n8n pattern library, binary documentation or oversized/sensitive source archives.
+- full third-party/community n8n pattern libraries were not treated as production-approved workflows;
+- duplicate Aurora/Manus provenance was not duplicated unnecessarily in normal Git history;
+- binary/oversized archives remained external artifacts;
+- known secret-bearing legacy configuration was excluded from canonical source control.
 
-The remaining package classes are explicitly governed as follows:
+See `IMPORT_CLASSIFICATION_v0.3.md` for the historical classification details.
 
-- **2,053 files** — full n8n source/reference library: `REFERENCE_ONLY_NOT_COMMITTED`. Workflows are promoted individually after curation, security review and TOCA capability binding.
-- **175 files** — duplicate original Aurora/Manus provenance trees: `REFERENCE_ONLY_NOT_COMMITTED`. Selected mapped references are kept in canonical development locations instead of duplicating the entire legacy tree.
-- **11 files** — binary manuals/images: `EXTERNAL_ARTIFACT`.
-- **1 file** — n8n source archive: `EXTERNAL_ARTIFACT`.
-- **1 file** — original Nova Aurora archive (~283 MB): `EXTERNAL_ARTIFACT_OVERSIZE_SECURITY_SENSITIVE`.
-- **Known secret-bearing Manus configuration**: `EXCLUDED_SECURITY`.
+## What changed after this baseline
 
-See `docs/migration/IMPORT_CLASSIFICATION_v0.3.md` for the authoritative classification rule.
+- W00 established and accepted monorepo quality/test/build/security/governance foundations.
+- Permanent Quality, Test Build and Security workflows now exist; the earlier baseline note that automated security scanning still had to be added is superseded.
+- W01 implemented and accepted canonical contracts/schemas/registries.
+- W02-A/B/C are accepted/merged and PB1 is released.
+- W02-D is currently in draft implementation PR #41 and is not yet accepted.
+- Current planning authority is Developer Manual v0.4.1 + ADR-001 + ADR-002, not the v0.3 baseline.
 
-## Security
+## Current authority rule
 
-The original Nova Aurora archive was previously identified as containing a hardcoded API credential in legacy Manus configuration. The curated Git tree excludes that secret-bearing configuration. Do not restore it. Rotate/revoke the original credential before treating historical archives as safe.
+GitHub `main` is implementation authority. Google Drive `AURORA_AI_NATIVE_DEVELOPMENT_GOVERNANCE` holds live operational governance/evidence. Historical migration/reference artifacts cannot silently override canonical runtime code, accepted contracts, current ADRs, wave ownership or publication barriers.
 
-Repository searches for the previously observed credential pattern and common API-key field naming returned no committed match at baseline closeout; this is not a substitute for automated secret scanning, which must be added to CI.
-
-## Development authority
-
-From this point forward, the GitHub repository is the development authority for **new Aurora AI-Native implementation**. Legacy references and external artifacts are evidence/provenance only and must not silently override canonical runtime code.
-
-Baseline migration v0.3 is therefore **closed and ready for Phase 1 implementation**. This status does **not** claim that the Aurora AI-Native runtime itself is complete; it only confirms that the repository baseline and migration policy are ready for development.
+This file intentionally preserves the fact that the original repository import was completed by classification; it does not claim that the current Aurora runtime is complete.
