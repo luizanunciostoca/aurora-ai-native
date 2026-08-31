@@ -13,7 +13,11 @@ function assert(condition: unknown, message: string): asserts condition {
 
 function assertThrows(fn: () => unknown, message: string): void {
   let threw = false;
-  try { fn(); } catch { threw = true; }
+  try {
+    fn();
+  } catch {
+    threw = true;
+  }
   assert(threw, message);
 }
 
@@ -27,7 +31,12 @@ function baseCheck() {
     },
     knownTenantIds: [TENANT_A, TENANT_B],
     bindings: [
-      { tenantId: TENANT_A, identityId: IDENTITY_A, identityKind: 'HUMAN', bindingKind: 'MEMBER' },
+      {
+        tenantId: TENANT_A,
+        identityId: IDENTITY_A,
+        identityKind: 'HUMAN',
+        bindingKind: 'MEMBER',
+      },
     ],
   };
 }
@@ -37,7 +46,10 @@ export function runTenantBoundaryTests(): void {
   const validDecision = checkTenantBoundary(valid);
   assert(validDecision.status === 'WITHIN_BOUNDARY', 'valid tenant binding must pass');
   assert(validDecision.correlationId === CORRELATION, 'correlation must be preserved');
-  assert(validDecision.evidence.matchedBindingCount === 1, 'matched binding evidence must be recorded');
+  assert(
+    validDecision.evidence.matchedBindingCount === 1,
+    'matched binding evidence must be recorded',
+  );
 
   const unknownTenant = baseCheck();
   unknownTenant.context.tenantId = 'ten_01J00000000000000000000009';
@@ -46,25 +58,48 @@ export function runTenantBoundaryTests(): void {
 
   const crossTenant = baseCheck();
   crossTenant.bindings = [
-    { tenantId: TENANT_B, identityId: IDENTITY_A, identityKind: 'HUMAN', bindingKind: 'MEMBER' },
+    {
+      tenantId: TENANT_B,
+      identityId: IDENTITY_A,
+      identityKind: 'HUMAN',
+      bindingKind: 'MEMBER',
+    },
   ];
   const crossDecision = checkTenantBoundary(TenantBoundaryCheckSchema.parse(crossTenant));
-  assert(crossDecision.reason === 'CROSS_TENANT_IDENTITY', 'cross-tenant identity must fail closed');
+  assert(
+    crossDecision.reason === 'CROSS_TENANT_IDENTITY',
+    'cross-tenant identity must fail closed',
+  );
 
   const mismatchedSubject = baseCheck();
   mismatchedSubject.context.subject.identityId = IDENTITY_B;
-  const subjectDecision = checkTenantBoundary(TenantBoundaryCheckSchema.parse(mismatchedSubject));
-  assert(subjectDecision.reason === 'SUBJECT_MISMATCH', 'mismatched subject must fail closed');
+  const subjectDecision = checkTenantBoundary(
+    TenantBoundaryCheckSchema.parse(mismatchedSubject),
+  );
+  assert(
+    subjectDecision.reason === 'SUBJECT_MISMATCH',
+    'mismatched subject must fail closed',
+  );
 
   assertThrows(
-    () => TenantBoundaryCheckSchema.parse({ ...baseCheck(), context: { ...baseCheck().context, tenantId: '' } }),
+    () =>
+      TenantBoundaryCheckSchema.parse({
+        ...baseCheck(),
+        context: { ...baseCheck().context, tenantId: '' },
+      }),
     'malformed tenant must be rejected',
   );
+
   const withoutTenant = baseCheck() as Record<string, unknown>;
-  const contextWithoutTenant = { ...(withoutTenant.context as Record<string, unknown>) };
+  const contextWithoutTenant = {
+    ...(withoutTenant.context as Record<string, unknown>),
+  };
   delete contextWithoutTenant.tenantId;
   withoutTenant.context = contextWithoutTenant;
-  assertThrows(() => TenantBoundaryCheckSchema.parse(withoutTenant), 'missing tenant must be rejected');
+  assertThrows(
+    () => TenantBoundaryCheckSchema.parse(withoutTenant),
+    'missing tenant must be rejected',
+  );
 
   const externalWrongTenant = {
     context: {
@@ -72,11 +107,19 @@ export function runTenantBoundaryTests(): void {
       actor: {
         kind: 'HUMAN',
         identityId: IDENTITY_A,
-        externalIdentity: { kind: 'EXTERNAL_IDENTITY', provider: 'provider-x', externalId: 'external-123' },
+        externalIdentity: {
+          kind: 'EXTERNAL_IDENTITY',
+          provider: 'provider-x',
+          externalId: 'external-123',
+        },
       },
       subject: {
         kind: 'EXTERNAL_IDENTITY',
-        externalIdentity: { kind: 'EXTERNAL_IDENTITY', provider: 'provider-x', externalId: 'external-123' },
+        externalIdentity: {
+          kind: 'EXTERNAL_IDENTITY',
+          provider: 'provider-x',
+          externalId: 'external-123',
+        },
       },
       correlationId: CORRELATION,
     },
@@ -87,12 +130,21 @@ export function runTenantBoundaryTests(): void {
         identityId: IDENTITY_A,
         identityKind: 'HUMAN',
         bindingKind: 'EXTERNAL',
-        externalIdentity: { kind: 'EXTERNAL_IDENTITY', provider: 'provider-x', externalId: 'external-123' },
+        externalIdentity: {
+          kind: 'EXTERNAL_IDENTITY',
+          provider: 'provider-x',
+          externalId: 'external-123',
+        },
       },
     ],
   };
-  const externalDecision = checkTenantBoundary(TenantBoundaryCheckSchema.parse(externalWrongTenant));
-  assert(externalDecision.reason === 'CROSS_TENANT_IDENTITY', 'external identity mapped to wrong tenant must fail closed');
+  const externalDecision = checkTenantBoundary(
+    TenantBoundaryCheckSchema.parse(externalWrongTenant),
+  );
+  assert(
+    externalDecision.reason === 'CROSS_TENANT_IDENTITY',
+    'external identity mapped to wrong tenant must fail closed',
+  );
 }
 
 runTenantBoundaryTests();
