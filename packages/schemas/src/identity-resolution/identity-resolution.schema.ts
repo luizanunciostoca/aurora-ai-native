@@ -187,9 +187,9 @@ export const IdentityResolutionResultSchema = createRuntimeSchema<IdentityResolu
 
     const errorValidation = validateCanonicalError(record.error, {
       contractVersion: (candidate: unknown): candidate is ContractVersion =>
-        ContractVersionSchema.safeParse(candidate).success,
+        ContractVersionSchema.is(candidate),
       correlationId: (candidate: unknown): candidate is CorrelationId =>
-        CorrelationIdSchema.safeParse(candidate).success,
+        CorrelationIdSchema.is(candidate),
     });
     if (!errorValidation.success) {
       throw new TypeError(
