@@ -20,6 +20,7 @@ const policyVersion = '2.4.0' as Version;
 const previousPolicyVersion = '2.3.0' as Version;
 const correlationId = 'cor_01J00000000000000000000000' as CorrelationId;
 const tenantA = 'ten_01J00000000000000000000000' as TenantId;
+const tenantB = 'ten_01J00000000000000000000001' as TenantId;
 const actorA = 'idn_01J00000000000000000000000' as IdentityId;
 const subjectA = 'idn_01J00000000000000000000002' as IdentityId;
 const evaluatedAt = '2026-08-31T18:00:00.000Z' as Rfc3339Timestamp;
@@ -94,13 +95,18 @@ function precheck(overrides: Partial<PolicyEvaluationRequest> = {}): PolicyPrech
   return { kind: 'PolicyPrecheckRequest', policyEvaluation: evaluation(overrides) };
 }
 
-function lookupRequest(expectedPolicy: PolicyReference = policy): CurrentPolicyLookupRequest {
+function lookupRequest(
+  expectedPolicy: PolicyReference = policy,
+  tenantId: TenantId = tenantA,
+): CurrentPolicyLookupRequest {
   return {
     kind: 'CurrentPolicyLookupRequest',
     schemaVersion,
     expectedPolicy,
     correlation: { correlationId },
     evaluatedAt,
+    tenant: { tenantId },
+    actor: { kind: 'HUMAN', identityId: actorA },
   };
 }
 
@@ -118,10 +124,16 @@ function expectThrow(name: string, fn: () => unknown): void {
   assert(threw, `${name}: expected throw`);
 }
 
+let observedTenant: TenantId | undefined;
 const lookupFound = lookupCurrentPolicy(lookupRequest(), {
-  getCurrent: () => snapshot(),
+  getCurrent: (request) => {
+    observedTenant = request.tenantId;
+    return snapshot();
+  },
 });
 assert(lookupFound.found, 'lookup found: expected current policy');
+assert(observedTenant === tenantA, 'lookup found: source must receive tenant binding');
+assert(lookupFound.tenant.tenantId === tenantA, 'lookup found: result must retain tenant context');
 assert(lookupFound.currentPolicy.version === policyVersion, 'lookup found: wrong current version');
 assert(lookupFound.authorizesExecution === false, 'lookup found: must never authorize execution');
 assert(
@@ -147,9 +159,17 @@ const lookupMissing = lookupCurrentPolicy(lookupRequest(), { getCurrent: () => u
 assert(!lookupMissing.found, 'lookup missing: expected not found');
 assert(lookupMissing.reasons.includes('POLICY_NOT_FOUND'), 'lookup missing: missing reason');
 
+const crossTenantLookup = lookupCurrentPolicy(lookupRequest(policy, tenantB), {
+  getCurrent: (request) => (request.tenantId === tenantA ? snapshot() : undefined),
+});
+assert(!crossTenantLookup.found, 'cross-tenant lookup: source must be able to fail closed');
+assert(
+  crossTenantLookup.tenant.tenantId === tenantB,
+  'cross-tenant lookup: result must preserve evaluated tenant',
+);
+
 const lookupMismatched = lookupCurrentPolicy(lookupRequest(), {
-  getCurrent: () =>
-    snapshot([allowRule], { reference: 'policy:other', version: policyVersion }),
+  getCurrent: () => snapshot([allowRule], { reference: 'policy:other', version: policyVersion }),
 });
 assert(!lookupMismatched.found, 'lookup mismatch: expected fail closed');
 assert(
