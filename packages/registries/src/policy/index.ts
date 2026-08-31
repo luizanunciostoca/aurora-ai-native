@@ -1,8 +1,11 @@
-import type { PolicySnapshot } from '@aurora/contracts/policy-engine';
 import type { PolicyReference } from '@aurora/contracts/policy';
 
-export interface PolicySnapshotRegistry {
-  get(reference: PolicyReference): PolicySnapshot | undefined;
+export interface PolicySnapshotLike {
+  readonly policy: PolicyReference;
+}
+
+export interface PolicySnapshotRegistry<TSnapshot extends PolicySnapshotLike = PolicySnapshotLike> {
+  get(reference: PolicyReference): TSnapshot | undefined;
 }
 
 function keyOf(reference: PolicyReference): string {
@@ -12,12 +15,17 @@ function keyOf(reference: PolicyReference): string {
 /**
  * W02-D test/runtime adapter only. Exact policy reference + version lookup has
  * no fallback to latest, nearest, or default versions. Persistence belongs to W03.
+ *
+ * The adapter is intentionally structural/generic so W02-D does not require
+ * publishing the new policy-engine contract subpath before coordinator-owned PB2.
  */
-export class InMemoryPolicySnapshotRegistry implements PolicySnapshotRegistry {
-  readonly #snapshots: ReadonlyMap<string, PolicySnapshot>;
+export class InMemoryPolicySnapshotRegistry<TSnapshot extends PolicySnapshotLike>
+  implements PolicySnapshotRegistry<TSnapshot>
+{
+  readonly #snapshots: ReadonlyMap<string, TSnapshot>;
 
-  constructor(snapshots: readonly PolicySnapshot[]) {
-    const entries = new Map<string, PolicySnapshot>();
+  constructor(snapshots: readonly TSnapshot[]) {
+    const entries = new Map<string, TSnapshot>();
     for (const snapshot of snapshots) {
       const key = keyOf(snapshot.policy);
       if (entries.has(key)) {
@@ -30,7 +38,7 @@ export class InMemoryPolicySnapshotRegistry implements PolicySnapshotRegistry {
     this.#snapshots = entries;
   }
 
-  get(reference: PolicyReference): PolicySnapshot | undefined {
+  get(reference: PolicyReference): TSnapshot | undefined {
     return this.#snapshots.get(keyOf(reference));
   }
 }
