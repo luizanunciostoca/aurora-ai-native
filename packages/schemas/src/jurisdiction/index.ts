@@ -1,4 +1,3 @@
-import type { JurisdictionContext, JurisdictionRestriction } from '@aurora/contracts/jurisdiction';
 import {
   asRecord,
   assertExactKeys,
@@ -6,7 +5,7 @@ import {
   parseNonEmptyString,
 } from '../context/internal';
 
-export const JurisdictionContextSchema = createRuntimeSchema<JurisdictionContext>(
+export const JurisdictionContextSchema = createRuntimeSchema<Record<string, unknown>>(
   (value: unknown) => {
     const record = asRecord(value, 'JurisdictionContext');
     assertExactKeys(
@@ -22,11 +21,11 @@ export const JurisdictionContextSchema = createRuntimeSchema<JurisdictionContext
     parseNonEmptyString(record.jurisdiction, 'jurisdiction');
     parseNonEmptyString(record.version, 'version');
 
-    return record as unknown as JurisdictionContext;
+    return record;
   },
 );
 
-export const JurisdictionRestrictionSchema = createRuntimeSchema<JurisdictionRestriction>(
+export const JurisdictionRestrictionSchema = createRuntimeSchema<Record<string, unknown>>(
   (value: unknown) => {
     const record = asRecord(value, 'JurisdictionRestriction');
     assertExactKeys(
@@ -46,6 +45,6 @@ export const JurisdictionRestrictionSchema = createRuntimeSchema<JurisdictionRes
     parseNonEmptyString(record.reasonReference, 'reasonReference');
     parseNonEmptyString(record.version, 'version');
 
-    return record as unknown as JurisdictionRestriction;
+    return record;
   },
 );
