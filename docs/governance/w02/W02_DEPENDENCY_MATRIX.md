@@ -65,12 +65,20 @@ A downstream consumer may not substitute direct internal-path imports for the re
 - W06 cache/context/speculation must revalidate current policy before an authority-relevant consumer acts.
 - W07 executor cannot treat a stale F precheck result as an execution credential; execution-time validation remains mandatory in its wave.
 
-## Current state after W02-00
+## Current state after PB1
 
-- A: READY
-- B: READY
-- C: READY
-- D: `GATED_PB1`
-- E: `GATED_PB2`
-- F: `GATED_PB3`
-- G: `GATED_PB4`
+PB1 technical acceptance main: `b48953cd4a7913e154fe2804248217ffe0c0952d`.
+
+- W02-00: `COMPLETE_ACCEPTED`
+- W02-A: `COMPLETE_ACCEPTED_MERGED` via PR #39; accepted head `4f84f20a1285ec3727591ed2ad89f90a9f988f1d`; PR #38 is superseded historical evidence.
+- W02-B: `COMPLETE_ACCEPTED_MERGED` via PR #37.
+- W02-C: `COMPLETE_ACCEPTED_MERGED` via PR #36.
+- PB1: `COMPLETE_RELEASED`; coordinator-owned root lockfile/public export convergence and A/B/C consumer-boundary verification are complete.
+- W02-D: `READY`; implementation ownership is released only for its frozen policy-engine leaf scope.
+- W02-E: `GATED_PB2`.
+- W02-F: `GATED_PB3`.
+- W02-G: `GATED_PB4`.
+
+PB1 evidence: pre-merge Quality `33417131319`, Test Build `33417131305`, Security `33417131803`; post-merge main Quality `33417242995`, Test Build `33417242973`, Security `33417243977` — all SUCCESS.
+
+PB2/PB3/PB4/PB5 semantics and Reality Gate requirements are unchanged.
