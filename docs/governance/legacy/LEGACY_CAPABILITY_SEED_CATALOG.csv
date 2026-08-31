@@ -1,0 +1,70 @@
+candidate_capability,legacy_source,primary_owner_wave,candidate_execution_target,side_effect_class,risk_class,candidate_consumers,status,notes
+agent.plan.phase.advance,AgentAdvancePhase,W05,LOCAL_SERVICE,INTERNAL_STATE,MEDIUM,W04/W05/W17,SEED_ONLY_NOT_CANONICAL,"Behavioral primitive, not authority."
+agent.task.complete,AgentEndTask,W05,LOCAL_SERVICE,INTERNAL_STATE,MEDIUM,W04/W05/W17,SEED_ONLY_NOT_CANONICAL,
+task.schedule,AgentScheduleTask,W04,LOCAL_SERVICE,INTERNAL_STATE,MEDIUM,W03/W04/W05,SEED_ONLY_NOT_CANONICAL,Must use durable timer/dispatch semantics.
+agent.plan.update,AgentUpdatePlan,W05,LOCAL_SERVICE,INTERNAL_STATE,MEDIUM,W04/W05/W17,SEED_ONLY_NOT_CANONICAL,
+browser.navigate,BrowserNavigate,W04,DEVICE_OR_LOCAL_SERVICE,EXTERNAL_READ,MEDIUM,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.view,BrowserView,W04,DEVICE_OR_LOCAL_SERVICE,READ,LOW,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.interact.click,BrowserClick,W04,DEVICE_OR_LOCAL_SERVICE,EXTERNAL_SIDE_EFFECT,HIGH,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.interact.input,BrowserInput,W04,DEVICE_OR_LOCAL_SERVICE,EXTERNAL_SIDE_EFFECT,HIGH,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.pointer.move,BrowserMoveMouse,W04,DEVICE_OR_LOCAL_SERVICE,LOCAL_UI,MEDIUM,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.key.press,BrowserPressKey,W04,DEVICE_OR_LOCAL_SERVICE,EXTERNAL_SIDE_EFFECT,HIGH,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.capture.image,BrowserSaveImage,W04,DEVICE_OR_LOCAL_SERVICE,LOCAL_WRITE,MEDIUM,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.scroll,BrowserScrollDown/BrowserScrollUp,W04,DEVICE_OR_LOCAL_SERVICE,LOCAL_UI,LOW,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.select,BrowserSelectOption,W04,DEVICE_OR_LOCAL_SERVICE,EXTERNAL_SIDE_EFFECT,HIGH,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.console.view,BrowserConsoleView,W04,DEVICE_OR_LOCAL_SERVICE,READ,MEDIUM,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+browser.console.execute,BrowserConsoleExec,W04,DEVICE_OR_LOCAL_SERVICE,EXTERNAL_SIDE_EFFECT,CRITICAL,W05/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Computer-use/browser execution requires explicit risk policy and evidence.
+file.read,FileRead,W04,DEVICE_OR_LOCAL_SERVICE,READ,MEDIUM,W06/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Path/tenant/permission boundaries required.
+file.write,FileWriteText,W04,DEVICE_OR_LOCAL_SERVICE,WRITE,HIGH,W06/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Path/tenant/permission boundaries required.
+file.append,FileAppendText,W04,DEVICE_OR_LOCAL_SERVICE,WRITE,HIGH,W06/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Path/tenant/permission boundaries required.
+file.replace,FileReplaceText,W04,DEVICE_OR_LOCAL_SERVICE,WRITE,HIGH,W06/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Path/tenant/permission boundaries required.
+file.open,FileManager/WindowsIntegration,W04,DEVICE_OR_LOCAL_SERVICE,LOCAL_UI,MEDIUM,W06/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Path/tenant/permission boundaries required.
+file.directory.list,FileManager/WindowsIntegration,W04,DEVICE_OR_LOCAL_SERVICE,READ,MEDIUM,W06/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Path/tenant/permission boundaries required.
+file.delete,WindowsIntegration,W04,DEVICE_OR_LOCAL_SERVICE,DESTRUCTIVE,CRITICAL,W06/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Path/tenant/permission boundaries required.
+file.search,WindowsIntegration,W04,DEVICE_OR_LOCAL_SERVICE,READ,MEDIUM,W06/W07/W15/W19,SEED_ONLY_NOT_CANONICAL,Path/tenant/permission boundaries required.
+search.web,InfoSearchWeb,W04,PROVIDER,READ,LOW,W05/W08/W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,
+search.api,InfoSearchApi,W04,PROVIDER,READ,MEDIUM,W05/W08/W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,
+search.image,InfoSearchImage,W04,PROVIDER,READ,LOW,W05/W08/W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,
+media.generate.image,MediaGenerateImage,W04,PROVIDER,WRITE_ARTIFACT,MEDIUM,W05/W08/W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,
+media.generate.speech,MediaGenerateSpeech,W04,PROVIDER_OR_DEVICE,WRITE_ARTIFACT,MEDIUM,W05/W08/W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,
+user.prompt,MessageAskUser,W04,GATEWAY,USER_INTERACTION,LOW,W05/W08/W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,
+notification.show,MessageNotifyUser/NotificationPlugin,W04,DEVICE_OR_GATEWAY,LOCAL_SIDE_EFFECT,LOW,W05/W08/W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,
+service.deploy.backend,ServiceDeployBackend,W04,LOCAL_SERVICE_OR_DEVICE,EXTERNAL_SIDE_EFFECT,CRITICAL,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+service.deploy.frontend,ServiceDeployFrontend,W04,LOCAL_SERVICE_OR_DEVICE,EXTERNAL_SIDE_EFFECT,CRITICAL,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+service.port.expose,ServiceExposePort,W04,LOCAL_SERVICE_OR_DEVICE,SECURITY_BOUNDARY_CHANGE,CRITICAL,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+shell.execute,ShellExec,W04,LOCAL_SERVICE_OR_DEVICE,LOCAL_SIDE_EFFECT,CRITICAL,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+shell.input,ShellInput,W04,LOCAL_SERVICE_OR_DEVICE,LOCAL_SIDE_EFFECT,HIGH,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+shell.terminate,ShellKill,W04,LOCAL_SERVICE_OR_DEVICE,DESTRUCTIVE,CRITICAL,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+shell.view,ShellView,W04,LOCAL_SERVICE_OR_DEVICE,READ,MEDIUM,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+shell.wait,ShellWait,W04,LOCAL_SERVICE_OR_DEVICE,INTERNAL,LOW,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+presentation.initialize,SlideInitialize,W04,LOCAL_SERVICE_OR_DEVICE,WRITE_ARTIFACT,MEDIUM,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+presentation.present,SlidePresent,W04,LOCAL_SERVICE_OR_DEVICE,LOCAL_UI,MEDIUM,W05/W07/W15/W19/W20,SEED_ONLY_NOT_CANONICAL,Never direct execution from agent output; current authority + executor required.
+app.open,ApplicationManager/WindowsIntegration,W04,DEVICE,LOCAL_SIDE_EFFECT,MEDIUM,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+app.close,ApplicationManager/WindowsIntegration,W04,DEVICE,LOCAL_SIDE_EFFECT,HIGH,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+app.focus,ApplicationManager/WindowsIntegration,W04,DEVICE,LOCAL_UI,LOW,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+app.list_running,ApplicationManager/WindowsIntegration,W04,DEVICE,READ,MEDIUM,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+system.info.read,SystemInfo/WindowsIntegration,W04,DEVICE,READ,LOW,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+system.cpu.read,CPUUsage/WindowsIntegration,W04,DEVICE,READ,LOW,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+system.memory.read,MemoryUsage/WindowsIntegration,W04,DEVICE,READ,LOW,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+audio.volume.set,AudioManager/WindowsIntegration,W04,DEVICE,LOCAL_SIDE_EFFECT,MEDIUM,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+audio.volume.read,AudioManager/WindowsIntegration,W04,DEVICE,READ,LOW,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+audio.mute.set,AudioManager/WindowsIntegration,W04,DEVICE,LOCAL_SIDE_EFFECT,MEDIUM,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+device.power.shutdown,PowerManager/WindowsIntegration,W04,DEVICE,DESTRUCTIVE,CRITICAL,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+device.power.restart,PowerManager/WindowsIntegration,W04,DEVICE,DESTRUCTIVE,CRITICAL,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+device.power.logout,PowerManager/WindowsIntegration,W04,DEVICE,DESTRUCTIVE,HIGH,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+device.power.sleep,PowerManager/WindowsIntegration,W04,DEVICE,LOCAL_SIDE_EFFECT,HIGH,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+device.power.hibernate,PowerManager/WindowsIntegration,W04,DEVICE,LOCAL_SIDE_EFFECT,HIGH,W07/W14/W15/W17/W19/W20,SEED_ONLY_NOT_CANONICAL,W15 implements native binding; W04 only owns vocabulary/registry.
+voice.listen.start,VoiceRecognition/AuroraVoiceEngine,W04,DEVICE,LOCAL_SENSOR,MEDIUM,W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,Consent/lifecycle and microphone permission required where applicable.
+voice.listen.stop,AuroraVoiceEngine,W04,DEVICE,LOCAL_SENSOR,LOW,W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,Consent/lifecycle and microphone permission required where applicable.
+voice.wake.detect,AuroraVoiceEngine,W04,DEVICE,LOCAL_SENSOR,MEDIUM,W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,Consent/lifecycle and microphone permission required where applicable.
+voice.transcript.process,VoiceCommand/AuroraVoiceEngine,W04,DEVICE,INTERNAL,MEDIUM,W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,Consent/lifecycle and microphone permission required where applicable.
+voice.speak,VoiceActions/AuroraVoiceEngine,W04,DEVICE,LOCAL_SIDE_EFFECT,LOW,W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,Consent/lifecycle and microphone permission required where applicable.
+presence.state.read,AuroraVoiceEngine/FaceVoice,W04,DEVICE,READ,LOW,W14/W15/W16/W17,SEED_ONLY_NOT_CANONICAL,Consent/lifecycle and microphone permission required where applicable.
+email.send,EmailPlugin,W04,PROVIDER,EXTERNAL_SIDE_EFFECT,HIGH,W08/W10/W19,SEED_ONLY_NOT_CANONICAL,Provider adapter owns implementation; capability registry owns vocabulary.
+external.service.invoke,ExternalServiceIntegrator,W04,PROVIDER,EXTERNAL_SIDE_EFFECT,HIGH,W08/W17/W19,SEED_ONLY_NOT_CANONICAL,Prefer more specific capabilities where known.
+productivity.action.invoke,ProductivityToolsIntegration,W04,PROVIDER,EXTERNAL_SIDE_EFFECT,HIGH,W08/W10/W19,SEED_ONLY_NOT_CANONICAL,Seed only; split into specific provider-neutral capabilities later.
+system.health.read,Diagnostics/SystemMonitor,W04,LOCAL_SERVICE,READ,LOW,W16/W17/W19,SEED_ONLY_NOT_CANONICAL,
+system.logs.read,LogPanel/VoiceLogger,W04,LOCAL_SERVICE,READ,LOW,W16/W17/W19,SEED_ONLY_NOT_CANONICAL,
+system.metrics.read,RealtimeMonitor/SystemMonitor,W04,LOCAL_SERVICE,READ,LOW,W16/W17/W19,SEED_ONLY_NOT_CANONICAL,
+workspace.settings.read,Settings,W04,LOCAL_SERVICE,READ,LOW,W16/W17/W19,SEED_ONLY_NOT_CANONICAL,
+workspace.settings.update,Settings,W04,LOCAL_SERVICE,INTERNAL_STATE,MEDIUM,W16/W17/W19,SEED_ONLY_NOT_CANONICAL,

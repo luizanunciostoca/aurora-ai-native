@@ -29,6 +29,19 @@ This map identifies successor **targets**, not permission to copy legacy impleme
 - Historical Manus success reports are never acceptance evidence for Aurora AI-Native.
 - The n8n source library is not production automation merely because a workflow exists in provenance/external artifacts.
 
+## Legacy salvage planning input — 2026-08-31
+
+A deeper review of the supplied `aurora_transcendente_final (3).zip` archive is tracked by:
+
+- `docs/governance/legacy/LEGACY_CAPABILITY_AND_REUSE_SALVAGE_REGISTER.md`;
+- `docs/governance/legacy/LEGACY_CAPABILITY_SEED_CATALOG.csv`;
+- `docs/governance/legacy/SALVAGE_AUDIT_SUMMARY.json`;
+- Drive `AURORA_LEGACY_SOURCE_FILE_CLASSIFICATION_2026-08-31` for file-level evidence.
+
+The archive SHA-256 is `d4388cdefd21c6ba6dcc24e1214d037d499370533bc870890c7881f2027a55c2`. The audit classified 541 first-party files and produced 69 deduplicated capability seeds. All seeds are planning inputs only and default to `NO_DIRECT_RUNTIME_IMPORT` / `SEED_ONLY_NOT_CANONICAL`.
+
+Future owner waves must consume the salvage register instead of re-importing the archive. Promotion is semantic and minimal: a wave may accept a capability verb, behavior, UX/protocol state, provider metadata or negative-test scenario only after re-specification against current canonical contracts and Risk Validation gates. Secret-bearing configuration, user/runtime data, direct process executors, randomized validation/optimization, permissive stub success and historical certificate claims are explicitly non-promotable.
+
 ## Runtime dependency conclusion
 
 At the audited baseline there is no implemented canonical runtime entrypoint consuming the legacy/reference trees. Therefore the current dependency direction is clean: **canonical targets may consult legacy references during redesign, but no legacy tree is runtime authority**.
