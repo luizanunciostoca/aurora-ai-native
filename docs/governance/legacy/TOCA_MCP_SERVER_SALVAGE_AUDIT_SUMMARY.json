@@ -1,0 +1,38 @@
+{
+  "status": "ACTIVE_CANONICAL_PLANNING_INPUT_CANDIDATE",
+  "audit_date": "2026-08-31",
+  "source_repository": "luizanunciostoca/toca-mcp-server",
+  "source_exact_main": "8a6cfe055be9b34e498cfbdb481e8232dc51df05",
+  "root_tree_sha": "8a6cfe055be9b34e498cfbdb481e8232dc51df05",
+  "preservation_model": "IMMUTABLE_GIT_PROVENANCE_PLUS_CURATED_DERIVED_INDEXES",
+  "default_decision": "NO_DIRECT_RUNTIME_IMPORT",
+  "source_area_rows": 41,
+  "curated_pattern_rows": 64,
+  "wave_handoff_rows": 19,
+  "risk_rows": 12,
+  "search_findings": {
+    "dynamic_eval_in_repo_search": 0,
+    "math_random_in_src_search": 0,
+    "child_process_in_src_search": 10,
+    "license_file_at_root": "NOT_FOUND",
+    "package_private": true
+  },
+  "highest_value": [
+    "transactional outbox / consumer idempotency / scheduler reconciliation",
+    "atomic approval-execution-readback lifecycle",
+    "capability lifecycle/resolution/validation evidence",
+    "provider readback/reconciliation",
+    "tenant/privacy/secret-reference patterns",
+    "SLO/error-budget/backup/PITR/restore evidence",
+    "Google Ads and Instagram provider/domain adapters",
+    "experimentation/learning governance and shadow-canary patterns"
+  ],
+  "critical_non_promotion_rules": [
+    "Do not replace Aurora PolicyToken, OwnerDecision, Policy Engine or Executor authority with TOCA authority types.",
+    "Do not copy executeTool readiness default; Aurora side-effect readiness/current validation must fail closed.",
+    "Do not expose local child_process execution directly to planner/model output.",
+    "Do not treat provider health/account verification/credential possession as authority.",
+    "Do not copy TOCA account IDs, credentials, tenant bindings, business rules or deployment assumptions.",
+    "No verbatim cross-repo code promotion without explicit provenance/license review."
+  ]
+}
