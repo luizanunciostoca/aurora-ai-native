@@ -2,92 +2,65 @@
 
 Date: 2026-08-31  
 Authority: CHAT W02 PROGRAM COORDINATOR  
-Baseline SHA: `eb46df1c3a1ab98a6ad6d091178091cb880a70e7`
+Coordination starting SHA: `eb46df1c3a1ab98a6ad6d091178091cb880a70e7`
 
-## Rules
+## Global ownership rules
 
-- One canonical write owner per file/path at a time.
-- A/B/C may work in parallel only on disjoint leaf paths.
-- D/E/F are serialized through publication barriers.
-- Shared barrels/manifests/root/workspace/CI files stay coordinator-locked unless explicitly transferred.
-- G receives final shared-integration ownership only after A-F publication.
-- Legacy/reference trees are read-only.
-- No W02 subwave may redefine `IdentityId`, `TenantId`, `ActorRef`, `SubjectRef`, `OwnerDecision`, `PolicyToken`, `AuthorityScope`, `CorrelationContext`, `CanonicalError` or `ExecutionOutcome`.
+- One canonical write owner per path at a time.
+- W01 canonical primitives are frozen/composed, never forked.
+- Shared barrels/manifests/root/workspace/CI files remain coordinator-controlled unless an explicit lock transfer is recorded.
+- Legacy/reference trees are read-only/non-authoritative.
+- Draft PRs do not transfer ownership.
+- Publication-barrier ownership is separate from leaf implementation ownership.
 
-## Protected W01 sources
+## Frozen W01 authority
 
-Read/compose; no parallel redefinition:
+W02 must not redefine `IdentityId`, `TenantId`, `ActorRef`, `SubjectRef`, `OwnerDecision`, `PolicyToken`, `AuthorityScope`, `CorrelationContext`, `CanonicalError` or `ExecutionOutcome`.
 
-- `packages/contracts/src/ids/**`
-- `packages/contracts/src/context/identity.ts`
-- `packages/contracts/src/context/tenant.ts`
-- `packages/contracts/src/context/correlation.ts`
-- `packages/contracts/src/policy/authority-primitives.ts`
-- `packages/contracts/src/policy/owner-decision.ts`
-- `packages/contracts/src/policy/policy-token.ts`
-- `packages/contracts/src/results/error-semantics.ts`
-- `packages/contracts/src/results/execution-semantics.ts`
-- mirrored W01 schema files
-- `packages/registries/src/ids/**`
-- `packages/registries/src/versioning/**`
+Corrective/additive changes to W01 authority require explicit coordinator ownership plus compatibility/regression evidence.
 
-Any corrective/additive edit requires explicit coordinator lock transfer and compatibility/regression evidence.
+## Coordinator-controlled shared surfaces
 
-## Coordinator-locked shared surfaces
+These remain serialized throughout W02 unless explicitly transferred:
 
 - `packages/contracts/src/index.ts`
 - `packages/schemas/src/index.ts`
 - `packages/registries/src/index.ts`
-- the three shared package manifests/tsconfigs
-- root `package.json`, `package-lock.json`, `tsconfig.base.json`, workspace/tooling config
-- `.github/CODEOWNERS`, `.github/workflows/**`
-- shared public export maps/barrels
+- shared package manifests/tsconfigs/export maps
+- root `package.json`, `package-lock.json`, `tsconfig.base.json` and workspace tooling
+- `.github/CODEOWNERS`
+- `.github/workflows/**`
 - cross-wave dependency/version changes
 
-Minimal publication-only changes may be performed by the coordinator between barriers. PB1 publication is complete, but this did not transfer future shared-surface ownership to W02-D.
+A leaf subwave may request a coordinator publication or mechanical integration change; it may not silently absorb ownership because its tests require one.
 
-## W02-A — Identity Resolution
+## Accepted leaf ownership
 
-**Canonical acceptance branch:** `wave/02a-pb1-convergence`  
-**Status:** `COMPLETE_ACCEPTED_MERGED` via PR #39. PR #38 is superseded historical evidence.
+### W02-A — Identity Resolution
 
-**Former exclusive paths — leaf lock closed after acceptance**
+Status: `COMPLETE_ACCEPTED_MERGED` via PR #39. Leaf lock closed/released.
+
+Former exclusive paths:
 
 - `packages/contracts/src/identity-resolution/**`
 - `packages/schemas/src/identity-resolution/**`
 - `services/identity/**`
 
-**Produces:** `IdentityResolutionRequest`, `IdentityResolutionResult`, `IdentityResolutionStatus`, `IdentityResolutionEvidence`.
+### W02-B — Tenant Boundary & Identity Binding
 
-**Consumes:** W01 `IdentityId`, `ActorRef`, `SubjectRef`, external identity refs, correlation/context/error/version primitives.
+Status: `COMPLETE_ACCEPTED_MERGED` via PR #37. Leaf lock closed/released.
 
-**Forbidden:** W01 ID/context/policy/result source edits, root/shared barrels/manifests, identity graph persistence, policy decisions, provider side effects.
-
-**Accepted evidence:** head `4f84f20a1285ec3727591ed2ad89f90a9f988f1d`; PB1 technical main `b48953cd4a7913e154fe2804248217ffe0c0952d`; exact-head and post-merge gates green.
-
-## W02-B — Tenant Boundary & Identity Binding
-
-**Branch:** `wave/02b-tenant-boundary`  
-**Status:** `COMPLETE_ACCEPTED_MERGED` via PR #37; leaf lock closed/released.
-
-**Former exclusive paths**
+Former exclusive paths:
 
 - `packages/contracts/src/tenant-boundary/**`
 - `packages/schemas/src/tenant-boundary/**`
 - `services/tenant/**`
 
-**Produces:** `IdentityTenantBinding`, `TenantBoundaryContext`, `TenantBoundaryCheck`, `TenantBoundaryDecision`.
+### W02-C — Consent, Purpose & Jurisdiction
 
-**Consumes:** W01 tenant/identity/context/error primitives and published A results when needed.
+Status: `COMPLETE_ACCEPTED_MERGED` via PR #36. Leaf lock closed/released.
 
-**Forbidden:** new TenantId/IdentityId aliases, permissive default tenant/cross-tenant fallback, W01 source edits, policy engine/persistence, shared barrels/manifests.
-
-## W02-C — Consent, Purpose & Jurisdiction
-
-**Branch:** `wave/02c-consent-purpose-jurisdiction`  
-**Status:** `COMPLETE_ACCEPTED_MERGED` via PR #36; leaf lock closed/released.
-
-**Former exclusive paths**
+Former exclusive paths:
 
 - `packages/contracts/src/consent/**`
 - `packages/schemas/src/consent/**`
@@ -98,123 +71,102 @@ Minimal publication-only changes may be performed by the coordinator between bar
 - `packages/registries/src/consent/**`
 - `packages/registries/src/purpose/**`
 - `packages/registries/src/jurisdiction/**`
-- `services/consent/**`
+- `services/consent/**` if/when present under accepted W02-C ownership
 
-**Produces:** consent status/evidence, purpose reference/context and jurisdiction context/restriction contract families.
+PB1 is `COMPLETE_RELEASED`; A/B/C public package boundaries were converged by the coordinator on technical acceptance main `b48953cd4a7913e154fe2804248217ffe0c0952d`.
 
-**Consumes:** W01 tenant/identity/correlation/version/error primitives.
+## Active ownership
 
-**Forbidden:** W03 persistence/migrations, policy evaluator, duplicate W01 IDs/types, external writes, shared barrels/manifests.
+### W02-D — Deterministic Policy Engine
 
-## PB1 — Coordinator publication
+Branch: `wave/02d-policy-engine`  
+Current state: `IN_PROGRESS_DRAFT_PR_41`  
+Draft head observed during this audit: `e9c22eb5e165670c4ec047b29393b4668f79de46`.
 
-**Status:** `COMPLETE_RELEASED` on technical acceptance main `b48953cd4a7913e154fe2804248217ffe0c0952d`.
-
-A/B/C are accepted and cross-dependencies reconciled. Coordinator regenerated the root lockfile, published the required A/B/C contract/schema public subpaths and verified the consumer fixture. This releases W02-D implementation ownership only for the frozen D leaf scope below. Shared/root publication surfaces remain coordinator-owned.
-
-## W02-D — Deterministic Policy Engine
-
-**Branch:** `wave/02d-policy-engine`  
-**Status:** `READY` — ownership released by PB1.
-
-**Active exclusive paths after PB1**
+Exclusive semantic/leaf scope:
 
 - `packages/contracts/src/policy-engine/**`
 - `packages/schemas/src/policy-engine/**`
 - `packages/registries/src/policy/**`
-- initial `packages/policy/**` bootstrap and deterministic evaluation implementation
+- `packages/policy/**` deterministic policy-core implementation paths
 
-**Produces:** `PolicyEvaluationRequest`, `PolicyEvaluationDecision = ALLOW | DENY | REQUIRE_APPROVAL`, `PolicyEvaluationResult`, canonical policy reason semantics.
+Produces one canonical W02 policy decision vocabulary: `ALLOW | DENY | REQUIRE_APPROVAL`, deterministic evaluation requests/results/evidence/reasons.
 
-**Consumes:** accepted/published A/B/C and W01 policy/context/error/version primitives.
+Forbidden within leaf ownership:
 
-**Forbidden:** persistence/event backbone, router/confidence/planner, provider/executor calls, redefinition of OwnerDecision states or ExecutionOutcome, edits to accepted A/B/C leaf files, or shared/root publication files without explicit coordinator transfer.
+- persistence/event backbone;
+- router/confidence/planner/context runtime;
+- provider/device/executor calls;
+- redefinition of W01 authority/outcome primitives;
+- edits to accepted A/B/C leaf semantics;
+- silent edits to coordinator-controlled shared/root/workflow/publication surfaces.
 
-**Merge prerequisites:** deterministic replay; default-deny/conflict tests; no duplicate policy vocabulary/cycles; exact-main revalidation. PB2 is not implied by D implementation and remains coordinator-controlled after D acceptance.
+### Current W02-D ownership drift requiring reconciliation
 
-## PB2 — Coordinator publication
+Draft PR #41 currently contains changes to:
 
-D accepted/published; exact SHA recorded before E release.
+- root `package-lock.json`;
+- `.github/workflows/w02d-format.yml`.
 
-## W02-E — PolicyToken & Authority Evaluation
+Both are coordinator-controlled by this matrix. These changes are **not accepted ownership transfers**. Before W02-D can be accepted, the coordinator must either:
 
-**Branch:** `wave/02e-authority-validation`  
-**Status:** `DEPENDENCY_GATED_PB2`.
+1. remove/rebuild those changes through the proper coordinator publication/integration path; or
+2. explicitly record a narrow lock transfer/publication action and revalidate the exact final HEAD.
 
-**Exclusive paths after PB2**
+The branch must also reconcile against then-current `main`; its original base `c4f25eb41fcb7ff9e390466146ebdeb8239bfe6f` predates later accepted governance changes.
+
+PB2 remains coordinator-controlled and closed until D acceptance/publication.
+
+## Dependency-gated ownership
+
+### W02-E — PolicyToken & Authority Evaluation
+
+State: `DEPENDENCY_GATED_PB2`.
+
+Future exclusive paths after PB2:
 
 - `packages/contracts/src/policy-validation/**`
 - `packages/schemas/src/policy-validation/**`
 - `packages/policy/src/authority/**`
 
-**Produces:** `PolicyTokenValidationRequest/Result`, `AuthorityEvaluationRequest/Result` and canonical validation reason semantics that compose `CanonicalError`.
+### W02-F — Policy Query / Precheck APIs
 
-**Consumes:** W01 `PolicyToken`, `OwnerDecision`, `AuthorityScope`, `AuthoritySubjectReference`, `PolicyReference`; accepted A/B/C/D.
+State: `DEPENDENCY_GATED_PB3`.
 
-**Forbidden:** secrets/provider credentials, confidence-as-permission, persistence/provider execution, replacement authority types.
-
-**Merge prerequisites:** PB2; full fail-closed negative matrix; explicit deterministic `SubjectRef`/`AuthoritySubjectReference` bridge tests.
-
-## PB3 — Coordinator publication
-
-E accepted/published; exact SHA recorded before F release.
-
-## W02-F — Policy Query / Precheck APIs
-
-**Branch:** `wave/02f-policy-precheck-api`  
-**Status:** `DEPENDENCY_GATED_PB3`.
-
-**Exclusive paths after PB3**
+Future exclusive paths after PB3:
 
 - `packages/contracts/src/policy-query/**`
 - `packages/schemas/src/policy-query/**`
 - `packages/policy/src/query/**`
 - `services/policy/**`
 
-**Produces:** `PolicyPrecheckRequest/Response`, `PolicyQueryRequest/Response`; responses compose D/E types and define no second decision enum.
+Precheck remains informational; F cannot mint executable authority.
 
-**Consumes:** accepted A-E.
+### W02-G — Integration, Security & Contract Tests
 
-**Forbidden:** authority minting from precheck, router/lane/confidence/planner logic, provider writes, persistence/event backbone.
+State: `DEPENDENCY_GATED_PB4`.
 
-**Merge prerequisites:** PB3; contract/schema/API consumer tests; side-effect-free proof.
+After explicit final lock transfer, G owns W02 shared integration/public exports, W02 integration/security tests, consumer fixtures and Reality Gate evidence. It does not gain unrelated feature ownership.
 
-## W02-G — Integration, Security & Contract Tests
+## Cross-wave prohibitions
 
-**Branch:** `wave/02g-policy-integration`  
-**Status:** gated on PB4/F acceptance.
+No W02 owner may implement:
 
-**Exclusive paths after lock transfer**
+- W03 persistence/event backbone;
+- W04 Goal Graph/CapabilityPlan/lanes/budgets;
+- W05 Intelligence Router/reasoning/confidence;
+- W06 Context Engine/cache/speculation;
+- W07+ side-effect executors/providers/device runtime.
 
-- W02 shared package/service barrels/manifests/public exports
-- `packages/policy` integration tests
-- `services/policy` integration/security tests
-- `tools/test/w02/**` or equivalent W02 cross-system test area
-- W02 consumer fixtures and Reality Gate evidence
+ADR-002 does not transfer any Device Plane ownership into W02.
 
-**Consumes:** A-F.
+## Current lock state
 
-**Forbidden:** unrelated production features; production leaf edits except minimal defect remediation with recorded rationale.
+- W02-A/B/C: `CLOSED_RELEASED`.
+- W02-D: `ACTIVE_IN_PROGRESS_DRAFT_PR_41` only for its frozen leaf/semantic scope.
+- W02-E: `GATED_PB2`.
+- W02-F: `GATED_PB3`.
+- W02-G: `GATED_PB4`.
+- Shared/root/workflow/publication surfaces: `COORDINATOR_LOCKED`.
 
-**Merge prerequisites:** A-F accepted/published; lock transfer; T1+T2 PASS; official repository gates green.
-
-## Prohibited cross-wave targets
-
-All W02 subwaves are prohibited from implementing W03 persistence/event backbone, W04 Goal Graph/CapabilityPlan/lanes/budgets, W05 router/reasoning/confidence, W06 context/cache/speculation and W07+ provider/executor side effects.
-
-## Lock transfer
-
-A transfer requires owner completion state, accepted branch HEAD/PR, dependency publication SHA and coordinator registry update. Silent ownership transfer is invalid.
-
-## Current release state
-
-- W02-A: `COMPLETE_ACCEPTED_MERGED`
-- W02-B: `COMPLETE_ACCEPTED_MERGED`
-- W02-C: `COMPLETE_ACCEPTED_MERGED`
-- PB1: `COMPLETE_RELEASED`
-- W02-D: `READY`
-- W02-E: `DEPENDENCY_GATED_PB2`
-- W02-F: `DEPENDENCY_GATED_PB3`
-- W02-G: `DEPENDENCY_GATED_PB4`
-
-PB1 evidence: pre-merge Quality `33417131319`, Test Build `33417131305`, Security `33417131803`; post-merge main Quality `33417242995`, Test Build `33417242973`, Security `33417243977` — all SUCCESS.
+Conflict status: `RECONCILIATION_REQUIRED_BEFORE_W02_D_ACCEPTANCE` because PR #41 currently touches coordinator-controlled files. This is an acceptance guard, not a rejection of the D implementation itself.

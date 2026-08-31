@@ -1,31 +1,35 @@
-path,status,current_file_count
-.github/ISSUE_TEMPLATE,ACTIVE_CANONICAL,2
-.github/workflows,ACTIVE_CANONICAL,3
-apps/aurora-android,SCAFFOLD_ACTIVE,1
-apps/aurora-desktop/legacy-reference,LEGACY_REFERENCE,6
-catalog/n8n,SCAFFOLD_ACTIVE,1
-docs/deprecation,ACTIVE_CANONICAL,7
-docs/governance,ACTIVE_CANONICAL,2
-docs/migration,ACTIVE_CANONICAL,6
-docs/registries,ACTIVE_CANONICAL,1
-docs/security,ACTIVE_CANONICAL,2
-evals,SCAFFOLD_ACTIVE,1
-infra,SCAFFOLD_ACTIVE,1
-packages/contracts,SCAFFOLD_ACTIVE,1
-reference/original-manus,REFERENCE_ONLY,1
-services/agent-runtime,ACTIVE_CANONICAL,1
-services/agent-runtime/legacy-manus-reference,LEGACY_REFERENCE,29
-services/aurora-gateway,SCAFFOLD_ACTIVE,1
-services/control-core,SCAFFOLD_ACTIVE,1
-services/executors,SCAFFOLD_ACTIVE,1
-services/mobile-gateway,SCAFFOLD_ACTIVE,1
-services/n8n-bridge,SCAFFOLD_ACTIVE,1
-services/push-notifications,SCAFFOLD_ACTIVE,1
-services/realtime-sync,SCAFFOLD_ACTIVE,1
-tools/audit,ACTIVE_CANONICAL,1
-tools/build,ACTIVE_CANONICAL,1
-tools/migration,DEPRECATED,1
-tools/quality,ACTIVE_CANONICAL,3
-tools/security,ACTIVE_CANONICAL,3
-tools/test,ACTIVE_CANONICAL,3
-tools/workspace,ACTIVE_CANONICAL,6
+path,status,authority_or_owner,notes
+.github/ISSUE_TEMPLATE,ACTIVE_CANONICAL,W00 Git governance,Accepted governance templates
+.github/workflows,ACTIVE_CANONICAL,W00 permanent CI,Quality/Test Build/Security are active; wave-specific workflow changes still follow ownership
+apps/aurora-android,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W15,No accepted Android Device Runtime
+apps/aurora-desktop/legacy-reference,LEGACY_REFERENCE,reference only,Visual/runtime provenance is non-authoritative
+catalog/n8n,REFERENCE_GOVERNED,W09 future consumers,Pattern library; not production approval
+docs/architecture,ACTIVE_CANONICAL,program architecture,ADR-002 repository mirror; Drive ADR index is live governance index
+docs/deprecation,HISTORICAL_AND_ACTIVE_GOVERNANCE,W00 cleanup provenance,Historical cleanup evidence retained
+docs/governance,ACTIVE_CANONICAL,program/wave governance,Includes current-status index plus W01/W02/Device Plane evidence
+docs/migration,HISTORICAL_BASELINE_WITH_CURRENT_STATUS_MARKERS,baseline provenance,Migration data retained; current roadmap authority is elsewhere
+docs/registries,ACTIVE_CANONICAL,W00-F registry contract,Live rows are in Drive
+docs/security,ACTIVE_CANONICAL_BASELINE,W00-D security governance,Permanent CI now exists
+packages/contracts,ACTIVE_CANONICAL,W01 + accepted W02 extensions,Versioned package implemented; W02-D draft is not yet canonical
+packages/schemas,ACTIVE_CANONICAL,W01 + accepted W02 extensions,Versioned runtime-schema package implemented
+packages/registries,ACTIVE_CANONICAL,W01 + accepted W02 extensions,Governed static registries package implemented
+reference,REFERENCE_ONLY,non-authoritative,Must not be canonical runtime dependency
+services/agent-runtime,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W05,Legacy Manus reference is provenance only
+services/aurora-gateway,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W14,Gateway runtime not yet accepted
+services/control-core,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W04,Control runtime not yet accepted
+services/executors,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W07,Executor Plane not yet accepted
+services/identity,ACTIVE_CANONICAL,W02-A,Accepted deterministic identity resolution runtime
+services/mobile-gateway,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W14,Device Gateway/session runtime not yet accepted
+services/n8n-bridge,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W09,n8n integration runtime not yet accepted
+services/push-notifications,SCAFFOLD_PLANNED_DEPENDENCY_GATED,future integration owner,No production delivery runtime claimed
+services/realtime-sync,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W14,Realtime runtime not yet accepted
+services/tenant,ACTIVE_CANONICAL,W02-B,Accepted tenant-boundary runtime
+evals,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W18 broad eval/learning runtime,Wave-specific tests may exist earlier under their own owners
+infra,SCAFFOLD_PLANNED_DEPENDENCY_GATED,W03/W17/W19/W20 by concern,No single baseline infra implementation claim
+tools/audit,ACTIVE_CANONICAL,W00-G,Permanent cleanup/audit tooling
+tools/build,ACTIVE_CANONICAL,W00-C,Permanent build gate tooling
+tools/migration,HISTORICAL_OR_DEPRECATED,baseline migration,Not runtime authority
+tools/quality,ACTIVE_CANONICAL,W00-B,Permanent quality gate tooling
+tools/security,ACTIVE_CANONICAL,W00-D,Permanent security gate tooling
+tools/test,ACTIVE_CANONICAL,W00-C,Permanent test gate tooling
+tools/workspace,ACTIVE_CANONICAL,W00 foundation,Monorepo workspace support
