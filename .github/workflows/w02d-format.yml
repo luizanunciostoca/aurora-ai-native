@@ -1,0 +1,45 @@
+name: W02-D Format
+
+on:
+  push:
+    branches:
+      - wave/02d-policy-engine
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Format W02-D sources
+        run: npx prettier --write packages/policy/src/index.ts packages/policy/test/policy-engine.test.ts packages/registries/src/policy/index.ts packages/schemas/src/policy-engine/index.ts
+      - name: Commit formatting if needed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "W02-D files already canonical"
+            exit 0
+          fi
+          unexpected="$(git status --porcelain | grep -vE '^ M (packages/policy/src/index.ts|packages/policy/test/policy-engine.test.ts|packages/registries/src/policy/index.ts|packages/schemas/src/policy-engine/index.ts)$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected files changed during formatting"
+            git status --short
+            exit 1
+          fi
+          git config user.name "aurora-governance-bot"
+          git config user.email "aurora-governance-bot@users.noreply.github.com"
+          git add packages/policy/src/index.ts packages/policy/test/policy-engine.test.ts packages/registries/src/policy/index.ts packages/schemas/src/policy-engine/index.ts
+          git commit -m "style(W02-D): apply canonical formatting"
+          git push origin HEAD:wave/02d-policy-engine
