@@ -19,6 +19,11 @@
       "types": "./dist/packages/policy/src/authority/index.d.ts",
       "require": "./dist/packages/policy/src/authority/index.js",
       "default": "./dist/packages/policy/src/authority/index.js"
+    },
+    "./query": {
+      "types": "./dist/packages/policy/src/query/index.d.ts",
+      "require": "./dist/packages/policy/src/query/index.js",
+      "default": "./dist/packages/policy/src/query/index.js"
     }
   },
   "scripts": {
