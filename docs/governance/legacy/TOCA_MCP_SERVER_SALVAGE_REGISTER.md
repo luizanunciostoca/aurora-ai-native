@@ -1,6 +1,6 @@
 # TOCA MCP SERVER → AURORA SALVAGE REGISTER
 
-Status: `ACTIVE_CANONICAL_PLANNING_INPUT_CANDIDATE`
+Status: `ACTIVE_CANONICAL_PLANNING_INPUT`
 Audit date: 2026-08-31
 Source repository: `luizanunciostoca/toca-mcp-server`
 Audited exact `main`: `8a6cfe055be9b34e498cfbdb481e8232dc51df05`
@@ -106,13 +106,25 @@ These observations are not a substitute for W19 security acceptance.
 
 ## 8. Artifacts
 
-- Drive `TOCA_MCP_SERVER_SALVAGE_CATALOG_2026-08-31.xlsx`
+- `TOCA_MCP_SERVER_SALVAGE_CATALOG_2026-08-31.xlsx`
   - Snapshot
   - Source Areas
-  - Platform Patterns (full curated file-level pattern catalog)
+  - Platform Patterns
   - Wave Handoff
   - Risk Register
 - `TOCA_MCP_SERVER_SALVAGE_AUDIT_SUMMARY.json`
-- Git machine-readable CSV mirrors for source areas, wave handoff and risk register. The full curated platform-pattern catalog remains in the Drive workbook to avoid duplicating a large derived table in Git.
+- this register.
 
 The immutable TOCA Git repository at the exact audited commit is the byte-level source archive; Drive should not become a second source tree.
+
+## 9. Governance acceptance
+
+Accepted into Aurora governance on 2026-08-31.
+
+- Aurora PR: `#57` — `docs(governance): add TOCA MCP live-repository salvage input`
+- Exact accepted PR HEAD: `8b8068a022c6cb3d7ea65e13ce14765c86e402a1`
+- Quality run `33442348643`: `SUCCESS`
+- Test Build run `33442348609`: `SUCCESS`
+- Security run `33442349986`: `SUCCESS`
+- Merge/main SHA: `923222a39b17bf4a4a5849441d76638e330a3aa4`
+- Scope remains governance/planning only. No runtime authority, wave release or direct cross-repository import is granted by this acceptance.
