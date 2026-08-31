@@ -5,20 +5,20 @@ import type {
   Rfc3339Timestamp,
   SubjectRef,
   TenantContext,
-} from '../context/index.js';
-import type { CorrelationId, IdentityId, TenantId } from '../ids/types.js';
-import type { ConsentRecord } from '../consent/index.js';
-import type { JurisdictionContext, JurisdictionRestriction } from '../jurisdiction/index.js';
+} from '../context/index';
+import type { CorrelationId, IdentityId, TenantId } from '../ids/types';
+import type { ConsentRecord } from '../consent/index';
+import type { JurisdictionContext, JurisdictionRestriction } from '../jurisdiction/index';
 import type {
   AuthorityScope,
   OwnerDecision,
   PolicyReference,
   PolicyToken,
-} from '../policy/index.js';
-import type { PurposeContext } from '../purpose/index.js';
-import type { CanonicalError } from '../results/error-semantics.js';
-import type { TenantBoundaryDecision } from '../tenant-boundary/types.js';
-import type { ContractVersion } from '../versioning/types.js';
+} from '../policy/index';
+import type { PurposeContext } from '../purpose/index';
+import type { CanonicalError } from '../results/error-semantics';
+import type { TenantBoundaryDecision } from '../tenant-boundary/types';
+import type { ContractVersion } from '../versioning/types';
 
 export const POLICY_EVALUATION_DECISIONS = ['ALLOW', 'DENY', 'REQUIRE_APPROVAL'] as const;
 export type PolicyEvaluationDecision = (typeof POLICY_EVALUATION_DECISIONS)[number];
