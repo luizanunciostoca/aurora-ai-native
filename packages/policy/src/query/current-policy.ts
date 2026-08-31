@@ -1,3 +1,4 @@
+import type { IdentityId, TenantId } from '@aurora/contracts/ids';
 import type {
   CurrentPolicyLookupRequest,
   CurrentPolicyLookupResult,
@@ -7,30 +8,49 @@ import type { PolicySnapshot } from '@aurora/contracts/policy-engine';
 
 import { uniqueSorted } from './internal';
 
+export interface CurrentPolicySourceRequest {
+  readonly policyReference: string;
+  readonly tenantId: TenantId;
+  readonly actorIdentityId: IdentityId;
+}
+
 /**
  * Read-only adapter boundary. W02-F owns no persistence or policy registry;
- * callers provide a current-policy source and later waves may bind it to their
- * own durable storage without moving persistence into W02.
+ * callers provide a tenant-aware current-policy source and later waves may
+ * bind it to durable storage without moving persistence into W02.
  */
 export interface CurrentPolicySource {
-  getCurrent(policyReference: string): PolicySnapshot | undefined;
+  getCurrent(request: CurrentPolicySourceRequest): PolicySnapshot | undefined;
+}
+
+function baseResult(request: CurrentPolicyLookupRequest) {
+  return {
+    kind: 'CurrentPolicyLookupResult' as const,
+    schemaVersion: request.schemaVersion,
+    expectedPolicy: request.expectedPolicy,
+    correlation: request.correlation,
+    evaluatedAt: request.evaluatedAt,
+    tenant: request.tenant,
+    actor: request.actor,
+    informationalOnly: true as const,
+    authorizesExecution: false as const,
+    requiresExecutionTimeValidation: true as const,
+  };
 }
 
 export function lookupCurrentPolicy(
   request: CurrentPolicyLookupRequest,
   source: CurrentPolicySource,
 ): CurrentPolicyLookupResult {
-  const snapshot = source.getCurrent(request.expectedPolicy.reference);
+  const snapshot = source.getCurrent({
+    policyReference: request.expectedPolicy.reference,
+    tenantId: request.tenant.tenantId,
+    actorIdentityId: request.actor.identityId,
+  });
+
   if (snapshot === undefined) {
     return {
-      kind: 'CurrentPolicyLookupResult',
-      schemaVersion: request.schemaVersion,
-      expectedPolicy: request.expectedPolicy,
-      correlation: request.correlation,
-      evaluatedAt: request.evaluatedAt,
-      informationalOnly: true,
-      authorizesExecution: false,
-      requiresExecutionTimeValidation: true,
+      ...baseResult(request),
       found: false,
       reasons: ['POLICY_NOT_FOUND'],
     };
@@ -38,14 +58,7 @@ export function lookupCurrentPolicy(
 
   if (snapshot.policy.reference !== request.expectedPolicy.reference) {
     return {
-      kind: 'CurrentPolicyLookupResult',
-      schemaVersion: request.schemaVersion,
-      expectedPolicy: request.expectedPolicy,
-      correlation: request.correlation,
-      evaluatedAt: request.evaluatedAt,
-      informationalOnly: true,
-      authorizesExecution: false,
-      requiresExecutionTimeValidation: true,
+      ...baseResult(request),
       found: false,
       reasons: ['POLICY_REFERENCE_MISMATCH'],
     };
@@ -58,14 +71,7 @@ export function lookupCurrentPolicy(
   ]);
 
   return {
-    kind: 'CurrentPolicyLookupResult',
-    schemaVersion: request.schemaVersion,
-    expectedPolicy: request.expectedPolicy,
-    correlation: request.correlation,
-    evaluatedAt: request.evaluatedAt,
-    informationalOnly: true,
-    authorizesExecution: false,
-    requiresExecutionTimeValidation: true,
+    ...baseResult(request),
     found: true,
     currentPolicy: snapshot.policy,
     state: snapshot.state,
