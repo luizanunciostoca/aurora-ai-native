@@ -5,7 +5,10 @@ import type {
   PolicyPrecheckResult,
   RequiredAuthorityDescriptor,
 } from '@aurora/contracts/policy-query';
-import type { PolicyEvaluationRequest, PolicyRule } from '@aurora/contracts/policy-engine';
+import type {
+  PolicyEvaluationRequest,
+  PolicyRule,
+} from '@aurora/contracts/policy-engine';
 
 import { evaluatePolicy, toAuthoritySubjectReference } from '../index';
 import { fingerprint, uniqueSorted } from './internal';
@@ -51,7 +54,8 @@ function requiredAuthority(
   reasons: readonly string[],
 ): RequiredAuthorityDescriptor {
   const required =
-    rules.some((rule) => rule.authorityRequired === true) || reasons.includes('AUTHORITY_REQUIRED');
+    rules.some((rule) => rule.authorityRequired === true) ||
+    reasons.includes('AUTHORITY_REQUIRED');
   if (!required) return { required: false };
   return {
     required: true,
