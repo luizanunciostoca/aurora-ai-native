@@ -55,9 +55,7 @@ function outside(
       evaluatedTenantId: input.context.tenantId,
       actorIdentityId: input.context.actor.identityId,
       matchedBindingCount: targetBindings.length,
-      observedBindingTenantIds: [
-        ...new Set(actorBindings.map((binding) => binding.tenantId)),
-      ],
+      observedBindingTenantIds: [...new Set(actorBindings.map((binding) => binding.tenantId))],
     },
   };
 }
@@ -88,16 +86,13 @@ export function checkTenantBoundary(
     }
   }
 
-  const actorBindings = input.bindings.filter(
-    (binding) => binding.identityId === actor.identityId,
-  );
+  const actorBindings = input.bindings.filter((binding) => binding.identityId === actor.identityId);
   const targetBindings = actorBindings.filter(
     (binding) => binding.tenantId === input.context.tenantId,
   );
 
   if (targetBindings.length === 0) {
-    const reason =
-      actorBindings.length > 0 ? 'CROSS_TENANT_IDENTITY' : 'IDENTITY_NOT_BOUND';
+    const reason = actorBindings.length > 0 ? 'CROSS_TENANT_IDENTITY' : 'IDENTITY_NOT_BOUND';
     return outside(input, reason);
   }
 
