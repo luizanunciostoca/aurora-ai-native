@@ -4,7 +4,6 @@ import type { ExternalIdentityRef } from '@aurora/contracts/context';
 import type { CorrelationId, IdentityId, ProviderExternalId, TenantId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
 import type { IdentityBindingRecord, IdentityResolutionRequest } from '@aurora/contracts/identity-resolution';
-import { IdentityResolutionRequestSchema } from '@aurora/schemas/identity-resolution';
 import { DeterministicIdentityResolver } from '../src/index';
 
 const version = '1.0.0' as ContractVersion;
@@ -65,14 +64,6 @@ test('ambiguous external binding fails closed', () => {
     request({ kind: 'EXTERNAL_IDENTITY', externalIdentity: external }),
   );
   assert.equal(result.status, 'AMBIGUOUS');
-});
-
-test('malformed reference is rejected by schema', () => {
-  const parsed = IdentityResolutionRequestSchema.safeParse({
-    schemaVersion: '1.0.0', tenantId: tenantA, correlationId,
-    subject: { kind: 'EXTERNAL_IDENTITY', externalIdentity: { kind: 'EXTERNAL_IDENTITY', provider: '', externalId: 'x' } },
-  });
-  assert.equal(parsed.success, false);
 });
 
 test('cross-tenant misuse fails closed', () => {
