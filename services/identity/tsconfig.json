@@ -8,8 +8,8 @@
     "declaration": true,
     "baseUrl": ".",
     "paths": {
-      "@aurora/contracts/identity-resolution": ["../../packages/contracts/src/identity-resolution/index.ts"],
-      "@aurora/schemas/identity-resolution": ["../../packages/schemas/src/identity-resolution/identity-resolution.schema.ts"]
+      "@aurora/contracts": ["../../packages/contracts/src/index.ts"],
+      "@aurora/contracts/*": ["../../packages/contracts/src/*/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
