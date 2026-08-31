@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateConsent, type ConsentEvaluationRequest, type ConsentRecord } from '@aurora/contracts/consent';
+import {
+  evaluateConsent,
+  type ConsentEvaluationRequest,
+  type ConsentRecord,
+} from '@aurora/contracts/consent';
 import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
@@ -79,7 +83,12 @@ test('wrong purpose is representable', () => {
   assert.equal(
     evaluateConsent({
       ...request(consent()),
-      purpose: { kind: 'PurposeContext', purposeId: 'sales.crm', version, status: 'ACTIVE' },
+      purpose: {
+        kind: 'PurposeContext',
+        purposeId: 'sales.crm',
+        version,
+        status: 'ACTIVE',
+      },
     }).reason,
     'PURPOSE_MISMATCH',
   );

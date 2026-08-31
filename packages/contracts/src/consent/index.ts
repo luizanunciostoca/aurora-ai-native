@@ -117,7 +117,10 @@ export function evaluateConsent(request: ConsentEvaluationRequest): ConsentEvalu
   if (consent.status === 'REVOKED' || consent.revokedAt) {
     return fail(request, 'CONSENT_REVOKED');
   }
-  if (consent.status === 'EXPIRED' || (consent.expiresAt && consent.expiresAt <= request.evaluatedAt)) {
+  if (
+    consent.status === 'EXPIRED' ||
+    (consent.expiresAt && consent.expiresAt <= request.evaluatedAt)
+  ) {
     return fail(request, 'CONSENT_EXPIRED');
   }
   if (!consent.scope.purposeIds.includes(request.purpose.purposeId)) {

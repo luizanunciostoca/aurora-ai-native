@@ -43,7 +43,11 @@ function parseConsentRecord(value: unknown): ConsentRecord {
   if (record.kind !== 'ConsentRecord') {
     throw new TypeError('ConsentRecord.kind is invalid');
   }
-  if (record.status !== 'ACTIVE' && record.status !== 'EXPIRED' && record.status !== 'REVOKED') {
+  if (
+    record.status !== 'ACTIVE' &&
+    record.status !== 'EXPIRED' &&
+    record.status !== 'REVOKED'
+  ) {
     throw new TypeError('ConsentRecord.status is invalid');
   }
 
