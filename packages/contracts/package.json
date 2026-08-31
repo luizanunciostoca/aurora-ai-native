@@ -21,11 +21,6 @@
       "require": "./dist/actions/index.js",
       "default": "./dist/actions/index.js"
     },
-    "./consent": {
-      "types": "./dist/consent/index.d.ts",
-      "require": "./dist/consent/index.js",
-      "default": "./dist/consent/index.js"
-    },
     "./context": {
       "types": "./dist/context/index.d.ts",
       "require": "./dist/context/index.js",
@@ -46,20 +41,10 @@
       "require": "./dist/ids/index.js",
       "default": "./dist/ids/index.js"
     },
-    "./jurisdiction": {
-      "types": "./dist/jurisdiction/index.d.ts",
-      "require": "./dist/jurisdiction/index.js",
-      "default": "./dist/jurisdiction/index.js"
-    },
     "./policy": {
       "types": "./dist/policy/index.d.ts",
       "require": "./dist/policy/index.js",
       "default": "./dist/policy/index.js"
-    },
-    "./purpose": {
-      "types": "./dist/purpose/index.d.ts",
-      "require": "./dist/purpose/index.js",
-      "default": "./dist/purpose/index.js"
     },
     "./receipts": {
       "types": "./dist/receipts/index.d.ts",
