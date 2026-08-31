@@ -2,7 +2,7 @@
 
 Date: 2026-08-31  
 Authority: CHAT W02 PROGRAM COORDINATOR  
-Starting SHA: `eb46df1c3a1ab98a6ad6d091178091cb880a70e7`  
+Coordination starting SHA: `eb46df1c3a1ab98a6ad6d091178091cb880a70e7`  
 Gate: **W02 REALITY GATE 1 — AUTHORITY VERIFIED**  
 Minimum maturity: **T1 Contract + T2 Simulation**
 
@@ -10,116 +10,109 @@ Minimum maturity: **T1 Contract + T2 Simulation**
 
 - Deny by default and least authority.
 - Intelligence/model confidence cannot create or elevate authorization.
-- Equivalent canonical inputs + current-policy snapshot/version produce reproducible decisions/reasons.
+- Equivalent canonical inputs + policy snapshot/version produce reproducible decisions/reasons.
 - Invalid/missing/mismatched authority fails closed.
-- No external provider or real side effect is invoked by gate tests.
-- Authorization-affecting outputs have correlation and sufficient audit/reproduction evidence.
-- No duplicate W01 primitive or local W02 decision vocabulary.
+- No external provider/device or real side effect is invoked by W02 gate tests.
+- Authorization-affecting outputs carry correlation and sufficient audit/reproduction evidence.
+- No duplicate W01 primitive or competing W02 decision vocabulary.
 
-## Subwave acceptance
+## Subwave acceptance state
 
-### W02-A
+### W02-A — `COMPLETE_ACCEPTED_MERGED`
 
-Pass requires deterministic known/not-found/ambiguous identity resolution, separation of provider/external refs from canonical IdentityId, no authority creation, correlation/evidence, contract/schema parity and no identity-graph persistence.
+PR #39. Deterministic identity resolution, provider/canonical identity separation, no authority creation, schema/runtime evidence and no identity-graph persistence accepted.
 
-**Current state:** `COMPLETE_ACCEPTED_MERGED` via PR #39. Accepted head `4f84f20a1285ec3727591ed2ad89f90a9f988f1d`; PB1 technical acceptance main `b48953cd4a7913e154fe2804248217ffe0c0952d`.
+### W02-B — `COMPLETE_ACCEPTED_MERGED`
 
-### W02-B
+PR #37. Explicit identity/tenant binding and fail-closed wrong/missing/ambiguous/cross-tenant behavior accepted.
 
-Pass requires explicit identity-tenant binding, wrong/missing/ambiguous/cross-tenant cases failing closed, no default-tenant fallback, W01 IDs reused and correlation/evidence present.
+### W02-C — `COMPLETE_ACCEPTED_MERGED`
 
-**Current state:** `COMPLETE_ACCEPTED_MERGED` via PR #37.
+PR #36. Explicit consent/purpose/jurisdiction semantics accepted without W03 persistence.
 
-### W02-C
+### W02-D — `IN_PROGRESS_DRAFT_PR_41`
 
-Pass requires explicit active/revoked/expired/missing consent semantics, deterministic purpose match/mismatch, explicit jurisdiction restrictions, fail closed when required evidence is absent/incompatible, and no W03 persistence.
+Pass requires exactly one policy decision vocabulary (`ALLOW | DENY | REQUIRE_APPROVAL`), default deny, deterministic conflict handling, replay stability, explicit policy version/reference/reasons/evidence, and zero confidence-based authority elevation or external side effect.
 
-**Current state:** `COMPLETE_ACCEPTED_MERGED` via PR #36.
+Draft PR #41 is not acceptance. Before acceptance it must reconcile against then-current `main` and satisfy the W02 ownership matrix. At this audit the draft touches root `package-lock.json` and `.github/workflows/w02d-format.yml`, which are coordinator-controlled surfaces. Those changes must be removed/rebuilt under coordinator publication or explicitly transferred/reconciled before final exact-head acceptance.
 
-### W02-D
+### W02-E — `DEPENDENCY_GATED_PB2`
 
-Pass requires exactly one W02 decision vocabulary (`ALLOW | DENY | REQUIRE_APPROVAL`), default deny, deterministic conflict handling, replay stability, explicit policy version/reference/reasons, no confidence-based permission elevation and no provider/persistence side effect.
+Pass requires exact tenant/subject/action/scope/constraints/time/current-policy validation. Expired, revoked/invalid, wrong-tenant, wrong-subject, wrong-scope/action, stale/incompatible policy/version and constraint violations fail closed. `SubjectRef` ↔ `AuthoritySubjectReference` comparison is explicit/tested. Token is never a provider credential.
 
-**Current state:** `READY`; PB1 is complete/released. W02-D implementation has not been performed by the coordinator.
+### W02-F — `DEPENDENCY_GATED_PB3`
 
-### W02-E
+Pass requires read-only/side-effect-free current-policy query/precheck, responses composing D/E canonical types, explicit current policy/correlation/reasons/evidence and no authority minting. Precheck is informational only.
 
-Pass requires valid authority only inside exact tenant/subject/action/scope/constraints/time/current-policy bounds. Expired, revoked/invalid, wrong-tenant, wrong-subject, wrong-scope/action, stale/incompatible policy/version and constraint violations fail closed. `SubjectRef` to W01 `AuthoritySubjectReference` comparison must be explicit/tested. Token is never a provider credential.
+### W02-G — `DEPENDENCY_GATED_PB4`
 
-**Current state:** `DEPENDENCY_GATED_PB2`.
+Pass requires clean consumer compilation/public exports, schema parity, duplicate/cycle/dependency/legacy-runtime audits, full T1/T2 suite, official gates on exact acceptance main and final Drive registry/evidence convergence.
 
-### W02-F
+## Publication barriers
 
-Pass requires read-only/side-effect-free current-policy query/precheck, responses composing D/E canonical types, explicit current policy/correlation/reasons/evidence, no authority minting from precheck and no lane/router/confidence/planner behavior.
+- PB0: `COMPLETE`.
+- PB1: `COMPLETE_RELEASED` on technical acceptance main `b48953cd4a7913e154fe2804248217ffe0c0952d`.
+- PB2: `PENDING` — D not accepted/published.
+- PB3: `PENDING`.
+- PB4: `PENDING`.
+- PB5: `PENDING`.
 
-**Current state:** `DEPENDENCY_GATED_PB3`.
-
-### W02-G
-
-Pass requires clean consumer compilation/public exports, schema parity, duplicate/cycle/dependency/legacy-runtime audits, full T1/T2 suite, official repository gates on exact acceptance SHA and final Drive evidence/registry synchronization.
-
-**Current state:** `DEPENDENCY_GATED_PB4`. Reality Gate execution remains assigned to W02-G after A-F convergence.
+PB1 completion is not Reality Gate completion and does not mark W02 complete.
 
 ## T1 — Contract gate
 
-All must pass on the exact acceptance SHA:
+All must pass on the exact final W02 acceptance SHA:
 
 - canonical public exports resolve;
 - consumer fixture type compilation;
-- runtime schema parse/reject parity for new serialized contracts;
+- runtime schema parse/reject parity for serialized contracts;
 - one unique source for frozen W01 names;
 - one unique `PolicyEvaluationDecision` vocabulary;
 - no package dependency cycle;
 - no canonical W02 runtime dependency on `reference/**` or `**/legacy-reference/**`;
-- no accidental W03/W04/W05/W06 feature implementation.
+- no accidental W03/W04/W05/W06/W07+ feature implementation;
+- no unresolved ownership violation in shared/root/CI/publication surfaces.
 
 ## T2 — Simulation scenarios
 
 | ID | Scenario | Expected |
 |---|---|---|
-| S01 | valid resolved identity + tenant + applicable consent/purpose/jurisdiction + current policy allow + valid authority | `ALLOW` with policy/correlation/reasons/evidence |
+| S01 | valid identity + tenant + applicable consent/purpose/jurisdiction + current policy allow + valid authority | `ALLOW` with policy/correlation/reasons/evidence |
 | S02 | current policy explicitly denies | `DENY`; no authority/confidence override |
-| S03 | policy requires owner approval without satisfying current decision evidence | `REQUIRE_APPROVAL` |
-| S04 | expired authority | non-ALLOW / fail closed with expiry reason |
-| S05 | wrong tenant | `DENY` before authority elevation |
+| S03 | policy requires approval without sufficient current decision evidence | `REQUIRE_APPROVAL` |
+| S04 | expired authority | non-ALLOW / fail closed |
+| S05 | wrong tenant | `DENY` |
 | S06 | wrong subject | `DENY` |
 | S07 | wrong action/scope | `DENY` |
 | S08 | revoked OwnerDecision or malformed/invalid PolicyToken | `DENY` |
-| S09 | required consent missing | non-ALLOW; never implicit allow |
+| S09 | required consent missing | non-ALLOW |
 | S10 | purpose mismatch | non-ALLOW |
-| S11 | jurisdiction restriction | non-ALLOW with jurisdiction reason/evidence |
+| S11 | jurisdiction restriction | non-ALLOW with evidence |
 | S12 | unresolved policy conflict | `DENY` |
 | S13 | identity not found/ambiguous | non-ALLOW; no fallback authority |
 | S14 | historically valid/stale authority while current policy denies | `DENY`; current policy wins |
-| S15 | DENY/REQUIRE_APPROVAL case plus synthetic high model confidence/reasoning/route metadata | exactly same authority/policy result |
-| S16 | repeated identical canonical request + fixed policy snapshot | identical normalized decision/reason semantics |
-| S17 | authority evidence from tenant A injected into tenant B request | `DENY` |
-| S18 | F precheck | result without provider/executor call, persistence write, external mutation or authority minting |
-| S19 | malformed/incompatible subject/scope reference | schema reject or deterministic `DENY`; never coercion to allow |
+| S15 | DENY/REQUIRE_APPROVAL + synthetic high confidence/reasoning metadata | identical authority result |
+| S16 | repeated identical canonical request + fixed policy snapshot | identical normalized decision/reasons/fingerprint |
+| S17 | authority from tenant A injected into tenant B request | `DENY` |
+| S18 | F precheck | no provider/executor call, persistence write, external mutation or authority minting |
+| S19 | malformed/incompatible subject/scope reference | schema reject or deterministic non-ALLOW |
 | S20 | missing current-policy context | `DENY`; never stale permissive fallback |
 
 ## Reproducibility evidence
 
-A T2 run records at minimum exact code SHA, contract/schema versions, current policy reference/version/snapshot identity, normalized request/action/scope, tenant, resolved subject/actor refs, applicable consent/purpose/jurisdiction refs, authority evidence refs, correlation, normalized decision, reason codes and deterministic input fingerprint/reference. Secrets, provider credentials and private model chain-of-thought are excluded.
+A T2 run records exact code SHA, contract/schema versions, policy reference/version/snapshot identity, normalized request/action/scope, tenant, subject/actor refs, relevant consent/purpose/jurisdiction refs, authority evidence refs, correlation, decision, reason codes and deterministic input fingerprint/reference. Secrets, provider credentials and private model chain-of-thought are excluded.
 
 ## Gate result rule
 
 - T1 PASS + T2 PASS => `REALITY_GATE_1_AUTHORITY_VERIFIED`.
-- Any safety/authority negative case that unexpectedly returns ALLOW => blocking failure.
+- Any safety/authority negative case unexpectedly returning ALLOW => blocking failure.
 - Missing deterministic replay evidence => blocking failure.
-- Any real external side effect => blocking failure and W02 scope violation.
+- Any real external side effect => blocking scope violation.
+- Any unresolved ownership drift in final integration surfaces => blocking acceptance failure.
 
-At W02-00, the gate definition was completed. Execution remains dependency-gated to W02-G after A-F convergence.
+Reality Gate execution remains dependency-gated to W02-G after A-F convergence. ADR-002 Device Plane planning does not weaken or replace this gate.
 
-## Current publication-barrier milestone
+## PB1 evidence
 
-- PB0: `COMPLETE`
-- PB1: `COMPLETE_RELEASED` on technical acceptance main `b48953cd4a7913e154fe2804248217ffe0c0952d`
-- PB2: `PENDING`
-- PB3: `PENDING`
-- PB4: `PENDING`
-- PB5: `PENDING`
-
-PB1 evidence: accepted W02-A/PB1 head `4f84f20a1285ec3727591ed2ad89f90a9f988f1d` passed Quality `33417131319`, Test Build `33417131305`, Security `33417131803`; post-merge technical main passed Quality `33417242995`, Test Build `33417242973`, Security `33417243977`.
-
-PB1 completion does not constitute `REALITY_GATE_1_AUTHORITY_VERIFIED` and does not mark W02 complete.
+Accepted W02-A/PB1 head `4f84f20a1285ec3727591ed2ad89f90a9f988f1d`: Quality `33417131319`, Test Build `33417131305`, Security `33417131803` — SUCCESS.  
+Post-merge technical main `b48953cd4a7913e154fe2804248217ffe0c0952d`: Quality `33417242995`, Test Build `33417242973`, Security `33417243977` — SUCCESS.
