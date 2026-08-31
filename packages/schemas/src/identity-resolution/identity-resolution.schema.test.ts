@@ -1,5 +1,3 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
 import {
   IdentityResolutionRequestSchema,
   IdentityResolutionResultSchema,
@@ -19,18 +17,22 @@ const evidence = {
   authorityGranted: false,
 };
 
-test('accepts canonical identity resolution request', () => {
-  const parsed = IdentityResolutionRequestSchema.parse({
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+export function runIdentityResolutionSchemaTests(): void {
+  const request = IdentityResolutionRequestSchema.parse({
     schemaVersion: '1.0.0',
     tenantId,
     correlationId,
     subject: { kind: 'IDENTITY', identityId },
   });
-  assert.equal(parsed.subject.kind, 'IDENTITY');
-});
+  assert(request.subject.kind === 'IDENTITY', 'canonical identity request must parse');
 
-test('rejects malformed external identity reference', () => {
-  const parsed = IdentityResolutionRequestSchema.safeParse({
+  const malformedExternal = IdentityResolutionRequestSchema.safeParse({
     schemaVersion: '1.0.0',
     tenantId,
     correlationId,
@@ -39,22 +41,18 @@ test('rejects malformed external identity reference', () => {
       externalIdentity: { kind: 'EXTERNAL_IDENTITY', provider: '', externalId: 'provider-id' },
     },
   });
-  assert.equal(parsed.success, false);
-});
+  assert(!malformedExternal.success, 'malformed external identity must be rejected');
 
-test('rejects unsupported expected identity kind', () => {
-  const parsed = IdentityResolutionRequestSchema.safeParse({
+  const unsupportedKind = IdentityResolutionRequestSchema.safeParse({
     schemaVersion: '1.0.0',
     tenantId,
     correlationId,
     subject: { kind: 'IDENTITY', identityId },
     expectedKind: 'OWNER',
   });
-  assert.equal(parsed.success, false);
-});
+  assert(!unsupportedKind.success, 'unsupported expected identity kind must be rejected');
 
-test('accepts resolved identity result with no authority', () => {
-  const parsed = IdentityResolutionResultSchema.parse({
+  const result = IdentityResolutionResultSchema.parse({
     status: 'RESOLVED',
     identity: {
       identityId,
@@ -64,12 +62,10 @@ test('accepts resolved identity result with no authority', () => {
     },
     evidence,
   });
-  assert.equal(parsed.status, 'RESOLVED');
-  assert.equal(parsed.evidence.authorityGranted, false);
-});
+  assert(result.status === 'RESOLVED', 'resolved identity result must parse');
+  assert(result.evidence.authorityGranted === false, 'resolution must not grant authority');
 
-test('rejects any result claiming identity resolution grants authority', () => {
-  const parsed = IdentityResolutionResultSchema.safeParse({
+  const elevatedAuthority = IdentityResolutionResultSchema.safeParse({
     status: 'RESOLVED',
     identity: {
       identityId,
@@ -79,11 +75,9 @@ test('rejects any result claiming identity resolution grants authority', () => {
     },
     evidence: { ...evidence, authorityGranted: true },
   });
-  assert.equal(parsed.success, false);
-});
+  assert(!elevatedAuthority.success, 'authorityGranted=true must be rejected');
 
-test('rejects resolved result with non-singleton candidate count', () => {
-  const parsed = IdentityResolutionResultSchema.safeParse({
+  const nonSingletonResult = IdentityResolutionResultSchema.safeParse({
     status: 'RESOLVED',
     identity: {
       identityId,
@@ -93,5 +87,7 @@ test('rejects resolved result with non-singleton candidate count', () => {
     },
     evidence: { ...evidence, candidateCount: 2 },
   });
-  assert.equal(parsed.success, false);
-});
+  assert(!nonSingletonResult.success, 'resolved result must have exactly one candidate');
+}
+
+runIdentityResolutionSchemaTests();
