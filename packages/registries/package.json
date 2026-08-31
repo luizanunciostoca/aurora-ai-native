@@ -19,6 +19,11 @@
       "require": "./dist/ids/index.js",
       "default": "./dist/ids/index.js"
     },
+    "./policy": {
+      "types": "./dist/policy/index.d.ts",
+      "require": "./dist/policy/index.js",
+      "default": "./dist/policy/index.js"
+    },
     "./versioning": {
       "types": "./dist/versioning/index.d.ts",
       "require": "./dist/versioning/index.js",
