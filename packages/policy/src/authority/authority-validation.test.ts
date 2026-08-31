@@ -209,9 +209,7 @@ const matrix: readonly { readonly name: string; readonly run: () => void }[] = [
     name: 'expired token',
     run: () =>
       expectInvalid(
-        validationRequest(
-          token({ expiresAt: '2026-08-31T17:59:59.000Z' as Rfc3339Timestamp }),
-        ),
+        validationRequest(token({ expiresAt: '2026-08-31T17:59:59.000Z' as Rfc3339Timestamp })),
         'TOKEN_EXPIRED',
       ),
   },
@@ -247,7 +245,10 @@ const matrix: readonly { readonly name: string; readonly run: () => void }[] = [
   {
     name: 'wrong scope',
     run: () =>
-      expectInvalid(validationRequest(token({ scope: ['instagram:read'] })), 'TOKEN_SCOPE_INSUFFICIENT'),
+      expectInvalid(
+        validationRequest(token({ scope: ['instagram:read'] })),
+        'TOKEN_SCOPE_INSUFFICIENT',
+      ),
   },
   {
     name: 'no scope widening',
@@ -290,7 +291,9 @@ const matrix: readonly { readonly name: string; readonly run: () => void }[] = [
     name: 'policy reference mismatch',
     run: () =>
       expectInvalid(
-        validationRequest(token({ policy: { reference: 'policy:other', version: policy.version } })),
+        validationRequest(
+          token({ policy: { reference: 'policy:other', version: policy.version } }),
+        ),
         'TOKEN_POLICY_REFERENCE_MISMATCH',
       ),
   },
@@ -351,7 +354,10 @@ const matrix: readonly { readonly name: string; readonly run: () => void }[] = [
     run: () => {
       const result = evaluateAuthority(
         authorityRequest(
-          policyRequest({ policyToken: null, ownerDecision: ownerDecision({ decision: 'DENIED' }) }),
+          policyRequest({
+            policyToken: null,
+            ownerDecision: ownerDecision({ decision: 'DENIED' }),
+          }),
         ),
       );
       assert(!result.authorized, 'DENIED OwnerDecision authorized operation');
@@ -363,7 +369,10 @@ const matrix: readonly { readonly name: string; readonly run: () => void }[] = [
     run: () => {
       const result = evaluateAuthority(
         authorityRequest(
-          policyRequest({ policyToken: null, ownerDecision: ownerDecision({ decision: 'REVOKED' }) }),
+          policyRequest({
+            policyToken: null,
+            ownerDecision: ownerDecision({ decision: 'REVOKED' }),
+          }),
         ),
       );
       assert(!result.authorized, 'REVOKED OwnerDecision authorized operation');
