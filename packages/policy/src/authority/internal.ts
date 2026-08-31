@@ -1,9 +1,5 @@
 import type { ActorRef, Rfc3339Timestamp } from '@aurora/contracts/context';
-import type {
-  AuthorityConstraints,
-  OwnerDecision,
-  PolicyToken,
-} from '@aurora/contracts/policy';
+import type { AuthorityConstraints, OwnerDecision, PolicyToken } from '@aurora/contracts/policy';
 
 const POLICY_TOKEN_KEYS = new Set([
   'kind',
@@ -57,7 +53,10 @@ export function asRecord(value: unknown): Readonly<Record<string, unknown>> | un
   return value as Readonly<Record<string, unknown>>;
 }
 
-function hasOnlyKeys(record: Readonly<Record<string, unknown>>, allowed: ReadonlySet<string>): boolean {
+function hasOnlyKeys(
+  record: Readonly<Record<string, unknown>>,
+  allowed: ReadonlySet<string>,
+): boolean {
   return Object.keys(record).every((key) => allowed.has(key));
 }
 
@@ -120,13 +119,16 @@ function validPolicyReference(value: unknown): boolean {
 
 function validTenant(value: unknown): boolean {
   const record = asRecord(value);
-  return record !== undefined && Object.keys(record).length === 1 && nonEmptyString(record.tenantId);
+  return (
+    record !== undefined && Object.keys(record).length === 1 && nonEmptyString(record.tenantId)
+  );
 }
 
 function validCorrelation(value: unknown): boolean {
   const record = asRecord(value);
   if (!record || !nonEmptyString(record.correlationId)) return false;
-  if (!Object.keys(record).every((key) => key === 'correlationId' || key === 'causation')) return false;
+  if (!Object.keys(record).every((key) => key === 'correlationId' || key === 'causation'))
+    return false;
   if (record.causation === undefined) return true;
   const causation = asRecord(record.causation);
   return (
@@ -138,7 +140,8 @@ function validCorrelation(value: unknown): boolean {
 
 function validActor(value: unknown): value is ActorRef {
   const record = asRecord(value);
-  if (!record || !['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM'].includes(String(record.kind))) return false;
+  if (!record || !['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM'].includes(String(record.kind)))
+    return false;
   if (!nonEmptyString(record.identityId)) return false;
   if (
     !Object.keys(record).every(
@@ -161,9 +164,7 @@ function validActor(value: unknown): value is ActorRef {
 function structurallyValidSubjectReference(value: unknown): boolean {
   const record = asRecord(value);
   return (
-    record !== undefined &&
-    Object.keys(record).length === 1 &&
-    nonEmptyString(record.reference)
+    record !== undefined && Object.keys(record).length === 1 && nonEmptyString(record.reference)
   );
 }
 
@@ -179,8 +180,10 @@ export function validPolicyTokenShape(value: unknown): value is PolicyToken {
   if (!validPolicyReference(token.policy) || !validConstraints(token.constraints)) return false;
   if (!['OWNER_DECISION', 'POLICY_RULE'].includes(String(token.authorityClass))) return false;
   if (!validCorrelation(token.correlation)) return false;
-  if (token.decisionReference !== undefined && !nonEmptyString(token.decisionReference)) return false;
-  if (token.authorityClass === 'OWNER_DECISION' && !nonEmptyString(token.decisionReference)) return false;
+  if (token.decisionReference !== undefined && !nonEmptyString(token.decisionReference))
+    return false;
+  if (token.authorityClass === 'OWNER_DECISION' && !nonEmptyString(token.decisionReference))
+    return false;
   return true;
 }
 
@@ -189,10 +192,12 @@ export function validOwnerDecisionShape(value: unknown): value is OwnerDecision 
   if (!decision || !hasOnlyKeys(decision, OWNER_DECISION_KEYS)) return false;
   if (decision.kind !== 'OWNER_DECISION') return false;
   if (!nonEmptyString(decision.schemaVersion) || !nonEmptyString(decision.decisionId)) return false;
-  if (!structurallyValidSubjectReference(decision.subject) || !validActor(decision.actor)) return false;
+  if (!structurallyValidSubjectReference(decision.subject) || !validActor(decision.actor))
+    return false;
   if (!validTenant(decision.tenant) || !validTimestamp(decision.decidedAt)) return false;
   if (!validScope(decision.scope) || !validConstraints(decision.constraints)) return false;
-  if (!['APPROVED', 'DENIED', 'REVOKED', 'EXPIRED'].includes(String(decision.decision))) return false;
+  if (!['APPROVED', 'DENIED', 'REVOKED', 'EXPIRED'].includes(String(decision.decision)))
+    return false;
   if (decision.expiresAt !== undefined && !validTimestamp(decision.expiresAt)) return false;
   if (
     decision.decision === 'APPROVED' &&
