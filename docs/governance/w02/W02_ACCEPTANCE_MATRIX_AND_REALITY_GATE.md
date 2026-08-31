@@ -22,29 +22,43 @@ Minimum maturity: **T1 Contract + T2 Simulation**
 
 Pass requires deterministic known/not-found/ambiguous identity resolution, separation of provider/external refs from canonical IdentityId, no authority creation, correlation/evidence, contract/schema parity and no identity-graph persistence.
 
+**Current state:** `COMPLETE_ACCEPTED_MERGED` via PR #39. Accepted head `4f84f20a1285ec3727591ed2ad89f90a9f988f1d`; PB1 technical acceptance main `b48953cd4a7913e154fe2804248217ffe0c0952d`.
+
 ### W02-B
 
 Pass requires explicit identity-tenant binding, wrong/missing/ambiguous/cross-tenant cases failing closed, no default-tenant fallback, W01 IDs reused and correlation/evidence present.
+
+**Current state:** `COMPLETE_ACCEPTED_MERGED` via PR #37.
 
 ### W02-C
 
 Pass requires explicit active/revoked/expired/missing consent semantics, deterministic purpose match/mismatch, explicit jurisdiction restrictions, fail closed when required evidence is absent/incompatible, and no W03 persistence.
 
+**Current state:** `COMPLETE_ACCEPTED_MERGED` via PR #36.
+
 ### W02-D
 
 Pass requires exactly one W02 decision vocabulary (`ALLOW | DENY | REQUIRE_APPROVAL`), default deny, deterministic conflict handling, replay stability, explicit policy version/reference/reasons, no confidence-based permission elevation and no provider/persistence side effect.
+
+**Current state:** `READY`; PB1 is complete/released. W02-D implementation has not been performed by the coordinator.
 
 ### W02-E
 
 Pass requires valid authority only inside exact tenant/subject/action/scope/constraints/time/current-policy bounds. Expired, revoked/invalid, wrong-tenant, wrong-subject, wrong-scope/action, stale/incompatible policy/version and constraint violations fail closed. `SubjectRef` to W01 `AuthoritySubjectReference` comparison must be explicit/tested. Token is never a provider credential.
 
+**Current state:** `DEPENDENCY_GATED_PB2`.
+
 ### W02-F
 
 Pass requires read-only/side-effect-free current-policy query/precheck, responses composing D/E canonical types, explicit current policy/correlation/reasons/evidence, no authority minting from precheck and no lane/router/confidence/planner behavior.
 
+**Current state:** `DEPENDENCY_GATED_PB3`.
+
 ### W02-G
 
 Pass requires clean consumer compilation/public exports, schema parity, duplicate/cycle/dependency/legacy-runtime audits, full T1/T2 suite, official repository gates on exact acceptance SHA and final Drive evidence/registry synchronization.
+
+**Current state:** `DEPENDENCY_GATED_PB4`. Reality Gate execution remains assigned to W02-G after A-F convergence.
 
 ## T1 — Contract gate
 
@@ -95,4 +109,17 @@ A T2 run records at minimum exact code SHA, contract/schema versions, current po
 - Missing deterministic replay evidence => blocking failure.
 - Any real external side effect => blocking failure and W02 scope violation.
 
-At W02-00, the gate definition is complete; execution remains dependency-gated to W02-G after A-F convergence.
+At W02-00, the gate definition was completed. Execution remains dependency-gated to W02-G after A-F convergence.
+
+## Current publication-barrier milestone
+
+- PB0: `COMPLETE`
+- PB1: `COMPLETE_RELEASED` on technical acceptance main `b48953cd4a7913e154fe2804248217ffe0c0952d`
+- PB2: `PENDING`
+- PB3: `PENDING`
+- PB4: `PENDING`
+- PB5: `PENDING`
+
+PB1 evidence: accepted W02-A/PB1 head `4f84f20a1285ec3727591ed2ad89f90a9f988f1d` passed Quality `33417131319`, Test Build `33417131305`, Security `33417131803`; post-merge technical main passed Quality `33417242995`, Test Build `33417242973`, Security `33417243977`.
+
+PB1 completion does not constitute `REALITY_GATE_1_AUTHORITY_VERIFIED` and does not mark W02 complete.
