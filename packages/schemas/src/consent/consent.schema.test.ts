@@ -2,7 +2,7 @@ import {
   evaluateConsent,
   type ConsentEvaluationRequest,
   type ConsentRecord,
-} from '@aurora/contracts/consent';
+} from '../../../contracts/src/consent';
 import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
