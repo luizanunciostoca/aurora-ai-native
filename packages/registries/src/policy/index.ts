@@ -19,9 +19,9 @@ function keyOf(reference: PolicyReference): string {
  * The adapter is intentionally structural/generic so W02-D does not require
  * publishing the new policy-engine contract subpath before coordinator-owned PB2.
  */
-export class InMemoryPolicySnapshotRegistry<TSnapshot extends PolicySnapshotLike>
-  implements PolicySnapshotRegistry<TSnapshot>
-{
+export class InMemoryPolicySnapshotRegistry<
+  TSnapshot extends PolicySnapshotLike,
+> implements PolicySnapshotRegistry<TSnapshot> {
   readonly #snapshots: ReadonlyMap<string, TSnapshot>;
 
   constructor(snapshots: readonly TSnapshot[]) {
