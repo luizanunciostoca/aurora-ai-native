@@ -3,7 +3,7 @@
 Date: 2026-08-31  
 Authority: CHAT W02 PROGRAM COORDINATOR  
 Coordination starting SHA: `eb46df1c3a1ab98a6ad6d091178091cb880a70e7`  
-PB1 technical acceptance: `b48953cd4a7913e154fe2804248217ffe0c0952d`
+Current implementation main at W02-E acceptance: `17e452356abd6e43f959a2cbb0bcf47de35abbfd`
 
 ## Canonical DAG
 
@@ -14,9 +14,9 @@ W02-00
   └─> W02-C ─┘
 ```
 
-Draft code is never a publication barrier. D/E/F/G are released only by accepted/published predecessors and coordinator-controlled publication evidence.
+Draft code is never a publication barrier. A dependent stage is released only by accepted/published predecessors plus coordinator-controlled publication evidence.
 
-## Current state
+## Current authoritative state
 
 | Stage | State | Evidence / guard |
 |---|---|---|
@@ -24,71 +24,82 @@ Draft code is never a publication barrier. D/E/F/G are released only by accepted
 | W02-A | `COMPLETE_ACCEPTED_MERGED` | PR #39; accepted head `4f84f20a1285ec3727591ed2ad89f90a9f988f1d` |
 | W02-B | `COMPLETE_ACCEPTED_MERGED` | PR #37 |
 | W02-C | `COMPLETE_ACCEPTED_MERGED` | PR #36 |
-| PB1 | `COMPLETE_RELEASED` | technical main `b48953cd4a7913e154fe2804248217ffe0c0952d` |
-| W02-D | `IN_PROGRESS_DRAFT_PR_41` | branch `wave/02d-policy-engine`; not accepted |
-| PB2 | `PENDING` | requires accepted/published D |
-| W02-E | `DEPENDENCY_GATED_PB2` | no implementation acceptance before PB2 |
-| PB3 | `PENDING` | requires accepted/published E |
-| W02-F | `DEPENDENCY_GATED_PB3` | precheck APIs only after PB3 |
+| PB1 | `COMPLETE_RELEASED` | immutable technical main `b48953cd4a7913e154fe2804248217ffe0c0952d` |
+| W02-D | `COMPLETE_ACCEPTED_MERGED` | PR #46; exact head `e9ca04a4b5ffe66619f092bd37614c68b7aa2600` |
+| PB2 | `COMPLETE_RELEASED` | PR #47; exact publication head `2dd9d77e1062ae03d95268bd2de99b28376878fc` |
+| W02-E | `COMPLETE_ACCEPTED_MERGED` | PR #50; exact accepted/merged SHA `17e452356abd6e43f959a2cbb0bcf47de35abbfd` |
+| PB3 | `ELIGIBLE_NOT_EXECUTED` | E accepted; coordinator publication still required |
+| W02-F | `DEPENDENCY_GATED_PB3 / NOT_STARTED` | precheck APIs only after PB3 |
 | PB4 | `PENDING` | requires accepted F and A-F convergence |
 | W02-G | `DEPENDENCY_GATED_PB4` | final integration + Reality Gate execution |
 | PB5 | `PENDING` | exact-main final evidence + Drive convergence |
 
+Historical PR #41 remains superseded W02-D draft evidence. It is not current state.
+
 ## Stage requirements
 
-| Stage | Hard dependency | Required published output | Release condition |
+| Stage | Hard dependency | Required output | Release / acceptance condition |
 |---|---|---|---|
-| W02-00 | W01 ACCEPTED | audit, charter, ownership, DAG, acceptance/reality gate | coordination accepted + Drive synchronized |
-| W02-A | W02-00 | identity-resolution contracts/schemas/runtime | accepted/merged — satisfied |
-| W02-B | W02-00; A only if consumed | tenant boundary/binding contracts/schemas/runtime | accepted/merged — satisfied |
-| W02-C | W02-00 | consent/purpose/jurisdiction contracts/schemas/registries | accepted/merged — satisfied |
-| PB1 | A+B+C accepted | public exports + consumer fixture | complete — satisfied |
-| W02-D | PB1 | deterministic policy evaluation contracts/core | exact-head replay/default-deny/conflict evidence + current-main reconciliation |
-| PB2 | D accepted | D public contracts/package exports | exact PB2 SHA recorded by coordinator |
-| W02-E | PB2 + accepted A/B/C/D | PolicyToken/OwnerDecision validation/evaluation | full fail-closed matrix |
-| PB3 | E accepted | E public contracts/exports | exact PB3 SHA recorded |
-| W02-F | PB3 | current-policy query/precheck API | side-effect-free + consumer tests |
+| W02-00 | W01 accepted | audit, charter, ownership, DAG, acceptance/reality gate | satisfied |
+| W02-A | W02-00 | identity-resolution contracts/schemas/runtime | satisfied |
+| W02-B | W02-00; A if consumed | tenant boundary/binding contracts/schemas/runtime | satisfied |
+| W02-C | W02-00 | consent/purpose/jurisdiction contracts/schemas/registries | satisfied |
+| PB1 | A+B+C accepted | public exports + consumer fixture | satisfied |
+| W02-D | PB1 | deterministic policy evaluation contracts/core | satisfied; exact-head replay/default-deny/conflict evidence |
+| PB2 | D accepted | D public contracts/package exports | satisfied under coordinator publication |
+| W02-E | PB2 + accepted A/B/C/D | PolicyToken/OwnerDecision validation/evaluation | satisfied; fail-closed attack/negative matrix |
+| PB3 | E accepted | E public contracts/schemas/package exports + consumer boundary | **not executed**; exact PB3 SHA + gates required |
+| W02-F | PB3 | current-policy query/precheck API | side-effect-free + informational-only + consumer tests |
 | PB4 | F accepted | A-F converged main | exact converged SHA recorded |
 | W02-G | PB4 | integrated exports/tests/Reality Gate evidence | T1+T2 + official gates |
-| PB5 | G merged | final exact-main evidence + Drive registry convergence | W02 COMPLETE/ACCEPTED |
+| PB5 | G merged | exact-main evidence + Drive registry convergence | W02 complete/accepted |
 
-## W02-D current-main reconciliation requirement
+## Accepted D / PB2 / E chain
 
-Draft PR #41 was created from `c4f25eb41fcb7ff9e390466146ebdeb8239bfe6f`. The audit baseline for the documentation cleanup is later main `f0a4c2e00ca3eee6e5d9d52489d75a614bd799ae`.
+W02-D acceptance:
 
-Before W02-D acceptance:
+- PR #46.
+- exact head `e9ca04a4b5ffe66619f092bd37614c68b7aa2600`.
+- Quality `33428380492`, Test Build `33428380455`, Security `33428381776`: SUCCESS.
 
-1. rebase/reconcile the branch against then-current `main`;
-2. revalidate no accepted A/B/C or W01 semantic authority was changed;
-3. reconcile any coordinator-owned root/workflow/publication files under explicit ownership;
-4. run official Quality, Test Build and Security on the exact final HEAD;
-5. record accepted HEAD/PR/merge SHA and PB2 publication separately.
+PB2 publication:
 
-At this audit, PR #41 includes draft changes to root `package-lock.json` and `.github/workflows/w02d-format.yml`; both are coordinator-controlled surfaces under the W02 ownership rules. Their presence is not accepted by implication and must be resolved or explicitly owned before W02-D acceptance.
+- PR #47.
+- exact publication head `2dd9d77e1062ae03d95268bd2de99b28376878fc`.
+- Quality `33429270894`, Test Build `33429270672`, Security `33429271811`: SUCCESS.
+
+W02-E acceptance:
+
+- PR #50.
+- exact accepted/merged SHA `17e452356abd6e43f959a2cbb0bcf47de35abbfd`.
+- Quality `33435840491`, Test Build `33435840492`, Security `33435841084`: SUCCESS.
+- 23-scenario authority-validation/attack matrix: PASS.
+- cleanup: PASS; canonical broken relative refs = 0.
 
 ## Contract publication order
 
 1. **P0 — W01:** canonical IDs/context/authority/error/outcome/versioning — accepted.
 2. **P1 — A/B/C:** identity resolution; tenant boundary; consent/purpose/jurisdiction — accepted/published.
-3. **P2 — D:** deterministic policy evaluation — draft/in progress.
-4. **P3 — E:** authority validation/evaluation — gated.
-5. **P4 — F:** current-policy query/precheck — gated.
-6. **P5 — G:** final integrated exports/tests — gated.
+3. **P2 — D:** deterministic policy evaluation — accepted/published through PB2.
+4. **P3 — E:** authority validation/evaluation — accepted; **PB3 public publication not yet executed**.
+5. **P4 — F:** current-policy query/precheck — gated by PB3.
+6. **P5 — G:** final integrated exports/tests — gated by PB4.
 
-A downstream consumer may not substitute direct internal imports for a required publication barrier.
+A downstream consumer may not substitute direct/internal imports, a build alias or an acceptance shim for a required publication barrier.
+
+## PB3 guard
+
+W02-E acceptance alone does not release W02-F. PB3 must independently reconcile coordinator-owned shared barrels/export maps, package manifests and consumer boundaries for E, then pass official Quality, Test Build and Security on the exact publication HEAD before F may start.
 
 ## Downstream guards
 
-- W03 may plan but cannot bypass W02 identity/policy boundaries.
-- W04 may consume W02 policy/precheck semantics but cannot create authorization semantics.
-- W05 routing/confidence may affect verification/escalation only, never permission.
-- W06 cache/context/speculation must not replace current policy validation.
-- W07 must perform execution-time authority validation where required; stale F precheck is never an execution credential.
+- W03 cannot bypass W02 identity/policy boundaries.
+- W04 may consume policy/precheck information but cannot create authorization semantics.
+- W05 routing/confidence affects verification/escalation only, never permission.
+- W06 cache/context/speculation never replaces current policy validation.
+- W07 must perform execution-time authority validation where required; stale precheck is never an execution credential.
 - ADR-002 Device Plane planning changes no W02 dependency or authority semantics.
 
-## PB1 evidence
+## Final W02 guard
 
-Pre-merge: Quality `33417131319`, Test Build `33417131305`, Security `33417131803` — SUCCESS.  
-Post-merge technical main: Quality `33417242995`, Test Build `33417242973`, Security `33417243977` — SUCCESS.
-
-PB1 remains immutable historical technical acceptance. Later governance/documentation main SHAs do not rewrite that acceptance reference.
+Reality Gate 1 remains dependency-gated to W02-G after A-F convergence. Completion of W02-E does not mark W02 complete.
