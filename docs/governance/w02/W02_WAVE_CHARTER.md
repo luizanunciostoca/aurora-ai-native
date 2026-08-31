@@ -3,7 +3,7 @@
 Date: 2026-08-31  
 Authority: CHAT W02 PROGRAM COORDINATOR  
 Exact coordination starting SHA: `eb46df1c3a1ab98a6ad6d091178091cb880a70e7`  
-PB1 technical acceptance: `b48953cd4a7913e154fe2804248217ffe0c0952d`
+Current implementation main at W02-E acceptance: `17e452356abd6e43f959a2cbb0bcf47de35abbfd`
 
 ## Mission
 
@@ -16,11 +16,17 @@ Create the canonical core for identity resolution, tenant boundaries/binding, co
 - W02-B: `COMPLETE_ACCEPTED_MERGED` — PR #37.
 - W02-C: `COMPLETE_ACCEPTED_MERGED` — PR #36.
 - PB1: `COMPLETE_RELEASED`.
-- W02-D: `IN_PROGRESS_DRAFT_PR_41`; not accepted, PB2 still pending.
-- W02-E: `DEPENDENCY_GATED_PB2`.
-- W02-F: `DEPENDENCY_GATED_PB3`.
+- W02-D: `COMPLETE_ACCEPTED_MERGED` — PR #46; exact accepted head `e9ca04a4b5ffe66619f092bd37614c68b7aa2600`.
+- PB2: `COMPLETE_RELEASED` — PR #47; exact publication head `2dd9d77e1062ae03d95268bd2de99b28376878fc`.
+- W02-E: `COMPLETE_ACCEPTED_MERGED` — PR #50; exact accepted/merged SHA `17e452356abd6e43f959a2cbb0bcf47de35abbfd`.
+- PB3: `ELIGIBLE_NOT_EXECUTED`.
+- W02-F: `DEPENDENCY_GATED_PB3 / NOT_STARTED`.
+- PB4: `PENDING`.
 - W02-G: `DEPENDENCY_GATED_PB4`.
+- PB5 / W02 final acceptance: `PENDING`.
 - Reality Gate 1: defined; execution remains W02-G responsibility after A-F convergence.
+
+Historical PR #41 remains superseded W02-D draft evidence and does not override this state.
 
 ## Hard invariants
 
@@ -33,21 +39,22 @@ Create the canonical core for identity resolution, tenant boundaries/binding, co
 7. Invalid, malformed, expired, revoked or mismatched authority fails closed.
 8. Tenant mismatch fails closed.
 9. Consent, purpose and jurisdiction are explicit/verifiable inputs when applicable.
-10. Authorization-affecting outputs carry correlation and sufficient audit/reproduction evidence.
-11. W02 does not implement W03 persistence/event backbone.
-12. W02 does not implement W04 Goal Graph/Capability Planner/lanes.
-13. W02 does not implement W05 Intelligence Router/Confidence Engine.
-14. W02 does not implement W06 Context Engine/cache/speculation.
-15. W02 does not implement W07+ external/device execution.
-16. W01 canonical primitives are composed, never forked.
+10. Current policy wins over stale authority evidence.
+11. Authorization-affecting outputs carry correlation and sufficient audit/reproduction evidence.
+12. W02 does not implement W03 persistence/event backbone.
+13. W02 does not implement W04 Goal Graph/Capability Planner/lanes.
+14. W02 does not implement W05 Intelligence Router/Confidence Engine.
+15. W02 does not implement W06 Context Engine/cache/speculation.
+16. W02 does not implement W07+ external/device execution.
+17. W01 canonical primitives are composed, never forked.
 
 ## Canonical namespace freeze
 
 The source and semantic role of `IdentityId`, `TenantId`, `ActorRef`, `SubjectRef`, `OwnerDecision`, `PolicyToken`, `AuthorityScope`, `CorrelationContext`, `CanonicalError` and `ExecutionOutcome` remain W01 authority.
 
-W02-D owns exactly one new policy-decision vocabulary: `ALLOW | DENY | REQUIRE_APPROVAL`, distinct from W01 `OwnerDecision` states and `ExecutionOutcome`.
+W02-D owns exactly one policy-decision vocabulary: `ALLOW | DENY | REQUIRE_APPROVAL`, distinct from W01 `OwnerDecision` states and `ExecutionOutcome`.
 
-W01 authority subject representation remains `AuthoritySubjectReference`. Any W02 `SubjectRef` bridge/comparison must be explicit, deterministic and tested; no silent cast or duplicate subject primitive.
+W01 authority subject representation remains `AuthoritySubjectReference`. `SubjectRef` bridging/comparison must be explicit, deterministic and tested; no silent cast or duplicate subject primitive.
 
 ## Subwaves
 
@@ -65,57 +72,57 @@ Accepted/merged. Produces explicit consent/purpose/jurisdiction policy context. 
 
 ### W02-D — Deterministic Policy Engine
 
-Status: `IN_PROGRESS_DRAFT_PR_41`.
+Status: `COMPLETE_ACCEPTED_MERGED`.
 
-Consumes accepted/published A/B/C and produces pure deterministic policy decisions/reasons/evidence with fail-closed conflict/default-deny behavior. Draft implementation does not constitute PB2.
-
-Acceptance requires branch reconciliation with then-current `main`, exact-head tests/gates, and reconciliation of any coordinator-owned shared/root/workflow changes. At this audit, PR #41 touches `package-lock.json` and `.github/workflows/w02d-format.yml`, which remain coordinator-controlled until explicitly reconciled.
+Acceptance PR #46; exact accepted head `e9ca04a4b5ffe66619f092bd37614c68b7aa2600`. Produces pure deterministic policy decisions/reasons/evidence with fail-closed conflict/default-deny behavior. Quality `33428380492`, Test Build `33428380455`, Security `33428381776` — SUCCESS.
 
 ### W02-E — PolicyToken Validation & Authority Decision Evaluation
 
-Gated until PB2. Validates W01 authority evidence against current identity/tenant/subject/scope/time/constraints/current policy and applicable consent/purpose/jurisdiction. It does not mint provider credentials or execution authority beyond validated scope.
+Status: `COMPLETE_ACCEPTED_MERGED`.
+
+Acceptance PR #50; exact accepted/merged SHA `17e452356abd6e43f959a2cbb0bcf47de35abbfd`.
+
+Validates W01 authority evidence against current tenant/subject/action/scope/time/constraints/current policy. Enforces least authority, no scope widening, current-policy precedence, explicit subject bridging, OwnerDecision applicability and deterministic replay. `PolicyToken` is never provider credential material. It does not implement external execution or W02-F precheck.
+
+Acceptance evidence: Quality `33435840491`, Test Build `33435840492`, Security `33435841084` — SUCCESS; 23-scenario authority-validation matrix PASS.
 
 ### W02-F — Policy Query / Precheck APIs
 
-Gated until PB3. Exposes read-only/current-policy/precheck interfaces by composing D/E. Precheck is informational and never substitutes execution-time validation.
+Status: `DEPENDENCY_GATED_PB3 / NOT_STARTED`.
+
+After PB3, F may expose read-only/current-policy/precheck interfaces by composing D/E. Precheck is informational and never substitutes execution-time validation or mints authority.
 
 ### W02-G — Integration, Security & Contract Tests
 
-Gated until PB4. Owns final shared integration after explicit lock transfer, negative/security matrices, contract/schema/public-export tests and Reality Gate execution/evidence.
+Status: `DEPENDENCY_GATED_PB4`.
+
+After PB4 and explicit lock transfer, G owns final shared integration, negative/security matrices, contract/schema/public-export tests and Reality Gate execution/evidence.
 
 ## Publication barriers
 
 - **PB0:** W02-00 accepted -> A/B/C may start. `COMPLETE`.
 - **PB1:** A+B+C accepted + public contracts/schemas published -> D released. `COMPLETE_RELEASED`.
-- **PB2:** D accepted + required D public surfaces published by coordinator -> E released. `PENDING`.
-- **PB3:** E accepted/published -> F released. `PENDING`.
+- **PB2:** D accepted + required D public surfaces published by coordinator -> E released. `COMPLETE_RELEASED` via PR #47.
+- **PB3:** E accepted + E public surfaces published/tested by coordinator -> F released. `ELIGIBLE_NOT_EXECUTED`.
 - **PB4:** F accepted + A-F converged -> G released. `PENDING`.
 - **PB5:** G merged + Reality Gate T1/T2 + exact-main/Drive convergence -> W02 complete. `PENDING`.
 
-A draft PR/file is not a published dependency.
+A draft PR/file, internal import, build alias or acceptance shim is not a published dependency.
 
-## W02-D acceptance reconciliation
+## PB3 guard
 
-PR #41 originated from main `c4f25eb41fcb7ff9e390466146ebdeb8239bfe6f`; later accepted governance advanced `main` beyond that point. Before acceptance, W02-D must:
-
-- rebase/reconcile on current main;
-- preserve W01 and accepted A/B/C semantics;
-- use only its frozen leaf ownership unless coordinator transfer is recorded;
-- eliminate or explicitly reconcile coordinator-controlled root/workflow changes;
-- prove deterministic replay, fail closed behavior, conflict precedence and no intelligence-to-authority elevation;
-- pass official Quality/Test Build/Security on exact final HEAD;
-- record accepted HEAD, merge SHA and PB2 publication as distinct evidence.
+W02-E acceptance does not automatically publish E. PB3 must be a separate coordinator-controlled action that reconciles canonical public barrels/export maps/manifests and consumer boundaries, preserves accepted E semantics, adds no F behavior, passes official gates on the exact publication HEAD, and records publication evidence before W02-F can start.
 
 ## Reality Gate 1 — Authority Verified
 
 Minimum maturity: **T1 Contract + T2 Simulation**.
 
-The suite covers ALLOW, DENY, REQUIRE_APPROVAL, expired/invalid/revoked authority, wrong tenant/subject/scope, missing consent, purpose mismatch, jurisdiction restriction, policy conflict, stale authority and high-confidence metadata that must not alter authority outcome. It performs no real external side effect.
+The final suite covers ALLOW, DENY, REQUIRE_APPROVAL, expired/invalid/revoked authority, wrong tenant/subject/scope, missing consent, purpose mismatch, jurisdiction restriction, policy conflict, stale authority and high-confidence metadata that must not alter authority outcome. It performs no real external side effect.
 
-Reality Gate execution remains W02-G responsibility; PB1 or D implementation cannot mark it complete.
+W02-E already provides accepted evidence for its authority-validation subset, but full Reality Gate execution remains W02-G responsibility after A-F convergence.
 
 ## Exit criteria
 
-W02 can be accepted only after A-G converge in dependency order; deterministic/fail-closed tests pass; public exports compile from consumer fixtures; no duplicate canonical primitive or policy vocabulary exists; no canonical runtime depends on legacy/reference trees; official gates pass on exact final main; and Drive registries/evidence are synchronized.
+W02 can be accepted only after A-G converge in dependency order; deterministic/fail-closed tests pass; public exports compile from consumer fixtures; no duplicate canonical primitive or policy vocabulary exists; no canonical runtime depends on legacy/reference trees; official gates pass on exact final main; Reality Gate T1/T2 passes; and Drive/repository governance evidence is synchronized.
 
 ADR-002 Device Plane planning introduces no exception to this charter and no new W02 execution authority.
