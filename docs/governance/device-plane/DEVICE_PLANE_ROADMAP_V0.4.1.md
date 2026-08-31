@@ -11,10 +11,10 @@ Base main audited: `c4f25eb41fcb7ff9e390466146ebdeb8239bfe6f`
 - W02-00 COMPLETE_ACCEPTED.
 - W02-A/B/C COMPLETE_ACCEPTED_MERGED.
 - PB1 COMPLETE_RELEASED; technical acceptance main remains `b48953cd4a7913e154fe2804248217ffe0c0952d`.
-- W02-D READY.
+- W02-D `IN_PROGRESS` in draft/open PR #41; final acceptance requires synchronization/revalidation against the latest main.
 - W02-E/F/G remain dependency-gated by PB2/PB3/PB4.
 
-This amendment does not expand W02 or implement device runtime.
+This amendment does not expand W02 or implement device runtime. The Device Plane planning merge itself is documentation-only and does not alter W02-D semantics.
 
 ## Cross-wave roadmap updates
 
@@ -93,4 +93,5 @@ Do not materialize missing paths before their owner wave is released.
 
 - Architecture: ACCEPTED_FOR_PLANNING.
 - Runtime implementation: PLANNED_DEPENDENCY_GATED.
+- W02-D is the current active implementation stage and remains outside Device Plane scope.
 - No device capability is claimed as implemented by this document.

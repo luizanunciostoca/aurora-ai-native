@@ -66,15 +66,15 @@ Installed-app integration precedence: official API/SDK -> Android Intent/App Lin
 - Accessibility/computer-use is not the default app integration mechanism.
 - No local device secret/credential may be embedded in PolicyToken, ActionIntent metadata, plan templates, cache or telemetry.
 
-## Current program state at acceptance
+## Current program state after live reconciliation
 
 - W00: COMPLETE/ACCEPTED.
 - W01: COMPLETE/ACCEPTED.
 - W02-00: COMPLETE_ACCEPTED.
 - W02-A/B/C: COMPLETE_ACCEPTED_MERGED.
 - PB1: COMPLETE_RELEASED on technical acceptance main `b48953cd4a7913e154fe2804248217ffe0c0952d`.
-- Governance-synchronized starting main: `c4f25eb41fcb7ff9e390466146ebdeb8239bfe6f`.
-- W02-D: READY.
-- W02-E/F/G: dependency-gated.
+- Device Plane planning was merged through PR #42 from the governance-synchronized W02 baseline `c4f25eb41fcb7ff9e390466146ebdeb8239bfe6f`.
+- W02-D: `IN_PROGRESS` in draft/open PR #41. Its implementation branch started from the pre-Device-Plane main and must rebase/revalidate against the latest main before W02-D acceptance.
+- W02-E/F/G: dependency-gated; PB2 is not released by a draft W02-D implementation.
 
-This ADR introduces planning authority only. It does not implement Android/device runtime and does not alter the current W02 sequence.
+This ADR introduces planning authority only. It does not implement Android/device runtime, alter W02-D semantics, or bypass the current W02 publication sequence.
