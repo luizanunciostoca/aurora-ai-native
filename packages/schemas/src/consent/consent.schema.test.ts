@@ -2,7 +2,7 @@ import {
   evaluateConsent,
   type ConsentEvaluationRequest,
   type ConsentRecord,
-} from '../../../contracts/src/consent';
+} from '@aurora/contracts/consent';
 import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
@@ -46,61 +46,17 @@ function request(record?: ConsentRecord): ConsentEvaluationRequest {
     tenantId,
     subject,
     evaluatedAt: now,
-    purpose: {
-      kind: 'PurposeContext',
-      purposeId: 'marketing.analytics',
-      version,
-      status: 'ACTIVE',
-    },
+    purpose: { kind: 'PurposeContext', purposeId: 'marketing.analytics', version, status: 'ACTIVE' },
     jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'BR', version },
     ...(record ? { consent: record } : {}),
   };
 }
 
-const active = evaluateConsent(request(consent()));
-assert(active.reason === 'ACTIVE_CONSENT', 'active consent must be satisfied');
-
-const missing = evaluateConsent(request());
-assert(missing.reason === 'CONSENT_REQUIRED', 'missing consent must never become implicit consent');
-
-const expiredConsent = consent({
-  expiresAt: '2026-08-30T00:00:00Z' as Rfc3339Timestamp,
-});
-const expired = evaluateConsent(request(expiredConsent));
-assert(expired.reason === 'CONSENT_EXPIRED', 'expired consent must fail deterministically');
-
-const revokedConsent = consent({ status: 'REVOKED', revokedAt: now });
-const revoked = evaluateConsent(request(revokedConsent));
-assert(revoked.reason === 'CONSENT_REVOKED', 'revoked consent must fail deterministically');
-
-const wrongPurpose = evaluateConsent({
-  ...request(consent()),
-  purpose: {
-    kind: 'PurposeContext',
-    purposeId: 'sales.crm',
-    version,
-    status: 'ACTIVE',
-  },
-});
-assert(wrongPurpose.reason === 'PURPOSE_MISMATCH', 'wrong purpose must be representable');
-
-const wrongJurisdiction = evaluateConsent({
-  ...request(consent()),
-  jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'US-CA', version },
-});
-assert(
-  wrongJurisdiction.reason === 'JURISDICTION_MISMATCH',
-  'wrong jurisdiction must be representable',
-);
-
-const wrongSubject = evaluateConsent({
-  ...request(consent()),
-  subject: {
-    kind: 'IDENTITY',
-    identityId: 'idn_01J11111111111111111111111' as IdentityId,
-  },
-});
-assert(wrongSubject.reason === 'SUBJECT_MISMATCH', 'wrong subject must fail closed');
-
-const missingProvenance = ConsentRecordSchema.safeParse({ ...consent(), provenance: {} });
-assert(!missingProvenance.success, 'missing provenance must be rejected by runtime schema');
+assert(evaluateConsent(request(consent())).reason === 'ACTIVE_CONSENT', 'active consent must pass');
+assert(evaluateConsent(request()).reason === 'CONSENT_REQUIRED', 'missing consent must fail closed');
+assert(evaluateConsent(request(consent({ expiresAt: '2026-08-30T00:00:00Z' as Rfc3339Timestamp }))).reason === 'CONSENT_EXPIRED', 'expired consent must fail');
+assert(evaluateConsent(request(consent({ status: 'REVOKED', revokedAt: now }))).reason === 'CONSENT_REVOKED', 'revoked consent must fail');
+assert(evaluateConsent({ ...request(consent()), purpose: { kind: 'PurposeContext', purposeId: 'sales.crm', version, status: 'ACTIVE' } }).reason === 'PURPOSE_MISMATCH', 'wrong purpose must fail');
+assert(evaluateConsent({ ...request(consent()), jurisdiction: { kind: 'JurisdictionContext', jurisdiction: 'US-CA', version } }).reason === 'JURISDICTION_MISMATCH', 'wrong jurisdiction must fail');
+assert(evaluateConsent({ ...request(consent()), subject: { kind: 'IDENTITY', identityId: 'idn_01J11111111111111111111111' as IdentityId } }).reason === 'SUBJECT_MISMATCH', 'wrong subject must fail');
+assert(!ConsentRecordSchema.safeParse({ ...consent(), provenance: {} }).success, 'missing provenance must be rejected');
