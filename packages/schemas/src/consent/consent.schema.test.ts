@@ -6,7 +6,7 @@ import {
 import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
-import { ConsentRecordSchema } from './index.js';
+import { ConsentRecordSchema } from './index';
 
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
