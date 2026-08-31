@@ -1,5 +1,3 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
 import type { ExternalIdentityRef } from '@aurora/contracts/context';
 import type {
   CorrelationId,
@@ -32,6 +30,16 @@ const records: readonly IdentityResolutionRecord[] = [
   { tenantId: tenantB, identityId: agentId, kind: 'AGENT' },
 ];
 
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function assertDeepEqual(actual: unknown, expected: unknown, message: string): void {
+  assert(JSON.stringify(actual) === JSON.stringify(expected), message);
+}
+
 function request(
   subject: IdentityResolutionRequest['subject'],
   tenantId = tenantA,
@@ -39,64 +47,62 @@ function request(
   return { schemaVersion: version, tenantId, correlationId, subject };
 }
 
-test('canonical identity resolves without authority', () => {
-  const result = new DeterministicIdentityResolver(records, now).resolve(
+export function runIdentityResolutionTests(): void {
+  const canonical = new DeterministicIdentityResolver(records, now).resolve(
     request({ kind: 'IDENTITY', identityId: humanId }),
   );
-  assert.equal(result.status, 'RESOLVED');
-  assert.equal(result.evidence.authorityGranted, false);
-});
+  assert(canonical.status === 'RESOLVED', 'canonical identity must resolve');
+  assert(canonical.evidence.authorityGranted === false, 'resolution must not grant authority');
 
-test('external binding resolves to canonical identity', () => {
-  const result = new DeterministicIdentityResolver(records, now).resolve(
+  const externalBinding = new DeterministicIdentityResolver(records, now).resolve(
     request({ kind: 'EXTERNAL_IDENTITY', externalIdentity: external }),
   );
-  assert.equal(result.status, 'RESOLVED');
-  if (result.status === 'RESOLVED') {
-    assert.equal(result.identity.identityId, humanId);
-    assert.notEqual(String(result.identity.identityId), String(external.externalId));
-  }
-});
+  assert(externalBinding.status === 'RESOLVED', 'external binding must resolve');
+  assert(
+    externalBinding.identity.identityId === humanId,
+    'external binding must resolve to canonical identity',
+  );
+  assert(
+    String(externalBinding.identity.identityId) !== String(external.externalId),
+    'provider external ID must not become canonical IdentityId',
+  );
 
-test('unknown identity fails not found', () => {
   const unknown = 'idn_01J00000000000000000000099' as IdentityId;
-  const result = new DeterministicIdentityResolver(records, now).resolve(
+  const unknownResult = new DeterministicIdentityResolver(records, now).resolve(
     request({ kind: 'IDENTITY', identityId: unknown }),
   );
-  assert.equal(result.status, 'NOT_FOUND');
-});
+  assert(unknownResult.status === 'NOT_FOUND', 'unknown identity must fail not found');
 
-test('ambiguous external binding fails closed', () => {
   const firstRecord = records[0];
-  assert.ok(firstRecord);
+  assert(firstRecord !== undefined, 'identity test fixture must contain first record');
   const ambiguous: readonly IdentityResolutionRecord[] = [
     firstRecord,
     { tenantId: tenantA, identityId: agentId, kind: 'AGENT', externalIdentities: [external] },
   ];
-  const result = new DeterministicIdentityResolver(ambiguous, now).resolve(
+  const ambiguousResult = new DeterministicIdentityResolver(ambiguous, now).resolve(
     request({ kind: 'EXTERNAL_IDENTITY', externalIdentity: external }),
   );
-  assert.equal(result.status, 'AMBIGUOUS');
-});
+  assert(ambiguousResult.status === 'AMBIGUOUS', 'ambiguous identity must fail closed');
 
-test('cross-tenant misuse fails closed', () => {
-  const result = new DeterministicIdentityResolver(records, now).resolve(
+  const crossTenant = new DeterministicIdentityResolver(records, now).resolve(
     request({ kind: 'IDENTITY', identityId: agentId }, tenantA),
   );
-  assert.equal(result.status, 'CONFLICT');
-  if (result.status !== 'RESOLVED') assert.equal(result.error.code, 'FORBIDDEN');
-});
+  assert(crossTenant.status === 'CONFLICT', 'cross-tenant identity must fail closed');
+  assert(crossTenant.error.code === 'FORBIDDEN', 'cross-tenant identity must be forbidden');
 
-test('expected identity kind mismatch fails closed', () => {
-  const result = new DeterministicIdentityResolver(records, now).resolve({
+  const kindMismatch = new DeterministicIdentityResolver(records, now).resolve({
     ...request({ kind: 'IDENTITY', identityId: humanId }),
     expectedKind: 'SYSTEM',
   });
-  assert.equal(result.status, 'CONFLICT');
-});
+  assert(kindMismatch.status === 'CONFLICT', 'identity kind mismatch must fail closed');
 
-test('replay with equal records, request and clock is deterministic', () => {
   const resolver = new DeterministicIdentityResolver(records, now);
-  const input = request({ kind: 'IDENTITY', identityId: humanId });
-  assert.deepEqual(resolver.resolve(input), resolver.resolve(input));
-});
+  const replayInput = request({ kind: 'IDENTITY', identityId: humanId });
+  assertDeepEqual(
+    resolver.resolve(replayInput),
+    resolver.resolve(replayInput),
+    'equivalent identity resolution replay must be deterministic',
+  );
+}
+
+runIdentityResolutionTests();
