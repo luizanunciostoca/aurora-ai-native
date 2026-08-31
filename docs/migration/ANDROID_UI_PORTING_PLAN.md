@@ -1,7 +1,12 @@
-# Android UI porting plan
+# Android UI Porting Plan — Historical Migration Guidance
 
-The current committed Aurora UI reference is preserved under `apps/aurora-desktop/legacy-reference/face`. No duplicated Android visual-reference tree is committed in the W00 accepted baseline; Android work must treat the desktop reference as visual provenance only.
+Status: `HISTORICAL_PLANNING_REFERENCE`  
+Current Android planning authority: Developer Manual v0.4.1 + ADR-002 + W15 ownership when released.
 
-The Android implementation should preserve the orb/core, rings, glow, voice-reactive states and voice-first interaction, but must be rebuilt using React Native plus native Kotlin modules for microphone foreground service, wake word, audio capture, overlay, notifications and power/lifecycle handling.
+The committed Aurora UI reference is preserved under `apps/aurora-desktop/legacy-reference/face`. It is visual/interaction provenance only and is not Android runtime authority.
 
-Workspace/Dashboard is not the boot screen. Presence Mode is the default. Workspace opens only on explicit user request or after user acceptance of Aurora's visual suggestion.
+The desired product behavior remains voice-first Presence Mode with the workspace/dashboard opened on demand. The orb/core, rings, glow and voice-reactive behavior may inform future UI work.
+
+Earlier baseline guidance proposed React Native plus native Kotlin modules. That stack choice is not frozen by this historical migration document. W15 must re-evaluate implementation technology, Android lifecycle/foreground-service requirements, permissions, wake/voice, overlay/notifications, Device Executor and dedicated-device needs against current platform requirements and accepted Aurora contracts when W15 is released.
+
+No Android runtime implementation is authorized by this file.
