@@ -1,5 +1,5 @@
 {
-  "status": "ACTIVE_CANONICAL_PLANNING_INPUT_CANDIDATE",
+  "status": "ACTIVE_CANONICAL_PLANNING_INPUT",
   "audit_date": "2026-08-31",
   "source_repository": "luizanunciostoca/toca-mcp-server",
   "source_exact_main": "8a6cfe055be9b34e498cfbdb481e8232dc51df05",
@@ -16,6 +16,15 @@
     "child_process_in_src_search": 10,
     "license_file_at_root": "NOT_FOUND",
     "package_private": true
+  },
+  "acceptance": {
+    "aurora_pr": 57,
+    "accepted_head": "8b8068a022c6cb3d7ea65e13ce14765c86e402a1",
+    "merge_main": "923222a39b17bf4a4a5849441d76638e330a3aa4",
+    "quality_run": 33442348643,
+    "test_build_run": 33442348609,
+    "security_run": 33442349986,
+    "scope": "PLANNING_REFERENCE_ONLY"
   },
   "highest_value": [
     "transactional outbox / consumer idempotency / scheduler reconciliation",
