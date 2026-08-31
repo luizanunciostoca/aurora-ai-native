@@ -90,9 +90,7 @@ function evaluation(
   return informational;
 }
 
-function precheck(
-  overrides: Partial<PolicyEvaluationRequest> = {},
-): PolicyPrecheckRequest {
+function precheck(overrides: Partial<PolicyEvaluationRequest> = {}): PolicyPrecheckRequest {
   return { kind: 'PolicyPrecheckRequest', policyEvaluation: evaluation(overrides) };
 }
 
@@ -171,8 +169,7 @@ assert(!allowed.requiredAuthority.required, 'precheck allow: authority should no
 assert(!allowed.approvalRequired, 'precheck allow: approval should not be required');
 assert(allowed.applicableConstraints.length === 1, 'precheck allow: expected one constraint');
 assert(
-  allowed.applicableConstraints[0]?.reasonReference ===
-    'policy:toca:marketing#allow-publish',
+  allowed.applicableConstraints[0]?.reasonReference === 'policy:toca:marketing#allow-publish',
   'precheck allow: reason reference missing',
 );
 
@@ -181,9 +178,7 @@ const authorityRule: PolicyRule = {
   ruleId: 'rule.allow.authority',
   authorityRequired: true,
 };
-const authorityRequired = precheckPolicy(
-  precheck({ snapshot: snapshot([authorityRule]) }),
-);
+const authorityRequired = precheckPolicy(precheck({ snapshot: snapshot([authorityRule]) }));
 assert(authorityRequired.decision === 'DENY', 'authority precheck: expected DENY without authority');
 assert(
   authorityRequired.reasons.includes('AUTHORITY_REQUIRED'),
@@ -262,7 +257,6 @@ const confidenceInjected = {
 } as PolicyPrecheckRequest & { confidence: number };
 const confidenceResult = precheckPolicy(confidenceInjected);
 assert(
-  confidenceResult.decision === allowed.decision &&
-    confidenceResult.authorizesExecution === false,
+  confidenceResult.decision === allowed.decision && confidenceResult.authorizesExecution === false,
   'confidence injection must not create permission',
 );
