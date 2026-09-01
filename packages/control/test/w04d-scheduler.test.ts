@@ -16,7 +16,11 @@ import {
   type GoalGraphNode,
   type GoalGraphStateSnapshot,
 } from '../src/goal-graph/index.ts';
-import { planSchedulerTick, type SchedulerTickInput } from '../src/scheduler/index.ts';
+import {
+  planSchedulerTick,
+  type SchedulerTickInput,
+  type SchedulerTickResult,
+} from '../src/scheduler/index.ts';
 
 const tenantId = 'ten_01J00000000000000000000000' as TenantId;
 const otherTenantId = 'ten_01J00000000000000000000001' as TenantId;
@@ -42,7 +46,9 @@ function graph(nodes: readonly GoalGraphNode[], edges: readonly GoalGraphEdge[] 
     nodes,
     edges,
   });
-  assert.equal(result.status, 'CREATED');
+  if (result.status !== 'CREATED') {
+    throw new Error(`expected goal graph creation, received ${result.code}`);
+  }
   return result.graph;
 }
 
@@ -63,7 +69,9 @@ function budget(maxConcurrency = 4): ExecutionBudget {
     exhaustionPolicy: 'HOLD',
     createdAt: '2026-09-01T10:20:00.000Z',
   });
-  assert.equal(result.status, 'CREATED');
+  if (result.status !== 'CREATED') {
+    throw new Error(`expected execution budget creation, received ${result.code}`);
+  }
   return result.budget;
 }
 
@@ -92,6 +100,15 @@ function input(
   };
 }
 
+function expectPlanned(
+  result: SchedulerTickResult,
+): Extract<SchedulerTickResult, { readonly status: 'PLANNED' }> {
+  if (result.status !== 'PLANNED') {
+    throw new Error(`expected scheduler plan, received ${result.code}`);
+  }
+  return result;
+}
+
 test('W04-D dispatches only lifecycle-ready nodes whose graph dependencies are ready', () => {
   const goalGraph = graph(
     [node('a'), node('b'), node('c')],
@@ -100,24 +117,28 @@ test('W04-D dispatches only lifecycle-ready nodes whose graph dependencies are r
       { fromNodeId: 'b', toNodeId: 'c' },
     ],
   );
-  const first = planSchedulerTick(
-    input(goalGraph, {
-      a: 'SUCCEEDED',
-      b: 'READY',
-      c: 'READY',
-    }),
+  const first = expectPlanned(
+    planSchedulerTick(
+      input(goalGraph, {
+        a: 'SUCCEEDED',
+        b: 'READY',
+        c: 'READY',
+      }),
+    ),
   );
   assert.equal(first.status, 'PLANNED');
   assert.deepEqual(first.plan.dispatchNodeIds, ['b']);
   assert.deepEqual(first.plan.deferredReadyNodeIds, []);
   assert.equal(first.plan.authorizesExecution, false);
 
-  const joined = planSchedulerTick(
-    input(goalGraph, {
-      a: 'SUCCEEDED',
-      b: 'SUCCEEDED',
-      c: 'READY',
-    }),
+  const joined = expectPlanned(
+    planSchedulerTick(
+      input(goalGraph, {
+        a: 'SUCCEEDED',
+        b: 'SUCCEEDED',
+        c: 'READY',
+      }),
+    ),
   );
   assert.equal(joined.status, 'PLANNED');
   assert.deepEqual(joined.plan.dispatchNodeIds, ['c']);
@@ -126,12 +147,14 @@ test('W04-D dispatches only lifecycle-ready nodes whose graph dependencies are r
 test('W04-D bounds dispatch by policy, tick fan-out, and current budget concurrency', () => {
   const goalGraph = graph([node('a'), node('b'), node('c'), node('d')]);
   const states = { a: 'READY', b: 'READY', c: 'READY', d: 'READY' } as const;
-  const result = planSchedulerTick(
-    input(goalGraph, states, {
-      budget: budget(2),
-      budgetUsage: usage(1),
-      policy: { maxConcurrency: 3, maxDispatchPerTick: 2 },
-    }),
+  const result = expectPlanned(
+    planSchedulerTick(
+      input(goalGraph, states, {
+        budget: budget(2),
+        budgetUsage: usage(1),
+        policy: { maxConcurrency: 3, maxDispatchPerTick: 2 },
+      }),
+    ),
   );
   assert.equal(result.status, 'PLANNED');
   assert.deepEqual(result.plan.dispatchNodeIds, ['a']);
@@ -149,26 +172,32 @@ test('W04-D round-robin cursor provides deterministic fairness without starvatio
   const goalGraph = graph([node('a'), node('b'), node('c')]);
   const states = { a: 'READY', b: 'READY', c: 'READY' } as const;
 
-  const first = planSchedulerTick(
-    input(goalGraph, states, { policy: { maxConcurrency: 1, maxDispatchPerTick: 1 } }),
+  const first = expectPlanned(
+    planSchedulerTick(
+      input(goalGraph, states, { policy: { maxConcurrency: 1, maxDispatchPerTick: 1 } }),
+    ),
   );
   assert.equal(first.status, 'PLANNED');
   assert.deepEqual(first.plan.dispatchNodeIds, ['a']);
 
-  const second = planSchedulerTick(
-    input(goalGraph, states, {
-      policy: { maxConcurrency: 1, maxDispatchPerTick: 1 },
-      fairness: first.plan.nextFairness,
-    }),
+  const second = expectPlanned(
+    planSchedulerTick(
+      input(goalGraph, states, {
+        policy: { maxConcurrency: 1, maxDispatchPerTick: 1 },
+        fairness: first.plan.nextFairness,
+      }),
+    ),
   );
   assert.equal(second.status, 'PLANNED');
   assert.deepEqual(second.plan.dispatchNodeIds, ['b']);
 
-  const third = planSchedulerTick(
-    input(goalGraph, states, {
-      policy: { maxConcurrency: 1, maxDispatchPerTick: 1 },
-      fairness: second.plan.nextFairness,
-    }),
+  const third = expectPlanned(
+    planSchedulerTick(
+      input(goalGraph, states, {
+        policy: { maxConcurrency: 1, maxDispatchPerTick: 1 },
+        fairness: second.plan.nextFairness,
+      }),
+    ),
   );
   assert.equal(third.status, 'PLANNED');
   assert.deepEqual(third.plan.dispatchNodeIds, ['c']);
@@ -179,19 +208,23 @@ test('W04-D applies cancellation and backpressure without creating execution aut
   const goalGraph = graph([node('a'), node('b')]);
   const states = { a: 'READY', b: 'READY' } as const;
 
-  const cancelled = planSchedulerTick(input(goalGraph, states, { cancellationRequested: true }));
+  const cancelled = expectPlanned(
+    planSchedulerTick(input(goalGraph, states, { cancellationRequested: true })),
+  );
   assert.equal(cancelled.status, 'PLANNED');
   assert.deepEqual(cancelled.plan.dispatchNodeIds, []);
   assert.equal(cancelled.plan.backpressureReason, 'CANCELLATION_REQUESTED');
   assert.equal(cancelled.plan.authorizesExecution, false);
   assert.equal(cancelled.plan.durableCoordinationBoundary, 'W03_WHEN_REQUIRED');
 
-  const budgetBlocked = planSchedulerTick(
-    input(goalGraph, states, {
-      budget: budget(1),
-      budgetUsage: usage(1),
-      policy: { maxConcurrency: 2, maxDispatchPerTick: 2 },
-    }),
+  const budgetBlocked = expectPlanned(
+    planSchedulerTick(
+      input(goalGraph, states, {
+        budget: budget(1),
+        budgetUsage: usage(1),
+        policy: { maxConcurrency: 2, maxDispatchPerTick: 2 },
+      }),
+    ),
   );
   assert.equal(budgetBlocked.status, 'PLANNED');
   assert.deepEqual(budgetBlocked.plan.dispatchNodeIds, []);
@@ -207,12 +240,14 @@ test('W04-D surfaces deterministic graph failure and cancellation propagation pl
     ],
   );
 
-  const failed = planSchedulerTick(
-    input(goalGraph, {
-      a: 'FAILED',
-      b: 'SUCCEEDED',
-      c: 'READY',
-    }),
+  const failed = expectPlanned(
+    planSchedulerTick(
+      input(goalGraph, {
+        a: 'FAILED',
+        b: 'SUCCEEDED',
+        c: 'READY',
+      }),
+    ),
   );
   assert.equal(failed.status, 'PLANNED');
   assert.deepEqual(failed.plan.dispatchNodeIds, []);
@@ -224,12 +259,14 @@ test('W04-D surfaces deterministic graph failure and cancellation propagation pl
     },
   ]);
 
-  const cancelled = planSchedulerTick(
-    input(goalGraph, {
-      a: 'CANCELLED',
-      b: 'SUCCEEDED',
-      c: 'READY',
-    }),
+  const cancelled = expectPlanned(
+    planSchedulerTick(
+      input(goalGraph, {
+        a: 'CANCELLED',
+        b: 'SUCCEEDED',
+        c: 'READY',
+      }),
+    ),
   );
   assert.equal(cancelled.status, 'PLANNED');
   assert.deepEqual(cancelled.plan.propagations, [
