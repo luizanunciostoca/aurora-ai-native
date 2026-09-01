@@ -128,6 +128,7 @@ export type WorkerDecisionCode =
   | 'CANCELLED'
   | 'COMPLETED'
   | 'FAILED'
+  | 'PRUNED'
   | 'TASK_NOT_FOUND';
 
 export interface WorkerRuntimeDecision {
