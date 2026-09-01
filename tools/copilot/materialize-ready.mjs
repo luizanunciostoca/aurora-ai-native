@@ -1,3 +1,4 @@
+/* global fetch */
 import { loadTaskGraph } from './load-task-graph.mjs';
 
 const [owner, repo] = (process.env.GITHUB_REPOSITORY || '').split('/');
