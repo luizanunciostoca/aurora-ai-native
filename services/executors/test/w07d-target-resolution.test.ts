@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { TenantContext } from '@aurora/contracts/context';
+import type { Rfc3339Timestamp, TenantContext } from '@aurora/contracts/context';
 import type { ExecutionTargetReference } from '@aurora/contracts/execution-target';
 import type { TenantId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
@@ -32,12 +32,15 @@ function binding(overrides: Partial<ExecutableTargetBinding> = {}): ExecutableTa
   };
 }
 
-function resolve(bindings: readonly ExecutableTargetBinding[], evaluatedAt = '2026-09-01T16:00:00Z') {
+function resolve(
+  bindings: readonly ExecutableTargetBinding[],
+  evaluatedAt: Rfc3339Timestamp = '2026-09-01T16:00:00Z',
+) {
   return resolveExecutionTarget({
     schemaVersion: version,
     actionIntentSchemaVersion: version,
     tenant,
-    evaluatedAt: evaluatedAt as typeof binding extends never ? never : any,
+    evaluatedAt,
     target,
     bindings,
   });
@@ -77,8 +80,10 @@ test('fails closed for freshness, compatibility and generic preconditions', () =
 });
 
 test('malformed resolver or freshness timestamps fail closed instead of becoming fresh by NaN comparison', () => {
-  const invalidEvaluation = resolve([binding()], 'not-a-timestamp');
-  const invalidFreshness = resolve([binding({ freshUntil: 'not-a-timestamp' as never })]);
+  const invalidEvaluation = resolve([binding()], 'not-a-timestamp' as Rfc3339Timestamp);
+  const invalidFreshness = resolve([
+    binding({ freshUntil: 'not-a-timestamp' as Rfc3339Timestamp }),
+  ]);
 
   assert.deepEqual(invalidEvaluation.reasons, ['TARGET_TIME_INVALID']);
   assert.deepEqual(invalidFreshness.reasons, ['TARGET_TIME_INVALID']);
