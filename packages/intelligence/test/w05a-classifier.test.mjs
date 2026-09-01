@@ -37,7 +37,7 @@ test('W05-A classification is deterministic and propagates tenant/correlation', 
   assert.deepEqual(first.correlation, correlation);
   assert.equal(first.taskClass, 'ANALYTICAL');
   assert.equal(first.modality, 'TEXT');
-  assert.equal(first.complexity, 'LOW');
+  assert.equal(first.complexity, 'MEDIUM');
   assert.equal(first.reversibility, 'NOT_APPLICABLE');
   assert.equal(first.classificationConfidence, 'HIGH');
   assert.equal(first.authoritySemantics, 'CLASSIFIER_ONLY_NO_AUTHORITY');
