@@ -1,0 +1,34 @@
+{
+  "name": "@aurora/persistence",
+  "version": "0.1.0",
+  "description": "W03 Postgres baseline, migration conventions and durable state primitives.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "STATUS.md"
+  ],
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./migrations": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "npm run typecheck && npm run build && node --test test/*.mjs",
+    "clean": "rm -rf dist dist-test"
+  },
+  "engines": {
+    "node": ">=22.16.0 <23",
+    "npm": "10.9.2"
+  }
+}
