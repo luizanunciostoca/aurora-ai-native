@@ -161,6 +161,48 @@ function reconciliationResult(
   };
 }
 
+function validAmbiguitySignal(value: string): boolean {
+  return (
+    value === 'TIMEOUT' ||
+    value === 'CONNECTION_LOST' ||
+    value === 'ACK_WITHOUT_VERIFICATION' ||
+    value === 'READBACK_UNKNOWN' ||
+    value === 'READBACK_MISMATCH'
+  );
+}
+
+/** Re-validates the full uncertainty fact at the trust boundary before it can drive retry logic. */
+function validUncertaintyRecord(request: ReconcileExecutionUncertaintyRequest): boolean {
+  const uncertainty = request.uncertainty;
+  const executionResult = uncertainty.executionResult;
+  const error = executionResult.error;
+
+  return (
+    uncertainty.kind === 'EXECUTION_UNCERTAINTY_RECORD' &&
+    Number.isInteger(uncertainty.attemptNumber) &&
+    uncertainty.attemptNumber >= 1 &&
+    Number.isInteger(uncertainty.maxAttempts) &&
+    uncertainty.maxAttempts >= 1 &&
+    uncertainty.attemptNumber <= uncertainty.maxAttempts &&
+    validAmbiguitySignal(uncertainty.signal) &&
+    timestampMs(uncertainty.occurredAt) !== undefined &&
+    uncertainty.authorizesExecution === false &&
+    executionResult.kind === 'ExecutionResult' &&
+    executionResult.schemaVersion === uncertainty.schemaVersion &&
+    executionResult.correlationId === uncertainty.correlationId &&
+    executionResult.timestamp === uncertainty.occurredAt &&
+    executionResult.outcome === 'EXECUTION_UNCERTAIN' &&
+    error.kind === 'CanonicalError' &&
+    error.schemaVersion === uncertainty.schemaVersion &&
+    error.code === 'EXECUTION_UNCERTAIN' &&
+    error.category === 'EXECUTION_UNCERTAIN' &&
+    error.retryability === 'RECONCILE_BEFORE_RETRY' &&
+    error.correlationId === uncertainty.correlationId &&
+    error.timestamp === uncertainty.occurredAt &&
+    error.classification === request.actionIntent.dataClassification
+  );
+}
+
 /**
  * Reconciles an ambiguous attempt. Equivalent retry is never eligible until
  * the side effect is explicitly confirmed absent and fresh W07-C safeguards pass.
@@ -194,6 +236,15 @@ export function reconcileExecutionUncertainty(
       request,
       'STILL_UNCERTAIN',
       ['RECONCILIATION_CORRELATION_MISMATCH'],
+      true,
+      false,
+    );
+  }
+  if (!validUncertaintyRecord(request)) {
+    return reconciliationResult(
+      request,
+      'STILL_UNCERTAIN',
+      ['RECONCILIATION_UNCERTAINTY_INVALID'],
       true,
       false,
     );
