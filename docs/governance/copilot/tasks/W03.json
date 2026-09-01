@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
   "wave": "W03",
   "defaults": {
@@ -12,6 +12,16 @@
       "- Risk Framework v1.0",
       "- Legacy W03 salvage",
       "- TOCA MCP event/persistence patterns"
+    ],
+    "readinessPolicy": "READ_ONLY_WHILE_BLOCKED",
+    "handoffFormat": "AURORA_COMPACT_V1",
+    "coordinatorSurfaces": [
+      "root-workspace-config",
+      "lockfiles",
+      "root-build-config",
+      "ci-workflows",
+      "codeowners",
+      "cross-package-publication"
     ]
   },
   "tasks": [
@@ -28,7 +38,10 @@
         "5. Define risk register/pre-mortem/stress plan including duplicate/replay/out-of-order and database failure."
       ],
       "ownership": "W03 governance + coordinator-owned shared persistence/event surfaces",
-      "forbidden": "No feature code before W02 release."
+      "forbidden": "No feature code before W02 release.",
+      "laneHint": "PROGRAM-CONTROL",
+      "dispatchPriority": 110,
+      "sharedWriteSurfaces": ["w03:governance-freeze", "w03:migration-allocation"]
     },
     {
       "id": "W03-A",
@@ -43,7 +56,11 @@
         "5. Use TOCA migrations only as schema pattern references."
       ],
       "ownership": "W03-owned persistence/migrations paths after freeze",
-      "forbidden": "No W04 capability/control schema; no provider/device domain tables."
+      "forbidden": "No W04 capability/control schema; no provider/device domain tables.",
+      "allowedPaths": ["migrations/**", "packages/persistence/**"],
+      "laneHint": "FOUNDATION",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": ["w03:persistence-baseline", "w03:migration-allocation"]
     },
     {
       "id": "W03-B",
@@ -58,7 +75,11 @@
         "5. Expose deterministic evidence/correlation hooks."
       ],
       "ownership": "W03 event/persistence outbox-inbox modules",
-      "forbidden": "No provider execution; no blind retry semantics."
+      "forbidden": "No provider execution; no blind retry semantics.",
+      "allowedPaths": ["packages/events/**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 90,
+      "sharedWriteSurfaces": ["w03:events-outbox-inbox-idempotency"]
     },
     {
       "id": "W03-C",
@@ -73,7 +94,11 @@
         "5. Replace polling only where reliable events exist; document fallback."
       ],
       "ownership": "W03 event transport/subscription packages",
-      "forbidden": "Legacy in-memory AuroraEventBus is test/reference only, never production backbone."
+      "forbidden": "Legacy in-memory AuroraEventBus is test/reference only, never production backbone.",
+      "allowedPaths": ["packages/events/**"],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 90,
+      "sharedWriteSurfaces": ["w03:events-transport-subscription"]
     },
     {
       "id": "W03-D",
@@ -88,7 +113,11 @@
         "5. Add replay safety invariants for future provider/device side effects."
       ],
       "ownership": "W03 ordering/replay/DLQ modules",
-      "forbidden": "Replay may not grant authority or blindly repeat uncertain side effects."
+      "forbidden": "Replay may not grant authority or blindly repeat uncertain side effects.",
+      "allowedPaths": ["packages/events/**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w03:events-ordering-replay-dlq"]
     },
     {
       "id": "W03-E",
@@ -103,7 +132,11 @@
         "5. Provide deterministic recovery after process restart."
       ],
       "ownership": "W03 scheduler/lease/workflow packages",
-      "forbidden": "No W05 agent runtime; no W15 Android runtime."
+      "forbidden": "No W05 agent runtime; no W15 Android runtime.",
+      "allowedPaths": ["packages/workflow/**"],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w03:workflow-timers-leases-durable-state"]
     },
     {
       "id": "W03-F",
@@ -118,7 +151,10 @@
         "5. Produce W03 Reality Gate evidence and migration/recovery runbook."
       ],
       "ownership": "W03 integration tests/fixtures/benchmarks",
-      "forbidden": "No external provider/device side effects."
+      "forbidden": "No external provider/device side effects.",
+      "laneHint": "CONVERGENCE",
+      "dispatchPriority": 70,
+      "sharedWriteSurfaces": ["w03:integration-failure-load-validation"]
     }
   ]
 }
