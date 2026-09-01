@@ -157,7 +157,9 @@ export function createStrategyRegistry(
   registryVersion: string,
   entries: readonly StrategyDescriptor[],
 ): StrategyRegistryCreateResult {
-  if (!nonEmpty(registryVersion)) return { status: 'REJECTED', code: 'INVALID_REGISTRY_VERSION' };
+  if (!nonEmpty(registryVersion)) {
+    return { status: 'REJECTED', code: 'INVALID_REGISTRY_VERSION' };
+  }
 
   const byId = new Map<string, StrategyDescriptor>();
   for (const entry of entries) {
@@ -165,7 +167,11 @@ export function createStrategyRegistry(
       return { status: 'REJECTED', code: 'INVALID_STRATEGY', strategyId: entry.strategyId };
     }
     if (byId.has(entry.strategyId)) {
-      return { status: 'REJECTED', code: 'DUPLICATE_STRATEGY_ID', strategyId: entry.strategyId };
+      return {
+        status: 'REJECTED',
+        code: 'DUPLICATE_STRATEGY_ID',
+        strategyId: entry.strategyId,
+      };
     }
     byId.set(entry.strategyId, entry);
   }
@@ -184,14 +190,18 @@ export function createStrategyRegistry(
   }
 
   const cycleAt = hasFallbackCycle(entries);
-  if (cycleAt) return { status: 'REJECTED', code: 'FALLBACK_CYCLE', strategyId: cycleAt };
+  if (cycleAt) {
+    return { status: 'REJECTED', code: 'FALLBACK_CYCLE', strategyId: cycleAt };
+  }
 
   return {
     status: 'CREATED',
     registry: {
       registryKind: 'AURORA_INTELLIGENCE_STRATEGY_REGISTRY',
       registryVersion,
-      entries: [...entries].sort((left, right) => left.strategyId.localeCompare(right.strategyId)),
+      entries: [...entries].sort((left, right) =>
+        left.strategyId.localeCompare(right.strategyId),
+      ),
     },
   };
 }
@@ -239,7 +249,9 @@ export function selectStrategy(
   request: StrategySelectionRequest,
 ): StrategySelectionResult {
   const preferred = findStrategy(registry, request.preferredStrategyId);
-  if (!preferred) return { status: 'NOT_SELECTED', code: 'NOT_FOUND', authorizesExecution: false };
+  if (!preferred) {
+    return { status: 'NOT_SELECTED', code: 'NOT_FOUND', authorizesExecution: false };
+  }
 
   const byId = new Map(registry.entries.map((entry) => [entry.strategyId, entry]));
   const queue: Array<{ readonly id: string; readonly via: 'PREFERRED' | 'FALLBACK' }> = [
