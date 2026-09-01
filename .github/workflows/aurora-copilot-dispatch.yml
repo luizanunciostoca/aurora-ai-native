@@ -1,0 +1,35 @@
+name: Aurora Copilot Dispatcher
+
+on:
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Aurora task issue number to retry'
+        required: true
+        type: number
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: aurora-copilot-dispatch-${{ github.event.issue.number || inputs.issue_number }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'aurora:copilot-ready'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Dispatch READY issue fail-closed
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AURORA_COPILOT_USER_TOKEN: ${{ secrets.AURORA_COPILOT_USER_TOKEN }}
+          AURORA_ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+        run: node tools/copilot/dispatch-issue.mjs
