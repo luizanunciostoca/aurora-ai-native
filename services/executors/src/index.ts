@@ -1,8 +1,8 @@
 /**
  * Canonical Executor Plane shared publication root.
  *
- * Program Control owns this barrel. W07 leaf exports are added only after their
- * owning subwave is independently accepted; an empty root must not imply any
- * executable capability, authority, provider binding, or side effect.
+ * Program Control owns this barrel. Only independently accepted W07 leaves may
+ * be exported here. Exporting a leaf publishes its API surface; it does not
+ * grant execution authority, provider binding, or side-effect permission.
  */
-export {};
+export * from './target-resolution/index.js';
