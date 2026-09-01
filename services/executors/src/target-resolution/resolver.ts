@@ -60,7 +60,9 @@ function bindingStateReason(binding: ExecutableTargetBinding): TargetResolutionR
  * evidence only and never execution authority.
  */
 export function resolveExecutionTarget(request: TargetResolutionRequest): TargetResolutionResult {
-  const targetMatches = request.bindings.filter((binding) => sameTarget(binding.target, request.target));
+  const targetMatches = request.bindings.filter((binding) =>
+    sameTarget(binding.target, request.target),
+  );
   if (targetMatches.length === 0) return unresolved(request, 'TARGET_NOT_FOUND');
 
   const tenantMatches = targetMatches.filter(
