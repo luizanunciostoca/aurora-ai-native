@@ -2,6 +2,38 @@ function normalizedStringSet(values) {
   return new Set((values || []).filter((value) => typeof value === 'string' && value.length > 0));
 }
 
+function staticGlobPrefix(pattern) {
+  const wildcardIndex = pattern.search(/[?*]/);
+  return wildcardIndex === -1 ? pattern : pattern.slice(0, wildcardIndex);
+}
+
+function globToRegExp(pattern) {
+  let source = '^';
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === '*') {
+      if (pattern[index + 1] === '*') {
+        source += '.*';
+        index += 1;
+      } else {
+        source += '[^/]*';
+      }
+      continue;
+    }
+    if (character === '?') {
+      source += '[^/]';
+      continue;
+    }
+    source += character.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
+  }
+  source += '$';
+  return new RegExp(source);
+}
+
+export function pathAllowedByPatterns(filePath, patterns) {
+  return (patterns || []).some((pattern) => globToRegExp(pattern).test(filePath));
+}
+
 export function buildDownstreamDepth(tasks) {
   const dependents = new Map(tasks.map((task) => [task.id, []]));
   for (const task of tasks) {
@@ -28,6 +60,28 @@ export function hasSharedWriteConflict(leftTask, rightTask) {
   const right = normalizedStringSet(rightTask.sharedWriteSurfaces);
   for (const surface of left) {
     if (right.has(surface)) return surface;
+  }
+  return null;
+}
+
+export function hasAllowedPathOverlap(leftTask, rightTask) {
+  const leftPatterns = leftTask.allowedPaths || [];
+  const rightPatterns = rightTask.allowedPaths || [];
+  if (!leftPatterns.length || !rightPatterns.length) return null;
+
+  for (const leftPattern of leftPatterns) {
+    const leftPrefix = staticGlobPrefix(leftPattern);
+    for (const rightPattern of rightPatterns) {
+      const rightPrefix = staticGlobPrefix(rightPattern);
+      if (
+        !leftPrefix ||
+        !rightPrefix ||
+        leftPrefix.startsWith(rightPrefix) ||
+        rightPrefix.startsWith(leftPrefix)
+      ) {
+        return `${leftPattern} <> ${rightPattern}`;
+      }
+    }
   }
   return null;
 }
@@ -70,12 +124,22 @@ export function selectSafeReadyFrontier(candidates, tasks, limit) {
     }
 
     let conflictingSelection = null;
+    let conflictReason = null;
     let conflictingSurface = null;
     for (const selectedCandidate of selected) {
-      const surface = hasSharedWriteConflict(candidate.task, selectedCandidate.task);
-      if (surface) {
+      const semanticSurface = hasSharedWriteConflict(candidate.task, selectedCandidate.task);
+      if (semanticSurface) {
         conflictingSelection = selectedCandidate;
-        conflictingSurface = surface;
+        conflictReason = 'SHARED_WRITE_SURFACE';
+        conflictingSurface = semanticSurface;
+        break;
+      }
+
+      const pathOverlap = hasAllowedPathOverlap(candidate.task, selectedCandidate.task);
+      if (pathOverlap) {
+        conflictingSelection = selectedCandidate;
+        conflictReason = 'ALLOWED_PATH_OVERLAP';
+        conflictingSurface = pathOverlap;
         break;
       }
     }
@@ -83,7 +147,7 @@ export function selectSafeReadyFrontier(candidates, tasks, limit) {
     if (conflictingSelection) {
       deferred.push({
         candidate,
-        reason: 'SHARED_WRITE_SURFACE',
+        reason: conflictReason,
         conflictsWith: conflictingSelection.task.id,
         surface: conflictingSurface,
       });
@@ -106,6 +170,7 @@ export function compactFrontierSummary(frontier) {
       taskId: task.id,
       issue: issue?.number || null,
       lane: task.laneHint || null,
+      allowedPaths: task.allowedPaths || [],
       sharedWriteSurfaces: task.sharedWriteSurfaces || [],
       criticalPathDepth: frontier.downstreamDepth.get(task.id) || 1,
     })),
