@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "tasks": [
+    {
+      "id": "W02-COORD",
+      "wave": "W02",
+      "title": "W02 Program Closeout Coordination",
+      "dependsOn": [],
+      "customAgent": "aurora-coordinator",
+      "mode": "IMPLEMENTATION",
+      "sourceDependencies": "W01 accepted; W02-00/A/B/C/D/E and PB1/PB2/PB3 accepted/released",
+      "mission": "Finish Policy Query/Precheck, publish F, execute W02 integration/security/Reality Gate and final acceptance.",
+      "sources": ["- W02_WAVE_CHARTER", "- W02_DEPENDENCY_MATRIX", "- W02_ACCEPTANCE_MATRIX_AND_REALITY_GATE", "- Developer Manual v0.5"],
+      "actions": ["1. Revalidate main and W02 current state.", "2. Keep W02-F leaf ownership isolated; PB4 coordinator-owned publication; W02-G integration after PB4; PB5 final acceptance.", "3. Prevent W03+ runtime leakage and Device Plane scope expansion.", "4. Coordinate exact-head evidence, Drive registries and final W02 Reality Gate."],
+      "ownership": "docs/governance/w02/** and coordinator-owned shared publication/governance surfaces",
+      "forbidden": "No feature implementation unless explicitly transferred.",
+      "initiallyComplete": true
+    },
+    {
+      "id": "W02-F",
+      "wave": "W02",
+      "title": "W02-F Policy Query / Precheck APIs",
+      "dependsOn": [],
+      "customAgent": "aurora-implementation",
+      "mode": "IMPLEMENTATION",
+      "sourceDependencies": "W01 accepted; W02-00/A/B/C/D/E and PB1/PB2/PB3 accepted/released",
+      "mission": "Finish Policy Query/Precheck, publish F, execute W02 integration/security/Reality Gate and final acceptance.",
+      "sources": ["- W02_WAVE_CHARTER", "- W02_DEPENDENCY_MATRIX", "- W02_ACCEPTANCE_MATRIX_AND_REALITY_GATE", "- Developer Manual v0.5"],
+      "actions": ["1. Implement current policy lookup.", "2. Implement informational policy precheck composing D/E canonical types.", "3. Expose required authority, applicable constraints, approval requirement where supported, reasons/reference, correlation and policy version/reference.", "4. Make all APIs read-only and side-effect-free.", "5. Prove stale precheck cannot substitute execution-time current authority validation.", "6. No PolicyToken issuance, OwnerDecision creation, implicit approval, provider credential or Fast Lane bypass.", "7. Add deterministic contracts/schemas/runtime tests including S18-like no-side-effect proof."],
+      "ownership": "packages/contracts/src/policy-query/**; packages/schemas/src/policy-query/**; packages/policy/src/query/**; services/policy/** as ownership allows",
+      "forbidden": "No executor/provider/device/n8n write path; no W03+ work.",
+      "initiallyComplete": true
+    },
+    {
+      "id": "W02-PB4",
+      "wave": "W02",
+      "title": "W02 PB4 - Policy Query Public Surface Publication",
+      "dependsOn": ["W02-F"],
+      "customAgent": "aurora-governance",
+      "mode": "IMPLEMENTATION",
+      "sourceDependencies": "W01 accepted; W02-00/A/B/C/D/E and PB1/PB2/PB3 accepted/released",
+      "mission": "Finish Policy Query/Precheck, publish F, execute W02 integration/security/Reality Gate and final acceptance.",
+      "sources": ["- W02_WAVE_CHARTER", "- W02_DEPENDENCY_MATRIX", "- W02_ACCEPTANCE_MATRIX_AND_REALITY_GATE", "- Developer Manual v0.5"],
+      "actions": ["1. Publish W02-F public package surfaces under coordinator ownership.", "2. Reconcile exports/manifests/barrels and consumer fixture without semantic expansion.", "3. Prove contracts/schemas/query surfaces resolve after builds.", "4. Run exact-head Quality/Test Build/Security and only then release W02-G."],
+      "ownership": "coordinator-owned package exports/manifests/consumer fixture/shared publication surfaces",
+      "forbidden": "No W02-G implementation.",
+      "initiallyComplete": true
+    },
+    {
+      "id": "W02-G",
+      "wave": "W02",
+      "title": "W02-G Integration, Security & Contract Tests + Reality Gate 1",
+      "dependsOn": ["W02-PB4"],
+      "customAgent": "aurora-integration",
+      "mode": "IMPLEMENTATION",
+      "sourceDependencies": "W01 accepted; W02-00/A/B/C/D/E and PB1/PB2/PB3 accepted/released; PB4 merged/released",
+      "mission": "Finish W02 integration/security/Reality Gate and final acceptance.",
+      "sources": ["- W02_WAVE_CHARTER", "- W02_DEPENDENCY_MATRIX", "- W02_ACCEPTANCE_MATRIX_AND_REALITY_GATE", "- Developer Manual v0.5"],
+      "actions": ["1. Audit clean consumer compilation/public exports.", "2. Verify schema/type parity, duplicate/cycle/dependency/legacy-runtime audits and ownership convergence.", "3. Run full T1 Contract Gate.", "4. Run T2 Simulation S01-S20 exactly as the acceptance matrix requires.", "5. Record reproducibility evidence without secrets/private chain-of-thought.", "6. Block on unexpected ALLOW, missing replay evidence, real external side effects or unresolved ownership drift."],
+      "ownership": "W02 integration tests, public packages, tools/test/w02/** and coordinator-transferred shared surfaces",
+      "forbidden": "No real provider/device side effects; maturity T1 Contract + T2 Simulation.",
+      "existingIssueNumber": 64
+    },
+    {
+      "id": "W02-PB5",
+      "wave": "W02",
+      "title": "W02 PB5 / Final W02 Acceptance",
+      "dependsOn": ["W02-G"],
+      "customAgent": "aurora-governance",
+      "mode": "IMPLEMENTATION",
+      "sourceDependencies": "W02-G accepted/merged with Reality Gate 1 AUTHORITY_VERIFIED",
+      "mission": "Close W02 and release W03 only after exact-main final acceptance.",
+      "sources": ["- W02_WAVE_CHARTER", "- W02_DEPENDENCY_MATRIX", "- W02_ACCEPTANCE_MATRIX_AND_REALITY_GATE", "- Developer Manual v0.5"],
+      "actions": ["1. Require W02-G accepted/merged and Reality Gate 1 AUTHORITY_VERIFIED.", "2. Run exact-main official gates and revalidate no drift.", "3. Converge Drive/GitHub current status, acceptance/evidence/change registries and deprecations.", "4. Publish final W02 acceptance/handoff.", "5. Release W03 implementation only if dependency conditions are truly satisfied."],
+      "ownership": "program/W02 governance + final publication/acceptance surfaces",
+      "forbidden": "No W03 runtime implementation in PB5."
+    }
+  ]
+}
