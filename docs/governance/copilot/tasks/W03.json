@@ -21,7 +21,11 @@
       "root-build-config",
       "ci-workflows",
       "codeowners",
-      "cross-package-publication"
+      "cross-package-publication",
+      "packages/events/package.json",
+      "packages/events/tsconfig.json",
+      "packages/events/tsconfig.build.json",
+      "packages/events/src/index.ts"
     ]
   },
   "tasks": [
@@ -74,9 +78,9 @@
         "4. Prove repeated delivery/replay does not duplicate downstream side effects.",
         "5. Expose deterministic evidence/correlation hooks."
       ],
-      "ownership": "W03 event/persistence outbox-inbox modules",
-      "forbidden": "No provider execution; no blind retry semantics.",
-      "allowedPaths": ["packages/events/**"],
+      "ownership": "packages/events/src/delivery/** plus W03-B-prefixed event tests; shared @aurora/events package/publication surfaces remain Program Control-owned",
+      "forbidden": "No provider execution; no blind retry semantics; no packages/events manifest, root barrel or transport/subscription leaf edits.",
+      "allowedPaths": ["packages/events/src/delivery/**", "packages/events/test/w03b-**"],
       "laneHint": "LANE-1",
       "dispatchPriority": 90,
       "sharedWriteSurfaces": ["w03:events-outbox-inbox-idempotency"]
@@ -93,9 +97,9 @@
         "4. Define transport-independent contracts and local/test transport if needed.",
         "5. Replace polling only where reliable events exist; document fallback."
       ],
-      "ownership": "W03 event transport/subscription packages",
-      "forbidden": "Legacy in-memory AuroraEventBus is test/reference only, never production backbone.",
-      "allowedPaths": ["packages/events/**"],
+      "ownership": "packages/events/src/transport/** plus W03-C-prefixed event tests; shared @aurora/events package/publication surfaces remain Program Control-owned",
+      "forbidden": "Legacy in-memory AuroraEventBus is test/reference only, never production backbone; no packages/events manifest, root barrel or delivery/idempotency leaf edits.",
+      "allowedPaths": ["packages/events/src/transport/**", "packages/events/test/w03c-**"],
       "laneHint": "LANE-2",
       "dispatchPriority": 90,
       "sharedWriteSurfaces": ["w03:events-transport-subscription"]
@@ -112,9 +116,9 @@
         "4. Handle duplicate, replayed and out-of-order EventEnvelope deterministically.",
         "5. Add replay safety invariants for future provider/device side effects."
       ],
-      "ownership": "W03 ordering/replay/DLQ modules",
-      "forbidden": "Replay may not grant authority or blindly repeat uncertain side effects.",
-      "allowedPaths": ["packages/events/**"],
+      "ownership": "packages/events/src/replay/** plus W03-D-prefixed event tests; shared package/publication surfaces remain Program Control-owned",
+      "forbidden": "Replay may not grant authority or blindly repeat uncertain side effects; no packages/events manifest or root barrel edits.",
+      "allowedPaths": ["packages/events/src/replay/**", "packages/events/test/w03d-**"],
       "laneHint": "LANE-1",
       "dispatchPriority": 80,
       "sharedWriteSurfaces": ["w03:events-ordering-replay-dlq"]
@@ -150,7 +154,7 @@
         "4. Measure queue/claim throughput and bounded concurrency.",
         "5. Produce W03 Reality Gate evidence and migration/recovery runbook."
       ],
-      "ownership": "W03 integration tests/fixtures/benchmarks",
+      "ownership": "W03 integration tests/fixtures/benchmarks/runbook",
       "forbidden": "No external provider/device side effects.",
       "laneHint": "CONVERGENCE",
       "dispatchPriority": 70,
