@@ -1,8 +1,10 @@
 export const W03_POSTGRES_CONVENTIONS = [
   'Use sequential migration numbers and stable forward-only numbering.',
   'Keep migrations deterministic, idempotent where practical, and record retention and ownership.',
-  'Prefer UUID + timestamptz + JSONB for durable event and workflow state.',
-  'Normalize tenant and canonical identifiers in every table key to prevent cross-tenant leakage.',
+  'Persist Aurora canonical IDs in their governed <prefix>_<ULID> wire format; never coerce them to UUID.',
+  'Use database-local UUID surrogates only for records that have no canonical Aurora ID namespace, and label them explicitly as local.',
+  'Use TIMESTAMPTZ and JSONB for durable temporal and structured state where appropriate.',
+  'Carry tenant keys through relational constraints so cross-tenant references fail closed.',
   'Backfill only via additive migrations; avoid destructive changes without a documented rollback path.',
 ] as const;
 
@@ -18,6 +20,8 @@ export const W03_POSTGRES_TABLES = {
 export const W03_POSTGRES_BASELINE = {
   migrationId: '001_w03_postgres_baseline',
   name: 'W03 Postgres baseline',
+  canonicalIdStorage: 'PREFIXED_ULID_TEXT',
+  localSurrogateStorage: 'UUID_LOCAL_ONLY',
   supportedStatus: [
     'queued',
     'claimed',
