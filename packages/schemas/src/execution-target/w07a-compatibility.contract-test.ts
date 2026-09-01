@@ -127,10 +127,7 @@ assert(parsedDevice.kind === 'DEVICE', 'DEVICE target must parse without provide
 const parsedProvider = ExecutionTargetReferenceSchema.parse(providerTarget, {
   parseContractVersion,
 });
-assert(
-  parsedProvider.kind === 'PROVIDER',
-  'PROVIDER target must preserve provider provenance',
-);
+assert(parsedProvider.kind === 'PROVIDER', 'PROVIDER target must preserve provider provenance');
 expectThrows(
   () =>
     ExecutionTargetReferenceSchema.parse(
@@ -258,10 +255,7 @@ const deviceReceipt = ReceiptSchema.parse(
   { ...baseReceipt, executionTarget: deviceTarget },
   receiptDependencies,
 );
-assert(
-  deviceReceipt.executionTarget?.kind === 'DEVICE',
-  'DEVICE Receipt must not require fake provider',
-);
+assert(deviceReceipt.executionTarget?.kind === 'DEVICE', 'DEVICE Receipt must not require fake provider');
 expectThrows(
   () =>
     ReceiptSchema.parse(
@@ -314,10 +308,7 @@ const legacyEvidence = EvidenceSchema.parse(
   },
   evidenceDependencies,
 );
-assert(
-  legacyEvidence.source.sourceType === 'PROVIDER_READBACK',
-  'legacy provider evidence parses',
-);
+assert(legacyEvidence.source.sourceType === 'PROVIDER_READBACK', 'legacy provider evidence parses');
 const targetEvidence = EvidenceSchema.parse(
   {
     ...baseEvidence,
