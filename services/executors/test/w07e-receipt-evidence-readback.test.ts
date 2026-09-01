@@ -29,7 +29,10 @@ function intent(
     capability: { capability: 'social.publish', actionType: 'PUBLISH' },
     executionTarget,
     tenant: { tenantId: 'tenant:alpha' as ActionIntent['tenant']['tenantId'] },
-    actor: { kind: 'HUMAN', identityId: 'identity:operator' as ActionIntent['actor']['identityId'] },
+    actor: {
+      kind: 'HUMAN',
+      identityId: 'identity:operator' as ActionIntent['actor']['identityId'],
+    },
     requestOrigin: {
       kind: 'HUMAN',
       identityId: 'identity:operator' as ActionIntent['requestOrigin']['identityId'],
@@ -282,39 +285,54 @@ test('receipt binding mismatch fails before the readback port is invoked', () =>
   }
 });
 
-test('sensitive fields values references camelCase and private keys are rejected before Evidence', () => {
-  const actionIntent = intent();
-  const observations = [
-    { reference: { system: 'provider', reference: 'object:128' }, observedState: { api_token: 'x' } },
-    {
-      reference: { system: 'provider', reference: 'object:129' },
-      observedState: { diagnostic: 'authorization=must-not-enter-evidence' },
-    },
-    {
-      reference: { system: 'provider', reference: 'https://example.invalid/object?token=secret' },
-    },
-    { reference: { system: 'provider', reference: 'object:131' }, observedState: { accessToken: 'x' } },
-    { reference: { system: 'provider', reference: 'object:132' }, observedState: { privateKey: 'x' } },
-    { reference: { system: 'clientSecret', reference: 'object:133' } },
-  ] as const;
+test(
+  'sensitive fields values references camelCase and private keys are rejected before Evidence',
+  () => {
+    const actionIntent = intent();
+    const observations = [
+      {
+        reference: { system: 'provider', reference: 'object:128' },
+        observedState: { api_token: 'x' },
+      },
+      {
+        reference: { system: 'provider', reference: 'object:129' },
+        observedState: { diagnostic: 'authorization=must-not-enter-evidence' },
+      },
+      {
+        reference: {
+          system: 'provider',
+          reference: 'https://example.invalid/object?token=secret',
+        },
+      },
+      {
+        reference: { system: 'provider', reference: 'object:131' },
+        observedState: { accessToken: 'x' },
+      },
+      {
+        reference: { system: 'provider', reference: 'object:132' },
+        observedState: { privateKey: 'x' },
+      },
+      { reference: { system: 'clientSecret', reference: 'object:133' } },
+    ] as const;
 
-  for (const observation of observations) {
-    const result = captureReadbackEvidence({
-      schemaVersion: version,
-      evidenceId: evidenceId(),
-      actionIntent,
-      receipt: targetedReceipt(actionIntent),
-      readback: () => ({
-        capturedAt: timestamp('2026-09-01T17:00:03Z'),
-        ...observation,
-      }),
-    });
-    assert.equal(result.status, 'REJECTED');
-    if (result.status === 'REJECTED') {
-      assert.deepEqual(result.reasons, ['READBACK_SENSITIVE_DATA_REJECTED']);
+    for (const observation of observations) {
+      const result = captureReadbackEvidence({
+        schemaVersion: version,
+        evidenceId: evidenceId(),
+        actionIntent,
+        receipt: targetedReceipt(actionIntent),
+        readback: () => ({
+          capturedAt: timestamp('2026-09-01T17:00:03Z'),
+          ...observation,
+        }),
+      });
+      assert.equal(result.status, 'REJECTED');
+      if (result.status === 'REJECTED') {
+        assert.deepEqual(result.reasons, ['READBACK_SENSITIVE_DATA_REJECTED']);
+      }
     }
-  }
-});
+  },
+);
 
 test('readback must be at or after the latest known receipt timestamp', () => {
   const actionIntent = intent();
