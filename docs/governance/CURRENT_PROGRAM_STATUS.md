@@ -1,8 +1,8 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_00_COMPLETE_ACCEPTED_W05_IMPLEMENTATION_FRONTIER_READY_W07_00_RECONCILIATION_REQUIRED`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_IMPLEMENTATION_FRONTIER_READY_W07_00_COMPLETE_ACCEPTED_W07_A_RELEASE_PENDING_STATUS_CONVERGENCE`
 Audit date: 2026-09-01
-Current accepted implementation/governance baseline before this status-convergence publication: `0d1895644760be8ed74661ab72756ebf4d81340e`
+Current accepted implementation/governance baseline before this status-convergence publication: `ebcf5c3117963755962903fa45403f9155808443`
 
 ## Authority order
 
@@ -27,14 +27,18 @@ No prompt, task node, PREBUILD artifact, draft PR, agent output or reference sou
 - W04: `COMPLETE_ACCEPTED / W04_CONTROL_CORE_VERIFIED`.
 - W04-00/A/B/C/D/E/F/G/H: `COMPLETE_ACCEPTED_MERGED` according to canonical exact-SHA, post-merge and Drive evidence.
 - W05-00: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W05-A/C/D/E/F: `DEPENDENCY_READY` after this status-convergence publication is accepted; implementation remains subject to ownership/shared-surface controls and `FREE_ACTIONS_CLI` batch limits.
+- W05-A/C/D/E/F: `DEPENDENCY_READY`; implementation remains subject to shared-surface ownership and `FREE_ACTIONS_CLI` batch limits.
 - W05-B: gated on accepted W05-A + W05-C + W05-D + W05-E.
 - W05-G: gated on accepted W05-B + W05-F.
 - W05-H: gated on accepted W05-G.
 - W06: gated on accepted W05-H.
-- W07-00: `DEPENDENCY_READY_BUT_CANDIDATE_RECONCILIATION_REQUIRED`; the previously reviewed candidate was based on pre-W05 main and must be regenerated/revalidated on current main before merge.
-- W07 descendants and W08-W20 remain dependency-gated except PREBUILD/readiness explicitly allowed by accepted Puzzle governance.
-- W15-00 is not released by W04-H alone; it remains additionally dependent on W02-PB5, W03-F, W07-H and W14-H.
+- W07-00: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED` on accepted main `ebcf5c3117963755962903fa45403f9155808443`.
+- W07-A: becomes `DEPENDENCY_READY` only after this status-convergence publication is independently accepted, merged and post-merge verified.
+- W07-B/C/D/E: gated on accepted W07-A.
+- W07-F/G: gated on accepted W07-B + W07-C + W07-D + W07-E.
+- W07-H: gated on accepted W07-F + W07-G.
+- W08-W20 remain dependency-gated except PREBUILD/readiness explicitly allowed by accepted Puzzle governance.
+- W15-00 is not released by W04-H or W07-00 alone; it remains additionally dependent on W02-PB5, W03-F, W07-H and W14-H.
 
 ## Compact accepted baseline evidence
 
@@ -52,6 +56,8 @@ W03-F / Reality Gate PR #126 accepted candidate `8108a9259823e27064ca32547859789
 
 Canonical Drive folder: `W03_PERSISTENCE_EVENT_BACKBONE_DURABLE_WORKFLOW` / `1ZO73FVedMQM77dtfRtWF9wm54eulBkXc`.
 
+Stale W03-D fallback PR #120 is explicitly `SUPERSEDED / CLOSED_WITHOUT_MERGE`; canonical W03-D was accepted through PR #123. No current dependency or authority may derive from #120.
+
 ### W04
 
 Final outcome: `W04_CONTROL_CORE_VERIFIED`.
@@ -60,24 +66,18 @@ W04-H PR #151 accepted candidate `b4de1097b03a4b94bc81ac38f6cbe0019244724b`; can
 
 Risk Gate A: PASS. Risk Gate B: PASS. Risk Gate C: `PASS_FOR_TEST_SCOPE`. Risk Gate D: `PASS_FOR_W04_SCOPE`.
 
-Canonical Drive folder: `W04_CONTROL_CORE_CAPABILITY_PLANNING_GOAL_GRAPH` / `1Vz45N4p5zhubQvBFAf_zFinkhCFZcQdp`. Detailed W04 node evidence remains canonical in `docs/governance/w04/**`, issues #90-#97, Git history and Drive acceptance records.
+Canonical Drive folder: `W04_CONTROL_CORE_CAPABILITY_PLANNING_GOAL_GRAPH` / `1Vz45N4p5zhubQvBFAf_zFinkhCFZcQdp`.
 
 ## W05-00 accepted evidence
 
 Wave node: W05-00 — Coordination / Intelligence Boundaries.
 
-- Original draft PR #155 was closed without merge after the ready-for-review connector mutation failed on an invalid GitHub GraphQL field. This was an operational connector defect, not a candidate defect.
-- Replacement PR #157 used the same branch `wave/05-00-intelligence-boundary-freeze`, same exact candidate HEAD `17f70459ec7f3d2a61e42857f286434ca2b0499c`, and same accepted base at review `b502bfa7e97291086c09cc85cd71040f96d3b036`; replacement introduced no content change.
+- Original draft PR #155 was closed without merge after the ready-for-review connector mutation failed; this was an operational connector defect, not a candidate defect.
+- Canonical replacement PR #157 retained the same exact candidate HEAD `17f70459ec7f3d2a61e42857f286434ca2b0499c` with no content drift.
 - Exact candidate gates: Quality `33514457038`, Test Build `33514457065`, Security `33514457830`, Aurora Puzzle Validation `33514457106`, Aurora Copilot Fabric Validation `33514457133`: SUCCESS.
-- Independent Program Control review on replacement #157: review id `5079379932`, anchored to exact candidate HEAD, decision `ACCEPT` for controlled merge.
-- Controlled merge/main: `0d1895644760be8ed74661ab72756ebf4d81340e`, with expected candidate head enforced.
-- Post-merge exact-main Quality `33520579295`: SUCCESS.
-- Post-merge exact-main Test Build `33520579206`: SUCCESS.
-- Post-merge exact-main Security `33520580008`: SUCCESS.
-- Post-merge exact-main Aurora Puzzle Validation `33520579450`: SUCCESS.
-- Post-merge exact-main Aurora Copilot Fabric Validation `33520579396`: SUCCESS.
-- Post-merge exact-main Aurora Copilot Task Orchestrator `33520579339`: SUCCESS.
-- Additional observed exact-main security-gate, secret-scan, dependency-scan / osv-scan and materialize-puzzle-frontier checks: SUCCESS.
+- Independent Program Control review on #157: review id `5079379932`, exact-head decision `ACCEPT`.
+- Controlled merge/main: `0d1895644760be8ed74661ab72756ebf4d81340e`.
+- Post-merge exact-main Quality `33520579295`, Test Build `33520579206`, Security `33520580008`, Aurora Puzzle Validation `33520579450`, Aurora Copilot Fabric Validation `33520579396`, Aurora Copilot Task Orchestrator `33520579339`: SUCCESS.
 - Drive acceptance evidence: `W05_00_ACCEPTANCE_EVIDENCE_2026-09-01` / `156ni-zWA_ko21_SWFM0KJtYpOaWP-N9TV4am5kPZHzM`.
 - Drive readiness artifact: `W05_PARALLEL_READINESS_PREBUILD_2026-09-01` / `1FMkKuEKixC1SXZCylnUOUIqWEYIyNP2EHSn-Om4x8tE`; readiness only, never authority.
 
@@ -95,13 +95,13 @@ Accepted coordination DAG:
 
 `W05-G -> W05-H`
 
-After acceptance of this status-convergence publication, dependency-ready implementation nodes are `{ W05-A, W05-C, W05-D, W05-E, W05-F }`.
+Dependency-ready implementation nodes are `{ W05-A, W05-C, W05-D, W05-E, W05-F }`.
 
-Program execution governance still caps `FREE_ACTIONS_CLI` at at most two dependency-satisfied code tasks per batch. Therefore the implementation frontier is logically five-way parallel but operational publication must be batched in at most two code tasks at a time unless that governance is separately changed and accepted.
+Program execution governance caps `FREE_ACTIONS_CLI` at at most two dependency-satisfied code tasks per batch. The implementation frontier is logically five-way parallel but operational BUILD publication remains limited to two code tasks at a time unless that governance is separately changed and accepted.
 
-### Shared-surface coordination before/while building
+### W05 shared-surface coordination
 
-- `packages/intelligence/**` does not exist in the accepted pre-W05 implementation baseline. Package skeleton, package manifest, tsconfig, root/public barrels/export maps and workspace/lockfile changes are Program Control shared surfaces and must be created/reconciled once, not independently by leaf workers.
+- `packages/intelligence/**` did not exist in the accepted pre-W05 implementation baseline. Package skeleton, manifest, tsconfig, root/public barrels/export maps and workspace/lockfile changes are Program Control shared surfaces and must be created/reconciled once, not independently by leaf workers.
 - W05-A owns classifier leaf semantics.
 - W05-C owns ReasoningLevel L0-L5 leaf semantics and consumes W04 ExecutionBudget rather than redefining it.
 - W05-D owns decomposed confidence/uncertainty/abstention semantics; confidence never becomes authority.
@@ -109,16 +109,65 @@ Program execution governance still caps `FREE_ACTIONS_CLI` at at most two depend
 - W05-F owns bounded generic worker/agent runtime semantics and must compose W03 durable lease/heartbeat/expiry/reclaim primitives rather than create a second durability truth.
 - Root manifests, root barrels, workspace config, lockfiles, CI, CODEOWNERS, cross-package public exports and `CURRENT_PROGRAM_STATUS.md` remain Program Control shared surfaces.
 
-## W07-00 reconciliation state
+## W07-00 accepted evidence and released successor boundary
 
-W07-00 issue #106 remains dependency-eligible from accepted W04-H, but its first candidate PR #156 was created/reviewed against main `b502bfa7e97291086c09cc85cd71040f96d3b036`. W05-00 is now merged and current main has advanced, so #156 is stale as a merge candidate even though its exact candidate gates were green.
+Wave node: W07-00 — Executor Boundary / Ownership / Compatibility / Risk Freeze.
 
-Stale candidate #156 exact HEAD: `ee11c003ab13b8bdea5ea449634a0c18250cbc56`.
-Candidate gates on that exact stale-base HEAD: Quality `33514731437`, Test Build `33514731718`, Security `33514732318`, Aurora Puzzle Validation `33514731330`, Aurora Copilot Fabric Validation `33514731317`: SUCCESS.
+### Superseded candidate
 
-Required next W07 action: preserve the reviewed seven-file governance content, recreate/reconcile it onto the latest accepted main after this status-convergence publication, open a non-draft canonical replacement, rerun exact-head gates, independently review, controlled-merge, run post-merge exact-main verification and converge Drive/GitHub before W07-A BUILD release.
+Original draft PR #156 was based on pre-W05 main `b502bfa7e97291086c09cc85cd71040f96d3b036`, exact HEAD `ee11c003ab13b8bdea5ea449634a0c18250cbc56`. Its exact-head gates were green, but accepted main advanced through W05-00 and W05 status convergence. #156 was therefore closed without merge and retained as provenance only.
 
-W07-A PREBUILD contract-readiness artifact exists in Drive as `W07_A_CONTRACT_READINESS_PREBUILD_2026-09-01` / `15dKLolojLmeT7JhIyR8nc_gvyPv77ay38ljUp9hAO2g`; it remains non-authoritative.
+### Canonical current-main replacement
+
+- Canonical PR: #159 — `docs(W07-00): reconcile executor boundary freeze on current main`.
+- Replacement base at creation: `37ead27f549b51b2b5322b0f45e72f5a95cc2584`.
+- Exact candidate HEAD: `da5a0f31d0f914842c60a25fbdf5520250fa7e03`.
+- Seven substantive W07-00 governance blobs were recreated byte-for-byte from the reviewed stale-base candidate; `W07_00_CURRENT_MAIN_RECONCILIATION.md` explicitly audited intervening accepted-main drift.
+- Independent Program Control review on #159: review id `5079527834`, exact-head decision `ACCEPT` for controlled merge.
+- Exact candidate Quality `33521702070`, Test Build `33521702157`, Security `33521703028`, Aurora Puzzle Validation `33521702106`, Aurora Copilot Fabric Validation `33521702131`: SUCCESS.
+- Controlled merge/resulting exact main: `ebcf5c3117963755962903fa45403f9155808443`.
+- Merge parents: `37ead27f549b51b2b5322b0f45e72f5a95cc2584` and `da5a0f31d0f914842c60a25fbdf5520250fa7e03`.
+- Post-merge exact-main Quality `33521973917`, Test Build `33521973597`, Security `33521974872`, Aurora Puzzle Validation `33521973567`, Aurora Copilot Fabric Validation `33521973675`, Aurora Copilot Task Orchestrator `33521973533`: SUCCESS.
+- Drive acceptance evidence: `W07_00_ACCEPTANCE_EVIDENCE_2026-09-01` / `1vJtJ0BpqH6B1xSodCVZ1MyGvYNiqJYShIs8UMi8d2Xs`.
+- W07-A readiness-only PREBUILD: `W07_A_CONTRACT_READINESS_PREBUILD_2026-09-01` / `15dKLolojLmeT7JhIyR8nc_gvyPv77ay38ljUp9hAO2g`; non-authoritative.
+
+Final W07-00 outcome: `COMPLETE_ACCEPTED / POST_MERGE_EXACT_MAIN_VERIFIED`.
+
+### Accepted W07 architecture freeze
+
+- W07 owns the generic deterministic executor safety boundary.
+- Current applicable W02 authority/policy validation remains mandatory where required.
+- Target resolution, target availability, provider/device/workflow identity, model output or router output never grants authority.
+- W03 remains durability/idempotency/replay source of truth; W07 composes it and cannot create a second idempotency truth.
+- W04 remains capability/control/lane/budget source of truth; planning metadata is not execution authority.
+- W05 remains intelligence-only and cannot bypass W07.
+- ActionIntent/Receipt/Evidence remain one canonical evolving family. W07-A must migrate provider-centric compatibility debt without creating a parallel truth.
+- Supported generic target kinds frozen for compatibility work are PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE.
+- Legacy PROVIDER compatibility may be preserved, but DEVICE/WORKFLOW/LOCAL_SERVICE cannot use fabricated provider identity.
+- Acknowledgement is not verified external state.
+- `EXECUTION_UNCERTAIN` is distinct from ordinary failure and requires reconcile-before-retry semantics.
+- Circuit breaker and kill switch are non-bypassable safety state.
+- Receipt/Evidence must not contain provider credentials/secrets.
+- W08 owns concrete provider adapters/credentials/transport; W09 workflow runtime; W14 DeviceId/DeviceRef/session/trust/gateway; W15 Android/native capability bridge and Device Executor.
+
+Risk Gate A: `PASS_FOR_COORDINATION_SCOPE`.
+Risk Gate B: `PASS_FOR_COORDINATION_SCOPE`.
+Risk Gate C: `PASS_FOR_PLAN_SCOPE_ONLY`; runtime performance evidence remains descendant/W07-H owned.
+Risk Gate D: `PASS_FOR_PLAN_SCOPE_ONLY`; runtime fault/recovery proof remains descendant-owned.
+
+### W07 successor DAG
+
+After acceptance/merge/post-merge verification of this status-convergence publication:
+
+`W07-00 -> W07-A`
+
+`W07-A -> (W07-B || W07-C || W07-D || W07-E)`
+
+`W07-B + W07-C + W07-D + W07-E -> (W07-F || W07-G)`
+
+`W07-F + W07-G -> W07-H`
+
+W07-A is the only immediately releasable W07 BUILD descendant. Its first obligation is compatibility-safe evolution of generic ExecutionTarget plus ActionIntent/Receipt/Evidence, preserving existing provider compatibility without fake provider identities and without moving provider/device/workflow concrete runtimes into W07.
 
 ## Architecture boundaries retained
 
