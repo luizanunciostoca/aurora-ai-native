@@ -152,3 +152,23 @@ test('bounded retry backoff never exceeds the configured cap', () => {
   assert.equal(delivery.boundedBackoffSeconds(20, 60), 60);
   assert.throws(() => delivery.boundedBackoffSeconds(0), /positive integer/);
 });
+
+test('delivery evidence preserves tenant/correlation and canonicalizes details', () => {
+  const evidence = delivery.buildDeliveryEvidence({
+    tenantId,
+    eventId,
+    correlationId,
+    transition: 'OUTBOX_CLAIMED',
+    at: '2026-09-01T03:00:00.000Z',
+    details: { z: 2, a: { y: 1, x: 0 } },
+  });
+
+  assert.equal(evidence.tenantId, tenantId);
+  assert.equal(evidence.eventId, eventId);
+  assert.equal(evidence.correlationId, correlationId);
+  assert.equal(JSON.stringify(evidence.details), '{"a":{"x":0,"y":1},"z":2}');
+  assert.throws(
+    () => delivery.buildDeliveryEvidence({ tenantId, eventId, transition: '', at: 'now' }),
+    /transition must be non-empty/,
+  );
+});
