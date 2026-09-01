@@ -3,6 +3,7 @@ export {
   canonicalizeJson,
   canonicalJsonString,
 } from './canonical-json';
+export { buildDeliveryEvidence } from './evidence';
 export { boundedBackoffSeconds, decideIdempotency } from './idempotency';
 export {
   ACK_INBOX_SQL,
