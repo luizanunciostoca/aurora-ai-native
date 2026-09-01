@@ -90,29 +90,26 @@ function result(
   } as unknown as AuthorityEvaluationResult;
 }
 
-test(
-  'permits progression only after current authority validation and never performs execution',
-  () => {
-    const authorityEvaluation = evaluation();
-    let calls = 0;
-    const gate = validateExecutorAuthority({
-      schemaVersion: intent.schemaVersion,
-      actionIntent: intent,
-      authorityEvaluation,
-      validateCurrentAuthority: (request) => {
-        calls += 1;
-        return result(request, true);
-      },
-    });
+test('requires current authority before progression', () => {
+  const authorityEvaluation = evaluation();
+  let calls = 0;
+  const gate = validateExecutorAuthority({
+    schemaVersion: intent.schemaVersion,
+    actionIntent: intent,
+    authorityEvaluation,
+    validateCurrentAuthority: (request) => {
+      calls += 1;
+      return result(request, true);
+    },
+  });
 
-    assert.equal(calls, 1);
-    assert.equal(gate.currentAuthorityValidated, true);
-    assert.equal(gate.executionEligible, true);
-    assert.equal(gate.authorizesExecution, false);
-  },
-);
+  assert.equal(calls, 1);
+  assert.equal(gate.currentAuthorityValidated, true);
+  assert.equal(gate.executionEligible, true);
+  assert.equal(gate.authorizesExecution, false);
+});
 
-test('Fast Lane, confidence, precheck and ExecutionBudget cannot bypass current denial', () => {
+test('non-authoritative signals cannot bypass current denial', () => {
   const authorityEvaluation = evaluation();
   const gate = validateExecutorAuthority({
     schemaVersion: intent.schemaVersion,
@@ -123,7 +120,7 @@ test('Fast Lane, confidence, precheck and ExecutionBudget cannot bypass current 
       lane: 'FAST',
       confidence: 1,
       precheckReference: 'precheck:allow',
-      executionBudgetReference: 'budget:unbounded-looking-but-non-authoritative',
+      executionBudgetReference: 'budget:non-authoritative',
     },
   });
 
@@ -132,7 +129,7 @@ test('Fast Lane, confidence, precheck and ExecutionBudget cannot bypass current 
   assert.deepEqual(gate.reasons, ['CURRENT_AUTHORITY_DENIED']);
 });
 
-test('mismatched intent/evaluation context fails closed before invoking validator', () => {
+test('context mismatch fails closed before validator invocation', () => {
   let calls = 0;
   const gate = validateExecutorAuthority({
     schemaVersion: intent.schemaVersion,
@@ -148,12 +145,15 @@ test('mismatched intent/evaluation context fails closed before invoking validato
   assert.deepEqual(gate.reasons, ['AUTHORITY_CONTEXT_MISMATCH']);
 });
 
-test('authority reference mismatch fails closed before invoking validator', () => {
+test('authority reference mismatch fails before validator invocation', () => {
   let calls = 0;
+  const authorityEvaluation = evaluation({
+    policyToken: { policyTokenId: 'policy-token:other' },
+  });
   const gate = validateExecutorAuthority({
     schemaVersion: intent.schemaVersion,
     actionIntent: intent,
-    authorityEvaluation: evaluation({ policyToken: { policyTokenId: 'policy-token:other' } }),
+    authorityEvaluation,
     validateCurrentAuthority: (request) => {
       calls += 1;
       return result(request, true);
@@ -164,21 +164,21 @@ test('authority reference mismatch fails closed before invoking validator', () =
   assert.deepEqual(gate.reasons, ['AUTHORITY_REFERENCE_MISMATCH']);
 });
 
-test('forged/stale validator result cannot be accepted as current authority', () => {
+test('stale validator result cannot become current authority', () => {
   const authorityEvaluation = evaluation();
+  const stalePolicy = { reference: 'policy:execution', version: 'old' };
   const gate = validateExecutorAuthority({
     schemaVersion: intent.schemaVersion,
     actionIntent: intent,
     authorityEvaluation,
-    validateCurrentAuthority: (request) =>
-      result(request, true, { currentPolicy: { reference: 'policy:execution', version: 'old' } }),
+    validateCurrentAuthority: (request) => result(request, true, { currentPolicy: stalePolicy }),
   });
 
   assert.equal(gate.executionEligible, false);
   assert.deepEqual(gate.reasons, ['CURRENT_AUTHORITY_RESULT_MISMATCH']);
 });
 
-test('validator failure is fail-closed and cannot be converted into execution eligibility', () => {
+test('validator failure is fail closed', () => {
   const gate = validateExecutorAuthority({
     schemaVersion: intent.schemaVersion,
     actionIntent: intent,
