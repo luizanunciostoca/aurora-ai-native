@@ -262,11 +262,7 @@ test('retry safeguards must be for the next attempt and newer than reconciliatio
     actionIntent: fixture.actionIntent,
     uncertainty: fixture.uncertainty,
     observation,
-    retrySafeguards: safeGuards(
-      fixture.actionIntent,
-      2,
-      at('2026-09-01T18:00:01Z'),
-    ),
+    retrySafeguards: safeGuards(fixture.actionIntent, 2, at('2026-09-01T18:00:01Z')),
   });
   const wrongAttempt = reconcileExecutionUncertainty({
     schemaVersion: version,
