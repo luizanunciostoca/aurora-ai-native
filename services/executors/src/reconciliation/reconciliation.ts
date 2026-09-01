@@ -25,10 +25,7 @@ function uniqueSorted<T extends string>(values: readonly T[]): readonly T[] {
 
 function rejectedClassification(
   ...reasons: readonly (
-    | 'INVALID_TIME'
-    | 'ATTEMPT_INVALID'
-    | 'ATTEMPT_LIMIT_INVALID'
-    | 'SIGNAL_PHASE_INCOMPATIBLE'
+    'INVALID_TIME' | 'ATTEMPT_INVALID' | 'ATTEMPT_LIMIT_INVALID' | 'SIGNAL_PHASE_INCOMPATIBLE'
   )[]
 ): ExecutionAmbiguityClassification {
   return { status: 'REJECTED', reasons: uniqueSorted(reasons), authorizesExecution: false };
