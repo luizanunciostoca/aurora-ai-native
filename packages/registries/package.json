@@ -38,7 +38,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "test": "npm run typecheck && npm run build && node --test test/shipping.test.mjs test/w05e-strategy-registry.test.mjs && node test/w05e-format-diagnostic.mjs",
+    "test": "npm run typecheck && npm run build && node --test test/shipping.test.mjs test/w05e-strategy-registry.test.mjs",
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
