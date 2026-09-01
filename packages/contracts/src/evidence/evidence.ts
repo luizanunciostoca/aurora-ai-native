@@ -4,6 +4,7 @@ import type {
   DataClassification,
   Rfc3339Timestamp,
 } from '../context';
+import type { ExecutionTargetReference } from '../execution-target';
 import type { ActionIntentId, EvidenceId, ExecutionId, ReceiptId } from '../ids';
 import type { ContractVersion } from '../versioning';
 import type { ExternalReference, JsonObject, RestrictedMetadata } from '../actions';
@@ -15,14 +16,22 @@ export type EvidenceSubject =
   | Readonly<{ kind: 'EXTERNAL_REFERENCE'; reference: ExternalReference }>;
 
 export type EvidenceType =
-  'READBACK' | 'PROVIDER_RECEIPT' | 'STATE_SNAPSHOT' | 'SIGNED_ATTESTATION' | 'REFERENCE';
+  | 'READBACK'
+  | 'EXECUTION_RECEIPT'
+  | 'PROVIDER_RECEIPT'
+  | 'STATE_SNAPSHOT'
+  | 'SIGNED_ATTESTATION'
+  | 'REFERENCE';
 
 export type EvidenceVerificationState = 'UNVERIFIED' | 'VERIFIED' | 'REJECTED';
 
 export interface EvidenceSource {
-  readonly sourceType: 'PROVIDER_READBACK' | 'EXECUTOR' | 'SYSTEM' | 'HUMAN';
+  readonly sourceType: 'TARGET_READBACK' | 'PROVIDER_READBACK' | 'EXECUTOR' | 'SYSTEM' | 'HUMAN';
   readonly capturedBy?: ActorRef;
+  /** Legacy provider provenance retained for provider-specific historical evidence. */
   readonly provider?: string;
+  /** Generic target provenance; target identity/availability is never authority. */
+  readonly executionTarget?: ExecutionTargetReference;
   readonly reference?: ExternalReference;
 }
 
