@@ -336,7 +336,9 @@ test('W04-G rejects incompatible capability identity, version, and compatibility
 
   const missingCompatibility = registry({
     entries: registry().entries.map((entry) =>
-      entry.capabilityId === 'cap:publish' ? { ...entry, compatibilityKeys: ['publish:v1'] } : entry,
+      entry.capabilityId === 'cap:publish'
+        ? { ...entry, compatibilityKeys: ['publish:v1'] }
+        : entry,
     ),
   });
   assert.deepEqual(bindPlanTemplate(bindingInput({ registry: missingCompatibility })), {
