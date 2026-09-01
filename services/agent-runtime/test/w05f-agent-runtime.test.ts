@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 // @ts-expect-error -- service harness has no @types/node; Node 22 provides this built-in.
 import test from 'node:test';
 
+import type { CorrelationId, TenantId } from '@aurora/contracts';
 import { BoundedAgentWorkerPool } from '../src/runtime/index.js';
 import type {
   AgentWorkerTask,
@@ -15,8 +16,10 @@ import type {
   W03LeaseReleaseResult,
 } from '../src/runtime/index.js';
 
-const tenant = { tenantId: 'tenant:alpha' };
-const correlation = { correlationId: 'correlation:w05f' };
+const tenant = { tenantId: 'ten_01K0M0M0M0M0M0M0M0M0M0M0M0M0' as TenantId };
+const correlation = {
+  correlationId: 'cor_01K0M0M0M0M0M0M0M0M0M0M0M0M1' as CorrelationId,
+};
 
 function task(taskId: string): AgentWorkerTask {
   return {
@@ -165,8 +168,7 @@ test('claim marks capacity before await so concurrent claims cannot oversubscrib
   assert.equal(secondClaim.code, 'WORKER_CAPACITY_REACHED');
   assert.equal(runtime.snapshot('task:b')?.state, 'PENDING');
 
-  assert.ok(firstInput);
-  assert.ok(resolveFirst);
+  if (!firstInput || !resolveFirst) throw new Error('deferred acquire was not captured');
   resolveFirst(acquired(firstInput));
   const first = await firstClaim;
   assert.equal(first.code, 'CLAIMED');
@@ -289,8 +291,7 @@ test('cancellation during CLAIMING releases a late acquired lease using cancella
   assert.equal(cancellation.code, 'CANCEL_REQUESTED');
   assert.equal(cancellation.record?.state, 'CLAIMING');
 
-  assert.ok(acquireInput);
-  assert.ok(resolveAcquire);
+  if (!acquireInput || !resolveAcquire) throw new Error('deferred acquire was not captured');
   resolveAcquire(acquired(acquireInput));
   const final = await claim;
   assert.equal(final.code, 'CANCELLED');
