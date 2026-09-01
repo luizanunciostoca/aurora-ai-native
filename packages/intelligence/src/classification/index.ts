@@ -1,0 +1,21 @@
+export { classifyTask } from './classifier.js';
+export {
+  TASK_INPUT_MODALITIES,
+  TASK_OPERATIONS,
+  type ClassificationConfidence,
+  type ClassificationReasonCode,
+  type TaskAmbiguity,
+  type TaskClass,
+  type TaskClassification,
+  type TaskClassificationInput,
+  type TaskComplexity,
+  type TaskComplexityDrivers,
+  type TaskEvidenceCompleteness,
+  type TaskInputModality,
+  type TaskModality,
+  type TaskOperation,
+  type TaskReversibility,
+  type TaskRiskFact,
+  type TaskRiskSignal,
+  type TaskSideEffectProfile,
+} from './types.js';
