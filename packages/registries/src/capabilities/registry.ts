@@ -1,4 +1,4 @@
-import type { TenantId } from '../../../contracts/src/ids/types';
+import type { TenantId } from '@aurora/contracts/ids';
 
 export const CAPABILITY_TARGET_KINDS = [
   'PROVIDER',
@@ -136,7 +136,11 @@ export function createCapabilityRegistry(
       return { status: 'REJECTED', code: 'INVALID_CAPABILITY', capabilityId: entry.capabilityId };
     }
     if (seen.has(entry.capabilityId)) {
-      return { status: 'REJECTED', code: 'DUPLICATE_CAPABILITY_ID', capabilityId: entry.capabilityId };
+      return {
+        status: 'REJECTED',
+        code: 'DUPLICATE_CAPABILITY_ID',
+        capabilityId: entry.capabilityId,
+      };
     }
     seen.add(entry.capabilityId);
   }
@@ -146,7 +150,9 @@ export function createCapabilityRegistry(
     registry: {
       registryKind: 'AURORA_CANONICAL_CAPABILITY_REGISTRY',
       registryVersion,
-      entries: [...entries].sort((left, right) => left.capabilityId.localeCompare(right.capabilityId)),
+      entries: [...entries].sort((left, right) =>
+        left.capabilityId.localeCompare(right.capabilityId),
+      ),
     },
   };
 }
