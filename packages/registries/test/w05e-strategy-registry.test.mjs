@@ -1,8 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-
-import prettier from 'prettier';
 
 import {
   createStrategyRegistry,
@@ -152,13 +149,4 @@ test('strategy descriptors expose no credential or executable target authority f
   assert.equal(keys.includes('authority'), false);
   assert.equal(keys.includes('providerbinding'), false);
   assert.equal(keys.includes('executiontarget'), false);
-});
-
-test('diagnostic: emit repo-configured Prettier output', async () => {
-  const path = new URL('../src/strategies/registry.ts', import.meta.url);
-  const source = await readFile(path, 'utf8');
-  const config = await prettier.resolveConfig(path.pathname);
-  const formatted = await prettier.format(source, { ...config, filepath: path.pathname });
-  console.log(`W05E_PRETTIER_BEGIN\n${formatted}W05E_PRETTIER_END`);
-  assert.fail('W05E_PRETTIER_DIAGNOSTIC_COMPLETE');
 });
