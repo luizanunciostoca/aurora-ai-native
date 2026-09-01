@@ -14,7 +14,11 @@ function nonEmpty(value: string, name: string): string {
 function normalizedInterest(interest: SubscriptionInterest): SubscriptionInterest {
   const eventTypes = interest.eventTypes ? [...new Set(interest.eventTypes)].sort() : undefined;
   const requiredLabels = interest.requiredLabels
-    ? Object.fromEntries(Object.entries(interest.requiredLabels).sort(([left], [right]) => left.localeCompare(right)))
+    ? Object.fromEntries(
+        Object.entries(interest.requiredLabels).sort(([left], [right]) =>
+          left.localeCompare(right),
+        ),
+      )
     : undefined;
   return {
     ...(eventTypes ? { eventTypes } : {}),
@@ -30,7 +34,8 @@ export function matchesSubscription(
   envelope: EventEnvelope,
   interest: SubscriptionInterest,
 ): boolean {
-  if (interest.eventTypes?.length && !interest.eventTypes.includes(envelope.eventType)) return false;
+  if (interest.eventTypes?.length && !interest.eventTypes.includes(envelope.eventType))
+    return false;
   if (interest.requiredLabels) {
     const labels = envelope.metadata?.labels ?? {};
     for (const [key, value] of Object.entries(interest.requiredLabels)) {
@@ -57,7 +62,10 @@ export class SubscriptionRegistry {
     const interest = normalizedInterest(input.interest);
     const existing = this.#subscriptions.get(key);
     if (existing) {
-      if (existing.subscriber !== subscriber || interestFingerprint(existing.interest) !== interestFingerprint(interest)) {
+      if (
+        existing.subscriber !== subscriber ||
+        interestFingerprint(existing.interest) !== interestFingerprint(interest)
+      ) {
         throw new Error(`subscription key conflict: ${key}`);
       }
       return existing;
@@ -92,7 +100,9 @@ export class SubscriptionRegistry {
 
   matching(envelope: EventEnvelope): readonly SubscriptionDefinition[] {
     return [...this.#subscriptions.values()]
-      .filter((definition) => definition.active && matchesSubscription(envelope, definition.interest))
+      .filter(
+        (definition) => definition.active && matchesSubscription(envelope, definition.interest),
+      )
       .sort((left, right) => left.subscriptionKey.localeCompare(right.subscriptionKey));
   }
 

@@ -1,11 +1,6 @@
 import type { EventEnvelope } from '@aurora/contracts/envelopes';
 import { SubscriptionRegistry } from './subscription-registry';
-import type {
-  DeliveryRecord,
-  LocalTransportLimits,
-  PublishResult,
-  SubscriptionKey,
-} from './types';
+import type { DeliveryRecord, LocalTransportLimits, PublishResult, SubscriptionKey } from './types';
 
 const DEFAULT_LIMITS: LocalTransportLimits = {
   maxFanout: 32,
@@ -61,9 +56,7 @@ export class LocalEventTransport {
         (record) => record.status === 'pending',
       ).length;
       if (!duplicate && pendingCount >= this.#limits.maxPendingPerSubscription) {
-        throw new Error(
-          `pending delivery capacity exceeded for ${subscription.subscriptionKey}`,
-        );
+        throw new Error(`pending delivery capacity exceeded for ${subscription.subscriptionKey}`);
       }
       planned.push({ subscriptionKey: subscription.subscriptionKey, deliveryKey, duplicate });
     }

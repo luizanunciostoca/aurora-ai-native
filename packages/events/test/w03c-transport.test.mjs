@@ -3,7 +3,11 @@ import { createRequire } from 'node:module';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
-const { LocalEventTransport, SubscriptionRegistry, matchesSubscription } = require('../dist/transport/index.js');
+const {
+  LocalEventTransport,
+  SubscriptionRegistry,
+  matchesSubscription,
+} = require('../dist/transport/index.js');
 
 const tenantId = 'ten_01K0M0M0M0M0M0M0M0M0M0M0M0';
 const identityId = 'idn_01K0M0M0M0M0M0M0M0M0M0M0M3';
@@ -125,7 +129,10 @@ test('fan-out limit fails before delivery creation and inactive subscriptions ar
     maxPullBatch: 1,
   });
   const current = envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M7');
-  assert.throws(() => limited.publish(current, '2026-09-01T03:00:00.000Z'), /fan-out limit exceeded/);
+  assert.throws(
+    () => limited.publish(current, '2026-09-01T03:00:00.000Z'),
+    /fan-out limit exceeded/,
+  );
   assert.equal(limited.pendingCount('sub-a'), 0);
   assert.equal(limited.pendingCount('sub-b'), 0);
 
