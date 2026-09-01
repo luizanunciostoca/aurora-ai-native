@@ -19,7 +19,9 @@ test('W04-B explicitly adjudicates the complete 69-seed legacy catalog exactly o
 });
 
 test('W04-B rejects agent-internal/generic seeds and decomposes combined browser scroll', () => {
-  const bySeed = new Map(LEGACY_CAPABILITY_SEED_ADJUDICATIONS.map((entry) => [entry.seedId, entry]));
+  const bySeed = new Map(
+    LEGACY_CAPABILITY_SEED_ADJUDICATIONS.map((entry) => [entry.seedId, entry]),
+  );
 
   assert.equal(bySeed.get('agent.plan.phase.advance')?.decision, 'REJECT');
   assert.equal(bySeed.get('agent.task.complete')?.decision, 'REJECT');
@@ -33,7 +35,10 @@ test('W04-B rejects agent-internal/generic seeds and decomposes combined browser
 });
 
 test('W04-B accepts high-risk vocabulary without turning it into implementation or authority', () => {
-  const bySeed = new Map(LEGACY_CAPABILITY_SEED_ADJUDICATIONS.map((entry) => [entry.seedId, entry]));
+  const bySeed = new Map(
+    LEGACY_CAPABILITY_SEED_ADJUDICATIONS.map((entry) => [entry.seedId, entry]),
+  );
+
   for (const seedId of [
     'browser.console.execute',
     'file.delete',
