@@ -20,11 +20,10 @@ collectTests(resolve(repoRoot, 'packages/control/test'), controlTests);
 controlTests.sort();
 
 const testFiles = ['tools/test/smoke.test.mjs', ...controlTests];
-const result = spawnSync(
-  process.execPath,
-  ['--experimental-strip-types', '--test', ...testFiles],
-  { cwd: repoRoot, stdio: 'inherit' },
-);
+const result = spawnSync(process.execPath, ['--experimental-strip-types', '--test', ...testFiles], {
+  cwd: repoRoot,
+  stdio: 'inherit',
+});
 const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 console.log(
   `[aurora:test] control_tests=${controlTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${result.status ?? 1}`,
