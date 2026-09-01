@@ -14,8 +14,8 @@ export interface CreateTargetedReceiptRequest {
   readonly attemptedAt: Rfc3339Timestamp;
   readonly acknowledgedAt?: Rfc3339Timestamp;
   readonly returnedAt?: Rfc3339Timestamp;
-  /** VERIFIED is evidence-derived and cannot be minted by attempt/acknowledgement creation. */
-  readonly executionOutcome?: Exclude<NonNullable<TargetedReceipt['executionOutcome']>, 'VERIFIED'>;
+  /** Runtime rejects VERIFIED: proof must come from sufficient evidence, not attempt creation. */
+  readonly executionOutcome?: TargetedReceipt['executionOutcome'];
 }
 
 export type ReceiptCreationReason =
