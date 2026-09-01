@@ -107,7 +107,10 @@ function baseFamilies(level: ReasoningLevel): IntelligenceRouteFamily[] {
   }
 }
 
-function candidateFamilies(request: IntelligenceRouterRequest, level: ReasoningLevel): IntelligenceRouteFamily[] {
+function candidateFamilies(
+  request: IntelligenceRouterRequest,
+  level: ReasoningLevel,
+): IntelligenceRouteFamily[] {
   let families = baseFamilies(level);
   if (request.classification.riskSignals.length > 0) {
     families = families.filter((family) => family !== 'DETERMINISTIC');
