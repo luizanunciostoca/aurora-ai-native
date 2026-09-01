@@ -100,7 +100,9 @@ async function listIssues() {
 async function listOpenPullRequests() {
   const all = [];
   for (let page = 1; ; page += 1) {
-    const batch = await request(`/repos/${owner}/${repo}/pulls?state=open&per_page=100&page=${page}`);
+    const batch = await request(
+      `/repos/${owner}/${repo}/pulls?state=open&per_page=100&page=${page}`,
+    );
     all.push(...batch);
     if (batch.length < 100) break;
   }
