@@ -17,19 +17,11 @@ export const CAPABILITY_AVAILABILITY_STATES = [
 ] as const;
 export type CapabilityAvailabilityState = (typeof CAPABILITY_AVAILABILITY_STATES)[number];
 export type CapabilityCurrentAvailability =
-  | 'CURRENT_AVAILABLE'
-  | 'CURRENT_DEGRADED'
-  | 'UNAVAILABLE'
-  | 'UNKNOWN'
-  | 'STALE';
+  'CURRENT_AVAILABLE' | 'CURRENT_DEGRADED' | 'UNAVAILABLE' | 'UNKNOWN' | 'STALE';
 
 export type CapabilityRiskClass = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type CapabilitySideEffectClass =
-  | 'READ_ONLY'
-  | 'INTERNAL_STATE'
-  | 'LOCAL_SIDE_EFFECT'
-  | 'EXTERNAL_SIDE_EFFECT'
-  | 'DESTRUCTIVE';
+  'READ_ONLY' | 'INTERNAL_STATE' | 'LOCAL_SIDE_EFFECT' | 'EXTERNAL_SIDE_EFFECT' | 'DESTRUCTIVE';
 export type CapabilityReadbackStrategy = 'NONE' | 'RECEIPT' | 'STATE_COMPARE' | 'RECONCILE';
 export type CapabilityEvidenceStrategy = 'REQUIRED' | 'OPTIONAL' | 'NOT_APPLICABLE';
 
