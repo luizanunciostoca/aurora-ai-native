@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  format-and-self-delete:
+  format-non-workflow-files:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Puzzle branch
@@ -25,7 +25,7 @@ jobs:
           cache: npm
       - name: Install workspace
         run: npm ci
-      - name: Apply canonical Prettier formatting only to reported files
+      - name: Apply canonical Prettier formatting
         run: >-
           npx prettier --write
           .github/workflows/aurora-copilot-orchestrator.yml
@@ -38,14 +38,32 @@ jobs:
           tools/copilot/puzzle-policy.test.mjs
           tools/copilot/puzzle-prebuild-artifact.mjs
           tools/copilot/validate-execution-mode.mjs
-      - name: Verify formatting scope
+      - name: Emit formatted orchestrator for Program Control
+        shell: bash
+        run: |
+          echo '---AURORA_FORMATTED_ORCHESTRATOR_BEGIN---'
+          cat .github/workflows/aurora-copilot-orchestrator.yml
+          echo '---AURORA_FORMATTED_ORCHESTRATOR_END---'
+      - name: Verify and commit only non-workflow formatting
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
-          git diff --name-only | sort > /tmp/actual
+          git restore .github/workflows/aurora-copilot-orchestrator.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json \
+            tools/copilot/claim-free-ready.mjs \
+            tools/copilot/free-worker-prompt.mjs \
+            tools/copilot/load-task-graph.mjs \
+            tools/copilot/materialize-ready.mjs \
+            tools/copilot/puzzle-policy.mjs \
+            tools/copilot/puzzle-policy.test.mjs \
+            tools/copilot/puzzle-prebuild-artifact.mjs \
+            tools/copilot/validate-execution-mode.mjs
+          git diff --cached --name-only | sort > /tmp/actual
           printf '%s\n' \
-            '.github/workflows/aurora-copilot-orchestrator.yml' \
             'docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json' \
             'tools/copilot/claim-free-ready.mjs' \
             'tools/copilot/free-worker-prompt.mjs' \
@@ -55,15 +73,6 @@ jobs:
             'tools/copilot/puzzle-policy.test.mjs' \
             'tools/copilot/puzzle-prebuild-artifact.mjs' \
             'tools/copilot/validate-execution-mode.mjs' | sort > /tmp/allowed
-          comm -23 /tmp/actual /tmp/allowed | tee /tmp/unexpected
-          test ! -s /tmp/unexpected
-      - name: Commit formatting and remove helper
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          rm .github/workflows/aurora-puzzle-format-reconcile-temp.yml
-          git add .
-          git commit -m 'chore(program-control): apply canonical Puzzle formatting'
+          diff -u /tmp/allowed /tmp/actual
+          git commit -m 'chore(program-control): apply canonical Puzzle formatting to control code'
           git push origin HEAD:program-control/puzzle-massively-parallel-execution
