@@ -1,6 +1,6 @@
 # UX/UI Experience Layer — Cross-Wave Dependency & Ownership Matrix
 
-Status: `PROPOSED_FOR_PLANNING`
+Status: `ACCEPTED_FOR_PLANNING`
 Date: 2026-09-01
 Base main: `c0860ac178bc8b34e1f5a34f3d2b9c6c5a138168`
 Companion: `docs/architecture/ADR-003_EXPERIENCE_LAYER_UX_UI_RUNTIME.md`
