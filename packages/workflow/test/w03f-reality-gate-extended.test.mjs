@@ -25,10 +25,7 @@ test('R14 workflow follow-up persists deterministic resume/version metadata and 
 
   assert.equal(statement.values[0], tenantId);
   assert.equal(statement.values[1], 'workflow-follow-up');
-  assert.equal(
-    statement.values[2],
-    'workflow:objective:1500:await-durable-event',
-  );
+  assert.equal(statement.values[2], 'workflow:objective:1500:await-durable-event');
 
   const metadata = JSON.parse(statement.values[4]);
   assert.deepEqual(metadata, {
