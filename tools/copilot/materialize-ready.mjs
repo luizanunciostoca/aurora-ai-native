@@ -1,10 +1,10 @@
-import fs from 'node:fs/promises';
+import { loadTaskGraph } from './load-task-graph.mjs';
 
 const [owner, repo] = (process.env.GITHUB_REPOSITORY || '').split('/');
 const token = process.env.GITHUB_TOKEN;
 if (!owner || !repo || !token) throw new Error('GITHUB_REPOSITORY and GITHUB_TOKEN are required');
 
-const graph = JSON.parse(await fs.readFile('docs/governance/copilot/AURORA_COPILOT_TASK_GRAPH.json', 'utf8'));
+const graph = await loadTaskGraph();
 const api = 'https://api.github.com';
 const headers = {
   Accept: 'application/vnd.github+json',
@@ -55,8 +55,7 @@ for (const wave of [...new Set(graph.tasks.map((t) => t.wave))]) {
   await ensureLabel(`wave:${wave}`, '0969da', `Aurora ${wave} task`);
 }
 
-let issues = await listIssues();
-const taskById = new Map(graph.tasks.map((t) => [t.id, t]));
+const issues = await listIssues();
 const issueByTask = new Map();
 
 function taskIdFromIssue(issue) {
@@ -83,15 +82,19 @@ for (const [taskId, issue] of issueByTask.entries()) {
 }
 
 function issueBody(task) {
-  return `<!-- AURORA_TASK_ID: ${task.id} -->\n<!-- AURORA_CUSTOM_AGENT: ${task.customAgent} -->\n<!-- AURORA_BASE_REF: main -->\n\n## Execution authority\nThis issue is an operational node from the Aurora Copilot task graph. It does not override live main, accepted exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual v0.5, accepted ADRs or owning wave governance. Revalidate all of them before writing.\n\n## Task\n**${task.id} — ${task.title}**\n\n## Canonical dependency statement\n${task.sourceDependencies || 'See task graph and live wave governance.'}\n\n## Graph dependencies\n${task.dependsOn.length ? task.dependsOn.map((d) => `- ${d}`).join('\n') : '- none'}\n\n## Mission\n${task.mission}\n\n## Required sources\n${task.sources.length ? task.sources.join('\n') : '- live repository and owning wave governance'}\n\n## Required work\n${task.actions.length ? task.actions.join('\n') : 'Revalidate the canonical task prompt before work.'}\n\n## Exclusive ownership / intended surface\n${task.ownership}\n\n## Out of scope / prohibited\n${task.forbidden}\n\n## Copilot role\nCustom agent: \`${task.customAgent}\`. One task = one isolated branch/workspace = one PR. Do not merge or self-accept. Shared/root/publication surfaces remain coordinator-owned unless this task explicitly grants them.\n\n## Acceptance evidence\n- deterministic positive/negative/boundary tests proportional to the task\n- cleanup/duplicate/source-of-truth/scope-leak audit\n- Risk Gates A/B/C/D where applicable\n- Quality + Test Build + Security on the same exact final HEAD\n- structured Aurora handoff with base SHA, branch, PR, exact HEAD, changed paths, tests, risks, blockers and downstream consumers\n\nIf a live dependency/publication barrier is not actually accepted, STOP implementation and report the blocker; do not materialize gated runtime.\n`;
+  return `<!-- AURORA_TASK_ID: ${task.id} -->\n<!-- AURORA_CUSTOM_AGENT: ${task.customAgent} -->\n<!-- AURORA_BASE_REF: main -->\n\n## Execution authority\nThis issue is an operational node from the Aurora Copilot task graph. It does not override live main, accepted exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual v0.5, accepted ADRs or owning wave governance. Revalidate all of them before writing.\n\n## Task\n**${task.id} — ${task.title}**\n\n## Canonical dependency statement\n${task.sourceDependencies || 'See task graph and live wave governance.'}\n\n## Graph dependencies\n${task.dependsOn.length ? task.dependsOn.map((d) => `- ${d}`).join('\n') : '- none'}\n\n## Mission\n${task.mission || 'Execute only the task-defined scope.'}\n\n## Required sources\n${task.sources.length ? task.sources.join('\n') : '- live repository and owning wave governance'}\n\n## Required work\n${task.actions.length ? task.actions.join('\n') : 'Revalidate the canonical task prompt before work.'}\n\n## Exclusive ownership / intended surface\n${task.ownership}\n\n## Out of scope / prohibited\n${task.forbidden}\n\n## Copilot role\nCustom agent: \`${task.customAgent}\`. One task = one isolated branch/workspace = one PR. Do not merge or self-accept. Shared/root/publication surfaces remain coordinator-owned unless this task explicitly grants them.\n\n## Acceptance evidence\n- deterministic positive/negative/boundary tests proportional to the task\n- cleanup/duplicate/source-of-truth/scope-leak audit\n- Risk Gates A/B/C/D where applicable\n- Quality + Test Build + Security on the same exact final HEAD\n- structured Aurora handoff with base SHA, branch, PR, exact HEAD, changed paths, tests, risks, blockers and downstream consumers\n\nIf a live dependency/publication barrier is not actually accepted, STOP implementation and report the blocker; do not materialize gated runtime.\n`;
 }
 
-async function setLabels(issue, desired) {
+async function markReady(issue, task) {
   const current = new Set((issue.labels || []).map((l) => l.name));
-  const next = [...new Set([...current, ...desired])].filter((l) => l !== 'aurora:copilot-gated' && l !== 'aurora:dispatch-blocked');
+  current.delete('aurora:copilot-gated');
+  current.delete('aurora:dispatch-blocked');
+  current.add('aurora:task');
+  current.add('aurora:copilot-ready');
+  current.add(`wave:${task.wave}`);
   return request(`/repos/${owner}/${repo}/issues/${issue.number}`, {
     method: 'PATCH',
-    body: JSON.stringify({ labels: next }),
+    body: JSON.stringify({ labels: [...current] }),
   });
 }
 
@@ -115,14 +118,15 @@ for (const task of graph.tasks) {
   }
 
   if (issue && issue.state === 'open' && depsSatisfied) {
-    // Retrofit metadata for an existing manually-created issue, then mark it READY.
     if (!taskIdFromIssue(issue)) {
       issue = await request(`/repos/${owner}/${repo}/issues/${issue.number}`, {
         method: 'PATCH',
         body: JSON.stringify({ body: `${issue.body || ''}\n\n${issueBody(task)}` }),
       });
     }
-    await setLabels(issue, ['aurora:task', 'aurora:copilot-ready', `wave:${task.wave}`]);
+    await markReady(issue, task);
     console.log(`READY ${task.id} on existing #${issue.number}`);
   }
 }
+
+console.log(`Aurora graph validated: ${graph.tasks.length} tasks across ${new Set(graph.tasks.map((t) => t.wave)).size} waves.`);
