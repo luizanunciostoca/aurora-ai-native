@@ -1,12 +1,7 @@
 import type { ProviderBinding } from '../actions/execution-values';
 import type { ContractVersion } from '../versioning';
 
-export const EXECUTION_TARGET_KINDS = [
-  'PROVIDER',
-  'DEVICE',
-  'WORKFLOW',
-  'LOCAL_SERVICE',
-] as const;
+export const EXECUTION_TARGET_KINDS = ['PROVIDER', 'DEVICE', 'WORKFLOW', 'LOCAL_SERVICE'] as const;
 export type ExecutionTargetKind = (typeof EXECUTION_TARGET_KINDS)[number];
 
 interface ExecutionTargetReferenceBase {
@@ -61,9 +56,7 @@ export function executionTargetFromProviderBinding(
     schemaVersion,
     kind: 'PROVIDER',
     provider: providerBinding.provider,
-    ...(providerBinding.targetType === undefined
-      ? {}
-      : { targetType: providerBinding.targetType }),
+    ...(providerBinding.targetType === undefined ? {} : { targetType: providerBinding.targetType }),
     ...(providerBinding.targetReference === undefined
       ? {}
       : { targetReference: providerBinding.targetReference }),
