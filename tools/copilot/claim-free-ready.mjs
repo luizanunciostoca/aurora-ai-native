@@ -7,7 +7,9 @@ const token = process.env.GITHUB_TOKEN;
 const outputPath = process.env.GITHUB_OUTPUT;
 const baseSha = process.env.AURORA_BASE_SHA;
 if (!owner || !repo || !token || !outputPath || !baseSha) {
-  throw new Error('GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_OUTPUT and AURORA_BASE_SHA are required');
+  throw new Error(
+    'GITHUB_REPOSITORY, GITHUB_TOKEN, GITHUB_OUTPUT and AURORA_BASE_SHA are required',
+  );
 }
 
 const mode = JSON.parse(
@@ -35,7 +37,8 @@ async function request(path, options = {}) {
   });
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
-  if (!response.ok) throw new Error(`${options.method || 'GET'} ${path}: ${response.status} ${text}`);
+  if (!response.ok)
+    throw new Error(`${options.method || 'GET'} ${path}: ${response.status} ${text}`);
   return data;
 }
 
@@ -52,10 +55,22 @@ async function ensureLabel(name, color, description) {
 
 for (const [name, color, description] of [
   ['aurora:copilot-free-ready', '54aeff', 'READY task queued for Copilot Free Actions CLI'],
-  ['aurora:copilot-free-running', 'fbca04', 'Copilot Free Actions CLI worker currently owns this task'],
+  [
+    'aurora:copilot-free-running',
+    'fbca04',
+    'Copilot Free Actions CLI worker currently owns this task',
+  ],
   ['aurora:copilot-free-pr-open', '8250df', 'Copilot Free candidate PR has been published'],
-  ['aurora:copilot-free-no-change', 'd4c5f9', 'Copilot Free worker completed without a candidate patch'],
-  ['aurora:copilot-free-failed', 'b60205', 'Copilot Free worker failed before publishing a candidate PR'],
+  [
+    'aurora:copilot-free-no-change',
+    'd4c5f9',
+    'Copilot Free worker completed without a candidate patch',
+  ],
+  [
+    'aurora:copilot-free-failed',
+    'b60205',
+    'Copilot Free worker failed before publishing a candidate PR',
+  ],
 ]) {
   await ensureLabel(name, color, description);
 }
@@ -63,7 +78,9 @@ for (const [name, color, description] of [
 async function listIssues() {
   const all = [];
   for (let page = 1; ; page += 1) {
-    const batch = await request(`/repos/${owner}/${repo}/issues?state=all&per_page=100&page=${page}`);
+    const batch = await request(
+      `/repos/${owner}/${repo}/issues?state=all&per_page=100&page=${page}`,
+    );
     all.push(...batch.filter((item) => !item.pull_request));
     if (batch.length < 100) break;
   }
@@ -77,7 +94,9 @@ function taskIdFromIssue(issue) {
 }
 
 const issues = await listIssues();
-const accepted = new Set(graph.tasks.filter((task) => task.initiallyComplete).map((task) => task.id));
+const accepted = new Set(
+  graph.tasks.filter((task) => task.initiallyComplete).map((task) => task.id),
+);
 for (const issue of issues) {
   const taskId = taskIdFromIssue(issue);
   if (

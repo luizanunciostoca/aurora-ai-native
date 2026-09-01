@@ -122,7 +122,9 @@ if (!executionMode.cloudAgentEnabled) {
     ...new Set([...(issue.labels || []).map((l) => l.name), 'aurora:dispatch-blocked']),
   ];
   await patchIssue({ labels });
-  await comment(`Copilot cloud-agent dispatch is disabled by execution mode ${executionMode.mode}.`);
+  await comment(
+    `Copilot cloud-agent dispatch is disabled by execution mode ${executionMode.mode}.`,
+  );
   process.exit(0);
 }
 
