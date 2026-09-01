@@ -3,10 +3,23 @@ import path from 'node:path';
 
 const TASK_DIR = 'docs/governance/copilot/tasks';
 const EXPECTED_TASK_COUNT = 166;
-const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2]);
+const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2, 3]);
+const PREBUILD_POLICIES = new Set([
+  'NONE',
+  'READINESS_ONLY',
+  'GOVERNANCE_ARTIFACT',
+  'ISOLATED_PATCH',
+]);
 
 function stringArray(value, fallback = []) {
   return Array.isArray(value) ? value : fallback;
+}
+
+function defaultPrebuildPolicy(task, defaults) {
+  if (task.prebuildPolicy) return task.prebuildPolicy;
+  if (defaults.prebuildPolicy) return defaults.prebuildPolicy;
+  if (String(task.id || '').endsWith('-00')) return 'GOVERNANCE_ARTIFACT';
+  return 'READINESS_ONLY';
 }
 
 export async function loadTaskGraph() {
@@ -47,6 +60,21 @@ export async function loadTaskGraph() {
         handoffFormat: task.handoffFormat || defaults.handoffFormat || 'AURORA_COMPACT_V1',
         laneHint: task.laneHint || defaults.laneHint || null,
         dispatchPriority: Number(task.dispatchPriority ?? defaults.dispatchPriority ?? 0),
+        prebuildPolicy: defaultPrebuildPolicy(task, defaults),
+        prebuildAllowedPaths: stringArray(
+          task.prebuildAllowedPaths,
+          stringArray(defaults.prebuildAllowedPaths),
+        ),
+        expectedInputContracts: stringArray(
+          task.expectedInputContracts,
+          stringArray(defaults.expectedInputContracts),
+        ),
+        outputContracts: stringArray(task.outputContracts, stringArray(defaults.outputContracts)),
+        integrationPoints: stringArray(
+          task.integrationPoints,
+          stringArray(defaults.integrationPoints),
+        ),
+        speculationBudget: Number(task.speculationBudget ?? defaults.speculationBudget ?? 32),
       });
     }
     sources.push(name);
@@ -63,13 +91,30 @@ export async function loadTaskGraph() {
     if (!Number.isFinite(task.dispatchPriority)) {
       throw new Error(`Task ${task.id} has invalid dispatchPriority`);
     }
-    for (const field of ['allowedPaths', 'sharedWriteSurfaces', 'coordinatorSurfaces']) {
+    if (!Number.isInteger(task.speculationBudget) || task.speculationBudget < 0) {
+      throw new Error(`Task ${task.id} has invalid speculationBudget`);
+    }
+    for (const field of [
+      'allowedPaths',
+      'sharedWriteSurfaces',
+      'coordinatorSurfaces',
+      'prebuildAllowedPaths',
+      'expectedInputContracts',
+      'outputContracts',
+      'integrationPoints',
+    ]) {
       if (!task[field].every((entry) => typeof entry === 'string' && entry.length > 0)) {
         throw new Error(`Task ${task.id} has invalid ${field}`);
       }
     }
     if (!['READ_ONLY_WHILE_BLOCKED', 'NONE'].includes(task.readinessPolicy)) {
       throw new Error(`Task ${task.id} has invalid readinessPolicy ${task.readinessPolicy}`);
+    }
+    if (!PREBUILD_POLICIES.has(task.prebuildPolicy)) {
+      throw new Error(`Task ${task.id} has invalid prebuildPolicy ${task.prebuildPolicy}`);
+    }
+    if (task.prebuildPolicy === 'ISOLATED_PATCH' && task.prebuildAllowedPaths.length === 0) {
+      throw new Error(`Task ${task.id} ISOLATED_PATCH prebuild requires prebuildAllowedPaths`);
     }
     if (task.handoffFormat !== 'AURORA_COMPACT_V1') {
       throw new Error(`Task ${task.id} has unsupported handoffFormat ${task.handoffFormat}`);
@@ -104,7 +149,7 @@ export async function loadTaskGraph() {
   }
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     authority:
       'Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this graph.',
     expectedTaskCount: EXPECTED_TASK_COUNT,
@@ -119,6 +164,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const parallelMetadataTasks = graph.tasks.filter(
     (t) => t.sharedWriteSurfaces.length || t.allowedPaths.length || t.laneHint,
   ).length;
+  const prebuildEnabledTasks = graph.tasks.filter((t) => t.prebuildPolicy !== 'NONE').length;
+  const patchPrebuildTasks = graph.tasks.filter((t) => t.prebuildPolicy === 'ISOLATED_PATCH').length;
   console.log(
     JSON.stringify(
       {
@@ -126,6 +173,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         taskCount: graph.tasks.length,
         initiallyComplete,
         parallelMetadataTasks,
+        prebuildEnabledTasks,
+        patchPrebuildTasks,
         waves: [...new Set(graph.tasks.map((t) => t.wave))],
         sources: graph.sources,
       },
