@@ -12,7 +12,7 @@ const task = graph.tasks.find((entry) => entry.id === taskId);
 if (!task) throw new Error(`Unknown Aurora task ${taskId}`);
 
 const prompt = `
-You are executing Aurora AI-Native task ${task.id} from GitHub issue #${issueNumber}.
+You are executing canonical Aurora AI-Native BUILD task ${task.id} from GitHub issue #${issueNumber}.
 
 BASE SHA
 ${baseSha}
@@ -21,7 +21,7 @@ ROLE
 Use the project custom agent '${task.customAgent || 'aurora-implementation'}' and obey .github/copilot-instructions.md, AGENTS.md and all matching path instructions.
 
 AUTHORITY
-This task graph is operational only. GitHub main/exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual v0.5, accepted ADRs and owning wave governance override it. Revalidate the repository state available in this checkout before changing anything.
+This BUILD task reached PUZZLE BUILD_READY only because its graph dependencies were accepted by canonical evidence. GitHub main/exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual v0.5, accepted ADRs and owning wave governance remain authoritative and override operational task metadata.
 
 TASK
 ${task.title}
@@ -29,11 +29,14 @@ ${task.title}
 MODE
 ${task.mode || 'IMPLEMENTATION'}
 
-PARALLEL EXECUTION METADATA
+PUZZLE EXECUTION METADATA
 Lane: ${task.laneHint || 'AUTO'}
 Dispatch priority: ${task.dispatchPriority || 0}
-Readiness policy while blocked: ${task.readinessPolicy}
-Allowed/owned path hints: ${task.allowedPaths.length ? task.allowedPaths.join(', ') : 'Resolve exactly from owning wave ownership matrix'}
+Prebuild policy: ${task.prebuildPolicy}
+Expected input contracts: ${task.expectedInputContracts.length ? task.expectedInputContracts.join(', ') : 'reconcile from accepted upstream authority'}
+Output contracts: ${task.outputContracts.length ? task.outputContracts.join(', ') : 'task-defined / wave-freeze governed'}
+Integration points: ${task.integrationPoints.length ? task.integrationPoints.join(', ') : 'resolve from accepted architecture'}
+Allowed/owned BUILD path hints: ${task.allowedPaths.length ? task.allowedPaths.join(', ') : 'Resolve exactly from owning wave ownership matrix'}
 Shared write surfaces: ${task.sharedWriteSurfaces.length ? task.sharedWriteSurfaces.join(', ') : 'none declared'}
 Coordinator-retained surfaces: ${task.coordinatorSurfaces.length ? task.coordinatorSurfaces.join(', ') : 'see live governance'}
 Handoff format: ${task.handoffFormat}
@@ -60,17 +63,18 @@ OUT OF SCOPE / PROHIBITED
 ${task.forbidden}
 
 HARD EXECUTION RULES
-- One task = one isolated candidate. Do not expand scope to another task or wave.
-- Treat this task as one lane in a wider READY frontier. Never modify a parallel lane's exclusive semantic surface.
+- One BUILD task = one isolated candidate. Do not expand scope to another task or wave.
+- Treat this task as one physical BUILD slot inside a wider Puzzle program that may have many logical PREBUILD/READINESS lanes.
+- PREBUILD or READINESS artifacts are non-authoritative. Never assume their contracts, code or conclusions are accepted until Program Control reconciles them against accepted upstream contracts.
 - Shared/root/publication surfaces remain coordinator-owned. If one is required, stop that edit and report SHARED_SURFACE_RECONCILIATION_REQUIRED.
 - Allowed path hints narrow work; they never widen ownership granted by live governance.
 - Do not weaken Intelligence != Authority != Execution.
 - Do not invent authority from confidence, precheck, session, permissions, credentials or provider state.
 - Do not modify main, create a PR, push, merge, or self-accept. A deterministic publisher job handles branch/PR publication after your run.
 - Do not modify GitHub workflows, CODEOWNERS, root workspace files, shared barrels/manifests, migrations or other coordinator surfaces unless this task explicitly owns them.
-- Do not depend on legacy/reference material at runtime unless explicitly promoted by canonical governance.
+- Do not depend on legacy/reference/PREBUILD material at runtime unless explicitly promoted by canonical governance.
 - If a live prerequisite appears unsatisfied or ownership is ambiguous, make no speculative workaround. Leave the working tree unchanged and explain BLOCKED in your final response.
-- Blocked downstream tasks may only perform read-only readiness; never materialize gated runtime early.
+- Canonical BUILD must remain based on accepted dependencies even if downstream PREBUILD pieces already exist.
 - Prefer deterministic implementation for validation, policy, authority, retries, state machines and side effects.
 - Run targeted tests and relevant quality checks before completing.
 - Keep changes minimal, reviewable and attributable to this task only.
@@ -94,7 +98,7 @@ SHARED_SURFACE_TOUCHES
 RECOMMENDED_ACCEPTANCE_STATE
 
 DEFINITION OF DONE
-Produce the smallest correct candidate change for this task, with tests/evidence proportional to scope. The repository CI and an independent Aurora acceptance step will decide whether it may merge.
+Produce the smallest correct canonical BUILD candidate for this task, with tests/evidence proportional to scope. Repository CI and independent Aurora acceptance decide whether it may integrate.
 `;
 
 process.stdout.write(prompt.trim() + '\n');
