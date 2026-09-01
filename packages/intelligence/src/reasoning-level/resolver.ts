@@ -10,7 +10,12 @@ import type {
 } from './types';
 
 const DESCRIPTORS: Readonly<Record<ReasoningLevel, ReasoningLevelDescriptor>> = Object.freeze({
-  L0: { level: 'L0', ordinal: 0, semantic: 'DETERMINISTIC_OR_NO_REASONING', nominalReasoningUnits: 0 },
+  L0: {
+    level: 'L0',
+    ordinal: 0,
+    semantic: 'DETERMINISTIC_OR_NO_REASONING',
+    nominalReasoningUnits: 0,
+  },
   L1: { level: 'L1', ordinal: 1, semantic: 'BOUNDED_DIRECT', nominalReasoningUnits: 1 },
   L2: { level: 'L2', ordinal: 2, semantic: 'STRUCTURED', nominalReasoningUnits: 3 },
   L3: { level: 'L3', ordinal: 3, semantic: 'MULTI_STEP', nominalReasoningUnits: 8 },
@@ -54,7 +59,6 @@ function requestedLevel(
   let level = baseLevel(complexity);
   reasons.push('TASK_NEED_FROM_COMPLEXITY');
   if (complexity === 'UNKNOWN') reasons.push('UNKNOWN_COMPLEXITY_REQUIRES_CAUTION');
-
   if (uncertainty === 'MEDIUM') {
     level = escalate(level, 1);
     reasons.push('UNCERTAINTY_ESCALATION');
@@ -95,7 +99,6 @@ export function resolveReasoningLevel(request: ReasoningLevelRequest): Reasoning
   if (request.correlation.correlationId !== request.classification.correlation.correlationId) {
     throw new Error('reasoning request correlation must match classification correlation');
   }
-
   const reasons: ReasoningLevelReason[] = [];
   const wanted = requestedLevel(request.classification.complexity, request.uncertainty, reasons);
   const budget = request.budget;
@@ -107,11 +110,9 @@ export function resolveReasoningLevel(request: ReasoningLevelRequest): Reasoning
     canSkipMandatoryValidation: false as const,
     authorizesExecution: false as const,
   };
-
   if (budget === undefined) {
     return { status: 'RESOLVED', ...base, level: wanted, reasons };
   }
-
   validateBudget(budget);
   const withBudget = { ...base, budgetId: budget.budgetId };
   if (budget.action === 'HOLD') {
@@ -120,7 +121,6 @@ export function resolveReasoningLevel(request: ReasoningLevelRequest): Reasoning
   if (budget.state === 'EXHAUSTED' || budget.action === 'STOP_OPTIONAL') {
     return { status: 'HELD', ...withBudget, reasons: [...reasons, 'BUDGET_EXHAUSTED'] };
   }
-
   const affordable = highestAffordableLevel(budget.remainingReasoningUnits);
   if (DESCRIPTORS[affordable].ordinal < DESCRIPTORS[wanted].ordinal) {
     if (budget.action === 'DEGRADE_OPTIONAL' || budget.state === 'DEGRADED') {
@@ -137,6 +137,5 @@ export function resolveReasoningLevel(request: ReasoningLevelRequest): Reasoning
       reasons: [...reasons, 'BUDGET_INSUFFICIENT_FOR_MINIMUM_TASK_NEED'],
     };
   }
-
   return { status: 'RESOLVED', ...withBudget, level: wanted, reasons };
 }
