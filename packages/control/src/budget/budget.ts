@@ -279,6 +279,7 @@ export function recordObservedBudgetUsage(
 }
 
 function childConstraintDimensions(
+  parentLimits: ExecutionBudgetLimits,
   request: ChildBudgetRequest,
   remaining: ExecutionBudgetRemaining,
 ): ExecutionBudgetDimension[] {
@@ -289,7 +290,7 @@ function childConstraintDimensions(
     constrained.push('REASONING_UNITS');
   }
   if (request.limits.maxToolCalls > remaining.toolCalls) constrained.push('TOOL_CALLS');
-  if (request.limits.maxConcurrency > remaining.concurrencySlots) constrained.push('CONCURRENCY');
+  if (request.limits.maxConcurrency > parentLimits.maxConcurrency) constrained.push('CONCURRENCY');
   return constrained;
 }
 
@@ -309,7 +310,7 @@ export function deriveChildExecutionBudget(
   }
 
   const remaining = remainingFrom(parent.limits, parentUsage);
-  const constrainedDimensions = childConstraintDimensions(request, remaining);
+  const constrainedDimensions = childConstraintDimensions(parent.limits, request, remaining);
   if (constrainedDimensions.length > 0) {
     return {
       status: 'REJECTED',
