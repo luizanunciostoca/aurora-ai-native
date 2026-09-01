@@ -1,13 +1,27 @@
 import assert from 'node:assert/strict';
-import { buildDownstreamDepth, selectSafeReadyFrontier } from './frontier-policy.mjs';
+import {
+  buildDownstreamDepth,
+  pathAllowedByPatterns,
+  selectSafeReadyFrontier,
+} from './frontier-policy.mjs';
 
 const tasks = [
-  { id: 'A', dependsOn: [], sharedWriteSurfaces: [] },
-  { id: 'B', dependsOn: ['A'], sharedWriteSurfaces: ['surface:b'] },
-  { id: 'C', dependsOn: ['A'], sharedWriteSurfaces: ['surface:c'] },
-  { id: 'D', dependsOn: ['B', 'C'], sharedWriteSurfaces: ['surface:d'] },
-  { id: 'E', dependsOn: ['B', 'C'], sharedWriteSurfaces: ['surface:e'] },
-  { id: 'F', dependsOn: ['D', 'E'], sharedWriteSurfaces: [] },
+  { id: 'A', dependsOn: [], sharedWriteSurfaces: [], allowedPaths: [] },
+  {
+    id: 'B',
+    dependsOn: ['A'],
+    sharedWriteSurfaces: ['surface:b'],
+    allowedPaths: ['packages/events/src/delivery/**', 'packages/events/test/w03b-**'],
+  },
+  {
+    id: 'C',
+    dependsOn: ['A'],
+    sharedWriteSurfaces: ['surface:c'],
+    allowedPaths: ['packages/events/src/transport/**', 'packages/events/test/w03c-**'],
+  },
+  { id: 'D', dependsOn: ['B', 'C'], sharedWriteSurfaces: [], allowedPaths: [] },
+  { id: 'E', dependsOn: ['B', 'C'], sharedWriteSurfaces: [], allowedPaths: [] },
+  { id: 'F', dependsOn: ['D', 'E'], sharedWriteSurfaces: [], allowedPaths: [] },
 ];
 
 const depth = buildDownstreamDepth(tasks);
@@ -15,6 +29,15 @@ assert.equal(depth.get('A'), 4);
 assert.equal(depth.get('B'), 3);
 assert.equal(depth.get('C'), 3);
 assert.equal(depth.get('F'), 1);
+
+assert.equal(
+  pathAllowedByPatterns('packages/events/src/delivery/outbox.ts', tasks[1].allowedPaths),
+  true,
+);
+assert.equal(
+  pathAllowedByPatterns('packages/events/src/transport/bus.ts', tasks[1].allowedPaths),
+  false,
+);
 
 const parallelCandidates = [
   {
@@ -49,6 +72,7 @@ const conflictingCandidates = [
       wave: 'W03',
       dependsOn: [],
       sharedWriteSurfaces: ['shared:manifest'],
+      allowedPaths: ['packages/x/**'],
       dispatchPriority: 10,
     },
   },
@@ -59,6 +83,7 @@ const conflictingCandidates = [
       wave: 'W03',
       dependsOn: [],
       sharedWriteSurfaces: ['shared:manifest'],
+      allowedPaths: ['packages/y/**'],
       dispatchPriority: 9,
     },
   },
@@ -75,6 +100,43 @@ assert.deepEqual(
 assert.equal(conflicting.deferred[0].reason, 'SHARED_WRITE_SURFACE');
 assert.equal(conflicting.deferred[0].surface, 'shared:manifest');
 
+const overlappingPaths = selectSafeReadyFrontier(
+  [
+    {
+      issue: { number: 6 },
+      task: {
+        id: 'P1',
+        wave: 'W03',
+        dependsOn: [],
+        sharedWriteSurfaces: [],
+        allowedPaths: ['packages/events/**'],
+        dispatchPriority: 10,
+      },
+    },
+    {
+      issue: { number: 7 },
+      task: {
+        id: 'P2',
+        wave: 'W03',
+        dependsOn: [],
+        sharedWriteSurfaces: [],
+        allowedPaths: ['packages/events/src/transport/**'],
+        dispatchPriority: 9,
+      },
+    },
+  ],
+  [
+    { id: 'P1', dependsOn: [] },
+    { id: 'P2', dependsOn: [] },
+  ],
+  2,
+);
+assert.deepEqual(
+  overlappingPaths.selected.map((entry) => entry.task.id),
+  ['P1'],
+);
+assert.equal(overlappingPaths.deferred[0].reason, 'ALLOWED_PATH_OVERLAP');
+
 const criticalPathCandidates = [
   {
     issue: { number: 10 },
@@ -83,6 +145,7 @@ const criticalPathCandidates = [
       wave: 'W04',
       dependsOn: [],
       sharedWriteSurfaces: [],
+      allowedPaths: [],
     },
   },
   {
@@ -92,6 +155,7 @@ const criticalPathCandidates = [
       wave: 'W04',
       dependsOn: [],
       sharedWriteSurfaces: [],
+      allowedPaths: [],
     },
   },
 ];
