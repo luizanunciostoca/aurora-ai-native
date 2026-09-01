@@ -1,0 +1,38 @@
+name: W03-B Format Reconcile Temp
+
+on:
+  push:
+    branches:
+      - wave/03b-outbox-inbox-idempotency
+    paths:
+      - '.github/workflows/w03b-format-reconcile-temp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-self-delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout lane branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/03b-outbox-inbox-idempotency
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Format only W03-B owned files
+        run: npx prettier --write 'packages/events/src/delivery/**/*.ts' 'packages/events/test/w03b-*.mjs'
+      - name: Commit formatted lane and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/w03b-format-reconcile-temp.yml
+          git add packages/events/src/delivery packages/events/test/w03b-delivery.test.mjs
+          git commit -m 'chore(W03-B): apply canonical formatting'
+          git push origin HEAD:wave/03b-outbox-inbox-idempotency
