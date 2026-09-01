@@ -93,13 +93,21 @@ export type ReconciliationObservation =
       reference?: string;
     }>;
 
+export interface RetrySafeguardEvidence {
+  /** Must be the W07-C evaluation for the next equivalent attempt. */
+  readonly attemptNumber: number;
+  /** Must be at or after the no-effect reconciliation observation. */
+  readonly evaluatedAt: Rfc3339Timestamp;
+  readonly result: ExecutionSafeguardResult;
+}
+
 export interface ReconcileExecutionUncertaintyRequest {
   readonly schemaVersion: ContractVersion;
   readonly actionIntent: ActionIntent;
   readonly uncertainty: ExecutionUncertaintyRecord;
   readonly observation?: ReconciliationObservation;
   /** Fresh W07-C safeguards for the next equivalent attempt, when retry is considered. */
-  readonly retrySafeguards?: ExecutionSafeguardResult;
+  readonly retrySafeguards?: RetrySafeguardEvidence;
 }
 
 export type ReconciliationReason =
@@ -113,6 +121,9 @@ export type ReconciliationReason =
   | 'RECONCILIATION_INDETERMINATE'
   | 'RETRY_ATTEMPT_LIMIT_REACHED'
   | 'RETRY_GUARDS_REQUIRED'
+  | 'RETRY_GUARDS_TIME_INVALID'
+  | 'RETRY_GUARDS_STALE'
+  | 'RETRY_GUARDS_ATTEMPT_MISMATCH'
   | 'RETRY_GUARDS_BLOCKED';
 
 export type ReconciliationResult = Readonly<{
