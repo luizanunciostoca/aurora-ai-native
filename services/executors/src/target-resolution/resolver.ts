@@ -93,6 +93,7 @@ export function resolveExecutionTarget(request: TargetResolutionRequest): Target
   if (targetVersionMatches.length > 1) return unresolved(request, 'TARGET_AMBIGUOUS');
 
   const binding = targetVersionMatches[0];
+  if (binding === undefined) return unresolved(request, 'TARGET_INCOMPATIBLE');
   if (binding.schemaVersion !== request.schemaVersion) {
     return unresolved(request, 'TARGET_INCOMPATIBLE');
   }
