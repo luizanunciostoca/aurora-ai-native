@@ -90,24 +90,27 @@ function result(
   } as unknown as AuthorityEvaluationResult;
 }
 
-test('permits progression only after current authority validation and never performs execution', () => {
-  const authorityEvaluation = evaluation();
-  let calls = 0;
-  const gate = validateExecutorAuthority({
-    schemaVersion: intent.schemaVersion,
-    actionIntent: intent,
-    authorityEvaluation,
-    validateCurrentAuthority: (request) => {
-      calls += 1;
-      return result(request, true);
-    },
-  });
+test(
+  'permits progression only after current authority validation and never performs execution',
+  () => {
+    const authorityEvaluation = evaluation();
+    let calls = 0;
+    const gate = validateExecutorAuthority({
+      schemaVersion: intent.schemaVersion,
+      actionIntent: intent,
+      authorityEvaluation,
+      validateCurrentAuthority: (request) => {
+        calls += 1;
+        return result(request, true);
+      },
+    });
 
-  assert.equal(calls, 1);
-  assert.equal(gate.currentAuthorityValidated, true);
-  assert.equal(gate.executionEligible, true);
-  assert.equal(gate.authorizesExecution, false);
-});
+    assert.equal(calls, 1);
+    assert.equal(gate.currentAuthorityValidated, true);
+    assert.equal(gate.executionEligible, true);
+    assert.equal(gate.authorizesExecution, false);
+  },
+);
 
 test('Fast Lane, confidence, precheck and ExecutionBudget cannot bypass current denial', () => {
   const authorityEvaluation = evaluation();
