@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS w03_idempotency_key (
     PRIMARY KEY (tenant_id, idempotency_key),
     FOREIGN KEY (tenant_id, event_id)
         REFERENCES w03_event (tenant_id, event_id)
-        ON DELETE SET NULL
+        ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS w03_timer (
@@ -139,7 +139,7 @@ COMMENT ON TABLE w03_event IS 'W03 durable canonical EventEnvelope store. Canoni
 COMMENT ON TABLE w03_event_outbox IS 'Transactional outbox delivery ledger for W03 event fan-out and bounded retry semantics.';
 COMMENT ON TABLE w03_event_inbox IS 'Inbox ack state used to prevent duplicate processing of replayed event envelopes.';
 COMMENT ON COLUMN w03_event_inbox.inbox_id IS 'Database-local surrogate only; not an Aurora canonical ID.';
-COMMENT ON TABLE w03_idempotency_key IS 'Idempotency ledger keyed by tenant and operation id to prevent duplicate side effects.';
+COMMENT ON TABLE w03_idempotency_key IS 'Idempotency ledger keyed by tenant and operation id. Event deletion is restricted while a ledger row references it so tenant/event provenance cannot be silently broken.';
 COMMENT ON TABLE w03_timer IS 'Durable timer state for schedule-driven workflow re-entry and cancellation. timer_id is database-local only.';
 COMMENT ON TABLE w03_lease IS 'Lease/heartbeat state used for contention fencing and safe worker reclaims. lease_id is database-local only.';
 
