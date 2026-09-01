@@ -39,6 +39,26 @@ async function request(path, options = {}) {
   return data;
 }
 
+async function ensureLabel(name, color, description) {
+  try {
+    await request(`/repos/${owner}/${repo}/labels/${encodeURIComponent(name)}`);
+  } catch {
+    await request(`/repos/${owner}/${repo}/labels`, {
+      method: 'POST',
+      body: JSON.stringify({ name, color, description }),
+    });
+  }
+}
+
+for (const [name, color, description] of [
+  ['aurora:copilot-free-ready', '54aeff', 'READY task queued for Copilot Free Actions CLI'],
+  ['aurora:copilot-free-running', 'fbca04', 'Copilot Free Actions CLI worker currently owns this task'],
+  ['aurora:copilot-free-pr-open', '8250df', 'Copilot Free candidate PR has been published'],
+  ['aurora:copilot-free-no-change', 'd4c5f9', 'Copilot Free worker completed without a candidate patch'],
+]) {
+  await ensureLabel(name, color, description);
+}
+
 async function listIssues() {
   const all = [];
   for (let page = 1; ; page += 1) {
