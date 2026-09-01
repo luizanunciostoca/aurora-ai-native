@@ -2,6 +2,7 @@ import type { ActionIntent, ExternalReference, JsonObject } from '@aurora/contra
 import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 import type { Evidence } from '@aurora/contracts/evidence';
 import type { TargetedReceipt } from '@aurora/contracts/receipts';
+import type { ExecutionOutcome } from '@aurora/contracts/results';
 import type { ContractVersion } from '@aurora/contracts/versioning';
 
 export interface CreateTargetedReceiptRequest {
@@ -22,7 +23,9 @@ export type ReceiptCreationReason =
   | 'EXECUTION_TARGET_REQUIRED'
   | 'RECEIPT_ATTEMPT_INVALID'
   | 'RECEIPT_TIME_INVALID'
-  | 'RECEIPT_TIME_ORDER_INVALID';
+  | 'RECEIPT_TIME_ORDER_INVALID'
+  | 'RECEIPT_ACKNOWLEDGEMENT_REQUIRED'
+  | 'RECEIPT_VERIFIED_REQUIRES_READBACK';
 
 export type ReceiptCreationResult =
   | Readonly<{
@@ -47,6 +50,15 @@ export interface TargetReadbackObservation {
   readonly capturedAt: Rfc3339Timestamp;
   readonly reference: ExternalReference;
   readonly observedState?: JsonObject;
+  /**
+   * The concrete W08/W09/W14/W15 adapter must state whether the returned
+   * readback itself is verified. Equality with unverified data never proves
+   * external state.
+   */
+  readonly verification: Readonly<{
+    state: 'VERIFIED' | 'UNVERIFIED';
+    method?: string;
+  }>;
 }
 
 /** Generic W07 port. Concrete provider/device/workflow/local readback remains consumer-wave owned. */
@@ -71,15 +83,24 @@ export type ReadbackReason =
   | 'READBACK_TIME_INVALID'
   | 'READBACK_TIME_ORDER_INVALID'
   | 'READBACK_SENSITIVE_DATA_REJECTED'
+  | 'READBACK_UNVERIFIED'
   | 'EXPECTED_STATE_NOT_DECLARED'
   | 'OBSERVED_STATE_NOT_RETURNED'
   | 'READBACK_MISMATCH';
+
+export type ReadbackDerivedExecutionOutcome = Extract<
+  ExecutionOutcome,
+  'EXECUTED_ACKNOWLEDGED' | 'EXECUTION_UNCERTAIN' | 'VERIFIED'
+>;
 
 export interface ReadbackAssessment {
   readonly state: ReadbackVerificationState;
   readonly reasons: readonly ReadbackReason[];
   readonly receiptAcknowledged: boolean;
   readonly verifiedExternalState: boolean;
+  /** Observation-only classification; W07-F owns reconciliation/retry state transitions. */
+  readonly derivedExecutionOutcome: ReadbackDerivedExecutionOutcome;
+  readonly requiresReconciliation: boolean;
   readonly authorizesExecution: false;
 }
 
