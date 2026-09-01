@@ -230,10 +230,7 @@ function fixtureBindingInput(
 
 function percentile(samples: readonly number[], fraction: number): number {
   const sorted = [...samples].sort((left, right) => left - right);
-  const index = Math.max(
-    0,
-    Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1),
-  );
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1));
   return sorted[index] ?? 0;
 }
 
@@ -401,10 +398,7 @@ test('W04-H bounds concurrency and preserves deterministic fairness', () => {
       { fromNodeId: 'b', toNodeId: 'a' },
     ],
   });
-  assert.deepEqual(
-    cycle.status === 'REJECTED' ? cycle.code : null,
-    'CYCLE_DETECTED',
-  );
+  assert.deepEqual(cycle.status === 'REJECTED' ? cycle.code : null, 'CYCLE_DETECTED');
 
   const pressureNodes = Array.from({ length: 256 }, (_, index) =>
     graphNode(`n${String(index).padStart(3, '0')}`),
@@ -425,10 +419,7 @@ test('W04-H bounds concurrency and preserves deterministic fairness', () => {
     nodes: [...pressureNodes, graphNode('overflow')],
     edges: [],
   });
-  assert.deepEqual(
-    overBound.status === 'REJECTED' ? overBound.code : null,
-    'NODE_LIMIT_EXCEEDED',
-  );
+  assert.deepEqual(overBound.status === 'REJECTED' ? overBound.code : null, 'NODE_LIMIT_EXCEEDED');
 
   const pressureStates = Object.fromEntries(
     pressureNodes.map((node) => [node.nodeId, 'READY']),
@@ -460,9 +451,7 @@ test('W04-H bounds concurrency and preserves deterministic fairness', () => {
   const fairnessStates = Object.fromEntries(
     fairnessResult.graph.nodes.map((node) => [node.nodeId, 'READY']),
   ) as GoalGraphStateSnapshot;
-  let fairness:
-    | { readonly nextTopologicalIndex: number; readonly turn: number }
-    | undefined;
+  let fairness: { readonly nextTopologicalIndex: number; readonly turn: number } | undefined;
   const observed: string[] = [];
   for (let round = 0; round < 4; round += 1) {
     const result = planSchedulerTick({
@@ -505,9 +494,7 @@ test('W04-H template hit avoids replanning and stale binding falls back', () => 
   const plan = fixturePlan(registry);
   const template = fixtureTemplate();
   let replans = 0;
-  const resolve = (
-    input: PlanTemplateBindingInput,
-  ): 'TEMPLATE_HIT' | 'FRONTIER_REPLAN' => {
+  const resolve = (input: PlanTemplateBindingInput): 'TEMPLATE_HIT' | 'FRONTIER_REPLAN' => {
     if (bindPlanTemplate(input).status === 'BOUND') return 'TEMPLATE_HIT';
     replans += 1;
     return 'FRONTIER_REPLAN';
