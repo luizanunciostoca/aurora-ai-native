@@ -1,0 +1,259 @@
+name: Aurora Copilot Free Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json'
+      - 'tools/copilot/**'
+      - '.github/agents/**'
+      - '.github/copilot-instructions.md'
+      - '.github/instructions/**'
+      - 'AGENTS.md'
+  issues:
+    types: [closed, labeled]
+  workflow_run:
+    workflows: ['Aurora Copilot Task Orchestrator']
+    types: [completed]
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+concurrency:
+  group: aurora-copilot-free-worker
+  cancel-in-progress: false
+
+jobs:
+  claim:
+    if: >-
+      ${{
+        (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
+        (github.event_name != 'issues' || github.event.action == 'closed' || github.event.label.name == 'aurora:copilot-ready')
+      }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      matrix: ${{ steps.claim.outputs.matrix }}
+      count: ${{ steps.claim.outputs.count }}
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Resolve exact base SHA
+        id: base
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Claim at most two READY Free tasks
+        id: claim
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          AURORA_BASE_SHA: ${{ steps.base.outputs.sha }}
+        run: node tools/copilot/claim-free-ready.mjs
+
+  worker:
+    needs: claim
+    if: ${{ needs.claim.outputs.count != '0' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.claim.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      copilot-requests: write
+    steps:
+      - name: Checkout exact candidate base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ matrix.baseSha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install workspace
+        run: npm ci
+      - name: Install current Copilot CLI
+        run: npm install --global @github/copilot@latest
+      - name: Render governed task prompt
+        run: >-
+          node tools/copilot/free-worker-prompt.mjs
+          '${{ matrix.taskId }}'
+          '${{ matrix.issue }}'
+          '${{ matrix.baseSha }}'
+          > /tmp/aurora-copilot-prompt.txt
+      - name: Run Copilot Free candidate worker
+        id: copilot
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COPILOT_SUBAGENT_MAX_CONCURRENT: '2'
+        run: |
+          set +e
+          copilot \
+            --agent='${{ matrix.agent }}' \
+            --model=auto \
+            --mode=autopilot \
+            --max-autopilot-continues=8 \
+            --allow-all-tools \
+            --allow-all-paths \
+            --no-ask-user \
+            --stream=off \
+            --share=/tmp/aurora-copilot-session.md \
+            -p "$(cat /tmp/aurora-copilot-prompt.txt)" \
+            > /tmp/aurora-copilot-output.txt 2>&1
+          status=$?
+          set -e
+          echo "$status" > /tmp/aurora-copilot-exit-code.txt
+          cat /tmp/aurora-copilot-output.txt
+      - name: Apply canonical formatter
+        run: npm run format || true
+      - name: Remove infrastructure/control-plane edits from AI patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          mapfile -t protected < <(
+            git diff --cached --name-only | grep -E '^(\.github/workflows/|\.github/CODEOWNERS$|docs/governance/copilot/|tools/copilot/|AGENTS\.md$|\.github/agents/|\.github/copilot-instructions\.md$|\.github/instructions/)' || true
+          )
+          for path in "${protected[@]}"; do
+            echo "Removing protected AI edit: $path"
+            if ! git restore --source=HEAD --staged --worktree -- "$path" 2>/dev/null; then
+              git reset -- "$path" || true
+              rm -rf -- "$path"
+            fi
+          done
+          git add -A
+      - name: Build candidate patch artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/aurora-free-artifact
+          git diff --cached --binary > /tmp/aurora-free-artifact/candidate.patch
+          git diff --cached --name-only > /tmp/aurora-free-artifact/changed-files.txt
+          cp /tmp/aurora-copilot-exit-code.txt /tmp/aurora-free-artifact/copilot-exit-code.txt
+          cp /tmp/aurora-copilot-output.txt /tmp/aurora-free-artifact/copilot-output.txt
+          if test -f /tmp/aurora-copilot-session.md; then
+            cp /tmp/aurora-copilot-session.md /tmp/aurora-free-artifact/copilot-session.md
+          fi
+          git reset
+      - name: Upload isolated candidate patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-free-${{ matrix.issue }}
+          path: /tmp/aurora-free-artifact
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [claim, worker]
+    if: ${{ always() && needs.claim.outputs.count != '0' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.claim.outputs.matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Checkout exact candidate base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ matrix.baseSha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Download candidate artifact
+        id: artifact
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: aurora-free-${{ matrix.issue }}
+          path: /tmp/aurora-free-artifact
+      - name: Handle worker infrastructure failure
+        if: ${{ steps.artifact.outcome != 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --add-label 'aurora:copilot-free-failed' || true
+          gh issue comment '${{ matrix.issue }}' --body 'Copilot Free worker infrastructure failed before producing a candidate artifact. No branch or PR was created; task remains unaccepted.'
+      - name: Classify Copilot result
+        id: classify
+        if: ${{ steps.artifact.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(cat /tmp/aurora-free-artifact/copilot-exit-code.txt)"
+          if test "$status" != '0'; then
+            echo 'state=failed' >> "$GITHUB_OUTPUT"
+          elif ! test -s /tmp/aurora-free-artifact/candidate.patch; then
+            echo 'state=no-change' >> "$GITHUB_OUTPUT"
+          else
+            echo 'state=patch' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Record Copilot execution failure
+        if: ${{ steps.classify.outputs.state == 'failed' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --add-label 'aurora:copilot-free-failed' || true
+          gh issue comment '${{ matrix.issue }}' --body 'Copilot Free CLI exited unsuccessfully. No branch or PR was published. Inspect the workflow artifact/output before retrying; task remains unaccepted.'
+      - name: Record no-change result
+        if: ${{ steps.classify.outputs.state == 'no-change' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --add-label 'aurora:copilot-free-no-change' || true
+          gh issue comment '${{ matrix.issue }}' --body 'Copilot Free CLI completed without a candidate patch. No acceptance is implied. Review whether the task is already satisfied or requires manual/retry handling.'
+      - name: Publish isolated candidate branch and PR
+        if: ${{ steps.classify.outputs.state == 'patch' }}
+        id: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          safe_task="$(printf '%s' '${{ matrix.taskId }}' | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g')"
+          branch="copilot/free/${safe_task}-${{ matrix.issue }}-${{ github.run_id }}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git apply --index --3way /tmp/aurora-free-artifact/candidate.patch
+          git commit -m "feat(${{ matrix.taskId }}): Copilot Free candidate"
+          git push --set-upstream origin "$branch"
+          pr_url="$(gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "[Copilot Free] ${{ matrix.taskId }} candidate" \
+            --body "Automated Copilot Free CLI candidate for issue #${{ matrix.issue }}. Base SHA: ${{ matrix.baseSha }}. The AI worker had read-only repository permission; this deterministic publisher applied the patch. This PR is NOT accepted and must pass Aurora exact-head gates and independent acceptance before merge.")"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+      - name: Dispatch exact-ref official gates
+        if: ${{ steps.classify.outputs.state == 'patch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run quality.yml --ref '${{ steps.publish.outputs.branch }}'
+          gh workflow run test-build.yml --ref '${{ steps.publish.outputs.branch }}'
+          gh workflow run security.yml --ref '${{ steps.publish.outputs.branch }}'
+      - name: Link candidate PR to task
+        if: ${{ steps.classify.outputs.state == 'patch' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --remove-label 'aurora:copilot-free-ready' --add-label 'aurora:copilot-free-pr-open' || true
+          gh issue comment '${{ matrix.issue }}' --body "Copilot Free candidate published: ${{ steps.publish.outputs.pr_url }}. Quality, Test Build and Security were explicitly dispatched against branch ${{ steps.publish.outputs.branch }}. No merge/acceptance is automatic."

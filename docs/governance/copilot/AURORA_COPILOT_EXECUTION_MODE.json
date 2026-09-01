@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "mode": "FREE_ACTIONS_CLI",
+  "cloudAgentEnabled": false,
+  "freeActionsCliEnabled": true,
+  "maxParallelTasks": 2,
+  "copilotModel": "auto",
+  "upgradeTarget": "PRO_PLUS_CLOUD_AGENT",
+  "authority": "Operational execution mode only. Live main, exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual, ADRs and owning wave governance remain authoritative.",
+  "notes": [
+    "Copilot Free does not provide cloud agent background sessions.",
+    "Copilot CLI is available on all Copilot plans and GitHub Actions can authenticate it with the workflow GITHUB_TOKEN using copilot-requests: write.",
+    "Free plan subagent concurrency is capped at 2.",
+    "The AI worker receives read-only repository permission. A separate deterministic publisher job applies the generated patch to an isolated branch and opens a PR.",
+    "Changing this mode to PRO_PLUS_CLOUD_AGENT later must go through normal PR/exact-head gates."
+  ]
+}
