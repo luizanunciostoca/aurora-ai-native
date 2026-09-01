@@ -1,18 +1,18 @@
 # W04 ACCEPTANCE MATRIX & RISK GATES
 
 Date: 2026-09-01  
-Status: `W04_00_COORDINATION_FREEZE_CANDIDATE`  
+Status: `COMPLETE_ACCEPTED / W04_CONTROL_CORE_VERIFIED`  
 Target: `W04_CONTROL_CORE_VERIFIED`
 
 ## Global acceptance invariants
 
 - Capability != authority.
 - Plan/GoalGraph/lane/budget/template != execution permission.
-- W04 cannot bypass W02 current authority or future W07 execution validation.
+- W04 cannot bypass W02 current authority or W07 execution validation.
 - W04 consumes W03 durability and must not create a competing durable-workflow source of truth.
 - Capability planning is target-neutral and capability-first.
 - Only one Capability Registry exists.
-- Legacy/TOCA capability vocabulary is `SEED_ONLY_NOT_CANONICAL` until W04-B explicitly adjudicates it.
+- Legacy/TOCA capability vocabulary starts as `SEED_ONLY_NOT_CANONICAL` until W04-B explicitly adjudicates it.
 - No external provider/device side effect is part of W04 acceptance.
 
 ## W04-00 coordination freeze acceptance
@@ -22,12 +22,12 @@ Required evidence:
 2. `docs/governance/copilot/tasks/W04.json` is schema v2 and represents the same DAG/ownership/readiness rules.
 3. `CURRENT_PROGRAM_STATUS.md` records W03 final acceptance and correct W04 release semantics.
 4. Repository audit demonstrates no competing Capability Registry/control-core runtime requiring migration.
-5. Legacy 69-seed and TOCA capability inputs remain planning/reference-only.
+5. Legacy 69-seed and TOCA capability inputs remain planning/reference-only until adjudicated.
 6. Device DP1 and cross-wave locks are represented without W14/W15 leakage.
 7. No runtime feature implementation is introduced by W04-00.
 8. Official candidate gates pass on one exact final HEAD; merge/post-merge/Drive/GitHub convergence follows.
 
-W04-00 acceptance releases only W04-A, W04-B and W04-F according to the dependency matrix.
+W04-00 was accepted and released only W04-A, W04-B and W04-F according to the dependency matrix.
 
 ## Subwave acceptance
 
@@ -65,6 +65,8 @@ PASS requires evidence for:
 - deterministic joins/cancellation/supersession;
 - public consumer compilation and source-of-truth consistency.
 
+Final W04 decision: `PASS`.
+
 ## Risk Gate B — Safety / Authority
 
 PASS requires evidence that:
@@ -75,37 +77,48 @@ PASS requires evidence that:
 - no W04 test invokes real provider/device side effects;
 - no secret/provider credential/device secret enters planning artifacts by architecture default.
 
-Independent release blockers: authority bypass, cross-tenant breach, capability-as-authority, hidden execution path, secret exposure, or external irreversible side effect without current authority.
+Independent release blockers remain authority bypass, cross-tenant breach, capability-as-authority, hidden execution path, secret exposure, or external irreversible side effect without current authority.
+
+Final W04 decision: `PASS`.
 
 ## Risk Gate C — Performance / Economics
 
-Measure at W04-H as runtime exists:
+Measured at W04-H:
 - plan/graph validation p50/p95/p99;
-- registry lookup/plan selection cost;
+- registry/capability-plan selection overhead;
 - scheduler ready-frontier/dispatch overhead;
-- bounded parallel speedup versus serial baseline;
 - fairness/starvation behavior;
 - fan-out/concurrency cap behavior;
-- template-hit path versus frontier replanning;
+- template-hit path versus fallback replanning;
 - budget accounting/exhaustion overhead;
-- memory/task explosion pressure.
+- bounded task-pressure behavior.
 
-Numeric SLOs must be evidence-driven; W04-00 must not invent production thresholds.
+Observed exact-candidate Test Build `33506852889` p50/p95/p99:
+
+| Measurement | p50 ms | p95 ms | p99 ms |
+| --- | ---: | ---: | ---: |
+| Graph validation | 0.088912 | 0.181339 | 0.983061 |
+| Capability plan | 0.005428 | 0.011998 | 0.298013 |
+| Scheduler | 0.010015 | 0.025628 | 0.236171 |
+| Template hit | 0.003815 | 0.028181 | 0.113729 |
+| Budget accounting | 0.003114 | 0.024687 | 0.227498 |
+
+These are observed integration-test measurements only. No production SLO is inferred or invented.
+
+Final W04 decision: `PASS_FOR_TEST_SCOPE`.
 
 ## Risk Gate D — Failure / Recoverability
 
-Inject/verify as applicable:
-- malformed lifecycle/graph/capability metadata;
-- graph cycle and missing dependency;
-- duplicate/superseded/cancelled tasks;
-- scheduler worker failure/cancellation and join failure;
-- budget exhaustion during planning/running work;
-- stale capability availability/freshness;
-- template incompatibility/invalidation;
-- queue/backpressure/fairness stress;
-- restart/recovery paths using W03 primitives where durability is required.
+Verified as applicable:
+- malformed/invalid graph metadata and cycles fail closed;
+- graph over-bound is rejected;
+- cancelled tasks do not dispatch;
+- pressure triggers bounded backpressure rather than unbounded expansion;
+- template incompatibility/hash staleness falls back deterministically;
+- budget exhaustion preserves mandatory validation;
+- restart/recovery ownership remains W03 and is not duplicated by W04.
 
-Expected behavior must be deterministic reject/stop/degrade/hold/reconcile as specified, never guessed execution state.
+Final W04 decision: `PASS_FOR_W04_SCOPE`.
 
 ## Final W04 Reality/Integration scenarios
 
@@ -132,6 +145,18 @@ Expected behavior must be deterministic reject/stop/degrade/hold/reconcile as sp
 
 ## Final decision
 
-Allowed: `ACCEPT | ACCEPT_WITH_RECORDED_RISK | REJECT | BLOCKED`.
+Allowed decision vocabulary: `ACCEPT | ACCEPT_WITH_RECORDED_RISK | REJECT | BLOCKED`.
 
-Final W04 acceptance requires Risk A/B/C/D decisions, applicable R01-R20 evidence, official exact-head gates, ownership/scope/cleanup audit, merge/post-merge verification and Drive/GitHub convergence.
+W04-H accepted candidate:
+- PR #151.
+- exact candidate HEAD `b4de1097b03a4b94bc81ac38f6cbe0019244724b`.
+- candidate Quality `33506852902`, Test Build `33506852889`, Security `33506853276`: SUCCESS.
+- controlled merge/main `fcc26c1065961ec6ca52019195108f3562c33365`.
+- post-merge Quality `33507711472`, Test Build `33507711290`, Security `33507712325`: SUCCESS.
+- independent scope/source-of-truth review: PASS.
+- Drive evidence `W04_H_ACCEPTANCE_EVIDENCE` / `145hSgYYiwTmSFqFe_BRyH-ZTfZGIbidV1ce-nx-Afjs`.
+- issue #97: closed with `aurora:accepted`.
+
+Decision: `ACCEPT / COMPLETE_ACCEPTED / W04_CONTROL_CORE_VERIFIED`.
+
+W04 is complete. W05-00 and W07-00 are direct W04-H dependency consumers, but each must pass its own coordination freeze, publication barriers, exact-head acceptance and Program Control convergence before later nodes are released.

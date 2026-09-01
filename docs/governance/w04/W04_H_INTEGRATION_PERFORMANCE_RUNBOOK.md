@@ -1,15 +1,42 @@
 # W04-H Integration / Performance / Contract Gate Runbook
 
 Date: 2026-09-01  
-Status: `CANDIDATE_NOT_ACCEPTED`  
+Status: `COMPLETE_ACCEPTED / W04_CONTROL_CORE_VERIFIED`  
 Task: `W04-H` / issue `#97`  
-Canonical base at BUILD start: `48ed0e59b289cf835a5feb23eeadbed35a335b59`
+Canonical BUILD base: `48ed0e59b289cf835a5feb23eeadbed35a335b59`  
+Exact accepted candidate HEAD: `b4de1097b03a4b94bc81ac38f6cbe0019244724b`  
+Accepted merge/main: `fcc26c1065961ec6ca52019195108f3562c33365`
 
 ## Scope and authority
 
 W04-H is the final W04 convergence gate. It owns integration, benchmark and contract-test evidence only. It does not introduce new runtime semantics, provider/device execution, authority, adaptive learning, production telemetry or a second durable-workflow source of truth.
 
-This candidate must not be treated as accepted until one exact final HEAD passes Quality + Test Build + Security, independent source-of-truth/scope review, controlled merge, post-merge verification and Drive/GitHub evidence convergence.
+The accepted candidate changed only:
+
+- `packages/control/test/w04h-integration-performance.test.ts`
+- `docs/governance/w04/W04_H_INTEGRATION_PERFORMANCE_RUNBOOK.md`
+
+No root/package publication surface, contract/schema, W03 durability, W05 intelligence, W07 executor/current-authority, W17 telemetry or W18 adaptive-learning surface was changed.
+
+## Exact-head acceptance evidence
+
+Candidate exact HEAD `b4de1097b03a4b94bc81ac38f6cbe0019244724b`:
+
+- Quality `33506852902` — SUCCESS.
+- Test Build `33506852889` — SUCCESS.
+- Security `33506853276` — SUCCESS.
+
+Independent Program Control review was recorded on PR #151 against that exact candidate. The controlled exact-head merge produced `main fcc26c1065961ec6ca52019195108f3562c33365`.
+
+Post-merge verification on that exact `main`:
+
+- Quality `33507711472` — SUCCESS.
+- Test Build `33507711290` — SUCCESS.
+- Security `33507712325` — SUCCESS.
+
+Canonical Drive evidence: `W04_H_ACCEPTANCE_EVIDENCE` / `145hSgYYiwTmSFqFe_BRyH-ZTfZGIbidV1ce-nx-Afjs`.
+
+Issue #97 is closed with `aurora:accepted`.
 
 ## Integrated test surface
 
@@ -32,7 +59,7 @@ No test invokes a provider, Android/device runtime, network side effect or execu
 
 ## Reality scenario coverage
 
-W04-H directly closes the integration gaps in the W04 acceptance matrix while relying on accepted A-G unit/contract evidence for leaf semantics:
+W04-H closes the integration gaps in the W04 acceptance matrix while relying on accepted A-G unit/contract evidence for leaf semantics:
 
 - R01-R02: lifecycle transition, cancellation/supersession semantics — accepted W04-A tests plus integrated lifecycle chain.
 - R03-R07: registry uniqueness, freshness/authority separation, target-neutral CapabilityPlan and DEVICE neutrality — accepted W04-B tests plus W04-H target-neutral assertions.
@@ -46,37 +73,44 @@ W04-H directly closes the integration gaps in the W04 acceptance matrix while re
 - R19: no legacy/TOCA executable wrapper/authority model is promoted — W04-H fixtures use Aurora-native target-neutral descriptors only.
 - R20: no external provider/device side effect — W04-H is pure in-process planning/test code.
 
-## Risk Gate candidate disposition
+## Performance evidence — test scope only
+
+Observed p50/p95/p99 control-plane overhead from exact-candidate Test Build `33506852889`:
+
+| Measurement | p50 ms | p95 ms | p99 ms |
+| --- | ---: | ---: | ---: |
+| Graph validation | 0.088912 | 0.181339 | 0.983061 |
+| Capability plan | 0.005428 | 0.011998 | 0.298013 |
+| Scheduler | 0.010015 | 0.025628 | 0.236171 |
+| Template hit | 0.003815 | 0.028181 | 0.113729 |
+| Budget accounting | 0.003114 | 0.024687 | 0.227498 |
+
+These are observed integration-test measurements only. W04-H does not infer or invent production SLOs from them.
+
+## Cleanup / source-of-truth audit
+
+Exact-head Test Build cleanup audit reported zero zero-byte files and zero canonical broken relative references. Existing duplicate groups/broken references are generated/reference/legacy material and were not introduced by the two-file W04-H diff. No second Capability Registry, policy engine, executor boundary, durable workflow foundation or planning source of truth was introduced.
+
+## Final Risk Gate disposition
 
 ### Gate A — Correctness
 
-Candidate PASS subject to official exact-head CI. Integrated composition is deterministic, graph cycles fail closed, joins do not run early, bounds are explicit, fairness is deterministic and evidence links remain reconstructable.
+`PASS`. Integrated composition is deterministic, graph cycles fail closed, joins do not run early, bounds are explicit, fairness is deterministic and evidence links remain reconstructable.
 
 ### Gate B — Safety / Authority
 
-Candidate PASS subject to official exact-head CI and independent review. Capability/plan/graph/lane/budget/template/scheduler artifacts never authorize execution. Current Policy, Authority and Executor checks remain mandatory where declared. No side-effect path is added.
+`PASS`. Capability/plan/graph/lane/budget/template/scheduler artifacts never authorize execution. Current Policy, Authority and Executor checks remain mandatory. No side-effect path is added.
 
 ### Gate C — Performance / Economics
 
-Candidate PASS_FOR_TEST_SCOPE subject to official exact-head CI. The benchmark emits observed p50/p95/p99 control-plane overhead and a deterministic planning-round parallelism ratio. No production SLO is asserted because W04 governance requires thresholds to be evidence-driven rather than invented.
+`PASS_FOR_TEST_SCOPE`. The accepted benchmark records observed p50/p95/p99 control-plane overhead, bounded concurrency/fan-out and fairness/backpressure behavior. No unsupported production threshold is asserted.
 
 ### Gate D — Failure / Recoverability
 
-Candidate PASS subject to official exact-head CI. The integrated test exercises cycles, graph over-bound rejection, cancellation, pressure/backpressure, stale template fallback and budget exhaustion. Durable recovery remains delegated to accepted W03 primitives rather than duplicated in W04.
+`PASS_FOR_W04_SCOPE`. The integrated test exercises cycles, graph over-bound rejection, cancellation, pressure/backpressure, stale template fallback and budget exhaustion. Durable restart/recovery remains delegated to accepted W03 primitives rather than duplicated in W04.
 
-## Acceptance procedure
+## Final decision
 
-1. Freeze the exact final W04-H candidate HEAD.
-2. Run official Quality, Test Build and Security on that same SHA.
-3. Review changed paths for ownership, duplicates, source-of-truth drift and scope leakage.
-4. Confirm no runtime/provider/device/authority/shared-surface implementation was introduced.
-5. Record benchmark output from the exact candidate CI run.
-6. Obtain independent acceptance decision; do not self-accept.
-7. Merge only with exact-head fencing after acceptance conditions are satisfied.
-8. Run post-merge Quality, Test Build and Security on resulting `main`.
-9. Create canonical Drive W04-H acceptance evidence and converge `CURRENT_PROGRAM_STATUS.md` only after merge/post-merge verification.
-10. Only then release downstream W05-00/W07-00 dependencies that require accepted W04-H.
+`ACCEPT / COMPLETE_ACCEPTED / W04_CONTROL_CORE_VERIFIED`.
 
-## Current decision
-
-`CANDIDATE_NOT_ACCEPTED` — implementation/evidence candidate exists, but exact final HEAD CI, independent review, controlled merge, post-merge gates and Drive/GitHub convergence are still mandatory.
+W04-H may satisfy downstream dependency edges. Direct task-graph consumers W05-00 and W07-00 still require their own live coordination freeze, publication barriers, exact-head acceptance and Program Control convergence before later nodes are released. W15-00 remains additionally gated by its other declared dependencies.
