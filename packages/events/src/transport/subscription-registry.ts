@@ -58,11 +58,13 @@ export class SubscriptionRegistry {
 
   register(input: RegisterSubscriptionInput): SubscriptionDefinition {
     const key = nonEmpty(input.subscriptionKey, 'subscriptionKey');
+    nonEmpty(input.tenantId, 'tenantId');
     const subscriber = nonEmpty(input.subscriber, 'subscriber');
     const interest = normalizedInterest(input.interest);
     const existing = this.#subscriptions.get(key);
     if (existing) {
       if (
+        existing.tenantId !== input.tenantId ||
         existing.subscriber !== subscriber ||
         interestFingerprint(existing.interest) !== interestFingerprint(interest)
       ) {
@@ -75,6 +77,7 @@ export class SubscriptionRegistry {
     }
     const definition: SubscriptionDefinition = {
       subscriptionKey: key,
+      tenantId: input.tenantId,
       subscriber,
       interest,
       active: true,
@@ -101,7 +104,10 @@ export class SubscriptionRegistry {
   matching(envelope: EventEnvelope): readonly SubscriptionDefinition[] {
     return [...this.#subscriptions.values()]
       .filter(
-        (definition) => definition.active && matchesSubscription(envelope, definition.interest),
+        (definition) =>
+          definition.active &&
+          definition.tenantId === envelope.tenant.tenantId &&
+          matchesSubscription(envelope, definition.interest),
       )
       .sort((left, right) => left.subscriptionKey.localeCompare(right.subscriptionKey));
   }
