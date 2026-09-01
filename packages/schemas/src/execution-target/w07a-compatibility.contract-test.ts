@@ -252,7 +252,10 @@ const deviceReceipt = ReceiptSchema.parse(
   { ...baseReceipt, executionTarget: deviceTarget },
   receiptDependencies,
 );
-assert(deviceReceipt.executionTarget?.kind === 'DEVICE', 'DEVICE Receipt must not require fake provider');
+assert(
+  deviceReceipt.executionTarget?.kind === 'DEVICE',
+  'DEVICE Receipt must not require fake provider',
+);
 expectThrows(
   () =>
     ReceiptSchema.parse(
