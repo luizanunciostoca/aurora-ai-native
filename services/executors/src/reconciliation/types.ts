@@ -1,9 +1,6 @@
 import type { ActionIntent } from '@aurora/contracts/actions';
 import type { Rfc3339Timestamp } from '@aurora/contracts/context';
-import type {
-  FailedExecutionResult,
-  UncertainExecutionResult,
-} from '@aurora/contracts/results';
+import type { FailedExecutionResult, UncertainExecutionResult } from '@aurora/contracts/results';
 import type { ContractVersion } from '@aurora/contracts/versioning';
 
 import type { CaptureReadbackEvidenceResult } from '../readback/index.js';
@@ -17,8 +14,7 @@ export type ExecutionAmbiguitySignal =
   | 'READBACK_MISMATCH';
 
 export type ExternalInvocationPhase =
-  | 'BEFORE_EXTERNAL_INVOCATION'
-  | 'AFTER_EXTERNAL_INVOCATION_STARTED';
+  'BEFORE_EXTERNAL_INVOCATION' | 'AFTER_EXTERNAL_INVOCATION_STARTED';
 
 export interface ClassifyExecutionAmbiguityRequest {
   readonly schemaVersion: ContractVersion;
@@ -56,10 +52,7 @@ export interface ExecutionUncertaintyRecord {
 }
 
 export type AmbiguityClassificationReason =
-  | 'INVALID_TIME'
-  | 'ATTEMPT_INVALID'
-  | 'ATTEMPT_LIMIT_INVALID'
-  | 'SIGNAL_PHASE_INCOMPATIBLE';
+  'INVALID_TIME' | 'ATTEMPT_INVALID' | 'ATTEMPT_LIMIT_INVALID' | 'SIGNAL_PHASE_INCOMPATIBLE';
 
 export type ExecutionAmbiguityClassification =
   | Readonly<{
