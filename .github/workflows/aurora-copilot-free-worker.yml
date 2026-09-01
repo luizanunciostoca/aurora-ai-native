@@ -34,6 +34,7 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: read
     outputs:
       matrix: ${{ steps.claim.outputs.matrix }}
       count: ${{ steps.claim.outputs.count }}
@@ -112,18 +113,45 @@ jobs:
           set -e
           echo "$status" > /tmp/aurora-copilot-exit-code.txt
           cat /tmp/aurora-copilot-output.txt
-      - name: Apply canonical formatter
-        run: npm run format || true
-      - name: Remove infrastructure/control-plane edits from AI patch
+      - name: Remove generated outputs before candidate classification
+        shell: bash
+        run: |
+          set -euo pipefail
+          for root in packages services apps catalog infra evals tools; do
+            test -d "$root" || continue
+            find "$root" -type d \( \
+              -name dist-test -o \
+              -name dist -o \
+              -name coverage -o \
+              -name .cache -o \
+              -name .turbo -o \
+              -name .next \
+            \) -prune -exec rm -rf {} +
+            find "$root" -type f -name '*.tsbuildinfo' -delete
+          done
+      - name: Format only candidate text files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t format_paths < <(
+            {
+              git diff --name-only
+              git ls-files --others --exclude-standard
+            } | sort -u | grep -E '\.(js|mjs|cjs|ts|tsx|json|md|yml|yaml)$' || true
+          )
+          if test "${#format_paths[@]}" -gt 0; then
+            npx prettier --write "${format_paths[@]}"
+          fi
+      - name: Remove protected and generated edits from AI patch
         shell: bash
         run: |
           set -euo pipefail
           git add -A
           mapfile -t protected < <(
-            git diff --cached --name-only | grep -E '^(\.github/workflows/|\.github/CODEOWNERS$|docs/governance/copilot/|tools/copilot/|AGENTS\.md$|\.github/agents/|\.github/copilot-instructions\.md$|\.github/instructions/)' || true
+            git diff --cached --name-only | grep -E '^(\.github/workflows/|\.github/CODEOWNERS$|docs/governance/copilot/|tools/copilot/|AGENTS\.md$|\.github/agents/|\.github/copilot-instructions\.md$|\.github/instructions/)|(^|/)(dist-test|dist|coverage|\.cache|\.turbo|\.next)(/|$)|\.tsbuildinfo$' || true
           )
           for path in "${protected[@]}"; do
-            echo "Removing protected AI edit: $path"
+            echo "Removing protected/generated AI edit: $path"
             if ! git restore --source=HEAD --staged --worktree -- "$path" 2>/dev/null; then
               git reset -- "$path" || true
               rm -rf -- "$path"
@@ -215,8 +243,8 @@ jobs:
         shell: bash
         run: |
           gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --add-label 'aurora:copilot-free-no-change' || true
-          gh issue comment '${{ matrix.issue }}' --body 'Copilot Free CLI completed without a candidate patch. No acceptance is implied. Review whether the task is already satisfied or requires manual/retry handling.'
-      - name: Publish isolated candidate branch and PR
+          gh issue comment '${{ matrix.issue }}' --body 'Copilot Free CLI completed without a candidate patch after generated-output filtering. No acceptance is implied. Review whether the task is already satisfied or requires manual/retry handling.'
+      - name: Publish isolated candidate branch
         if: ${{ steps.classify.outputs.state == 'patch' }}
         id: publish
         env:
@@ -232,13 +260,25 @@ jobs:
           git apply --index --3way /tmp/aurora-free-artifact/candidate.patch
           git commit -m "feat(${{ matrix.taskId }}): Copilot Free candidate"
           git push --set-upstream origin "$branch"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+          set +e
           pr_url="$(gh pr create \
             --base main \
             --head "$branch" \
             --title "[Copilot Free] ${{ matrix.taskId }} candidate" \
-            --body "Automated Copilot Free CLI candidate for issue #${{ matrix.issue }}. Base SHA: ${{ matrix.baseSha }}. The AI worker had read-only repository permission; this deterministic publisher applied the patch. This PR is NOT accepted and must pass Aurora exact-head gates and independent acceptance before merge.")"
-          echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+            --body "Automated Copilot Free CLI candidate for issue #${{ matrix.issue }}. Base SHA: ${{ matrix.baseSha }}. The AI worker had read-only repository permission; this deterministic publisher applied the patch. This PR is NOT accepted and must pass Aurora exact-head gates and independent acceptance before merge." 2>/tmp/aurora-pr-create-error.txt)"
+          pr_status=$?
+          set -e
+
+          if test "$pr_status" = '0'; then
+            echo "pr_published=true" >> "$GITHUB_OUTPUT"
+            echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+          else
+            echo "pr_published=false" >> "$GITHUB_OUTPUT"
+            echo 'GitHub Actions could not create the PR; branch remains available for Program Control.'
+            cat /tmp/aurora-pr-create-error.txt || true
+          fi
       - name: Dispatch exact-ref official gates
         if: ${{ steps.classify.outputs.state == 'patch' }}
         env:
@@ -249,11 +289,19 @@ jobs:
           gh workflow run quality.yml --ref '${{ steps.publish.outputs.branch }}'
           gh workflow run test-build.yml --ref '${{ steps.publish.outputs.branch }}'
           gh workflow run security.yml --ref '${{ steps.publish.outputs.branch }}'
-      - name: Link candidate PR to task
-        if: ${{ steps.classify.outputs.state == 'patch' }}
+      - name: Link published candidate PR to task
+        if: ${{ steps.classify.outputs.state == 'patch' && steps.publish.outputs.pr_published == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --remove-label 'aurora:copilot-free-ready' --add-label 'aurora:copilot-free-pr-open' || true
+          gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --remove-label 'aurora:copilot-free-ready' --remove-label 'aurora:copilot-free-branch-ready' --add-label 'aurora:copilot-free-pr-open' || true
           gh issue comment '${{ matrix.issue }}' --body "Copilot Free candidate published: ${{ steps.publish.outputs.pr_url }}. Quality, Test Build and Security were explicitly dispatched against branch ${{ steps.publish.outputs.branch }}. No merge/acceptance is automatic."
+      - name: Hand branch-only candidate to Program Control
+        if: ${{ steps.classify.outputs.state == 'patch' && steps.publish.outputs.pr_published != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --remove-label 'aurora:copilot-free-ready' --add-label 'aurora:copilot-free-branch-ready' || true
+          gh issue comment '${{ matrix.issue }}' --body "Copilot Free candidate branch `${{ steps.publish.outputs.branch }}` was created and Quality/Test Build/Security were dispatched. Repository policy prevented GitHub Actions from opening the PR, so Program Control must publish this branch as a PR. No acceptance is implied."
