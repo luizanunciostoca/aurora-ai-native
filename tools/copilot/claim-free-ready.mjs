@@ -55,6 +55,7 @@ for (const [name, color, description] of [
   ['aurora:copilot-free-running', 'fbca04', 'Copilot Free Actions CLI worker currently owns this task'],
   ['aurora:copilot-free-pr-open', '8250df', 'Copilot Free candidate PR has been published'],
   ['aurora:copilot-free-no-change', 'd4c5f9', 'Copilot Free worker completed without a candidate patch'],
+  ['aurora:copilot-free-failed', 'b60205', 'Copilot Free worker failed before publishing a candidate PR'],
 ]) {
   await ensureLabel(name, color, description);
 }
@@ -116,6 +117,8 @@ const include = [];
 for (const { issue, task } of selected) {
   const labels = new Set((issue.labels || []).map((label) => label.name));
   labels.delete('aurora:dispatch-blocked');
+  labels.delete('aurora:copilot-free-failed');
+  labels.delete('aurora:copilot-free-no-change');
   labels.add('aurora:copilot-free-ready');
   labels.add('aurora:copilot-free-running');
   await request(`/repos/${owner}/${repo}/issues/${issue.number}`, {
