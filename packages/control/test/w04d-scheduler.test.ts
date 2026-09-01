@@ -23,7 +23,10 @@ const otherTenantId = 'ten_01J00000000000000000000001' as TenantId;
 const correlationId = 'cor_01J00000000000000000000000' as CorrelationId;
 const otherCorrelationId = 'cor_01J00000000000000000000001' as CorrelationId;
 
-function node(nodeId: string, joinPolicy: GoalGraphNode['joinPolicy'] = 'ALL_SUCCESS'): GoalGraphNode {
+function node(
+  nodeId: string,
+  joinPolicy: GoalGraphNode['joinPolicy'] = 'ALL_SUCCESS',
+): GoalGraphNode {
   return {
     nodeId,
     lifecycleRef: { kind: 'TASK', id: `task:${nodeId}` },
