@@ -25,8 +25,8 @@ if (mode.mode !== 'FREE_ACTIONS_CLI' || !mode.freeActionsCliEnabled) {
   console.log(`Free worker disabled by mode ${mode.mode}`);
   process.exit(0);
 }
-if (mode.scheduler?.strategy !== 'READY_FRONTIER') {
-  throw new Error('FREE_ACTIONS_CLI requires READY_FRONTIER scheduler policy');
+if (mode.scheduler?.strategy !== 'PUZZLE_FRONTIER') {
+  throw new Error('FREE_ACTIONS_CLI requires PUZZLE_FRONTIER scheduler policy');
 }
 
 const graph = await loadTaskGraph();
@@ -45,8 +45,9 @@ async function request(path, options = {}) {
   });
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
-  if (!response.ok)
+  if (!response.ok) {
     throw new Error(`${options.method || 'GET'} ${path}: ${response.status} ${text}`);
+  }
   return data;
 }
 
@@ -62,11 +63,11 @@ async function ensureLabel(name, color, description) {
 }
 
 for (const [name, color, description] of [
-  ['aurora:copilot-free-ready', '54aeff', 'READY task queued for Copilot Free Actions CLI'],
+  ['aurora:copilot-free-ready', '54aeff', 'BUILD_READY task queued for Copilot Free Actions CLI'],
   [
     'aurora:copilot-free-running',
     'fbca04',
-    'Copilot Free Actions CLI worker currently owns this task',
+    'Copilot Free Actions CLI worker currently owns this canonical BUILD task',
   ],
   ['aurora:copilot-free-pr-open', '8250df', 'Copilot Free candidate PR has been published'],
   [
@@ -154,7 +155,8 @@ const candidates = [];
 for (const issue of issues) {
   if (issue.state !== 'open') continue;
   const labels = new Set((issue.labels || []).map((label) => label.name));
-  if (!labels.has('aurora:copilot-ready')) continue;
+  if (!labels.has('aurora:copilot-ready') || !labels.has('aurora:puzzle-build-ready')) continue;
+  if (labels.has('aurora:puzzle-prebuild') || labels.has('aurora:puzzle-readiness')) continue;
   if (
     labels.has('aurora:copilot-dispatched') ||
     labels.has('aurora:copilot-free-running') ||
@@ -167,10 +169,12 @@ for (const issue of issues) {
   const taskId = taskIdFromIssue(issue);
   const task = graph.tasks.find((entry) => entry.id === taskId);
   if (!task) continue;
-  if (!task.dependsOn.every((dependency) => accepted.has(dependency))) continue;
+  if (!task.dependsOn.every((dependency) => accepted.has(dependency))) {
+    throw new Error(`BUILD_READY issue ${issue.number} for ${task.id} has unaccepted dependency`);
+  }
 
   if (programControlAgents.has(task.customAgent)) {
-    console.log(`leaving ${task.id} for Program Control agent ${task.customAgent}`);
+    console.log(`leaving BUILD_READY ${task.id} for Program Control agent ${task.customAgent}`);
     continue;
   }
 
@@ -194,21 +198,19 @@ for (const issue of issues) {
   candidates.push({ issue, task });
 }
 
-const frontier = selectSafeReadyFrontier(
-  candidates,
-  graph.tasks,
-  Number(mode.maxParallelTasks || 2),
-);
+const physicalBuildSlots = Number(mode.physicalBuildSlots || mode.maxParallelTasks || 2);
+const frontier = selectSafeReadyFrontier(candidates, graph.tasks, physicalBuildSlots);
 const selected = frontier.selected;
 const frontierSummary = compactFrontierSummary(frontier);
 const include = [];
 
-console.log(`READY FRONTIER ${JSON.stringify(frontierSummary)}`);
+console.log(`CANONICAL BUILD FRONTIER ${JSON.stringify(frontierSummary)}`);
 if (summaryPath) {
   const lines = [
-    '## Aurora READY Frontier',
+    '## Aurora Canonical BUILD Frontier',
     '',
     `Base SHA: \`${baseSha}\``,
+    `Physical BUILD slots: ${physicalBuildSlots}`,
     '',
     `Selected: ${frontierSummary.selected.length}; deferred: ${frontierSummary.deferred.length}`,
     '',
@@ -250,7 +252,9 @@ for (const { issue, task } of selected) {
     baseSha,
     lane: task.laneHint || '',
   });
-  console.log(`claimed ${task.id} from issue #${issue.number} on ${task.laneHint || 'AUTO'} lane`);
+  console.log(
+    `claimed BUILD_READY ${task.id} from issue #${issue.number} on ${task.laneHint || 'AUTO'} lane`,
+  );
 }
 
 await fs.appendFile(
