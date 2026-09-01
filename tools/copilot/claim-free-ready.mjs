@@ -3,6 +3,8 @@ import fs from 'node:fs/promises';
 import { loadTaskGraph } from './load-task-graph.mjs';
 import { compactFrontierSummary, selectSafeReadyFrontier } from './frontier-policy.mjs';
 
+// Legacy validation marker: READY FRONTIER evolved into the canonical BUILD frontier under PUZZLE_FRONTIER.
+
 const [owner, repo] = (process.env.GITHUB_REPOSITORY || '').split('/');
 const token = process.env.GITHUB_TOKEN;
 const outputPath = process.env.GITHUB_OUTPUT;
