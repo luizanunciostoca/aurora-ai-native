@@ -28,7 +28,10 @@ function expectThrows(fn: () => unknown, contains: string): void {
     fn();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    assert(message.includes(contains), `expected error containing "${contains}", got "${message}"`);
+    assert(
+      message.includes(contains),
+      `expected error containing "${contains}", got "${message}"`,
+    );
     return;
   }
   throw new Error(`expected function to throw: ${contains}`);
@@ -87,7 +90,9 @@ const receiptDependencies: ReceiptSchemaDependencies = {
   parseExecutionId: (input) => prefixed<ExecutionId>('exe', input),
   parseCorrelationContext,
   parseExecutionOutcome(input) {
-    if (!canonicalOutcomes.has(String(input))) throw new TypeError('unsupported ExecutionOutcome');
+    if (!canonicalOutcomes.has(String(input))) {
+      throw new TypeError('unsupported ExecutionOutcome');
+    }
     return input as ExecutionOutcome;
   },
 };
@@ -119,8 +124,13 @@ const deviceTarget = {
 
 const parsedDevice = ExecutionTargetReferenceSchema.parse(deviceTarget, { parseContractVersion });
 assert(parsedDevice.kind === 'DEVICE', 'DEVICE target must parse without provider identity');
-const parsedProvider = ExecutionTargetReferenceSchema.parse(providerTarget, { parseContractVersion });
-assert(parsedProvider.kind === 'PROVIDER', 'PROVIDER target must preserve provider provenance');
+const parsedProvider = ExecutionTargetReferenceSchema.parse(providerTarget, {
+  parseContractVersion,
+});
+assert(
+  parsedProvider.kind === 'PROVIDER',
+  'PROVIDER target must preserve provider provenance',
+);
 expectThrows(
   () =>
     ExecutionTargetReferenceSchema.parse(
@@ -170,13 +180,21 @@ const baseIntent = {
 
 const legacyIntentInput = {
   ...baseIntent,
-  providerBinding: { provider: 'meta', targetType: 'comment', targetReference: 'comment-123' },
+  providerBinding: {
+    provider: 'meta',
+    targetType: 'comment',
+    targetReference: 'comment-123',
+  },
 };
 const legacyIntent = ActionIntentSchema.parse(legacyIntentInput, actionDependencies);
-assert(legacyIntent.executionTarget === undefined, 'legacy provider ActionIntent must round-trip unchanged');
 assert(
-  JSON.stringify(ActionIntentSchema.parse(JSON.parse(JSON.stringify(legacyIntent)), actionDependencies)) ===
-    JSON.stringify(legacyIntent),
+  legacyIntent.executionTarget === undefined,
+  'legacy provider ActionIntent must round-trip unchanged',
+);
+assert(
+  JSON.stringify(
+    ActionIntentSchema.parse(JSON.parse(JSON.stringify(legacyIntent)), actionDependencies),
+  ) === JSON.stringify(legacyIntent),
   'legacy ActionIntent serialization must remain stable',
 );
 const deviceIntent = ActionIntentSchema.parse(
@@ -197,7 +215,10 @@ const matchingProviderIntent = ActionIntentSchema.parse(
   },
   actionDependencies,
 );
-assert(matchingProviderIntent.executionTarget?.kind === 'PROVIDER', 'matching legacy/new PROVIDER refs parse');
+assert(
+  matchingProviderIntent.executionTarget?.kind === 'PROVIDER',
+  'matching legacy/new PROVIDER refs parse',
+);
 expectThrows(
   () =>
     ActionIntentSchema.parse(
@@ -237,7 +258,10 @@ const deviceReceipt = ReceiptSchema.parse(
   { ...baseReceipt, executionTarget: deviceTarget },
   receiptDependencies,
 );
-assert(deviceReceipt.executionTarget?.kind === 'DEVICE', 'DEVICE Receipt must not require fake provider');
+assert(
+  deviceReceipt.executionTarget?.kind === 'DEVICE',
+  'DEVICE Receipt must not require fake provider',
+);
 expectThrows(
   () =>
     ReceiptSchema.parse(
@@ -290,7 +314,10 @@ const legacyEvidence = EvidenceSchema.parse(
   },
   evidenceDependencies,
 );
-assert(legacyEvidence.source.sourceType === 'PROVIDER_READBACK', 'legacy provider evidence parses');
+assert(
+  legacyEvidence.source.sourceType === 'PROVIDER_READBACK',
+  'legacy provider evidence parses',
+);
 const targetEvidence = EvidenceSchema.parse(
   {
     ...baseEvidence,
@@ -299,7 +326,10 @@ const targetEvidence = EvidenceSchema.parse(
   },
   evidenceDependencies,
 );
-assert(targetEvidence.source.executionTarget?.kind === 'DEVICE', 'generic target evidence preserves target');
+assert(
+  targetEvidence.source.executionTarget?.kind === 'DEVICE',
+  'generic target evidence preserves target',
+);
 expectThrows(
   () =>
     EvidenceSchema.parse(
@@ -313,7 +343,11 @@ expectThrows(
     EvidenceSchema.parse(
       {
         ...baseEvidence,
-        source: { sourceType: 'TARGET_READBACK', executionTarget: deviceTarget, provider: 'fake' },
+        source: {
+          sourceType: 'TARGET_READBACK',
+          executionTarget: deviceTarget,
+          provider: 'fake',
+        },
       },
       evidenceDependencies,
     ),
