@@ -10,10 +10,16 @@ const {
 } = require('../dist/transport/index.js');
 
 const tenantId = 'ten_01K0M0M0M0M0M0M0M0M0M0M0M0';
+const tenantBId = 'ten_01K0M0M0M0M0M0M0M0M0M0M0MB';
 const identityId = 'idn_01K0M0M0M0M0M0M0M0M0M0M0M3';
 const correlationId = 'cor_01K0M0M0M0M0M0M0M0M0M0M0M2';
 
-function envelope(eventId, eventType = 'aurora.test.created', labels = {}) {
+function envelope(
+  eventId,
+  eventType = 'aurora.test.created',
+  labels = {},
+  envelopeTenantId = tenantId,
+) {
   return {
     kind: 'EVENT',
     schemaVersion: '1.0.0',
@@ -23,15 +29,20 @@ function envelope(eventId, eventType = 'aurora.test.created', labels = {}) {
     producer: { kind: 'SYSTEM', identityId },
     source: { service: 'transport-test' },
     correlation: { correlationId },
-    tenant: { tenantId },
+    tenant: { tenantId: envelopeTenantId },
     payload: { value: 1 },
     metadata: { labels },
   };
 }
 
+function register(registry, input) {
+  return registry.register({ tenantId, ...input });
+}
+
 test('subscription registration is deterministic and conflicting reuse fails closed', () => {
   const registry = new SubscriptionRegistry(2);
   const input = {
+    tenantId,
     subscriptionKey: 'billing-created',
     subscriber: 'billing-worker',
     interest: {
@@ -53,6 +64,10 @@ test('subscription registration is deterministic and conflicting reuse fails clo
     () => registry.register({ ...input, subscriber: 'different-worker' }),
     /subscription key conflict/,
   );
+  assert.throws(
+    () => registry.register({ ...input, tenantId: tenantBId }),
+    /subscription key conflict/,
+  );
 });
 
 test('matcher uses only governed event type and opaque metadata labels', () => {
@@ -71,16 +86,32 @@ test('matcher uses only governed event type and opaque metadata labels', () => {
   assert.equal(matchesSubscription(current, { requiredLabels: { region: 'us' } }), false);
 });
 
+test('subscription registry fails closed across tenant boundaries', () => {
+  const registry = new SubscriptionRegistry();
+  register(registry, { subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
+
+  const tenantA = envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M4');
+  const tenantB = envelope(
+    'evt_01K0M0M0M0M0M0M0M0M0M0M0MB',
+    'aurora.test.created',
+    {},
+    tenantBId,
+  );
+
+  assert.equal(registry.matching(tenantA).length, 1);
+  assert.equal(registry.matching(tenantB).length, 0);
+});
+
 test('fan-out is bounded and acknowledgements are independent per subscription', () => {
   const registry = new SubscriptionRegistry();
-  registry.register({ subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
-  registry.register({ subscriptionKey: 'sub-b', subscriber: 'b', interest: {} });
+  register(registry, { subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
+  register(registry, { subscriptionKey: 'sub-b', subscriber: 'b', interest: {} });
   const transport = new LocalEventTransport(registry, {
     maxFanout: 2,
     maxPendingPerSubscription: 4,
     maxPullBatch: 2,
   });
-  const current = envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M4');
+  const current = envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M5');
 
   assert.deepEqual(transport.publish(current, '2026-09-01T03:00:01.000Z'), {
     matchedSubscriptions: 2,
@@ -102,17 +133,21 @@ test('fan-out is bounded and acknowledgements are independent per subscription',
 
 test('fan-out capacity is checked before any queue is mutated', () => {
   const registry = new SubscriptionRegistry();
-  registry.register({ subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
-  registry.register({ subscriptionKey: 'sub-b', subscriber: 'b', interest: {} });
+  register(registry, { subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
+  register(registry, { subscriptionKey: 'sub-b', subscriber: 'b', interest: {} });
   const transport = new LocalEventTransport(registry, {
     maxFanout: 2,
     maxPendingPerSubscription: 1,
     maxPullBatch: 1,
   });
 
-  transport.publish(envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M5'), '2026-09-01T03:00:00.000Z');
+  transport.publish(envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M6'), '2026-09-01T03:00:00.000Z');
   assert.throws(
-    () => transport.publish(envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M6'), '2026-09-01T03:00:01.000Z'),
+    () =>
+      transport.publish(
+        envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M7'),
+        '2026-09-01T03:00:01.000Z',
+      ),
     /pending delivery capacity exceeded/,
   );
   assert.equal(transport.pendingCount('sub-a'), 1);
@@ -121,14 +156,14 @@ test('fan-out capacity is checked before any queue is mutated', () => {
 
 test('fan-out limit fails before delivery creation and inactive subscriptions are excluded', () => {
   const registry = new SubscriptionRegistry();
-  registry.register({ subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
-  registry.register({ subscriptionKey: 'sub-b', subscriber: 'b', interest: {} });
+  register(registry, { subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
+  register(registry, { subscriptionKey: 'sub-b', subscriber: 'b', interest: {} });
   const limited = new LocalEventTransport(registry, {
     maxFanout: 1,
     maxPendingPerSubscription: 2,
     maxPullBatch: 1,
   });
-  const current = envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M7');
+  const current = envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M8');
   assert.throws(
     () => limited.publish(current, '2026-09-01T03:00:00.000Z'),
     /fan-out limit exceeded/,
@@ -146,13 +181,13 @@ test('fan-out limit fails before delivery creation and inactive subscriptions ar
 
 test('pull batches are capped by configured maxPullBatch', () => {
   const registry = new SubscriptionRegistry();
-  registry.register({ subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
+  register(registry, { subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
   const transport = new LocalEventTransport(registry, {
     maxFanout: 1,
     maxPendingPerSubscription: 5,
     maxPullBatch: 2,
   });
-  for (const suffix of ['8', '9', 'A']) {
+  for (const suffix of ['9', 'A', 'B']) {
     transport.publish(
       envelope(`evt_01K0M0M0M0M0M0M0M0M0M0M0M${suffix}`),
       '2026-09-01T03:00:00.000Z',
