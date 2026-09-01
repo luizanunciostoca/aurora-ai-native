@@ -1,4 +1,4 @@
-import type { EventEnvelope, EventType } from '@aurora/contracts';
+import type { EventEnvelope, EventType, TenantId } from '@aurora/contracts';
 
 /** Internal transport key only. This is not a new Aurora canonical ID namespace. */
 export type SubscriptionKey = string;
@@ -11,6 +11,11 @@ export interface SubscriptionInterest {
 
 export interface SubscriptionDefinition {
   readonly subscriptionKey: SubscriptionKey;
+  /**
+   * Every subscription is bound to exactly one canonical tenant. W03 does not
+   * infer cross-tenant authority from subscriber identity or event metadata.
+   */
+  readonly tenantId: TenantId;
   readonly subscriber: string;
   readonly interest: SubscriptionInterest;
   readonly active: boolean;
@@ -18,6 +23,7 @@ export interface SubscriptionDefinition {
 
 export interface RegisterSubscriptionInput {
   readonly subscriptionKey: SubscriptionKey;
+  readonly tenantId: TenantId;
   readonly subscriber: string;
   readonly interest: SubscriptionInterest;
 }
