@@ -1,15 +1,20 @@
-# Status: SHARED_BUILD_TEST_BOOTSTRAP_CANDIDATE / LEAF_ACCEPTANCE_NOT_IMPLIED
+# Status: SHARED_BUILD_TEST_BOOTSTRAP_ACCEPTED / W07_D_ACCEPTED_PUBLISHED
 
 Canonical Executor Plane target. Primary ownership belongs to W07 — Executor Plane & Side-Effect Safety.
 
-Program Control now owns a shared TypeScript build/test bootstrap for `services/executors/**`: canonical quality typecheck discovers `services/executors/tsconfig.json`, root build compiles executor source through `tsconfig.build.json`, and the root test harness compiles/executes any `services/executors/test/**/*.test.ts` through `tsconfig.test.json` when such tests exist.
+Program Control owns the shared TypeScript build/test bootstrap for `services/executors/**`: canonical quality typecheck discovers `services/executors/tsconfig.json`, root build compiles executor source through `tsconfig.build.json`, and the root test harness compiles/executes `services/executors/test/**/*.test.ts` through `tsconfig.test.json` when tests exist.
 
-`services/executors/src/index.ts` is an intentionally empty Program Control-owned publication root. Leaf exports are added only after their owning subwave is independently accepted; the empty barrel implies no executable capability, authority or target runtime.
+Accepted published leaf:
+- W07-D `src/target-resolution/**` — deterministic target-neutral ExecutionTargetResolver for PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE.
 
-This shared bootstrap is infrastructure only. It does not implement or accept W07-B/C/D/E/F/G/H semantics, does not grant authority, and performs no provider/device/workflow/local side effect. Leaf ownership remains defined by `docs/governance/w07/W07_OWNERSHIP_MATRIX.md`.
+W07-D acceptance boundary:
+- target resolution is availability/compatibility evidence only;
+- every result fixes `authorizesExecution: false`;
+- tenant mismatch, missing/ambiguous target, non-available state, stale/invalid time, schema incompatibility and unmet preconditions fail closed;
+- no provider credential, PolicyToken/OwnerDecision issuance or widening, concrete provider/device/workflow runtime, or external side effect is introduced.
+
+`services/executors/src/index.ts` is the Program Control-owned publication root and currently exports only the independently accepted W07-D target-resolution surface. W07-B/C/E/F/G/H remain independently governed and are not implied by this publication.
 
 The executor must consume governed `ActionIntent` inputs, perform current authority/policy validation where required, enforce idempotency/preconditions/quotas, and emit receipts/readback/reconciliation evidence. `EXECUTION_UNCERTAIN` remains reconcile-before-retry.
 
-ADR-002 extends execution targets beyond providers: W07 owns generic target resolution for PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE through compatibility-safe contracts. Concrete provider/device/workflow runtimes remain owned by their consumer waves.
-
-A package manifest, lockfile registration, deployment configuration and accepted leaf export set remain Program Control-owned shared publication surfaces and are intentionally deferred until the Executor API surface is stable enough to publish without repeated workspace/lockfile churn.
+Concrete provider/device/workflow runtimes remain owned by their consumer waves. A package manifest, lockfile registration and deployment configuration remain Program Control-owned shared publication surfaces and are still deferred until the Executor API surface is stable enough to publish without repeated workspace/lockfile churn.
