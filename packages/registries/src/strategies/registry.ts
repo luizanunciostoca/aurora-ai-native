@@ -1,25 +1,26 @@
 export const STRATEGY_KINDS = [
-  'DETERMINISTIC',
-  'MODEL',
-  'SPECIALIST',
-  'COMPUTER_USE_PLANNING',
-  'HUMAN',
+  "DETERMINISTIC",
+  "MODEL",
+  "SPECIALIST",
+  "COMPUTER_USE_PLANNING",
+  "HUMAN",
 ] as const;
 export type StrategyKind = (typeof STRATEGY_KINDS)[number];
 
 export const STRATEGY_AVAILABILITY_STATES = [
-  'AVAILABLE',
-  'DEGRADED',
-  'UNAVAILABLE',
-  'UNKNOWN',
+  "AVAILABLE",
+  "DEGRADED",
+  "UNAVAILABLE",
+  "UNKNOWN",
 ] as const;
-export type StrategyAvailabilityState = (typeof STRATEGY_AVAILABILITY_STATES)[number];
+export type StrategyAvailabilityState =
+  (typeof STRATEGY_AVAILABILITY_STATES)[number];
 export type StrategyCurrentAvailability =
-  | 'CURRENT_AVAILABLE'
-  | 'CURRENT_DEGRADED'
-  | 'UNAVAILABLE'
-  | 'UNKNOWN'
-  | 'STALE';
+  | "CURRENT_AVAILABLE"
+  | "CURRENT_DEGRADED"
+  | "UNAVAILABLE"
+  | "UNKNOWN"
+  | "STALE";
 
 export interface StrategyAvailabilityObservation {
   readonly state: StrategyAvailabilityState;
@@ -50,21 +51,21 @@ export interface StrategyDescriptor {
 }
 
 export interface StrategyRegistrySnapshot {
-  readonly registryKind: 'AURORA_INTELLIGENCE_STRATEGY_REGISTRY';
+  readonly registryKind: "AURORA_INTELLIGENCE_STRATEGY_REGISTRY";
   readonly registryVersion: string;
   readonly entries: readonly StrategyDescriptor[];
 }
 
 export type StrategyRegistryCreateResult =
-  | { readonly status: 'CREATED'; readonly registry: StrategyRegistrySnapshot }
+  | { readonly status: "CREATED"; readonly registry: StrategyRegistrySnapshot }
   | {
-      readonly status: 'REJECTED';
+      readonly status: "REJECTED";
       readonly code:
-        | 'INVALID_REGISTRY_VERSION'
-        | 'INVALID_STRATEGY'
-        | 'DUPLICATE_STRATEGY_ID'
-        | 'UNKNOWN_FALLBACK_STRATEGY'
-        | 'FALLBACK_CYCLE';
+        | "INVALID_REGISTRY_VERSION"
+        | "INVALID_STRATEGY"
+        | "DUPLICATE_STRATEGY_ID"
+        | "UNKNOWN_FALLBACK_STRATEGY"
+        | "FALLBACK_CYCLE";
       readonly strategyId?: string;
       readonly fallbackStrategyId?: string;
     };
@@ -79,15 +80,15 @@ export interface StrategySelectionRequest {
 
 export type StrategySelectionResult =
   | {
-      readonly status: 'SELECTED';
+      readonly status: "SELECTED";
       readonly strategy: StrategyDescriptor;
-      readonly selectedVia: 'PREFERRED' | 'FALLBACK';
-      readonly currentAvailability: 'CURRENT_AVAILABLE' | 'CURRENT_DEGRADED';
+      readonly selectedVia: "PREFERRED" | "FALLBACK";
+      readonly currentAvailability: "CURRENT_AVAILABLE" | "CURRENT_DEGRADED";
       readonly authorizesExecution: false;
     }
   | {
-      readonly status: 'NOT_SELECTED';
-      readonly code: 'NOT_FOUND' | 'NO_COMPATIBLE_AVAILABLE_STRATEGY';
+      readonly status: "NOT_SELECTED";
+      readonly code: "NOT_FOUND" | "NO_COMPATIBLE_AVAILABLE_STRATEGY";
       readonly authorizesExecution: false;
     };
 
@@ -96,11 +97,14 @@ function nonEmpty(value: string): boolean {
 }
 
 function nonEmptyUnique(values: readonly string[]): boolean {
-  if (values.length === 0 || values.some((value) => !nonEmpty(value))) return false;
+  if (values.length === 0 || values.some((value) => !nonEmpty(value)))
+    return false;
   return new Set(values).size === values.length;
 }
 
-function validObservation(observation: StrategyAvailabilityObservation): boolean {
+function validObservation(
+  observation: StrategyAvailabilityObservation,
+): boolean {
   return (
     STRATEGY_AVAILABILITY_STATES.includes(observation.state) &&
     nonEmpty(observation.source) &&
@@ -120,14 +124,17 @@ function validStrategy(strategy: StrategyDescriptor): boolean {
     nonEmptyUnique(strategy.compatibility.modalities) &&
     nonEmptyUnique(strategy.compatibility.taskClasses) &&
     nonEmptyUnique(strategy.compatibility.reasoningLevels) &&
-    new Set(strategy.fallbackStrategyIds).size === strategy.fallbackStrategyIds.length &&
+    new Set(strategy.fallbackStrategyIds).size ===
+      strategy.fallbackStrategyIds.length &&
     strategy.fallbackStrategyIds.every(nonEmpty) &&
     !strategy.fallbackStrategyIds.includes(strategy.strategyId) &&
     validObservation(strategy.availability)
   );
 }
 
-function hasFallbackCycle(entries: readonly StrategyDescriptor[]): string | undefined {
+function hasFallbackCycle(
+  entries: readonly StrategyDescriptor[],
+): string | undefined {
   const byId = new Map(entries.map((entry) => [entry.strategyId, entry]));
   const visiting = new Set<string>();
   const visited = new Set<string>();
@@ -158,16 +165,24 @@ export function createStrategyRegistry(
   entries: readonly StrategyDescriptor[],
 ): StrategyRegistryCreateResult {
   if (!nonEmpty(registryVersion)) {
-    return { status: 'REJECTED', code: 'INVALID_REGISTRY_VERSION' };
+    return { status: "REJECTED", code: "INVALID_REGISTRY_VERSION" };
   }
 
   const byId = new Map<string, StrategyDescriptor>();
   for (const entry of entries) {
     if (!validStrategy(entry)) {
-      return { status: 'REJECTED', code: 'INVALID_STRATEGY', strategyId: entry.strategyId };
+      return {
+        status: "REJECTED",
+        code: "INVALID_STRATEGY",
+        strategyId: entry.strategyId,
+      };
     }
     if (byId.has(entry.strategyId)) {
-      return { status: 'REJECTED', code: 'DUPLICATE_STRATEGY_ID', strategyId: entry.strategyId };
+      return {
+        status: "REJECTED",
+        code: "DUPLICATE_STRATEGY_ID",
+        strategyId: entry.strategyId,
+      };
     }
     byId.set(entry.strategyId, entry);
   }
@@ -176,8 +191,8 @@ export function createStrategyRegistry(
     for (const fallbackStrategyId of entry.fallbackStrategyIds) {
       if (!byId.has(fallbackStrategyId)) {
         return {
-          status: 'REJECTED',
-          code: 'UNKNOWN_FALLBACK_STRATEGY',
+          status: "REJECTED",
+          code: "UNKNOWN_FALLBACK_STRATEGY",
           strategyId: entry.strategyId,
           fallbackStrategyId,
         };
@@ -187,15 +202,17 @@ export function createStrategyRegistry(
 
   const cycleAt = hasFallbackCycle(entries);
   if (cycleAt) {
-    return { status: 'REJECTED', code: 'FALLBACK_CYCLE', strategyId: cycleAt };
+    return { status: "REJECTED", code: "FALLBACK_CYCLE", strategyId: cycleAt };
   }
 
   return {
-    status: 'CREATED',
+    status: "CREATED",
     registry: {
-      registryKind: 'AURORA_INTELLIGENCE_STRATEGY_REGISTRY',
+      registryKind: "AURORA_INTELLIGENCE_STRATEGY_REGISTRY",
       registryVersion,
-      entries: [...entries].sort((left, right) => left.strategyId.localeCompare(right.strategyId)),
+      entries: [...entries].sort((left, right) =>
+        left.strategyId.localeCompare(right.strategyId),
+      ),
     },
   };
 }
@@ -212,24 +229,29 @@ export function evaluateStrategyAvailability(
   nowEpochMs: number,
 ): StrategyCurrentAvailability {
   const observedAt = Date.parse(observation.observedAt);
-  if (!Number.isFinite(observedAt) || !Number.isFinite(nowEpochMs)) return 'UNKNOWN';
-  if (nowEpochMs < observedAt || nowEpochMs - observedAt > observation.maxAgeMs) return 'STALE';
+  if (!Number.isFinite(observedAt) || !Number.isFinite(nowEpochMs))
+    return "UNKNOWN";
+  if (nowEpochMs < observedAt || nowEpochMs - observedAt > observation.maxAgeMs)
+    return "STALE";
 
   switch (observation.state) {
-    case 'AVAILABLE':
-      return 'CURRENT_AVAILABLE';
-    case 'DEGRADED':
-      return 'CURRENT_DEGRADED';
-    case 'UNAVAILABLE':
-      return 'UNAVAILABLE';
-    case 'UNKNOWN':
-      return 'UNKNOWN';
+    case "AVAILABLE":
+      return "CURRENT_AVAILABLE";
+    case "DEGRADED":
+      return "CURRENT_DEGRADED";
+    case "UNAVAILABLE":
+      return "UNAVAILABLE";
+    case "UNKNOWN":
+      return "UNKNOWN";
   }
 }
 
 export function isStrategyCompatible(
   strategy: StrategyDescriptor,
-  request: Pick<StrategySelectionRequest, 'modality' | 'taskClass' | 'reasoningLevel'>,
+  request: Pick<
+    StrategySelectionRequest,
+    "modality" | "taskClass" | "reasoningLevel"
+  >,
 ): boolean {
   return (
     strategy.compatibility.modalities.includes(request.modality) &&
@@ -244,13 +266,20 @@ export function selectStrategy(
 ): StrategySelectionResult {
   const preferred = findStrategy(registry, request.preferredStrategyId);
   if (!preferred) {
-    return { status: 'NOT_SELECTED', code: 'NOT_FOUND', authorizesExecution: false };
+    return {
+      status: "NOT_SELECTED",
+      code: "NOT_FOUND",
+      authorizesExecution: false,
+    };
   }
 
-  const byId = new Map(registry.entries.map((entry) => [entry.strategyId, entry]));
-  const queue: Array<{ readonly id: string; readonly via: 'PREFERRED' | 'FALLBACK' }> = [
-    { id: preferred.strategyId, via: 'PREFERRED' },
-  ];
+  const byId = new Map(
+    registry.entries.map((entry) => [entry.strategyId, entry]),
+  );
+  const queue: Array<{
+    readonly id: string;
+    readonly via: "PREFERRED" | "FALLBACK";
+  }> = [{ id: preferred.strategyId, via: "PREFERRED" }];
   const visited = new Set<string>();
 
   while (queue.length > 0) {
@@ -260,13 +289,17 @@ export function selectStrategy(
     const candidate = byId.get(candidateRef.id);
     if (!candidate) continue;
 
-    const availability = evaluateStrategyAvailability(candidate.availability, request.nowEpochMs);
+    const availability = evaluateStrategyAvailability(
+      candidate.availability,
+      request.nowEpochMs,
+    );
     if (
-      (availability === 'CURRENT_AVAILABLE' || availability === 'CURRENT_DEGRADED') &&
+      (availability === "CURRENT_AVAILABLE" ||
+        availability === "CURRENT_DEGRADED") &&
       isStrategyCompatible(candidate, request)
     ) {
       return {
-        status: 'SELECTED',
+        status: "SELECTED",
         strategy: candidate,
         selectedVia: candidateRef.via,
         currentAvailability: availability,
@@ -275,13 +308,13 @@ export function selectStrategy(
     }
 
     for (const fallbackId of candidate.fallbackStrategyIds) {
-      queue.push({ id: fallbackId, via: 'FALLBACK' });
+      queue.push({ id: fallbackId, via: "FALLBACK" });
     }
   }
 
   return {
-    status: 'NOT_SELECTED',
-    code: 'NO_COMPATIBLE_AVAILABLE_STRATEGY',
+    status: "NOT_SELECTED",
+    code: "NO_COMPATIBLE_AVAILABLE_STRATEGY",
     authorizesExecution: false,
   };
 }
