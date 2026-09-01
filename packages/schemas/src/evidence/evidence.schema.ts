@@ -8,6 +8,7 @@ import type {
 } from '@aurora/contracts/evidence';
 import type { ActionIntentId, EvidenceId, ExecutionId, ReceiptId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
+import { ExecutionTargetReferenceSchema } from '../execution-target';
 import {
   asRecord,
   exactKeys,
@@ -60,6 +61,7 @@ function subject(
 function evidenceType(input: unknown): EvidenceType {
   if (
     input === 'READBACK' ||
+    input === 'EXECUTION_RECEIPT' ||
     input === 'PROVIDER_RECEIPT' ||
     input === 'STATE_SNAPSHOT' ||
     input === 'SIGNED_ATTESTATION' ||
@@ -76,8 +78,14 @@ function source(
   dependencies: EvidenceSchemaDependencies,
 ): EvidenceSource {
   const record = asRecord(input, path);
-  exactKeys(record, ['sourceType', 'capturedBy', 'provider', 'reference'], ['sourceType'], path);
+  exactKeys(
+    record,
+    ['sourceType', 'capturedBy', 'provider', 'executionTarget', 'reference'],
+    ['sourceType'],
+    path,
+  );
   if (
+    record.sourceType !== 'TARGET_READBACK' &&
     record.sourceType !== 'PROVIDER_READBACK' &&
     record.sourceType !== 'EXECUTOR' &&
     record.sourceType !== 'SYSTEM' &&
@@ -89,15 +97,39 @@ function source(
   const capturedBy =
     record.capturedBy === undefined ? undefined : dependencies.parseActorRef(record.capturedBy);
   const provider = optionalNonEmptyString(record.provider, `${path}.provider`, 128);
+  const executionTarget =
+    record.executionTarget === undefined
+      ? undefined
+      : ExecutionTargetReferenceSchema.parse(
+          record.executionTarget,
+          { parseContractVersion: dependencies.parseContractVersion },
+          `${path}.executionTarget`,
+        );
   const reference =
     record.reference === undefined
       ? undefined
       : externalReference(record.reference, `${path}.reference`);
 
+  if (record.sourceType === 'TARGET_READBACK' && executionTarget === undefined) {
+    throw new TypeError(`${path}.executionTarget: required for TARGET_READBACK`);
+  }
+  if (provider !== undefined && record.sourceType !== 'PROVIDER_READBACK') {
+    throw new TypeError(`${path}.provider: only valid for PROVIDER_READBACK`);
+  }
+  if (provider !== undefined && executionTarget !== undefined) {
+    if (executionTarget.kind !== 'PROVIDER' || executionTarget.provider !== provider) {
+      throw new TypeError(`${path}: provider conflicts with executionTarget`);
+    }
+  }
+  if (record.sourceType === 'PROVIDER_READBACK' && executionTarget?.kind !== undefined && executionTarget.kind !== 'PROVIDER') {
+    throw new TypeError(`${path}.executionTarget: PROVIDER_READBACK requires PROVIDER target`);
+  }
+
   return {
     sourceType: record.sourceType,
     ...(capturedBy === undefined ? {} : { capturedBy }),
     ...(provider === undefined ? {} : { provider }),
+    ...(executionTarget === undefined ? {} : { executionTarget }),
     ...(reference === undefined ? {} : { reference }),
   };
 }
