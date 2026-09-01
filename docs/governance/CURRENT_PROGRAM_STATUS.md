@@ -1,8 +1,8 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_IMPLEMENTATION_FRONTIER_READY_W07_00_COMPLETE_ACCEPTED_W07_A_READY`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_E_ACCEPTED_W05_A_C_D_F_READY_W07_A_ACCEPTED_W07_B_C_D_E_READY`
 Audit date: 2026-09-01
-Accepted implementation/governance baseline before this convergence publication: `ebcf5c3117963755962903fa45403f9155808443`
+Accepted implementation/governance baseline before this convergence publication: `1bcdb72078dd4d7e89bb92791fb0e14095ffd65b`
 
 ## Authority order
 
@@ -23,14 +23,15 @@ No prompt, task node, PREBUILD artifact, draft PR, agent output, green CI on a s
 - W03: `COMPLETE_ACCEPTED / REALITY_GATE_DURABLE_EVENT_DELIVERY_VERIFIED`.
 - W04: `COMPLETE_ACCEPTED / W04_CONTROL_CORE_VERIFIED`.
 - W05-00: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W05-A/C/D/E/F: `DEPENDENCY_READY`; implementation remains subject to exact ownership/shared-surface controls and the accepted `FREE_ACTIONS_CLI` two-code-task batch ceiling.
-- W05-B: gated on accepted W05-A + W05-C + W05-D + W05-E.
+- W05-E: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
+- W05-A/C/D/F: `DEPENDENCY_READY`; implementation remains subject to exact ownership/shared-surface controls and the accepted `FREE_ACTIONS_CLI` two-code-task batch ceiling.
+- W05-B: gated on accepted W05-A + W05-C + W05-D; W05-E is already accepted.
 - W05-G: gated on accepted W05-B + W05-F.
 - W05-H: gated on accepted W05-G.
 - W06: gated on accepted W05-H.
 - W07-00: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W07-A: `DEPENDENCY_READY` after this convergence publication is accepted.
-- W07-B/C/D/E: gated on accepted W07-A.
+- W07-A: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
+- W07-B/C/D/E: `DEPENDENCY_READY` after this status-convergence publication is accepted; implementation remains subject to ownership/shared-surface controls and the same two-code-task batch ceiling.
 - W07-F/G: gated on accepted W07-B + W07-C + W07-D + W07-E.
 - W07-H: gated on accepted W07-F + W07-G.
 - W08-W20 remain dependency-gated except PREBUILD/readiness explicitly allowed by accepted Puzzle governance.
@@ -83,7 +84,19 @@ Accepted W05 DAG:
 
 `W05-B + W05-F -> W05-G -> W05-H`
 
-Logical implementation frontier is `{ W05-A, W05-C, W05-D, W05-E, W05-F }`, but `FREE_ACTIONS_CLI` limits each execution batch to at most two dependency-satisfied code tasks.
+## W05-E accepted evidence
+
+PR #169 accepted exact candidate HEAD `13d75a7b05d3f6ea7cd9d5f56f669013db44c082` against accepted base `40fb85f030016dce792bf8b2174f6dab09c44930`.
+
+Candidate exact-head gates: Quality `33527391026`, Test Build `33527391041`, Security `33527391901`: SUCCESS. Independent Program Control review recorded `ACCEPT` with Risk Gates A/B PASS and C/D PASS_FOR_W05E_SCOPE.
+
+Controlled merge/main: `5768f6f77be6695e72c2cf7cae16ae04f12748da`. Post-merge exact-main Quality `33527659921`, Test Build `33527659888`, Security `33527660602`: SUCCESS.
+
+Drive acceptance evidence: `W05_E_ACCEPTANCE_EVIDENCE_2026-09-01` / `1t6_RcQdJSdOXZQJuMopCZtc2TJDsSpPd6CLxUHi6TLE`.
+
+W05-E remains a distinct intelligence Strategy Registry, separate from the W04 Capability Registry. Strategy selection is informational/planning metadata and cannot mint policy, approval or execution authority.
+
+Logical W05 implementation frontier is now `{ W05-A, W05-C, W05-D, W05-F }`; W05-B remains gated until W05-A, W05-C and W05-D are accepted in addition to already accepted W05-E. `FREE_ACTIONS_CLI` still limits each execution batch to at most two dependency-satisfied code tasks.
 
 Shared-surface controls:
 
@@ -120,17 +133,29 @@ Accepted W07 DAG:
 
 `W07-F + W07-G -> W07-H`
 
-After acceptance of this status-convergence publication, W07-A is the only W07 BUILD-ready descendant.
+## W07-A accepted evidence and released frontier
 
-W07-A contract compatibility requirements remain:
+PR #170 accepted exact current-main-reconciled candidate HEAD `c47ebe44572cc2540c902c43ab252054edb6c726`.
 
-- evolve the same canonical ActionIntent/Receipt/Evidence family; no parallel truth;
-- introduce target-neutral compatibility for PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE;
-- preserve existing provider fixtures/version migration explicitly;
-- never fabricate provider identity for DEVICE/WORKFLOW/LOCAL_SERVICE;
+Candidate exact-head gates: Quality `33527911644`, Test Build `33527911510`, Security `33527912326`: SUCCESS. Independent Program Control review recorded `ACCEPT` with Risk Gates A/B PASS and C/D PASS_FOR_W07A_SCOPE.
+
+Controlled merge/main: `1bcdb72078dd4d7e89bb92791fb0e14095ffd65b`. Post-merge exact-main Quality `33528098556`, Test Build `33528098540`, Security `33528099185`: SUCCESS.
+
+Drive acceptance evidence: `W07_A_ACCEPTANCE_EVIDENCE_2026-09-01` / `1AOMJlL8q4EIhF6GJcfCn05TGxQIqKZHDA_FllI7N8-M`.
+
+Accepted W07-A invariants:
+
+- evolved the same canonical ActionIntent/Receipt/Evidence family; no parallel truth;
+- introduced target-neutral compatibility for PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE;
+- preserved existing provider compatibility explicitly and fails closed on conflicting legacy/new representations;
+- DEVICE/WORKFLOW/LOCAL_SERVICE never fabricate provider identity;
 - target identity/availability is not authority;
-- no W14 DeviceId/DeviceRef ownership is pulled into W07-A;
-- no provider/device/workflow runtime is implemented in W07-A.
+- W14 retains DeviceId/DeviceRef ownership;
+- W08/W09/W14/W15 retain concrete target runtime ownership;
+- receipt/acknowledgement remains distinct from verified external state/readback;
+- no provider/device/workflow runtime or external side effect was implemented by W07-A.
+
+After acceptance of this convergence publication, the W07 dependency-ready implementation frontier is `{ W07-B, W07-C, W07-D, W07-E }`, subject to the global two-code-task batch ceiling and ownership/shared-surface controls. No W07-F/G/H dependency is released by inference.
 
 ## Architecture boundaries retained
 
