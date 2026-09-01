@@ -53,7 +53,8 @@ function compareCandidates(left, right, downstreamDepth) {
 }
 
 export function selectSafeReadyFrontier(candidates, tasks, limit) {
-  if (!Number.isInteger(limit) || limit < 1) throw new Error('frontier limit must be a positive integer');
+  if (!Number.isInteger(limit) || limit < 1)
+    throw new Error('frontier limit must be a positive integer');
 
   const downstreamDepth = buildDownstreamDepth(tasks);
   const ordered = [...candidates].sort((left, right) =>
