@@ -1,8 +1,8 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W04_ABF_ACCEPTED`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_W04_ABCDEFG_ACCEPTED_H_READY`
 Audit date: 2026-09-01
-Current accepted feature baseline before this governance-status publication: `5fac1a0c317b060f2da11545066f2dfffe3eceb7`
+Current accepted feature baseline before this governance-status publication: `e914a0dbf02b026efbeeaa42480c82851da6b06c`
 
 ## Authority order
 
@@ -25,12 +25,8 @@ No prompt, task node, PREBUILD artifact, draft PR, agent output or reference sou
 - W03: `COMPLETE_ACCEPTED / REALITY_GATE_DURABLE_EVENT_DELIVERY_VERIFIED`.
 - W03-00/A/B/C/D/E/F: accepted according to canonical exact-SHA/Drive evidence.
 - W04-00: `COMPLETE_ACCEPTED / W04_COORDINATION_FREEZE_VERIFIED`.
-- W04-A: `COMPLETE_ACCEPTED_MERGED`.
-- W04-B: `COMPLETE_ACCEPTED_MERGED`.
-- W04-F: `COMPLETE_ACCEPTED_MERGED`.
-- W04-C, W04-E and W04-G: `DEPENDENCY_READY` because W04-A + W04-B are accepted.
-- W04-D: blocked only on W04-C because W04-F is accepted.
-- W04-H: blocked on W04-D + W04-E + W04-G.
+- W04-A/B/C/D/E/F/G: `COMPLETE_ACCEPTED_MERGED`.
+- W04-H: `DEPENDENCY_READY`; W04-D + W04-E + W04-G are accepted and the integration/performance/contract gate is the sole remaining W04 node.
 - W05-W20: dependency-gated except PREBUILD/readiness explicitly allowed by accepted Puzzle governance.
 
 ## W02 final evidence
@@ -87,6 +83,39 @@ Canonical acceptance evidence:
 - Drive acceptance evidence: `W04_B_ACCEPTANCE_EVIDENCE` / `15-0ZeBNXPtOnFQyqjxrOtn59R_jRthVpe3oYSKh0x4o`.
 - Issue #91: closed with `aurora:accepted`.
 
+## W04-C final evidence
+
+- PR #142 — `feat(w04-c): add deterministic goal graph DAG semantics`.
+- Exact final BUILD HEAD `f37e01e897fc339b55a2595a557652a05288a919`.
+- Candidate Quality `33494595596`, Test Build `33494595609`, Security `33494596214`: SUCCESS.
+- Merge/main `5ce8edf479035d9d0a5ec1ee469ecd1f09e35776`.
+- Post-merge Quality `33495213692`, Test Build `33495213723`, Security `33495214310`: SUCCESS.
+- GoalGraph is bounded, deterministic and non-authoritative; cycle/edge rejection, join semantics and failure/cancellation propagation are accepted without duplicating W03 durability.
+- Drive acceptance evidence: `W04_C_ACCEPTANCE_EVIDENCE` / `18q4-EQ9c9-3nthRuwjf0hGS-Icbf1Y0860-Y3rJKXtM`.
+- Issue #92: closed with `aurora:accepted`.
+
+## W04-D final evidence
+
+- PR #146 — `feat(w04-d): add deterministic bounded parallel scheduler`.
+- Exact final BUILD HEAD `8942d24a9a109ec4792daa39620b0bbbf9d8a407`.
+- Candidate Quality `33498894230`, Test Build `33498894296`, Security `33498894696`: SUCCESS.
+- Merge/main `2ea645f262c39c6cd53802568b501cfaa83f135e`.
+- Post-merge Quality `33502700810`, Test Build `33502700792`, Security `33502701222`: SUCCESS.
+- Scheduler behavior is deterministic planning-only: dependency-ready dispatch, bounded concurrency/fan-out, stable fairness, explicit backpressure and cancellation/failure propagation; W03 remains durable coordination authority and `authorizesExecution` remains false.
+- Drive acceptance evidence: `W04_D_ACCEPTANCE_EVIDENCE` / `1K6vwChKqN-3v6NsPMzlUNGtfpvNAe1V-pVoCDoHyGmc`.
+- Issue #93: closed with `aurora:accepted`.
+
+## W04-E final evidence
+
+- PR #143 — `feat(w04-e): add deterministic fast governed lane resolver`.
+- Exact final BUILD HEAD `7b2c283d36e23054ebdeabbd8a009dd229355277`.
+- Candidate Quality `33493769716`, Test Build `33493769717`, Security `33493770320`: SUCCESS.
+- Merge/main `1b3d777b51fac6a281778a9045fd8525b8c79ca0`.
+- Post-merge Quality `33495229415`, Test Build `33495229356`, Security `33495230035`: SUCCESS.
+- FAST/GOVERNED selection is deterministic planning metadata only; unsafe/high-risk/approval/step-up/unknown states conservatively escalate and current Policy/Authority/Executor validation remains mandatory.
+- Drive acceptance evidence: `W04_E_ACCEPTANCE_EVIDENCE` / `1ANOEKaYQ617umDceEP51eECTBnuuFRTx37ahqNfrWvI`.
+- Issue #94: closed with `aurora:accepted`.
+
 ## W04-F final evidence
 
 - PR #137 — `feat(w04-f): add deterministic execution budget contract`.
@@ -97,6 +126,18 @@ Canonical acceptance evidence:
 - ExecutionBudget constrains latency/cost/reasoning/tool calls/concurrency without minting execution authority or weakening mandatory safety validation.
 - Drive acceptance evidence: `W04_F_ACCEPTANCE_EVIDENCE` / `1sKxZhQjhDQGpPxZzayX7ZmT3s6NjvpjcaepMOg29zCQ`.
 - Issue #95: closed with `aurora:accepted`.
+
+## W04-G final evidence
+
+- Canonical PR #148 — `feat(w04-g): reconcile curated templates onto accepted W04-D main`.
+- Superseded PR #144 was closed without merge after its base became stale when W04-D advanced `main`.
+- Exact reconciled BUILD HEAD `3c39d0ff2f03412063068e5ce08753d106dfab89` on accepted base `2ea645f262c39c6cd53802568b501cfaa83f135e`.
+- Candidate Quality `33502809690`, Test Build `33502809897`, Security `33502810454`: SUCCESS.
+- Merge/main `e914a0dbf02b026efbeeaa42480c82851da6b06c`.
+- Post-merge Quality `33503108260`, Test Build `33503108287`, Security `33503108756`: SUCCESS.
+- Curated PlanTemplate/PlanBinding is version/hash/provenance/compatibility/invalidation bound, deterministic and fail-closed; current capability/policy/authority/executor validation remains mandatory; `authorizesExecution: false` and `adaptivePromotion: false` preserve W07/W18 ownership.
+- Drive acceptance evidence: `W04_G_ACCEPTANCE_EVIDENCE` / `1Bluh6slZP63L5r7V157v9lJofKpQ9lEwsdiV_ya5B0U`.
+- Issue #96: closed with `aurora:accepted`.
 
 Canonical W04 Drive folder: `W04_CONTROL_CORE_CAPABILITY_PLANNING_GOAL_GRAPH` / `1Vz45N4p5zhubQvBFAf_zFinkhCFZcQdp`.
 
@@ -118,11 +159,11 @@ Canonical W04 governance set:
 
 `W04-D + W04-E + W04-G -> W04-H`
 
-Accepted nodes: `{ W04-00, W04-A, W04-B, W04-F }`.
+Accepted nodes: `{ W04-00, W04-A, W04-B, W04-C, W04-D, W04-E, W04-F, W04-G }`.
 
-Current dependency-ready frontier: `{ W04-C, W04-E, W04-G }`.
+Current dependency-ready frontier: `{ W04-H }`.
 
-With `FREE_ACTIONS_CLI maxParallelTasks=2`, Program Control should prioritize W04-C in one code slot because accepted W04-C + W04-F unlock W04-D. The second code slot may safely use W04-E or W04-G after live branch/PR/ownership revalidation. W04-D remains blocked until W04-C acceptance; W04-H remains blocked until W04-D, W04-E and W04-G acceptance.
+W04-H is the next canonical convergence node. Its owned surface is integration/benchmark/contract tests plus W04 evidence/runbook only. It may prove mock goal capability/lane/budget selection, deterministic bounded parallel dispatch planning, curated template-hit behavior, cycle rejection, concurrency caps, cancellation/fairness and target-neutral bindings. It may not introduce new semantic runtime implementation or external side effects.
 
 ## W04 architecture boundaries
 
@@ -147,7 +188,7 @@ Core invariants:
 
 ## Legacy / TOCA W04 input status
 
-Legacy capability register remains `ACTIVE_CANONICAL_PLANNING_INPUT`: 541 files classified, 69 deduplicated capability seeds, every seed `SEED_ONLY_NOT_CANONICAL` and `NO_DIRECT_RUNTIME_IMPORT` by default. W04-B has now completed the explicit adjudication of all 69 seeds into accepted/rejected/decomposed canonical registry vocabulary without direct legacy runtime import.
+Legacy capability register remains `ACTIVE_CANONICAL_PLANNING_INPUT`: 541 files classified, 69 deduplicated capability seeds, every seed `SEED_ONLY_NOT_CANONICAL` and `NO_DIRECT_RUNTIME_IMPORT` by default. W04-B completed explicit adjudication of all 69 seeds into accepted/rejected/decomposed canonical registry vocabulary without direct legacy runtime import.
 
 TOCA MCP salvage remains reference-only at audited commit `8a6cfe055be9b34e498cfbdb481e8232dc51df05`. Capability catalog/IDs/lifecycle/resolution/validation-evidence are semantic references only. TOCA Approval/Autonomy/route/business bindings cannot become parallel Aurora authority.
 
