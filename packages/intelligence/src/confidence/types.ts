@@ -1,11 +1,7 @@
 import type { CorrelationContext, TenantContext } from '@aurora/contracts';
 
 export type ConfidenceBand = 'HIGH' | 'MEDIUM' | 'LOW' | 'UNKNOWN';
-export type ConfidenceDisposition =
-  | 'PROCEED_WITH_EVIDENCE'
-  | 'VERIFY'
-  | 'ESCALATE'
-  | 'ABSTAIN';
+export type ConfidenceDisposition = 'PROCEED_WITH_EVIDENCE' | 'VERIFY' | 'ESCALATE' | 'ABSTAIN';
 
 export interface ConfidenceSignalSet {
   readonly evidenceQualityBps: number | null;
