@@ -87,11 +87,7 @@ test('repeated quarantine is idempotently keyed and records bounded recovery evi
 
 test('external side-effect replay never creates authority and requires fresh validation', () => {
   const coordinator = new ReplayCoordinator();
-  const current = input(
-    'evt_01K0M0M0M0M0M0M0M0M0M0M0D6',
-    1,
-    'EXTERNAL_SIDE_EFFECT',
-  );
+  const current = input('evt_01K0M0M0M0M0M0M0M0M0M0M0D6', 1, 'EXTERNAL_SIDE_EFFECT');
 
   const decision = coordinator.process(current, '2026-09-01T05:00:01.000Z');
   assert.equal(decision.status, 'QUARANTINED');

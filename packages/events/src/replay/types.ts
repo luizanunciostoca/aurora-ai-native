@@ -14,9 +14,7 @@ export interface ReplayInput {
 }
 
 export type DeadLetterReason =
-  | 'SEQUENCE_GAP'
-  | 'STALE_OR_OUT_OF_ORDER'
-  | 'FRESH_AUTHORITY_REQUIRED';
+  'SEQUENCE_GAP' | 'STALE_OR_OUT_OF_ORDER' | 'FRESH_AUTHORITY_REQUIRED';
 
 export interface DeadLetterRecord {
   readonly deadLetterId: string;

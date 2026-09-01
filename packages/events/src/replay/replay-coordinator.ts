@@ -99,11 +99,7 @@ export class ReplayCoordinator {
     }
   }
 
-  #quarantine(
-    input: ReplayInput,
-    observedAt: string,
-    reason: DeadLetterReason,
-  ): ReplayDecision {
+  #quarantine(input: ReplayInput, observedAt: string, reason: DeadLetterReason): ReplayDecision {
     const deadLetterId = `${input.envelope.eventId}:${reason}`;
     const existing = this.#deadLetters.get(deadLetterId);
     const fresh: DeadLetterRecord = input.ordering
