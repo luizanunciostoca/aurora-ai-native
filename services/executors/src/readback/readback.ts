@@ -1,6 +1,10 @@
 import type { ExternalReference, JsonObject, JsonValue } from '@aurora/contracts/actions';
 import type { CorrelationContext } from '@aurora/contracts/context';
-import type { ExecutionTargetReference } from '@aurora/contracts/execution-target';
+import {
+  executionTargetFromProviderBinding,
+  providerBindingMatchesExecutionTarget,
+  type ExecutionTargetReference,
+} from '@aurora/contracts/execution-target';
 import type { Evidence } from '@aurora/contracts/evidence';
 import type { TargetedReceipt } from '@aurora/contracts/receipts';
 
@@ -15,8 +19,22 @@ import type {
 } from './types.js';
 
 const RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
-const SENSITIVE_KEY_PATTERN =
-  /(?:^|[_-])(password|passwd|secret|token|api[_-]?key|credential|authorization|cookie)(?:$|[_-])/i;
+const SENSITIVE_NORMALIZED_KEYS = new Set([
+  'password',
+  'passwd',
+  'secret',
+  'token',
+  'apikey',
+  'apitoken',
+  'accesstoken',
+  'refreshtoken',
+  'credential',
+  'credentials',
+  'authorization',
+  'cookie',
+  'privatekey',
+  'clientsecret',
+]);
 const SENSITIVE_VALUE_PATTERN =
   /\bBearer\s+[A-Za-z0-9._~+/-]+|(?:api[_-]?key|token|secret|password|authorization|credential)\s*[:=]\s*\S+/i;
 
@@ -57,29 +75,62 @@ function sameTarget(left: ExecutionTargetReference, right: ExecutionTargetRefere
   }
 }
 
+type IntentTargetResolution =
+  | Readonly<{ status: 'RESOLVED'; target: ExecutionTargetReference }>
+  | Readonly<{ status: 'MISSING' }>
+  | Readonly<{ status: 'CONFLICT' }>;
+
+function resolveActionIntentTarget(
+  actionIntent: CreateTargetedReceiptRequest['actionIntent'],
+): IntentTargetResolution {
+  const { executionTarget, providerBinding } = actionIntent;
+  if (executionTarget !== undefined) {
+    if (
+      providerBinding !== undefined &&
+      !providerBindingMatchesExecutionTarget(providerBinding, executionTarget)
+    ) {
+      return { status: 'CONFLICT' };
+    }
+    return { status: 'RESOLVED', target: executionTarget };
+  }
+  if (providerBinding !== undefined) {
+    return {
+      status: 'RESOLVED',
+      target: executionTargetFromProviderBinding(providerBinding, actionIntent.schemaVersion),
+    };
+  }
+  return { status: 'MISSING' };
+}
+
+function sensitiveKey(key: string): boolean {
+  const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return SENSITIVE_NORMALIZED_KEYS.has(normalized);
+}
+
 function containsSensitiveValue(value: JsonValue): boolean {
   if (typeof value === 'string') return SENSITIVE_VALUE_PATTERN.test(value);
   if (Array.isArray(value)) return value.some((item) => containsSensitiveValue(item));
   if (value === null || typeof value !== 'object') return false;
   return Object.entries(value).some(
-    ([key, child]) => SENSITIVE_KEY_PATTERN.test(key) || containsSensitiveValue(child),
+    ([key, child]) => sensitiveKey(key) || containsSensitiveValue(child),
   );
 }
 
 function containsSensitiveReference(reference: ExternalReference): boolean {
   return (
+    sensitiveKey(reference.system) ||
     SENSITIVE_VALUE_PATTERN.test(reference.system) ||
-    SENSITIVE_VALUE_PATTERN.test(reference.reference) ||
-    SENSITIVE_KEY_PATTERN.test(reference.system)
+    SENSITIVE_VALUE_PATTERN.test(reference.reference)
   );
 }
 
 function canonicalize(value: JsonValue): JsonValue {
   if (Array.isArray(value)) return value.map((item) => canonicalize(item));
   if (value === null || typeof value !== 'object') return value;
+  const record = value as JsonObject;
   const result: Record<string, JsonValue> = {};
-  for (const key of Object.keys(value).sort()) {
-    const child = value[key];
+  for (const key of Object.keys(record).sort()) {
+    const child = record[key];
     if (child !== undefined) result[key] = canonicalize(child);
   }
   return result;
@@ -103,13 +154,26 @@ export function createTargetedExecutionReceipt(
   if (request.schemaVersion !== request.actionIntent.schemaVersion) {
     return rejectedReceipt('RECEIPT_SCHEMA_MISMATCH');
   }
-  const executionTarget = request.actionIntent.executionTarget;
-  if (executionTarget === undefined) return rejectedReceipt('EXECUTION_TARGET_REQUIRED');
+
+  const targetResolution = resolveActionIntentTarget(request.actionIntent);
+  if (targetResolution.status === 'MISSING') return rejectedReceipt('EXECUTION_TARGET_REQUIRED');
+  if (targetResolution.status === 'CONFLICT') return rejectedReceipt('EXECUTION_TARGET_CONFLICT');
+  const executionTarget = targetResolution.target;
+  if (executionTarget.schemaVersion !== request.schemaVersion) {
+    return rejectedReceipt('RECEIPT_SCHEMA_MISMATCH');
+  }
+
   if (!Number.isInteger(request.attempt) || request.attempt < 1) {
     return rejectedReceipt('RECEIPT_ATTEMPT_INVALID');
   }
   if (request.executionOutcome === 'VERIFIED') {
     return rejectedReceipt('RECEIPT_VERIFIED_REQUIRES_EVIDENCE');
+  }
+  if (
+    request.executionOutcome === 'EXECUTED_ACKNOWLEDGED' &&
+    request.acknowledgedAt === undefined
+  ) {
+    return rejectedReceipt('RECEIPT_ACKNOWLEDGEMENT_REQUIRED');
   }
 
   const attemptedAt = timestampMs(request.attemptedAt);
@@ -173,8 +237,11 @@ function readbackBindingReasons(
   if (!sameCorrelation(request.receipt.correlation, request.actionIntent.correlation)) {
     reasons.push('READBACK_CORRELATION_MISMATCH');
   }
-  const expectedTarget = request.actionIntent.executionTarget;
-  if (expectedTarget === undefined || !sameTarget(request.receipt.executionTarget, expectedTarget)) {
+  const targetResolution = resolveActionIntentTarget(request.actionIntent);
+  if (
+    targetResolution.status !== 'RESOLVED' ||
+    !sameTarget(request.receipt.executionTarget, targetResolution.target)
+  ) {
     reasons.push('READBACK_TARGET_MISMATCH');
   }
   return uniqueSorted(reasons);
@@ -251,10 +318,23 @@ export function captureReadbackEvidence(
 
   const capturedAt = timestampMs(observation.capturedAt);
   const attemptedAt = timestampMs(request.receipt.attemptedAt);
-  if (capturedAt === undefined || attemptedAt === undefined) {
+  const acknowledgedAt =
+    request.receipt.acknowledgedAt === undefined
+      ? undefined
+      : timestampMs(request.receipt.acknowledgedAt);
+  const returnedAt =
+    request.receipt.returnedAt === undefined ? undefined : timestampMs(request.receipt.returnedAt);
+  if (
+    capturedAt === undefined ||
+    attemptedAt === undefined ||
+    (request.receipt.acknowledgedAt !== undefined && acknowledgedAt === undefined) ||
+    (request.receipt.returnedAt !== undefined && returnedAt === undefined)
+  ) {
     return { status: 'REJECTED', reasons: ['READBACK_TIME_INVALID'], authorizesExecution: false };
   }
-  if (capturedAt < attemptedAt) {
+
+  const latestReceiptTime = returnedAt ?? acknowledgedAt ?? attemptedAt;
+  if (capturedAt < latestReceiptTime) {
     return {
       status: 'REJECTED',
       reasons: ['READBACK_TIME_ORDER_INVALID'],
@@ -272,11 +352,15 @@ export function captureReadbackEvidence(
     };
   }
 
+  const subject: Evidence['subject'] = {
+    kind: 'RECEIPT',
+    receiptId: request.receipt.receiptId,
+  };
   const evidence: Evidence = Object.freeze({
     kind: 'EVIDENCE',
     schemaVersion: request.schemaVersion,
     evidenceId: request.evidenceId,
-    subject: { kind: 'RECEIPT', receiptId: request.receipt.receiptId },
+    subject,
     evidenceType: 'READBACK',
     capturedAt: observation.capturedAt,
     source: {
