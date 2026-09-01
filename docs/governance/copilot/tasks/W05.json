@@ -1,17 +1,45 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
   "wave": "W05",
   "defaults": {
     "mode": "IMPLEMENTATION",
-    "sourceDependencies": "W03-W04 accepted + W02 policy APIs",
-    "mission": "Classifier, Intelligence Router, L0-L5 reasoning, Confidence Engine, strategy registry, agent runtime, bounded inspect/repair loop, routing evals.",
+    "sourceDependencies": "W02 policy/authority + W03 durability + W04-H accepted control core",
+    "mission": "Classifier, Intelligence Router, L0-L5 reasoning, Confidence Engine, strategy registry, bounded agent runtime, bounded inspect/repair loop and routing evals with zero authority elevation.",
     "sources": [
-      "- Developer Manual v0.5",
-      "- Action Plan v0.4.1",
-      "- Risk Framework",
-      "- Legacy Manus/Aurora orchestrator behavior fixtures",
-      "- TOCA structured-decision/model adapter references"
+      "Developer Manual v0.5",
+      "Action Plan v0.4.1",
+      "Risk Framework v1.0",
+      "W05 canonical charter/dependency/ownership/acceptance/risk/eval freeze",
+      "W02 accepted policy/precheck/authority boundaries",
+      "W03 accepted durability primitives",
+      "W04 accepted CapabilityPlan/lane/budget/template/GoalGraph outputs",
+      "Legacy Manus/Aurora and TOCA model/decision references as reference-only"
+    ],
+    "readinessPolicy": "READ_ONLY_WHILE_BLOCKED",
+    "handoffFormat": "AURORA_COMPACT_V1",
+    "coordinatorSurfaces": [
+      "root-workspace-config",
+      "lockfiles",
+      "root-build-config",
+      "ci-workflows",
+      "codeowners",
+      "cross-package-publication",
+      "packages/intelligence/package.json",
+      "packages/intelligence/tsconfig.json",
+      "packages/intelligence/tsconfig.build.json",
+      "packages/intelligence/src/index.ts",
+      "packages/registries/package.json",
+      "packages/registries/tsconfig.json",
+      "packages/registries/tsconfig.build.json",
+      "packages/registries/src/index.ts",
+      "services/agent-runtime/STATUS.md",
+      "services/agent-runtime/package.json",
+      "services/agent-runtime/tsconfig.json",
+      "services/agent-runtime/src/index.ts",
+      "packages/contracts-public-evolution",
+      "packages/schemas-public-evolution",
+      "current-program-status"
     ]
   },
   "tasks": [
@@ -21,12 +49,24 @@
       "dependsOn": ["W04-H"],
       "customAgent": "aurora-coordinator",
       "actions": [
-        "1. Freeze Intelligence vs Authority boundaries and W04/W06/W07 interfaces.",
-        "2. Run over-agentification gate before defining workers/agents.",
-        "3. Define routing benchmark/eval plan and cost/latency baselines."
+        "Freeze Intelligence vs Authority boundaries and W04/W06/W07 interfaces.",
+        "Run over-agentification gate before defining workers/agents.",
+        "Define routing benchmark/eval plan and cost/latency baselines."
       ],
       "ownership": "W05 governance/intelligence shared surfaces",
-      "forbidden": "No policy/authority/executor implementation."
+      "forbidden": "No policy/authority/executor implementation and no runtime feature code.",
+      "allowedPaths": [
+        "docs/governance/w05/**",
+        "docs/governance/copilot/tasks/W05.json"
+      ],
+      "laneHint": "PROGRAM-CONTROL",
+      "dispatchPriority": 120,
+      "sharedWriteSurfaces": [
+        "w05:governance-freeze",
+        "w05:ownership-allocation",
+        "w05:publication-barriers",
+        "w05:over-agentification-eval-plan"
+      ]
     },
     {
       "id": "W05-A",
@@ -34,26 +74,16 @@
       "dependsOn": ["W05-00"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Classify task class, modality, complexity, reversibility and risk signals needed for routing.",
-        "2. Use deterministic rules where possible and explicit confidence/unknown states.",
-        "3. Do not turn classifier risk/confidence into permission."
+        "Classify task class, modality, complexity, reversibility and routing risk signals.",
+        "Use deterministic rules where possible with explicit UNKNOWN/confidence states.",
+        "Never transform classifier risk/confidence into permission."
       ],
-      "ownership": "W05 classification packages",
-      "forbidden": "No authority decision."
-    },
-    {
-      "id": "W05-B",
-      "title": "W05-B Intelligence Router",
-      "dependsOn": ["W05-A", "W05-C", "W05-D", "W05-E"],
-      "customAgent": "aurora-implementation",
-      "actions": [
-        "1. Route among deterministic/no-AI, small/frontier model, specialist, computer-use and human strategies.",
-        "2. Use lowest-sufficient reasoning and explicit escalation on uncertainty/risk/conflict.",
-        "3. Consume W04 lane/budget/capability context.",
-        "4. Emit strategy selection evidence, never executable authority."
-      ],
-      "ownership": "W05 router packages",
-      "forbidden": "No direct tools/executor side effects."
+      "ownership": "packages/intelligence/src/classification/** plus W05-A tests",
+      "forbidden": "No authority decision and no router implementation.",
+      "allowedPaths": ["packages/intelligence/src/classification/**", "packages/intelligence/test/w05a-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": ["w05:classification"]
     },
     {
       "id": "W05-C",
@@ -61,13 +91,16 @@
       "dependsOn": ["W05-00"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Define L0-L5 reasoning semantics and selection conditions.",
-        "2. Respect latency/cost/reasoning budget.",
-        "3. Allow escalation/de-escalation with bounded loops.",
-        "4. Reasoning level never elevates permission."
+        "Define L0-L5 reasoning semantics and deterministic selection conditions.",
+        "Respect latency/cost/reasoning budget and bounded escalation/de-escalation.",
+        "Reasoning level never elevates permission."
       ],
-      "ownership": "W05 reasoning-level packages",
-      "forbidden": "No hidden authority."
+      "ownership": "packages/intelligence/src/reasoning-level/** plus W05-C tests",
+      "forbidden": "No hidden authority and no W04 ExecutionBudget source-of-truth duplication.",
+      "allowedPaths": ["packages/intelligence/src/reasoning-level/**", "packages/intelligence/test/w05c-**"],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": ["w05:reasoning-level"]
     },
     {
       "id": "W05-D",
@@ -75,12 +108,16 @@
       "dependsOn": ["W05-00"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Define confidence decomposition/output contracts and uncertainty reasons.",
-        "2. Expose calibration interface for W18.",
-        "3. Use confidence to request verification/escalation, not authorize."
+        "Define confidence decomposition/output contracts and uncertainty reasons.",
+        "Expose stable calibration interface for W18.",
+        "Use confidence to request verification/escalation, never authorize."
       ],
-      "ownership": "W05 confidence packages",
-      "forbidden": "No spend/write authority from confidence."
+      "ownership": "packages/intelligence/src/confidence/** plus W05-D tests",
+      "forbidden": "No spend/write authority from confidence and no W18 adaptive promotion.",
+      "allowedPaths": ["packages/intelligence/src/confidence/**", "packages/intelligence/test/w05d-**"],
+      "laneHint": "LANE-3",
+      "dispatchPriority": 95,
+      "sharedWriteSurfaces": ["w05:confidence"]
     },
     {
       "id": "W05-E",
@@ -88,12 +125,16 @@
       "dependsOn": ["W05-00"],
       "customAgent": "aurora-contracts",
       "actions": [
-        "1. Define model/specialist/computer-use/human strategy registry and compatibility metadata.",
-        "2. Support availability/fallback and model/provider abstraction.",
-        "3. Keep strategy registry distinct from W04 Capability Registry."
+        "Define model/specialist/computer-use/human strategy registry and compatibility metadata.",
+        "Support availability/freshness/fallback and model/provider abstraction.",
+        "Keep strategy registry distinct from W04 Capability Registry."
       ],
-      "ownership": "W05 strategy registry paths",
-      "forbidden": "No second capability registry."
+      "ownership": "packages/registries/src/strategies/** plus W05-E tests",
+      "forbidden": "No second capability registry and no executable authority metadata.",
+      "allowedPaths": ["packages/registries/src/strategies/**", "packages/registries/test/w05e-**"],
+      "laneHint": "LANE-4",
+      "dispatchPriority": 95,
+      "sharedWriteSurfaces": ["w05:strategy-registry"]
     },
     {
       "id": "W05-F",
@@ -101,13 +142,33 @@
       "dependsOn": ["W05-00"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Implement generic worker runtime only where agent semantics are justified.",
-        "2. Support leases/heartbeats/reclaim/bounded worker pools and cancellation.",
-        "3. Reuse W03 durable primitives where applicable.",
-        "4. Prevent hidden agent authority/tool execution."
+        "Implement generic worker runtime only where agent semantics pass the over-agentification gate.",
+        "Support bounded pools, cancellation and lease/heartbeat/reclaim semantics.",
+        "Reuse W03 durable primitives when durability is required and prevent hidden tool authority."
       ],
-      "ownership": "W05 agent runtime packages",
-      "forbidden": "No god-object orchestrator; no direct side effects."
+      "ownership": "services/agent-runtime/src/runtime/** plus W05-F tests",
+      "forbidden": "No god-object orchestrator, no duplicate durable workflow and no direct side effects.",
+      "allowedPaths": ["services/agent-runtime/src/runtime/**", "services/agent-runtime/test/w05f-**"],
+      "laneHint": "LANE-5",
+      "dispatchPriority": 90,
+      "sharedWriteSurfaces": ["w05:agent-runtime"]
+    },
+    {
+      "id": "W05-B",
+      "title": "W05-B Intelligence Router",
+      "dependsOn": ["W05-A", "W05-C", "W05-D", "W05-E"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "Route among deterministic/no-AI, model, specialist, computer-use and human strategies.",
+        "Use lowest-sufficient reasoning with explicit escalation on uncertainty/risk/conflict.",
+        "Consume W04 lane/budget/capability context and emit strategy selection evidence only."
+      ],
+      "ownership": "packages/intelligence/src/router/** plus W05-B tests",
+      "forbidden": "No direct tools/executor side effects and no control-core duplication.",
+      "allowedPaths": ["packages/intelligence/src/router/**", "packages/intelligence/test/w05b-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w05:intelligence-router"]
     },
     {
       "id": "W05-G",
@@ -115,13 +176,16 @@
       "dependsOn": ["W05-B", "W05-F"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Implement bounded adaptive loop for tasks that need iterative inspection/repair.",
-        "2. Validate tool choices against capabilities and executor boundaries.",
-        "3. Set max iterations/time/tool-call budget and loop-break conditions.",
-        "4. Persist enough strategy evidence without private chain-of-thought."
+        "Implement bounded adaptive loop only for tasks needing iterative inspection/repair.",
+        "Validate planned tool choices against capabilities/executor boundaries.",
+        "Enforce iteration/time/model/tool/budget limits and persist structured strategy evidence without private chain-of-thought."
       ],
-      "ownership": "W05 bounded agent loop",
-      "forbidden": "No unbounded autonomous loop."
+      "ownership": "services/agent-runtime/src/loop/** plus W05-G tests",
+      "forbidden": "No unbounded autonomous loop and no direct external execution.",
+      "allowedPaths": ["services/agent-runtime/src/loop/**", "services/agent-runtime/test/w05g-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 70,
+      "sharedWriteSurfaces": ["w05:bounded-adaptive-loop"]
     },
     {
       "id": "W05-H",
@@ -129,12 +193,21 @@
       "dependsOn": ["W05-G"],
       "customAgent": "aurora-performance",
       "actions": [
-        "1. Benchmark deterministic, small-model, frontier, specialist and human routes.",
-        "2. Compare quality, latency, cost and tool/model calls.",
-        "3. Prove quality-compatible routing uses less compute where possible and zero authority elevation."
+        "Benchmark deterministic, model, specialist and human routes using versioned fixtures.",
+        "Compare quality, latency, compute/cost and model/tool calls without invented measurements.",
+        "Prove quality-compatible routing can use less compute where possible and always zero authority elevation."
       ],
-      "ownership": "W05 eval/benchmark tests",
-      "forbidden": "No W18 adaptive production promotion."
+      "ownership": "W05 integration/eval/benchmark tests and W05 evidence only",
+      "forbidden": "No W18 adaptive production promotion and no new semantic runtime.",
+      "allowedPaths": [
+        "packages/intelligence/test/w05h-**",
+        "packages/registries/test/w05h-**",
+        "services/agent-runtime/test/w05h-**",
+        "docs/governance/w05/**"
+      ],
+      "laneHint": "CONVERGENCE",
+      "dispatchPriority": 60,
+      "sharedWriteSurfaces": ["w05:routing-eval-gate"]
     }
   ]
 }
