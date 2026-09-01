@@ -24,7 +24,19 @@ const suspiciousNames = [];
 const structuralMarkers = [];
 const brokenRelativeRefs = [];
 const legacyFiles = [];
-const sourceExt = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.html', '.htm', '.css']);
+const sourceExt = new Set([
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.jsx',
+  '.ts',
+  '.mts',
+  '.cts',
+  '.tsx',
+  '.html',
+  '.htm',
+  '.css',
+]);
 const namePattern = /(?:^|[-_.])(backup|bak|copy|final\d*|new(?:-new)*|old)(?:[-_.]|$)/i;
 const markerPattern = /\b(TODO|FIXME|PLACEHOLDER|STUB|omitted for brevity)\b/i;
 
@@ -41,12 +53,27 @@ function resolveCandidate(fromFile, spec) {
   const base = spec.startsWith('/')
     ? path.join(root, spec)
     : path.resolve(path.dirname(fromFile), spec);
+  const ext = path.extname(base).toLowerCase();
+  const stem = ext.length > 0 ? base.slice(0, -ext.length) : base;
+  const runtimeSourceCandidates =
+    ext === '.js'
+      ? [`${stem}.ts`, `${stem}.tsx`]
+      : ext === '.mjs'
+        ? [`${stem}.mts`]
+        : ext === '.cjs'
+          ? [`${stem}.cts`]
+          : ext === '.jsx'
+            ? [`${stem}.tsx`]
+            : [];
   const candidates = [
     base,
+    ...runtimeSourceCandidates,
     `${base}.js`,
     `${base}.mjs`,
     `${base}.cjs`,
     `${base}.ts`,
+    `${base}.mts`,
+    `${base}.cts`,
     `${base}.tsx`,
     `${base}.jsx`,
     `${base}.json`,
