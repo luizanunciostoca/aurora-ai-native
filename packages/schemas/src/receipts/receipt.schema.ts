@@ -46,13 +46,19 @@ function validateTargetProviderCompatibility(
   rawProviderDataReferencePresent: boolean,
 ): void {
   if (!target) {
-    if (!provider) throw new TypeError('Receipt.provider: required for legacy receipt without executionTarget');
+    if (!provider) {
+      throw new TypeError('Receipt.provider: required for legacy receipt without executionTarget');
+    }
     return;
   }
   if (target.kind !== 'PROVIDER') {
-    if (provider) throw new TypeError('Receipt.provider: forbidden for non-PROVIDER executionTarget');
+    if (provider) {
+      throw new TypeError('Receipt.provider: forbidden for non-PROVIDER executionTarget');
+    }
     if (providerReferencePresent || rawProviderDataReferencePresent) {
-      throw new TypeError('Receipt: provider-specific references forbidden for non-PROVIDER executionTarget');
+      throw new TypeError(
+        'Receipt: provider-specific references forbidden for non-PROVIDER executionTarget',
+      );
     }
     return;
   }
@@ -115,7 +121,8 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
     'Receipt.executor.instanceReference',
     512,
   );
-  const provider = record.provider === undefined ? undefined : parseProvider(record.provider, 'Receipt.provider');
+  const provider =
+    record.provider === undefined ? undefined : parseProvider(record.provider, 'Receipt.provider');
   const executionTarget =
     record.executionTarget === undefined
       ? undefined
@@ -140,7 +147,11 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
   if (returnedAt && Date.parse(returnedAt) < Date.parse(attemptedAt)) {
     throw new TypeError('Receipt.returnedAt: cannot precede attemptedAt');
   }
-  if (acknowledgedAt && returnedAt && Date.parse(returnedAt) < Date.parse(acknowledgedAt)) {
+  if (
+    acknowledgedAt &&
+    returnedAt &&
+    Date.parse(returnedAt) < Date.parse(acknowledgedAt)
+  ) {
     throw new TypeError('Receipt.returnedAt: cannot precede acknowledgedAt');
   }
 
