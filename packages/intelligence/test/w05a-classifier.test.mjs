@@ -52,7 +52,16 @@ test('equivalent modality sets produce the same deterministic MULTIMODAL classif
 });
 
 test('insufficient evidence and unknown requirements are explicit rather than guessed', () => {
-  const result = intelligence.classifyTask(baseInput({ operation: 'UNKNOWN', modalities: [], sideEffectProfile: 'UNKNOWN', evidenceCompleteness: 'INSUFFICIENT', ambiguity: 'UNKNOWN', complexityDrivers: {} }));
+  const result = intelligence.classifyTask(
+    baseInput({
+      operation: 'UNKNOWN',
+      modalities: [],
+      sideEffectProfile: 'UNKNOWN',
+      evidenceCompleteness: 'INSUFFICIENT',
+      ambiguity: 'UNKNOWN',
+      complexityDrivers: {},
+    }),
+  );
   assert.equal(result.taskClass, 'UNKNOWN');
   assert.equal(result.modality, 'UNKNOWN');
   assert.equal(result.complexity, 'UNKNOWN');
@@ -62,12 +71,19 @@ test('insufficient evidence and unknown requirements are explicit rather than gu
 });
 
 test('irreversible high-risk execution remains classifier-only and cannot become permission', () => {
-  const result = intelligence.classifyTask(baseInput({
-    operation: 'EXECUTE',
-    sideEffectProfile: 'IRREVERSIBLE',
-    riskFacts: ['EXTERNAL_SIDE_EFFECT', 'FINANCIAL_IMPACT', 'DESTRUCTIVE_CHANGE'],
-    complexityDrivers: { estimatedSteps: 20, dependencyCount: 7, externalInteractionCount: 5, requiresSpecializedTool: true },
-  }));
+  const result = intelligence.classifyTask(
+    baseInput({
+      operation: 'EXECUTE',
+      sideEffectProfile: 'IRREVERSIBLE',
+      riskFacts: ['EXTERNAL_SIDE_EFFECT', 'FINANCIAL_IMPACT', 'DESTRUCTIVE_CHANGE'],
+      complexityDrivers: {
+        estimatedSteps: 20,
+        dependencyCount: 7,
+        externalInteractionCount: 5,
+        requiresSpecializedTool: true,
+      },
+    }),
+  );
   assert.equal(result.taskClass, 'EXECUTION_REQUEST');
   assert.equal(result.reversibility, 'IRREVERSIBLE');
   assert.equal(result.complexity, 'VERY_HIGH');
@@ -80,14 +96,32 @@ test('irreversible high-risk execution remains classifier-only and cannot become
 });
 
 test('risk signals are canonical, deduplicated and order-stable', () => {
-  const result = intelligence.classifyTask(baseInput({ riskFacts: ['SENSITIVE_DATA', 'FINANCIAL_IMPACT', 'SENSITIVE_DATA'], ambiguity: 'HIGH' }));
-  assert.deepEqual(result.riskSignals, ['AMBIGUOUS_REQUIREMENTS', 'FINANCIAL_IMPACT', 'SENSITIVE_DATA']);
+  const result = intelligence.classifyTask(
+    baseInput({
+      riskFacts: ['SENSITIVE_DATA', 'FINANCIAL_IMPACT', 'SENSITIVE_DATA'],
+      ambiguity: 'HIGH',
+    }),
+  );
+  assert.deepEqual(result.riskSignals, [
+    'AMBIGUOUS_REQUIREMENTS',
+    'FINANCIAL_IMPACT',
+    'SENSITIVE_DATA',
+  ]);
   assert.equal(result.classificationConfidence, 'LOW');
 });
 
 test('complexity driver bounds fail deterministically instead of overflowing routing inputs', () => {
-  assert.throws(() => intelligence.classifyTask(baseInput({ complexityDrivers: { estimatedSteps: -1 } })), /expected safe integer between 0 and 100000/);
-  assert.throws(() => intelligence.classifyTask(baseInput({ complexityDrivers: { dependencyCount: Number.MAX_SAFE_INTEGER } })), /expected safe integer between 0 and 100000/);
+  assert.throws(
+    () => intelligence.classifyTask(baseInput({ complexityDrivers: { estimatedSteps: -1 } })),
+    /expected safe integer between 0 and 100000/,
+  );
+  assert.throws(
+    () =>
+      intelligence.classifyTask(
+        baseInput({ complexityDrivers: { dependencyCount: Number.MAX_SAFE_INTEGER } }),
+      ),
+    /expected safe integer between 0 and 100000/,
+  );
 });
 
 test('task classes do not reinterpret decision support as authority', () => {

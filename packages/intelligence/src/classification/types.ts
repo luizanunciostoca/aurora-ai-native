@@ -29,18 +29,10 @@ export type TaskModality = TaskInputModality | 'MULTIMODAL' | 'UNKNOWN';
 export type TaskComplexity = 'TRIVIAL' | 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH' | 'UNKNOWN';
 
 export type TaskReversibility =
-  | 'NOT_APPLICABLE'
-  | 'REVERSIBLE'
-  | 'PARTIALLY_REVERSIBLE'
-  | 'IRREVERSIBLE'
-  | 'UNKNOWN';
+  'NOT_APPLICABLE' | 'REVERSIBLE' | 'PARTIALLY_REVERSIBLE' | 'IRREVERSIBLE' | 'UNKNOWN';
 
 export type TaskSideEffectProfile =
-  | 'NONE'
-  | 'REVERSIBLE'
-  | 'PARTIALLY_REVERSIBLE'
-  | 'IRREVERSIBLE'
-  | 'UNKNOWN';
+  'NONE' | 'REVERSIBLE' | 'PARTIALLY_REVERSIBLE' | 'IRREVERSIBLE' | 'UNKNOWN';
 
 export type TaskEvidenceCompleteness = 'COMPLETE' | 'PARTIAL' | 'INSUFFICIENT' | 'UNKNOWN';
 export type TaskAmbiguity = 'NONE' | 'LOW' | 'HIGH' | 'UNKNOWN';
@@ -57,10 +49,7 @@ export type TaskRiskFact =
   | 'DESTRUCTIVE_CHANGE';
 
 export type TaskRiskSignal =
-  | TaskRiskFact
-  | 'IRREVERSIBLE_SIDE_EFFECT'
-  | 'AMBIGUOUS_REQUIREMENTS'
-  | 'INSUFFICIENT_EVIDENCE';
+  TaskRiskFact | 'IRREVERSIBLE_SIDE_EFFECT' | 'AMBIGUOUS_REQUIREMENTS' | 'INSUFFICIENT_EVIDENCE';
 
 export interface TaskComplexityDrivers {
   readonly estimatedSteps?: number;
