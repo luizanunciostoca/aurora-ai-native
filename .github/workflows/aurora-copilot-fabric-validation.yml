@@ -29,6 +29,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Diagnose canonical Prettier output
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx prettier --write tools/copilot/frontier-policy.test.mjs
+          git diff -- tools/copilot/frontier-policy.test.mjs
       - name: Validate governed Aurora DAG
         run: node tools/copilot/load-task-graph.mjs
       - name: Validate Copilot execution mode
