@@ -51,26 +51,25 @@ test('resolves one fresh compatible binding without granting authority', () => {
 });
 
 test('fails closed for missing, cross-tenant and ambiguous bindings', () => {
-  assert.deepEqual(resolve([]).reasons, ['TARGET_NOT_FOUND']);
-  assert.deepEqual(resolve([binding({ tenant: otherTenant })]).reasons, [
-    'TARGET_TENANT_MISMATCH',
-  ]);
-  assert.deepEqual(resolve([binding(), binding({ bindingId: 'binding:two' })]).reasons, [
-    'TARGET_AMBIGUOUS',
-  ]);
+  const missing = resolve([]);
+  const crossTenant = resolve([binding({ tenant: otherTenant })]);
+  const ambiguous = resolve([binding(), binding({ bindingId: 'binding:two' })]);
+
+  assert.deepEqual(missing.reasons, ['TARGET_NOT_FOUND']);
+  assert.deepEqual(crossTenant.reasons, ['TARGET_TENANT_MISMATCH']);
+  assert.deepEqual(ambiguous.reasons, ['TARGET_AMBIGUOUS']);
 });
 
 test('fails closed for availability, freshness, compatibility and preconditions', () => {
-  assert.deepEqual(resolve([binding({ state: 'UNAVAILABLE' })]).reasons, ['TARGET_UNAVAILABLE']);
-  assert.deepEqual(resolve([binding({ freshUntil: '2026-09-01T16:00:00Z' })]).reasons, [
-    'TARGET_STALE',
-  ]);
-  assert.deepEqual(resolve([binding({ compatibleActionIntentSchemaVersions: [] })]).reasons, [
-    'TARGET_INCOMPATIBLE',
-  ]);
-  assert.deepEqual(resolve([binding({ preconditionsSatisfied: false })]).reasons, [
-    'TARGET_PRECONDITION_FAILED',
-  ]);
+  const unavailable = resolve([binding({ state: 'UNAVAILABLE' })]);
+  const stale = resolve([binding({ freshUntil: '2026-09-01T16:00:00Z' })]);
+  const incompatible = resolve([binding({ compatibleActionIntentSchemaVersions: [] })]);
+  const preconditionFailed = resolve([binding({ preconditionsSatisfied: false })]);
+
+  assert.deepEqual(unavailable.reasons, ['TARGET_UNAVAILABLE']);
+  assert.deepEqual(stale.reasons, ['TARGET_STALE']);
+  assert.deepEqual(incompatible.reasons, ['TARGET_INCOMPATIBLE']);
+  assert.deepEqual(preconditionFailed.reasons, ['TARGET_PRECONDITION_FAILED']);
 });
 
 test('matches provider targets using the complete target identity', () => {
