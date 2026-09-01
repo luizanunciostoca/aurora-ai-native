@@ -1,132 +1,74 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `PB5_FINAL_ACCEPTANCE_PUBLICATION_CANDIDATE`  
-Audit date: 2026-09-01  
-PB5 base main: `283ede2c1de3823cf30391aaa2df188914f456a2`
-
-## Publication semantics
-
-This document is a PB5 candidate while it is not on `main`. It becomes the active current-state declaration only after the owning PB5 pull request is merged to `main` with Aurora exact-head Quality, Test Build and Security gates green and Program Control records the corresponding acceptance evidence.
-
-When this document is present on accepted `main`, the effective program state is:
-
-- W00: `COMPLETE_ACCEPTED`.
-- W01: `COMPLETE_ACCEPTED`.
-- W02: `COMPLETE_ACCEPTED`.
-- W02-00/A/B/C/D/E/F/G: `COMPLETE_ACCEPTED_MERGED`.
-- PB1/PB2/PB3/PB4/PB5: `COMPLETE_RELEASED / ACCEPTED` as applicable.
-- W03: `RELEASED_FOR_IMPLEMENTATION`, subject to its own Chat 00 reality/dependency/ownership/risk freeze before runtime writes.
-- W04: `READINESS / REFERENCE_MINING` only until its own dependencies are satisfied.
-- W05-W20: remain dependency-gated except for readiness/reference work explicitly permitted by the accepted execution sequence.
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_ON_ACCEPTED_MAIN`  
+W03-00 baseline main: `ad664f32949256ccc5751fe1fb88047b66c2d247`  
+Audit date: 2026-09-01
 
 ## Authority order
 
 1. GitHub `main` is implementation/code authority.
-2. Accepted PR and exact-SHA evidence govern implementation/publication acceptance.
-3. Google Drive `AURORA_AI_NATIVE_DEVELOPMENT_GOVERNANCE` is the operational governance/evidence registry.
-4. Developer Manual v0.5 Audit-Consolidated, ADR-001 and ADR-002 govern accepted architecture/planning.
-5. Risk & Architecture Validation Framework v1.0 is mandatory cross-wave governance for W03+.
-6. Accepted wave charters, ownership matrices, dependency matrices and acceptance matrices govern allocated scope.
-7. Historical, superseded and salvage/reference material is provenance only.
+2. Accepted PR/exact-SHA evidence governs implementation and publication acceptance.
+3. Google Drive `AURORA_AI_NATIVE_DEVELOPMENT_GOVERNANCE` is live operational governance/evidence authority.
+4. Developer Manual v0.5 Audit-Consolidated, accepted ADRs and owning-wave governance define architecture/scope.
+5. Risk & Architecture Validation Framework v1.0 is mandatory for W03+.
+6. Historical/superseded/salvage material is provenance/reference only.
 
-A historical document, prompt, agent output or task-graph node cannot override later accepted evidence or release a gated dependency by itself.
+No prompt, task node, draft PR, agent output or reference artifact can release a dependency by itself.
 
-## W02 final technical evidence
+## Accepted program state
 
-### W02-F
+- W00: `COMPLETE_ACCEPTED`.
+- W01: `COMPLETE_ACCEPTED`.
+- W02: `COMPLETE_ACCEPTED / REALITY_GATE_1_AUTHORITY_VERIFIED`.
+- W02-00/A/B/C/D/E/F/G: `COMPLETE_ACCEPTED_MERGED`.
+- PB1-PB5: `COMPLETE_RELEASED / ACCEPTED` as applicable.
+- W03: released for its coordination/ownership/risk freeze.
+- W04: readiness/reference mining only until accepted W03 dependencies release it.
+- W05-W20: dependency-gated except readiness/reference work explicitly allowed by accepted program governance.
 
-- PR #61: merged.
-- exact accepted HEAD: `185f9681bf258d06ff9bb45721c6cde6988b639d`.
-- merge main: `0e8fccf51490f1e05fb356bd562a812e4738475b`.
-- Quality `33449520272`: SUCCESS.
-- Test Build `33449520312`: SUCCESS.
-- Security `33449520715`: SUCCESS.
+## W02 final evidence
 
-### PB4
+PB5 canonical PR #73 merged after exact HEAD `bd9b5d7495bd3c49ca24781c41238be7fda3dbdc` passed Quality `33462240393`, Test Build `33462240427` and Security `33462240798`. PB5 merge/release main is `ad664f32949256ccc5751fe1fb88047b66c2d247`; exact-main Quality/Test Build/Security all succeeded. Issue #71 is closed with `aurora:accepted`. Drive records `W02-PB5-001`, `CHG-W02-PB5-001`, `EVD-W02-PB5-001`, `ACC-W02-PB5-001` are canonical.
 
-- PR #62: merged/released.
-- exact publication HEAD: `c2a9c06e11f0039b4670efdd44c2219931ff593b`.
-- publication main: `8ca6d252b75907bb62616a8054f740b8fa5d32c7`.
-- Quality `33450029976`: SUCCESS.
-- Test Build `33450029963`: SUCCESS.
-- Security `33450030286`: SUCCESS.
+W02-G Reality Gate remains immutable evidence: PR #68, exact accepted HEAD `ee2572d09392f6ee06014fb9d8335d2e9b6fd758`, Quality `33460989349`, Test Build `33460989330`, Security `33460989658`, merge `4df704ae787947d2138658cae984726470f7633d`, post-merge gates successful, S01-S20 accepted with zero real external side effects.
 
-### W02-G — Reality Gate 1
+## W03-00 publication semantics
 
-- canonical PR #68: merged.
-- reconciled base main: `d629df9f6e8ad200c567d839f9bba9e248e7dd5e`.
-- exact accepted HEAD: `ee2572d09392f6ee06014fb9d8335d2e9b6fd758`.
-- merge main: `4df704ae787947d2138658cae984726470f7633d`.
-- Quality `33460989349`: SUCCESS.
-- Test Build `33460989330`: SUCCESS.
-- Security `33460989658`: SUCCESS.
-- post-merge Quality `33461113096`: SUCCESS.
-- post-merge Test Build `33461100616`: SUCCESS.
-- post-merge Security `33461100936`: SUCCESS.
-- issue #64: closed with `aurora:accepted`.
+This file is updated by the W03-00 coordination-freeze candidate. **While that PR is unmerged, W03-A remains gated.** When this exact W03-00 candidate is independently accepted, passes Quality/Test Build/Security on one exact HEAD, `main` is revalidated, merges, post-merge main is verified and Drive records converge, the effective state becomes:
 
-W02-G adds the consolidated S01-S20 authority Reality Gate harness and preserves zero real provider/device/executor/persistence/model side effects.
+- W03-00: `COMPLETE_ACCEPTED_MERGED_VERIFIED_ON_MAIN`.
+- W03-A: `RELEASED_FOR_IMPLEMENTATION`.
+- W03-B/C/D/E/F: remain dependency-gated according to the accepted W03 dependency matrix.
 
-## Copilot development fabric
+Canonical W03 Drive folder: `W03_PERSISTENCE_EVENT_BACKBONE_DURABLE_WORKFLOW` / `1ZO73FVedMQM77dtfRtWF9wm54eulBkXc`.
 
-Aurora Copilot Multi-Agent Development Fabric v1.0 remains active.
+Drive freeze documents:
+- `W03_WAVE_CHARTER` / `1amZXFhfGCf_RYhqNWFokTT658Y4msIkzHQsrJn0RNyY`.
+- `W03_DEPENDENCY_MATRIX` / `1cq4M71-J_aWi2ZBJPUk21CnyGlvV4yl19Fw4Pal0khs`.
+- `W03_OWNERSHIP_MATRIX` / `1zeJVIkEx_KlkKC0Wap8TTnJvRMD446xQGPMUJ8oB5SU`.
+- `W03_ACCEPTANCE_MATRIX_AND_REALITY_GATE` / `18pfgf3TqWB9J4n581pdjpK0v6S2gr7i0H6ZjULoaUIE`.
+- `W03_RISK_REGISTER_AND_PREMORTEM` / `1YSg6iAgnuLOan37eQCYOAlx7jwGyTo0qYGFyjEqCxuo`.
 
-Current execution mode: `FREE_ACTIONS_CLI`.
+## W03 frozen DAG
 
-- Cloud Agent is disabled while the repository owner uses Copilot Free.
-- Copilot CLI may execute at most two dependency-satisfied code tasks per batch.
-- AI workers receive repository read access plus `copilot-requests: write`; they do not push, merge or self-accept.
-- Program Control owns coordinator/governance/acceptance tasks.
-- One task maps to one isolated candidate ownership surface.
-- Downstream dependencies require `aurora:accepted` plus canonical evidence.
+`W03-00 -> W03-A -> (W03-B || W03-C) -> (W03-D || W03-E) -> W03-F`
 
-The first Free execution exposed two automation defects: duplicate work when a canonical PR already existed and generated `dist-test` output being captured as a patch. PR #70 hardened the fabric to detect open canonical PRs, skip Program-Control tasks, filter generated outputs and preserve branch-only candidates when repository policy prevents Actions from creating a PR.
+D/E require accepted B+C. F requires accepted D+E. Downstream release requires `aurora:accepted` plus canonical exact-SHA/Drive evidence.
 
-PB5 base main `283ede2c1de3823cf30391aaa2df188914f456a2` passed after hardening:
+## W03 architecture boundaries
 
-- Quality `33461804484`: SUCCESS.
-- Test Build `33461804485`: SUCCESS.
-- Security `33461804843`: SUCCESS.
+W03 owns durable Postgres/event/outbox/inbox/idempotency/replay/DLQ/timers/leases/durable-workflow primitives. It reuses W01 canonical EventEnvelope/IDs/context/versioning and W02 tenant/identity/policy/authority boundaries.
 
-## W03 release conditions
+W03 does not implement W04 Capability Registry/GoalGraph/planning scheduler/lanes, W05 agents, W07 side-effect Executor, W08 providers, W09 n8n business logic, W14 device gateway/session/trust, W15 Android runtime, W17 production telemetry/DR or W18 adaptive learning.
 
-W03 implementation is released only after PB5 is accepted on `main`.
+Reliable state transitions are event-driven by default. Polling is bounded claim/reconciliation/recovery fallback only. Replay/history never grants authority. Duplicate/replayed work must not duplicate irreversible side effects.
 
-Before any W03 runtime write, W03 Program Coordinator must revalidate:
+## Development execution fabric
 
-- current `main` and exact PB5 acceptance evidence;
-- W03 ownership/dependency documents;
-- canonical W01/W02 contracts and public surfaces;
-- Developer Manual v0.5;
-- Risk & Architecture Validation Framework v1.0;
-- reuse candidates as reference only;
-- migration/shared-surface ownership;
-- Risk Gates A/B/C/D and over-agentification classification.
+`FREE_ACTIONS_CLI` remains accepted. Code workers may execute at most two dependency-satisfied code tasks per batch. Coordinator/governance/acceptance tasks remain Program Control-owned. Workers cannot auto-merge/self-accept; generated outputs are filtered and canonical open PR ownership blocks duplicate candidates.
 
-The accepted W03 pattern remains: Chat 00 coordination -> Reality Audit || Reuse Mining -> Contract/Architecture Freeze -> implementation DAG -> Integration || Red Team || Performance -> Reality Gate -> exact-SHA acceptance.
+## Acceptance discipline
 
-## Safety invariants
+W03+ uses separate Risk Gates A Correctness, B Safety/Authority, C Performance/Economics and D Failure/Recoverability. Release blockers independent of score remain authority bypass, cross-tenant breach, uncontrolled duplicate irreversible side effect, secret exposure and irreversible execution without valid authority.
 
-- Intelligence != Authority != Execution.
-- Confidence, precheck, context, cache, model output, workflow state, device permission, session or credential possession never elevate authority.
-- Current policy/authority validation remains mandatory where execution semantics require it.
-- Precheck is informational and never an executable credential.
-- `EXECUTION_UNCERTAIN` requires reconciliation before retry.
-- Duplicate/replayed/reconnected work must not duplicate irreversible side effects.
-- No implementation agent self-accepts or self-merges.
-- No stale CI may satisfy an acceptance gate.
-- Legacy/reference material never silently becomes runtime authority.
-
-## Drift control
-
-Before every merge or downstream release, revalidate:
-
-- latest `main` SHA;
-- open/merged PR state;
-- exact candidate HEAD;
-- Quality/Test Build/Security on that same HEAD;
-- publication barriers;
-- Drive task/change/evidence/acceptance/deprecation registries;
-- current wave ownership and dependencies.
-
-A disagreement is a blocker until reconciled or explicitly recorded.
+No stale CI satisfies acceptance. Before every merge/downstream release, revalidate current main, exact candidate HEAD, official gates, PR state, Drive task/change/evidence/acceptance/deprecation registries and active ownership/dependency documents.
