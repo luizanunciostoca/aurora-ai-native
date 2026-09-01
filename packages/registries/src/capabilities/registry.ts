@@ -1,4 +1,4 @@
-import type { TenantId } from '@aurora/contracts/ids';
+import type { TenantId } from '../../../contracts/src/ids/types.ts';
 
 export const CAPABILITY_TARGET_KINDS = [
   'PROVIDER',
