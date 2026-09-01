@@ -345,6 +345,47 @@ test('mismatched action intent and stale observation fail closed', () => {
   assert.equal(stale.retryEligibleAfterFreshGuards, false);
 });
 
+test('tampered uncertainty facts cannot drive reconciliation or retry eligibility', () => {
+  const fixture = uncertainty();
+  const malformedAttempts = {
+    ...fixture.uncertainty,
+    attemptNumber: 0,
+  } as unknown as typeof fixture.uncertainty;
+  const tamperedResult = {
+    ...fixture.uncertainty,
+    executionResult: {
+      ...fixture.uncertainty.executionResult,
+      timestamp: at('2026-09-01T18:00:01Z'),
+      error: {
+        ...fixture.uncertainty.executionResult.error,
+        code: 'INTERNAL_ERROR',
+      },
+    },
+  } as unknown as typeof fixture.uncertainty;
+  const invalidSignal = {
+    ...fixture.uncertainty,
+    signal: 'FORGED_SIGNAL',
+  } as unknown as typeof fixture.uncertainty;
+
+  for (const uncertaintyRecord of [malformedAttempts, tamperedResult, invalidSignal]) {
+    const result = reconcileExecutionUncertainty({
+      schemaVersion: version,
+      actionIntent: fixture.actionIntent,
+      uncertainty: uncertaintyRecord,
+      observation: {
+        state: 'NO_EFFECT_CONFIRMED',
+        observedAt: at('2026-09-01T18:00:02Z'),
+      },
+      retrySafeguards: safeGuards(fixture.actionIntent),
+    });
+    assert.equal(result.state, 'STILL_UNCERTAIN');
+    assert.equal(result.reconciliationRequired, true);
+    assert.equal(result.retryEligibleAfterFreshGuards, false);
+    assert.deepEqual(result.reasons, ['RECONCILIATION_UNCERTAINTY_INVALID']);
+    assert.equal(result.authorizesExecution, false);
+  }
+});
+
 test('W07-E MATCH is an effect-observed hint, never a VERIFIED promotion', () => {
   const match = {
     status: 'CAPTURED',
