@@ -8,7 +8,9 @@ import type { CapabilityPlan } from '../src/capability-plan/types.ts';
 import {
   bindPlanTemplate,
   createPlanTemplate,
+  type BindPlanTemplateResult,
   type CreatePlanTemplateInput,
+  type CreatePlanTemplateResult,
   type PlanTemplate,
   type PlanTemplateBindingInput,
 } from '../src/templates/index.ts';
@@ -63,10 +65,26 @@ function templateInput(overrides: Partial<CreatePlanTemplateInput> = {}): Create
   };
 }
 
+function expectCreated(
+  result: CreatePlanTemplateResult,
+): Extract<CreatePlanTemplateResult, { readonly status: 'CREATED' }> {
+  if (result.status !== 'CREATED') {
+    throw new Error(`expected template creation, received ${result.code}`);
+  }
+  return result;
+}
+
+function expectBound(
+  result: BindPlanTemplateResult,
+): Extract<BindPlanTemplateResult, { readonly status: 'BOUND' }> {
+  if (result.status !== 'BOUND') {
+    throw new Error(`expected template binding, received ${result.code}`);
+  }
+  return result;
+}
+
 function createActiveTemplate(): PlanTemplate {
-  const result = createPlanTemplate(templateInput());
-  assert.equal(result.status, 'CREATED');
-  return result.template;
+  return expectCreated(createPlanTemplate(templateInput())).template;
 }
 
 function registry(overrides: Partial<CapabilityRegistrySnapshot> = {}): CapabilityRegistrySnapshot {
@@ -177,7 +195,7 @@ function bindingInput(overrides: Partial<PlanTemplateBindingInput> = {}): PlanTe
 }
 
 test('W04-G creates deterministic curated templates without authority or adaptive promotion', () => {
-  const result = createPlanTemplate(templateInput());
+  const result = expectCreated(createPlanTemplate(templateInput()));
   assert.equal(result.status, 'CREATED');
   assert.equal(result.template.authorizesExecution, false);
   assert.equal(result.template.adaptivePromotion, false);
@@ -202,10 +220,10 @@ test('W04-G rejects malformed, ambiguous, or inconsistent template metadata fail
     status: 'REJECTED',
     code: 'INVALID_CONTENT_HASH',
   });
-  assert.deepEqual(
-    createPlanTemplate(templateInput({ status: 'INVALIDATED', invalidationReason: undefined })),
-    { status: 'REJECTED', code: 'INVALID_STATUS_METADATA' },
-  );
+  assert.deepEqual(createPlanTemplate(templateInput({ status: 'INVALIDATED' })), {
+    status: 'REJECTED',
+    code: 'INVALID_STATUS_METADATA',
+  });
   assert.deepEqual(
     createPlanTemplate(
       templateInput({
@@ -226,7 +244,7 @@ test('W04-G rejects malformed, ambiguous, or inconsistent template metadata fail
 });
 
 test('W04-G binds a compatible READY plan deterministically and preserves current validation barriers', () => {
-  const result = bindPlanTemplate(bindingInput());
+  const result = expectBound(bindPlanTemplate(bindingInput()));
   assert.equal(result.status, 'BOUND');
   assert.deepEqual(result.binding.requirementOrder, ['publish', 'evidence']);
   assert.deepEqual(result.binding.selections, [
@@ -255,10 +273,11 @@ test('W04-G binds a compatible READY plan deterministically and preserves curren
 
 test('W04-G refuses invalidated, hash-stale, and input-contract-incompatible templates', () => {
   const active = createActiveTemplate();
-  const invalidated = createPlanTemplate(
-    templateInput({ status: 'INVALIDATED', invalidationReason: 'explicit governance revocation' }),
+  const invalidated = expectCreated(
+    createPlanTemplate(
+      templateInput({ status: 'INVALIDATED', invalidationReason: 'explicit governance revocation' }),
+    ),
   );
-  assert.equal(invalidated.status, 'CREATED');
 
   assert.deepEqual(bindPlanTemplate(bindingInput({ template: invalidated.template })), {
     status: 'REJECTED',
