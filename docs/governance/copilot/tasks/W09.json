@@ -1,1 +1,124 @@
-{"schemaVersion":1,"authority":"Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.","wave":"W09","defaults":{"mode":"IMPLEMENTATION","sourceDependencies":"W03 durable foundations + W07 executor plane accepted","mission":"Governed workflow bridge: N8nWorkflowBinding, event/webhook/schedule bridge, credential boundary, evidence forwarding, curated workflow migration and replay-safe execution without making n8n authority/source of truth.","sources":["- Developer Manual v0.5 ss. 14, 26, 28-34","- Action Plan v0.4.1 W09","- n8n salvage catalog: 2,053 parsed / 1,937 sanitized patterns","- Risk Framework v1.0","- DEVICE_PLANE_CROSS_WAVE_OWNERSHIP (workflow-only lock)"]},"tasks":[{"id":"W09-00","title":"W09-00 - n8n Fabric Coordination & Governance Freeze","dependsOn":["W03-F","W07-H"],"customAgent":"aurora-coordinator","actions":["1. Revalidate W03/W07 accepted outputs.","2. Freeze ownership, workflow binding schema, registration lifecycle and safe execution topology.","3. Define what remains in Aurora vs n8n and enforce Aurora as source of truth.","4. Define publication barriers and migration acceptance categories.","5. Create risk/premortem for webhook replay, credential leakage, duplicate execution and shell/SSH patterns."],"ownership":"W09 integration packages/services and governance.","forbidden":"Do not create authority logic inside n8n or implement device/provider executors."},{"id":"W09-A","title":"W09-A - N8nWorkflowBinding Registry","dependsOn":["W09-00"],"customAgent":"aurora-contracts","actions":["1. Define N8nWorkflowBinding with workflow reference, version/hash, provenance, tenant scope, capability binding and status.","2. Support immutable/versioned registration and supersession.","3. Record sanitized source lineage where migrated from corpus.","4. Reject unknown/stale/incompatible bindings.","5. Add registry/schema/consumer tests."],"ownership":"W09 workflow binding contracts/registry.","forbidden":"Do not copy raw corpus credentials/pinData/IDs into canonical bindings."},{"id":"W09-B","title":"W09-B - Event/Webhook/Schedule Bridge","dependsOn":["W09-A"],"customAgent":"aurora-implementation","actions":["1. Implement event, webhook and schedule ingress/egress bridge using W03 semantics.","2. Propagate correlation/causation/idempotency.","3. Deduplicate webhook/event replay.","4. Map scheduled triggers to governed execution requests rather than direct side effects.","5. Add duplicate/out-of-order/replay tests."],"ownership":"Workflow trigger/bridge layer.","forbidden":"Do not bypass W07 for side effects."},{"id":"W09-C","title":"W09-C - Workflow Credential Boundary","dependsOn":["W09-A"],"customAgent":"aurora-implementation","actions":["1. Define how n8n workflow credentials reference external secrets without becoming Aurora authority.","2. Bind credential use to tenant/workflow/provider context.","3. Prevent credential values from Evidence, logs, templates or bindings.","4. Define rotation/revocation handling where supported.","5. Test wrong-tenant and missing-secret fail closed."],"ownership":"W09 credential-reference integration.","forbidden":"Do not make n8n credential possession permission to execute."},{"id":"W09-D","title":"W09-D - Receipt/Evidence Forwarding","dependsOn":["W09-A"],"customAgent":"aurora-implementation","actions":["1. Forward workflow run status, outputs, target execution receipts and evidence references into Aurora correlation chain.","2. Normalize workflow started/completed/failed/cancelled/uncertain outcomes.","3. Preserve provenance/version/hash.","4. Prevent private/sensitive workflow data from entering governance evidence.","5. Add reconstruction tests."],"ownership":"W09 evidence/receipt bridge.","forbidden":"Do not create a parallel evidence source of truth."},{"id":"W09-E","title":"W09-E - Curated Workflow Migration","dependsOn":["W09-B","W09-C","W09-D"],"customAgent":"aurora-implementation","actions":["1. Use the sanitized 1,937-pattern corpus only as reference.","2. Classify candidate workflows by capability/domain/risk/provenance.","3. Re-specify smallest useful topology against W03/W07/W08 contracts.","4. Keep 32 Execute Command/SSH examples index-only high-risk unless a future explicitly governed LOCAL_SERVICE capability is approved.","5. Record source hash/provenance and licensing checks for any verbatim reuse."],"ownership":"Curated W09 migration tooling/catalog.","forbidden":"Do not bulk import raw workflow corpus into production."},{"id":"W09-F","title":"W09-F - Governance, Replay, Failure & Integration Tests","dependsOn":["W09-E"],"customAgent":"aurora-integration","actions":["1. Test workflow registration/version drift, duplicate webhooks/events, retries, cancellation, provider outage, missing credential and evidence forwarding.","2. Prove no workflow node can mint authority or directly bypass W07.","3. Run load/fan-out budgets and four Risk Gates.","4. Run exact-head CI and cleanup.","5. Publish accepted W09 fabric handoff."],"ownership":"W09 integration/tests/publication.","forbidden":"Do not claim domain workflow completion for W10-W13."}]}
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W09",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W03 durable foundations + W07 executor plane accepted",
+    "mission": "Governed workflow bridge: N8nWorkflowBinding, event/webhook/schedule bridge, credential boundary, evidence forwarding, curated workflow migration and replay-safe execution without making n8n authority/source of truth.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 14, 26, 28-34",
+      "- Action Plan v0.4.1 W09",
+      "- n8n salvage catalog: 2,053 parsed / 1,937 sanitized patterns",
+      "- Risk Framework v1.0",
+      "- DEVICE_PLANE_CROSS_WAVE_OWNERSHIP (workflow-only lock)"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W09-00",
+      "title": "W09-00 - n8n Fabric Coordination & Governance Freeze",
+      "dependsOn": ["W03-F", "W07-H"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Revalidate W03/W07 accepted outputs.",
+        "2. Freeze ownership, workflow binding schema, registration lifecycle and safe execution topology.",
+        "3. Define what remains in Aurora vs n8n and enforce Aurora as source of truth.",
+        "4. Define publication barriers and migration acceptance categories.",
+        "5. Create risk/premortem for webhook replay, credential leakage, duplicate execution and shell/SSH patterns."
+      ],
+      "ownership": "W09 integration packages/services and governance.",
+      "forbidden": "Do not create authority logic inside n8n or implement device/provider executors."
+    },
+    {
+      "id": "W09-A",
+      "title": "W09-A - N8nWorkflowBinding Registry",
+      "dependsOn": ["W09-00"],
+      "customAgent": "aurora-contracts",
+      "actions": [
+        "1. Define N8nWorkflowBinding with workflow reference, version/hash, provenance, tenant scope, capability binding and status.",
+        "2. Support immutable/versioned registration and supersession.",
+        "3. Record sanitized source lineage where migrated from corpus.",
+        "4. Reject unknown/stale/incompatible bindings.",
+        "5. Add registry/schema/consumer tests."
+      ],
+      "ownership": "W09 workflow binding contracts/registry.",
+      "forbidden": "Do not copy raw corpus credentials/pinData/IDs into canonical bindings."
+    },
+    {
+      "id": "W09-B",
+      "title": "W09-B - Event/Webhook/Schedule Bridge",
+      "dependsOn": ["W09-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement event, webhook and schedule ingress/egress bridge using W03 semantics.",
+        "2. Propagate correlation/causation/idempotency.",
+        "3. Deduplicate webhook/event replay.",
+        "4. Map scheduled triggers to governed execution requests rather than direct side effects.",
+        "5. Add duplicate/out-of-order/replay tests."
+      ],
+      "ownership": "Workflow trigger/bridge layer.",
+      "forbidden": "Do not bypass W07 for side effects."
+    },
+    {
+      "id": "W09-C",
+      "title": "W09-C - Workflow Credential Boundary",
+      "dependsOn": ["W09-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define how n8n workflow credentials reference external secrets without becoming Aurora authority.",
+        "2. Bind credential use to tenant/workflow/provider context.",
+        "3. Prevent credential values from Evidence, logs, templates or bindings.",
+        "4. Define rotation/revocation handling where supported.",
+        "5. Test wrong-tenant and missing-secret fail closed."
+      ],
+      "ownership": "W09 credential-reference integration.",
+      "forbidden": "Do not make n8n credential possession permission to execute."
+    },
+    {
+      "id": "W09-D",
+      "title": "W09-D - Receipt/Evidence Forwarding",
+      "dependsOn": ["W09-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Forward workflow run status, outputs, target execution receipts and evidence references into Aurora correlation chain.",
+        "2. Normalize workflow started/completed/failed/cancelled/uncertain outcomes.",
+        "3. Preserve provenance/version/hash.",
+        "4. Prevent private/sensitive workflow data from entering governance evidence.",
+        "5. Add reconstruction tests."
+      ],
+      "ownership": "W09 evidence/receipt bridge.",
+      "forbidden": "Do not create a parallel evidence source of truth."
+    },
+    {
+      "id": "W09-E",
+      "title": "W09-E - Curated Workflow Migration",
+      "dependsOn": ["W09-B", "W09-C", "W09-D"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Use the sanitized 1,937-pattern corpus only as reference.",
+        "2. Classify candidate workflows by capability/domain/risk/provenance.",
+        "3. Re-specify smallest useful topology against W03/W07/W08 contracts.",
+        "4. Keep 32 Execute Command/SSH examples index-only high-risk unless a future explicitly governed LOCAL_SERVICE capability is approved.",
+        "5. Record source hash/provenance and licensing checks for any verbatim reuse."
+      ],
+      "ownership": "Curated W09 migration tooling/catalog.",
+      "forbidden": "Do not bulk import raw workflow corpus into production."
+    },
+    {
+      "id": "W09-F",
+      "title": "W09-F - Governance, Replay, Failure & Integration Tests",
+      "dependsOn": ["W09-E"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Test workflow registration/version drift, duplicate webhooks/events, retries, cancellation, provider outage, missing credential and evidence forwarding.",
+        "2. Prove no workflow node can mint authority or directly bypass W07.",
+        "3. Run load/fan-out budgets and four Risk Gates.",
+        "4. Run exact-head CI and cleanup.",
+        "5. Publish accepted W09 fabric handoff."
+      ],
+      "ownership": "W09 integration/tests/publication.",
+      "forbidden": "Do not claim domain workflow completion for W10-W13."
+    }
+  ]
+}

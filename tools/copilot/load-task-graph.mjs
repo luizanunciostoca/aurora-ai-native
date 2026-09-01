@@ -41,7 +41,8 @@ export async function loadTaskGraph() {
 
   for (const task of tasks) {
     for (const dependency of task.dependsOn) {
-      if (!ids.has(dependency)) throw new Error(`Task ${task.id} depends on unknown task ${dependency}`);
+      if (!ids.has(dependency))
+        throw new Error(`Task ${task.id} depends on unknown task ${dependency}`);
       if (dependency === task.id) throw new Error(`Task ${task.id} depends on itself`);
     }
   }
@@ -60,12 +61,15 @@ export async function loadTaskGraph() {
   for (const task of tasks) visit(task.id);
 
   if (tasks.length !== EXPECTED_TASK_COUNT) {
-    throw new Error(`Task graph count mismatch: expected ${EXPECTED_TASK_COUNT}, found ${tasks.length}`);
+    throw new Error(
+      `Task graph count mismatch: expected ${EXPECTED_TASK_COUNT}, found ${tasks.length}`,
+    );
   }
 
   return {
     schemaVersion: 1,
-    authority: 'Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this graph.',
+    authority:
+      'Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this graph.',
     expectedTaskCount: EXPECTED_TASK_COUNT,
     sources,
     tasks,
@@ -75,5 +79,16 @@ export async function loadTaskGraph() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const graph = await loadTaskGraph();
   const initiallyComplete = graph.tasks.filter((t) => t.initiallyComplete).length;
-  console.log(JSON.stringify({ taskCount: graph.tasks.length, initiallyComplete, waves: [...new Set(graph.tasks.map((t) => t.wave))], sources: graph.sources }, null, 2));
+  console.log(
+    JSON.stringify(
+      {
+        taskCount: graph.tasks.length,
+        initiallyComplete,
+        waves: [...new Set(graph.tasks.map((t) => t.wave))],
+        sources: graph.sources,
+      },
+      null,
+      2,
+    ),
+  );
 }

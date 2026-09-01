@@ -5,7 +5,8 @@ const [owner, repo] = (process.env.GITHUB_REPOSITORY || '').split('/');
 const githubToken = process.env.GITHUB_TOKEN;
 const copilotToken = process.env.AURORA_COPILOT_USER_TOKEN;
 const eventPath = process.env.GITHUB_EVENT_PATH;
-if (!owner || !repo || !githubToken) throw new Error('GITHUB_REPOSITORY and GITHUB_TOKEN are required');
+if (!owner || !repo || !githubToken)
+  throw new Error('GITHUB_REPOSITORY and GITHUB_TOKEN are required');
 
 const graph = await loadTaskGraph();
 const event = eventPath ? JSON.parse(await fs.readFile(eventPath, 'utf8')) : {};
@@ -22,18 +23,32 @@ function headers(token) {
   };
 }
 async function request(path, token, options = {}) {
-  const response = await fetch(`${api}${path}`, { ...options, headers: { ...headers(token), ...(options.headers || {}) } });
+  const response = await fetch(`${api}${path}`, {
+    ...options,
+    headers: { ...headers(token), ...(options.headers || {}) },
+  });
   const text = await response.text();
   let data = null;
-  try { data = text ? JSON.parse(text) : null; } catch { data = text; }
-  if (!response.ok) throw new Error(`${options.method || 'GET'} ${path}: ${response.status} ${text}`);
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  if (!response.ok)
+    throw new Error(`${options.method || 'GET'} ${path}: ${response.status} ${text}`);
   return data;
 }
 async function comment(body) {
-  return request(`/repos/${owner}/${repo}/issues/${issueNumber}/comments`, githubToken, { method: 'POST', body: JSON.stringify({ body }) });
+  return request(`/repos/${owner}/${repo}/issues/${issueNumber}/comments`, githubToken, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  });
 }
 async function patchIssue(body) {
-  return request(`/repos/${owner}/${repo}/issues/${issueNumber}`, githubToken, { method: 'PATCH', body: JSON.stringify(body) });
+  return request(`/repos/${owner}/${repo}/issues/${issueNumber}`, githubToken, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
 }
 
 const issue = await request(`/repos/${owner}/${repo}/issues/${issueNumber}`, githubToken);
@@ -53,27 +68,44 @@ if (issue.labels?.some((l) => l.name === 'aurora:copilot-dispatched')) {
 
 const allIssues = [];
 for (let page = 1; ; page += 1) {
-  const batch = await request(`/repos/${owner}/${repo}/issues?state=all&per_page=100&page=${page}`, githubToken);
+  const batch = await request(
+    `/repos/${owner}/${repo}/issues?state=all&per_page=100&page=${page}`,
+    githubToken,
+  );
   allIssues.push(...batch.filter((i) => !i.pull_request));
   if (batch.length < 100) break;
 }
 const accepted = new Set(graph.tasks.filter((t) => t.initiallyComplete).map((t) => t.id));
 for (const i of allIssues) {
-  const m = i.body?.match(/<!--\s*AURORA_TASK_ID:\s*([^\s]+)\s*-->/i) || i.title?.match(/^\[AURORA\]\[TASK\s+([^\]]+)\]/i);
-  if (m && i.state === 'closed' && i.labels?.some((l) => l.name === 'aurora:accepted')) accepted.add(m[1]);
+  const m =
+    i.body?.match(/<!--\s*AURORA_TASK_ID:\s*([^\s]+)\s*-->/i) ||
+    i.title?.match(/^\[AURORA\]\[TASK\s+([^\]]+)\]/i);
+  if (m && i.state === 'closed' && i.labels?.some((l) => l.name === 'aurora:accepted'))
+    accepted.add(m[1]);
 }
 const missing = task.dependsOn.filter((d) => !accepted.has(d));
 if (missing.length) {
-  const labels = [...new Set([...(issue.labels || []).map((l) => l.name).filter((l) => l !== 'aurora:copilot-ready'), 'aurora:copilot-gated'])];
+  const labels = [
+    ...new Set([
+      ...(issue.labels || []).map((l) => l.name).filter((l) => l !== 'aurora:copilot-ready'),
+      'aurora:copilot-gated',
+    ]),
+  ];
   await patchIssue({ labels });
-  await comment(`Copilot dispatch refused fail-closed: graph dependencies are not accepted: ${missing.join(', ')}.`);
+  await comment(
+    `Copilot dispatch refused fail-closed: graph dependencies are not accepted: ${missing.join(', ')}.`,
+  );
   process.exit(0);
 }
 
 if (!copilotToken) {
-  const labels = [...new Set([...(issue.labels || []).map((l) => l.name), 'aurora:dispatch-blocked'])];
+  const labels = [
+    ...new Set([...(issue.labels || []).map((l) => l.name), 'aurora:dispatch-blocked']),
+  ];
   await patchIssue({ labels });
-  await comment('Copilot dispatch is structurally ready but `AURORA_COPILOT_USER_TOKEN` is not configured as a repository secret. No agent was started. Add a user-scoped token permitted to assign Copilot/cloud-agent work, then rerun the dispatcher workflow for this issue. Do not paste the token into an issue or repository file.');
+  await comment(
+    'Copilot dispatch is structurally ready but `AURORA_COPILOT_USER_TOKEN` is not configured as a repository secret. No agent was started. Add a user-scoped token permitted to assign Copilot/cloud-agent work, then rerun the dispatcher workflow for this issue. Do not paste the token into an issue or repository file.',
+  );
   process.exit(0);
 }
 
@@ -93,13 +125,26 @@ try {
     }),
   });
 
-  const labels = [...new Set([...(issue.labels || []).map((l) => l.name).filter((l) => l !== 'aurora:copilot-ready' && l !== 'aurora:dispatch-blocked'), 'aurora:copilot-dispatched'])];
+  const labels = [
+    ...new Set([
+      ...(issue.labels || [])
+        .map((l) => l.name)
+        .filter((l) => l !== 'aurora:copilot-ready' && l !== 'aurora:dispatch-blocked'),
+      'aurora:copilot-dispatched',
+    ]),
+  ];
   await patchIssue({ labels });
-  await comment(`Dispatched to GitHub Copilot cloud agent with custom agent \`${task.customAgent}\`. The resulting PR remains subject to Aurora exact-head CI, independent acceptance and no-self-merge rules.`);
+  await comment(
+    `Dispatched to GitHub Copilot cloud agent with custom agent \`${task.customAgent}\`. The resulting PR remains subject to Aurora exact-head CI, independent acceptance and no-self-merge rules.`,
+  );
   console.log(`dispatched ${task.id} (#${issueNumber}) to ${task.customAgent}`);
 } catch (error) {
-  const labels = [...new Set([...(issue.labels || []).map((l) => l.name), 'aurora:dispatch-blocked'])];
+  const labels = [
+    ...new Set([...(issue.labels || []).map((l) => l.name), 'aurora:dispatch-blocked']),
+  ];
   await patchIssue({ labels });
-  await comment(`Copilot dispatch failed closed. No task release is implied. Error: \`${String(error.message).slice(0, 1500)}\``);
+  await comment(
+    `Copilot dispatch failed closed. No task release is implied. Error: \`${String(error.message).slice(0, 1500)}\``,
+  );
   throw error;
 }

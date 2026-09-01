@@ -1,1 +1,139 @@
-{"schemaVersion":1,"authority":"Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.","wave":"W08","defaults":{"mode":"IMPLEMENTATION","sourceDependencies":"W07 accepted executor contracts/runtime","mission":"Provider-specific integration layer with read/write separation, credentials references, explicit tenant/account binding, rate-limit/health semantics, readback/reconciliation and safe staging.","sources":["- Developer Manual v0.5 ss. 13, 26, 28-34","- Action Plan v0.4.1 W08","- DEVICE_PLANE_CROSS_WAVE_OWNERSHIP (provider-only lock)","- Risk Framework v1.0","- TOCA MCP provider references: Google Ads, Instagram/Meta, GCP"]},"tasks":[{"id":"W08-00","title":"W08-00 - Provider Adapter Coordination & Contract Freeze","dependsOn":["W07-H"],"customAgent":"aurora-coordinator","actions":["1. Revalidate W07 public executor/target contracts and W04 capability bindings.","2. Inventory providers required by downstream W11-W13 and shared services.","3. Freeze provider adapter interface, read/write split, provider binding and ownership paths.","4. Define provider-health/readback/error taxonomy and publication barriers.","5. Create risk/premortem/test plan for credentials, quotas, retries and external ambiguity."],"ownership":"W08 provider adapter packages and governance.","forbidden":"Do not implement business campaign/social decisions, Android/device runtime or authority semantics."},{"id":"W08-A","title":"W08-A - Provider Binding & External Identity/ID Mapping","dependsOn":["W08-00"],"customAgent":"aurora-implementation","actions":["1. Define provider binding references separate from Aurora canonical IDs.","2. Bind tenant/account/provider identities explicitly and fail closed on mismatch.","3. Model provider capabilities/endpoints without leaking provider IDs into canonical entity IDs.","4. Support verification state as precondition metadata only.","5. Add wrong-account/cross-tenant/ambiguous-binding tests."],"ownership":"Provider binding/mapping contracts/runtime.","forbidden":"Provider verification or possession of a valid ID must not become authority."},{"id":"W08-B","title":"W08-B - SecretReference & Credential Boundary","dependsOn":["W08-00"],"customAgent":"aurora-implementation","actions":["1. Implement credential resolution behind SecretReference/provider credential boundary.","2. Prohibit plaintext secret serialization in PolicyToken, ActionIntent, Evidence, cache, templates, logs or Drive governance.","3. Bind credential lookup to tenant/provider/account context.","4. Support rotation/revocation-aware resolution where architecture permits.","5. Add secret-leak and wrong-tenant credential tests."],"ownership":"Provider credential resolver interfaces/adapters.","forbidden":"Do not store secrets in repository, governance docs or execution evidence."},{"id":"W08-C","title":"W08-C - Read Adapter Foundation","dependsOn":["W08-A","W08-B"],"customAgent":"aurora-implementation","actions":["1. Implement provider read adapter interface and normalized response/error mapping.","2. Propagate correlation, tenant/account binding and provider metadata.","3. Support pagination/rate-limit metadata and freshness/provenance.","4. Ensure reads cannot mutate external state.","5. Add deterministic contract tests and safe mocks."],"ownership":"Provider read adapters and normalized read models.","forbidden":"Do not perform writes or domain decisions."},{"id":"W08-D","title":"W08-D - Governed Write Transport","dependsOn":["W08-A","W08-B"],"customAgent":"aurora-implementation","actions":["1. Implement provider write transports callable only from W07 Executor.","2. Carry idempotency/preconditions/correlation/target binding from executor.","3. Return transport result suitable for readback and uncertainty classification.","4. Prove direct planner/router/model access is impossible through public API.","5. Use paused/no-op/sandbox modes where provider supports them."],"ownership":"Provider transport implementation below W07 execution boundary.","forbidden":"Do not expose a public business-command API that bypasses W07."},{"id":"W08-E","title":"W08-E - Health, Rate Limits, Quotas & Retry Metadata","dependsOn":["W08-A","W08-B"],"customAgent":"aurora-implementation","actions":["1. Implement provider health/readiness observations and rate-limit/quota parsing.","2. Expose retry-after/backoff metadata without deciding business policy.","3. Distinguish provider outage, auth failure, quota exhaustion, throttling and transient transport failure.","4. Keep health/readiness as preconditions, not authority.","5. Add provider degradation simulations."],"ownership":"Provider operational metadata/health layer.","forbidden":"Do not let healthy/verified provider bypass Policy/Authority."},{"id":"W08-F","title":"W08-F - Readback & Reconciliation Adapters","dependsOn":["W08-C","W08-D","W08-E"],"customAgent":"aurora-integration","actions":["1. Implement provider-specific readback required to confirm write outcome.","2. Normalize observed state for W07 reconciliation.","3. Handle eventual consistency, missing resource, duplicate/ambiguous result and delayed provider state.","4. Support reconcile-before-retry for ambiguous writes.","5. Add mismatch/late-readback tests."],"ownership":"Provider readback/reconciliation adapters.","forbidden":"Do not silently treat transport success as verified business outcome."},{"id":"W08-G","title":"W08-G - Safe Mocks, Staging, Capability Bindings & Integration","dependsOn":["W08-F"],"customAgent":"aurora-integration","actions":["1. Create safe provider mocks/staging harnesses.","2. Bind provider capabilities to W04 target-neutral registry without making provider the capability definition.","3. Run end-to-end adapter tests through W07 using no real unsafe side effects.","4. Run four Risk Gates, credential leak scans and exact-head CI.","5. Publish provider foundation handoff for W11-W13."],"ownership":"W08 integration/test/publication surfaces.","forbidden":"Do not implement W11-W13 domain workflows."}]}
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W08",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W07 accepted executor contracts/runtime",
+    "mission": "Provider-specific integration layer with read/write separation, credentials references, explicit tenant/account binding, rate-limit/health semantics, readback/reconciliation and safe staging.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 13, 26, 28-34",
+      "- Action Plan v0.4.1 W08",
+      "- DEVICE_PLANE_CROSS_WAVE_OWNERSHIP (provider-only lock)",
+      "- Risk Framework v1.0",
+      "- TOCA MCP provider references: Google Ads, Instagram/Meta, GCP"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W08-00",
+      "title": "W08-00 - Provider Adapter Coordination & Contract Freeze",
+      "dependsOn": ["W07-H"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Revalidate W07 public executor/target contracts and W04 capability bindings.",
+        "2. Inventory providers required by downstream W11-W13 and shared services.",
+        "3. Freeze provider adapter interface, read/write split, provider binding and ownership paths.",
+        "4. Define provider-health/readback/error taxonomy and publication barriers.",
+        "5. Create risk/premortem/test plan for credentials, quotas, retries and external ambiguity."
+      ],
+      "ownership": "W08 provider adapter packages and governance.",
+      "forbidden": "Do not implement business campaign/social decisions, Android/device runtime or authority semantics."
+    },
+    {
+      "id": "W08-A",
+      "title": "W08-A - Provider Binding & External Identity/ID Mapping",
+      "dependsOn": ["W08-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define provider binding references separate from Aurora canonical IDs.",
+        "2. Bind tenant/account/provider identities explicitly and fail closed on mismatch.",
+        "3. Model provider capabilities/endpoints without leaking provider IDs into canonical entity IDs.",
+        "4. Support verification state as precondition metadata only.",
+        "5. Add wrong-account/cross-tenant/ambiguous-binding tests."
+      ],
+      "ownership": "Provider binding/mapping contracts/runtime.",
+      "forbidden": "Provider verification or possession of a valid ID must not become authority."
+    },
+    {
+      "id": "W08-B",
+      "title": "W08-B - SecretReference & Credential Boundary",
+      "dependsOn": ["W08-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement credential resolution behind SecretReference/provider credential boundary.",
+        "2. Prohibit plaintext secret serialization in PolicyToken, ActionIntent, Evidence, cache, templates, logs or Drive governance.",
+        "3. Bind credential lookup to tenant/provider/account context.",
+        "4. Support rotation/revocation-aware resolution where architecture permits.",
+        "5. Add secret-leak and wrong-tenant credential tests."
+      ],
+      "ownership": "Provider credential resolver interfaces/adapters.",
+      "forbidden": "Do not store secrets in repository, governance docs or execution evidence."
+    },
+    {
+      "id": "W08-C",
+      "title": "W08-C - Read Adapter Foundation",
+      "dependsOn": ["W08-A", "W08-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement provider read adapter interface and normalized response/error mapping.",
+        "2. Propagate correlation, tenant/account binding and provider metadata.",
+        "3. Support pagination/rate-limit metadata and freshness/provenance.",
+        "4. Ensure reads cannot mutate external state.",
+        "5. Add deterministic contract tests and safe mocks."
+      ],
+      "ownership": "Provider read adapters and normalized read models.",
+      "forbidden": "Do not perform writes or domain decisions."
+    },
+    {
+      "id": "W08-D",
+      "title": "W08-D - Governed Write Transport",
+      "dependsOn": ["W08-A", "W08-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement provider write transports callable only from W07 Executor.",
+        "2. Carry idempotency/preconditions/correlation/target binding from executor.",
+        "3. Return transport result suitable for readback and uncertainty classification.",
+        "4. Prove direct planner/router/model access is impossible through public API.",
+        "5. Use paused/no-op/sandbox modes where provider supports them."
+      ],
+      "ownership": "Provider transport implementation below W07 execution boundary.",
+      "forbidden": "Do not expose a public business-command API that bypasses W07."
+    },
+    {
+      "id": "W08-E",
+      "title": "W08-E - Health, Rate Limits, Quotas & Retry Metadata",
+      "dependsOn": ["W08-A", "W08-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement provider health/readiness observations and rate-limit/quota parsing.",
+        "2. Expose retry-after/backoff metadata without deciding business policy.",
+        "3. Distinguish provider outage, auth failure, quota exhaustion, throttling and transient transport failure.",
+        "4. Keep health/readiness as preconditions, not authority.",
+        "5. Add provider degradation simulations."
+      ],
+      "ownership": "Provider operational metadata/health layer.",
+      "forbidden": "Do not let healthy/verified provider bypass Policy/Authority."
+    },
+    {
+      "id": "W08-F",
+      "title": "W08-F - Readback & Reconciliation Adapters",
+      "dependsOn": ["W08-C", "W08-D", "W08-E"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Implement provider-specific readback required to confirm write outcome.",
+        "2. Normalize observed state for W07 reconciliation.",
+        "3. Handle eventual consistency, missing resource, duplicate/ambiguous result and delayed provider state.",
+        "4. Support reconcile-before-retry for ambiguous writes.",
+        "5. Add mismatch/late-readback tests."
+      ],
+      "ownership": "Provider readback/reconciliation adapters.",
+      "forbidden": "Do not silently treat transport success as verified business outcome."
+    },
+    {
+      "id": "W08-G",
+      "title": "W08-G - Safe Mocks, Staging, Capability Bindings & Integration",
+      "dependsOn": ["W08-F"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Create safe provider mocks/staging harnesses.",
+        "2. Bind provider capabilities to W04 target-neutral registry without making provider the capability definition.",
+        "3. Run end-to-end adapter tests through W07 using no real unsafe side effects.",
+        "4. Run four Risk Gates, credential leak scans and exact-head CI.",
+        "5. Publish provider foundation handoff for W11-W13."
+      ],
+      "ownership": "W08 integration/test/publication surfaces.",
+      "forbidden": "Do not implement W11-W13 domain workflows."
+    }
+  ]
+}

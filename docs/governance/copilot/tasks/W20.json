@@ -1,1 +1,184 @@
-{"schemaVersion":1,"authority":"Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.","wave":"W20","defaults":{"mode":"IMPLEMENTATION","sourceDependencies":"W00-W19 accepted as applicable; DP6 satisfied if Device Plane ships","mission":"Final cross-system reconciliation, production-like E2E staging, performance/economics, stress/failure/DR, physical Android E2E, cleanup/deprecation, rollback manifest and Release 1.0 decision.","sources":["- Developer Manual v0.5 ss. 25, 26, 29-34","- Action Plan v0.4.1 W20 + physical-device amendment","- Risk Framework v1.0 staging/release maturity","- All ACCEPTANCE_INDEX/EVIDENCE_INDEX records W00-W19","- DEVICE_PLANE_DEPENDENCY_MATRIX DP7"]},"tasks":[{"id":"W20-00","title":"W20-00 - Release Coordination, Reality & Acceptance Freeze","dependsOn":["W19-J"],"customAgent":"aurora-coordinator","actions":["1. Revalidate every required W00-W19 acceptance and exact main state.","2. Freeze Release 1.0 scope, included Device Plane profile, staging environment and acceptance matrix.","3. Identify unresolved deprecations, migrations, feature flags and rollback dependencies.","4. Define final KPI baseline vs target and release blockers.","5. Create release premortem including rollback/kill-switch/DR and governance drift."],"ownership":"Program-wide integration/release governance.","forbidden":"Do not waive upstream missing acceptance by documentation assertion."},{"id":"W20-A","title":"W20-A - Cross-System Reconciliation","dependsOn":["W20-00"],"customAgent":"aurora-integration","actions":["1. Audit packages/contracts/schemas/registries/services for duplicate truth, stale compatibility shims, cycles and ownership drift.","2. Verify canonical IDs/versioning/public exports and consumer builds.","3. Reconcile Drive/GitHub status/evidence/deprecations.","4. Remove or explicitly retain obsolete runtime paths.","5. Produce final architecture inventory."],"ownership":"Program-wide integration/cleanup within coordinated ownership.","forbidden":"Do not rewrite accepted architecture without explicit blocking finding/change control."},{"id":"W20-B","title":"W20-B - Production-Like End-to-End Staging","dependsOn":["W20-A"],"customAgent":"aurora-implementation","actions":["1. Run representative goals from intake through context/router/capability/DAG/policy/authority/executor/readback/evidence/outcome.","2. Cover provider/workflow/domain and device paths included in release.","3. Use staging/sandbox/non-destructive controls.","4. Verify correlation/evidence reconstruction.","5. Capture pass/fail and residual issues."],"ownership":"Staging E2E harness and coordinated fixes.","forbidden":"No uncontrolled production side effects."},{"id":"W20-C","title":"W20-C - Final Performance & Economic Baseline","dependsOn":["W20-B"],"customAgent":"aurora-performance","actions":["1. Compare baseline vs final quality, latency p50/p95/p99, compute/model/tool/retrieval cost and business outcomes.","2. Measure queueing/fan-out/concurrency and resource pressure.","3. Verify Fast/Governed routes meet intended tradeoffs.","4. Confirm efficiency never removed mandatory safety/evidence.","5. Document capacity limits and SLO readiness."],"ownership":"Release performance/economic validation.","forbidden":"Do not tune by bypassing Policy/Authority/Executor/Evidence."},{"id":"W20-D","title":"W20-D - Fast/Governed Lane & Parallel DAG Stress","dependsOn":["W20-B"],"customAgent":"aurora-implementation","actions":["1. Stress 1,500 simultaneous objectives and ~10,000 downstream tasks/events or calibrated equivalent.","2. Exercise bounded concurrency, cancellation, fairness, joins, timeouts and overload degradation.","3. Attempt Fast Lane misclassification under risk.","4. Measure retry/queue storm behavior.","5. Verify deterministic/consistent completion and no side-effect duplication."],"ownership":"Release stress/load tests.","forbidden":"Unbounded fan-out or authority bypass blocks release."},{"id":"W20-E","title":"W20-E - Cache / Context / Template / Router Invalidation & Rollback","dependsOn":["W20-B"],"customAgent":"aurora-integration","actions":["1. Test semantic cache hit/miss/invalidation, ContextSnapshot staleness and conflicting facts.","2. Test template/version rollback and adaptive router rollback.","3. Verify stale precheck/context/cache/templates never authorize execution.","4. Exercise model/strategy fallback and safe degradation.","5. Record rollback time/evidence."],"ownership":"Release intelligence/context rollback validation.","forbidden":"No stale state as authority."},{"id":"W20-F","title":"W20-F - Provider / Workflow Failure, Rate Limit, Quota & Uncertain Execution","dependsOn":["W20-B"],"customAgent":"aurora-implementation","actions":["1. Inject provider timeout/rate-limit/quota/outage and n8n/webhook failures.","2. Exercise EXECUTION_UNCERTAIN, readback/reconcile-before-retry and circuit breakers.","3. Verify credentials/tenant/account bindings under degradation.","4. Test delayed/duplicate callbacks and evidence.","5. Prove no duplicate irreversible side effects."],"ownership":"Release external integration failure tests.","forbidden":"Blind retry is prohibited."},{"id":"W20-G","title":"W20-G - DR / Restore / Kill Switch / Rollback Rehearsal","dependsOn":["W20-B"],"customAgent":"aurora-implementation","actions":["1. Execute backup/PITR/restore and service recovery drills.","2. Verify outbox/inbox/evidence/read models consistency after restore.","3. Exercise global/component kill switches and rollback manifest.","4. Measure RPO/RTO and manual/degraded procedures.","5. Prove recovery state reconciles external side effects."],"ownership":"Release DR/rollback acceptance.","forbidden":"Do not declare recovery if external state is unknown/unreconciled."},{"id":"W20-H","title":"W20-H - Physical Android E2E / DP7","dependsOn":["W20-B"],"customAgent":"aurora-integration","actions":["1. If Device Plane is included, run command -> policy -> authority -> ActionIntent -> Device Executor -> app/hardware -> Receipt -> readback/evidence on physical device.","2. Cover offline, permission denied, app missing, session expired/revoked, duplicate command, late receipt, disconnect, EXECUTION_UNCERTAIN and kill switch.","3. Verify battery/resource/lifecycle constraints as relevant.","4. Capture device/build/environment evidence.","5. Close DP7 only on complete pass."],"ownership":"Physical device release acceptance.","forbidden":"If Device Plane is excluded, record explicit release scope rather than fabricating pass."},{"id":"W20-I","title":"W20-I - Cleanup, Deprecation, Provenance & Release Artifacts","dependsOn":["W20-C","W20-D","W20-E","W20-F","W20-G","W20-H"],"customAgent":"aurora-implementation","actions":["1. Close DEPRECATION_REGISTER items required for 1.0.","2. Remove stale branches/shims/artifacts where safe and preserve accepted historical evidence.","3. Verify salvage/reference material is not runtime dependency.","4. Finalize migrations/rollback notes/operator runbooks and provenance/license records.","5. Run secret/cleanup scans."],"ownership":"Release cleanup/governance artifacts.","forbidden":"Do not delete accepted evidence/history."},{"id":"W20-J","title":"W20-J - Release Manifest & Final 1.0 Decision","dependsOn":["W20-I"],"customAgent":"aurora-implementation","actions":["1. Assemble exact release SHA, PRs, CI, migrations, feature flags, dependencies, risk residuals, SLO/DR/security evidence and rollback manifest.","2. Run final Reality Gate and exact-main Quality/Test Build/Security.","3. Require all P0/P1 blockers resolved.","4. Decision must be READY_FOR_RELEASE, BLOCKED or explicitly scoped non-release; no ambiguous 'mostly ready'.","5. Synchronize GitHub/Drive status and publish Release 1.0 acceptance."],"ownership":"Final program release acceptance.","forbidden":"Never trade safety/authority/evidence completeness for schedule."}]}
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W20",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W00-W19 accepted as applicable; DP6 satisfied if Device Plane ships",
+    "mission": "Final cross-system reconciliation, production-like E2E staging, performance/economics, stress/failure/DR, physical Android E2E, cleanup/deprecation, rollback manifest and Release 1.0 decision.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 25, 26, 29-34",
+      "- Action Plan v0.4.1 W20 + physical-device amendment",
+      "- Risk Framework v1.0 staging/release maturity",
+      "- All ACCEPTANCE_INDEX/EVIDENCE_INDEX records W00-W19",
+      "- DEVICE_PLANE_DEPENDENCY_MATRIX DP7"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W20-00",
+      "title": "W20-00 - Release Coordination, Reality & Acceptance Freeze",
+      "dependsOn": ["W19-J"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Revalidate every required W00-W19 acceptance and exact main state.",
+        "2. Freeze Release 1.0 scope, included Device Plane profile, staging environment and acceptance matrix.",
+        "3. Identify unresolved deprecations, migrations, feature flags and rollback dependencies.",
+        "4. Define final KPI baseline vs target and release blockers.",
+        "5. Create release premortem including rollback/kill-switch/DR and governance drift."
+      ],
+      "ownership": "Program-wide integration/release governance.",
+      "forbidden": "Do not waive upstream missing acceptance by documentation assertion."
+    },
+    {
+      "id": "W20-A",
+      "title": "W20-A - Cross-System Reconciliation",
+      "dependsOn": ["W20-00"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Audit packages/contracts/schemas/registries/services for duplicate truth, stale compatibility shims, cycles and ownership drift.",
+        "2. Verify canonical IDs/versioning/public exports and consumer builds.",
+        "3. Reconcile Drive/GitHub status/evidence/deprecations.",
+        "4. Remove or explicitly retain obsolete runtime paths.",
+        "5. Produce final architecture inventory."
+      ],
+      "ownership": "Program-wide integration/cleanup within coordinated ownership.",
+      "forbidden": "Do not rewrite accepted architecture without explicit blocking finding/change control."
+    },
+    {
+      "id": "W20-B",
+      "title": "W20-B - Production-Like End-to-End Staging",
+      "dependsOn": ["W20-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Run representative goals from intake through context/router/capability/DAG/policy/authority/executor/readback/evidence/outcome.",
+        "2. Cover provider/workflow/domain and device paths included in release.",
+        "3. Use staging/sandbox/non-destructive controls.",
+        "4. Verify correlation/evidence reconstruction.",
+        "5. Capture pass/fail and residual issues."
+      ],
+      "ownership": "Staging E2E harness and coordinated fixes.",
+      "forbidden": "No uncontrolled production side effects."
+    },
+    {
+      "id": "W20-C",
+      "title": "W20-C - Final Performance & Economic Baseline",
+      "dependsOn": ["W20-B"],
+      "customAgent": "aurora-performance",
+      "actions": [
+        "1. Compare baseline vs final quality, latency p50/p95/p99, compute/model/tool/retrieval cost and business outcomes.",
+        "2. Measure queueing/fan-out/concurrency and resource pressure.",
+        "3. Verify Fast/Governed routes meet intended tradeoffs.",
+        "4. Confirm efficiency never removed mandatory safety/evidence.",
+        "5. Document capacity limits and SLO readiness."
+      ],
+      "ownership": "Release performance/economic validation.",
+      "forbidden": "Do not tune by bypassing Policy/Authority/Executor/Evidence."
+    },
+    {
+      "id": "W20-D",
+      "title": "W20-D - Fast/Governed Lane & Parallel DAG Stress",
+      "dependsOn": ["W20-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Stress 1,500 simultaneous objectives and ~10,000 downstream tasks/events or calibrated equivalent.",
+        "2. Exercise bounded concurrency, cancellation, fairness, joins, timeouts and overload degradation.",
+        "3. Attempt Fast Lane misclassification under risk.",
+        "4. Measure retry/queue storm behavior.",
+        "5. Verify deterministic/consistent completion and no side-effect duplication."
+      ],
+      "ownership": "Release stress/load tests.",
+      "forbidden": "Unbounded fan-out or authority bypass blocks release."
+    },
+    {
+      "id": "W20-E",
+      "title": "W20-E - Cache / Context / Template / Router Invalidation & Rollback",
+      "dependsOn": ["W20-B"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Test semantic cache hit/miss/invalidation, ContextSnapshot staleness and conflicting facts.",
+        "2. Test template/version rollback and adaptive router rollback.",
+        "3. Verify stale precheck/context/cache/templates never authorize execution.",
+        "4. Exercise model/strategy fallback and safe degradation.",
+        "5. Record rollback time/evidence."
+      ],
+      "ownership": "Release intelligence/context rollback validation.",
+      "forbidden": "No stale state as authority."
+    },
+    {
+      "id": "W20-F",
+      "title": "W20-F - Provider / Workflow Failure, Rate Limit, Quota & Uncertain Execution",
+      "dependsOn": ["W20-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Inject provider timeout/rate-limit/quota/outage and n8n/webhook failures.",
+        "2. Exercise EXECUTION_UNCERTAIN, readback/reconcile-before-retry and circuit breakers.",
+        "3. Verify credentials/tenant/account bindings under degradation.",
+        "4. Test delayed/duplicate callbacks and evidence.",
+        "5. Prove no duplicate irreversible side effects."
+      ],
+      "ownership": "Release external integration failure tests.",
+      "forbidden": "Blind retry is prohibited."
+    },
+    {
+      "id": "W20-G",
+      "title": "W20-G - DR / Restore / Kill Switch / Rollback Rehearsal",
+      "dependsOn": ["W20-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Execute backup/PITR/restore and service recovery drills.",
+        "2. Verify outbox/inbox/evidence/read models consistency after restore.",
+        "3. Exercise global/component kill switches and rollback manifest.",
+        "4. Measure RPO/RTO and manual/degraded procedures.",
+        "5. Prove recovery state reconciles external side effects."
+      ],
+      "ownership": "Release DR/rollback acceptance.",
+      "forbidden": "Do not declare recovery if external state is unknown/unreconciled."
+    },
+    {
+      "id": "W20-H",
+      "title": "W20-H - Physical Android E2E / DP7",
+      "dependsOn": ["W20-B"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. If Device Plane is included, run command -> policy -> authority -> ActionIntent -> Device Executor -> app/hardware -> Receipt -> readback/evidence on physical device.",
+        "2. Cover offline, permission denied, app missing, session expired/revoked, duplicate command, late receipt, disconnect, EXECUTION_UNCERTAIN and kill switch.",
+        "3. Verify battery/resource/lifecycle constraints as relevant.",
+        "4. Capture device/build/environment evidence.",
+        "5. Close DP7 only on complete pass."
+      ],
+      "ownership": "Physical device release acceptance.",
+      "forbidden": "If Device Plane is excluded, record explicit release scope rather than fabricating pass."
+    },
+    {
+      "id": "W20-I",
+      "title": "W20-I - Cleanup, Deprecation, Provenance & Release Artifacts",
+      "dependsOn": ["W20-C", "W20-D", "W20-E", "W20-F", "W20-G", "W20-H"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Close DEPRECATION_REGISTER items required for 1.0.",
+        "2. Remove stale branches/shims/artifacts where safe and preserve accepted historical evidence.",
+        "3. Verify salvage/reference material is not runtime dependency.",
+        "4. Finalize migrations/rollback notes/operator runbooks and provenance/license records.",
+        "5. Run secret/cleanup scans."
+      ],
+      "ownership": "Release cleanup/governance artifacts.",
+      "forbidden": "Do not delete accepted evidence/history."
+    },
+    {
+      "id": "W20-J",
+      "title": "W20-J - Release Manifest & Final 1.0 Decision",
+      "dependsOn": ["W20-I"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Assemble exact release SHA, PRs, CI, migrations, feature flags, dependencies, risk residuals, SLO/DR/security evidence and rollback manifest.",
+        "2. Run final Reality Gate and exact-main Quality/Test Build/Security.",
+        "3. Require all P0/P1 blockers resolved.",
+        "4. Decision must be READY_FOR_RELEASE, BLOCKED or explicitly scoped non-release; no ambiguous 'mostly ready'.",
+        "5. Synchronize GitHub/Drive status and publish Release 1.0 acceptance."
+      ],
+      "ownership": "Final program release acceptance.",
+      "forbidden": "Never trade safety/authority/evidence completeness for schedule."
+    }
+  ]
+}

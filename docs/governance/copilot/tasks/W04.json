@@ -1,1 +1,145 @@
-{"schemaVersion":1,"authority":"Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.","wave":"W04","defaults":{"mode":"IMPLEMENTATION","sourceDependencies":"W01-W03 accepted; W02 policy core available","mission":"Objective/Task lifecycle, target-neutral Capability Registry, CapabilityPlan, GoalGraph DAG, bounded parallel scheduler, Fast/Governed lanes, ExecutionBudget, PlanTemplate/PlanBinding.","sources":["- Developer Manual v0.5","- Action Plan v0.4.1","- Device ownership/dependency matrices","- Legacy capability seed catalog","- TOCA MCP capability catalog/lifecycle/resolution"]},"tasks":[{"id":"W04-00","title":"W04-00 Coordination / Ownership / Contract Freeze","dependsOn":["W03-F"],"customAgent":"aurora-coordinator","actions":["1. Freeze control-core boundaries and target-neutral capability ownership.","2. Audit 69 legacy capability seeds and TOCA capability references as seed-only.","3. Define internal DAG/subwave dependencies and publication points required by W05/W07/W14/W15.","4. Enforce capability-first, not agent-first, planning."],"ownership":"W04 governance + control/capability shared surfaces","forbidden":"No executor/provider/device runtime."},{"id":"W04-A","title":"W04-A Objective / Goal / Task Lifecycle","dependsOn":["W04-00"],"customAgent":"aurora-implementation","actions":["1. Define Objective/Goal/Task lifecycle contracts, states, transitions, cancellation and correlation.","2. Support deterministic supersession/terminal-state rules and evidence hooks.","3. Avoid embedding model/agent implementation details in lifecycle primitives."],"ownership":"W04 control/goal/task packages","forbidden":"No W05 agent runtime."},{"id":"W04-B","title":"W04-B Target-Neutral Capability Registry + CapabilityPlan","dependsOn":["W04-00"],"customAgent":"aurora-contracts","actions":["1. Create exactly one Capability Registry foundation.","2. Define capability metadata/binding: target kind, compatibility, availability/freshness, permissions/preconditions, risk/side-effect class, readback/evidence strategy.","3. Define CapabilityPlan that selects needed capabilities independent of agents/providers/devices.","4. Accept/reject/rename/decompose legacy/TOCA seeds explicitly.","5. Allow future DEVICE bindings without Android business logic; satisfy DP1 conditions."],"ownership":"packages/registries/src/capabilities/** and W04 capability planning paths","forbidden":"No second registry; no device executor; capability availability is not authority."},{"id":"W04-C","title":"W04-C Goal Graph DAG / Dependency / Join Semantics","dependsOn":["W04-A","W04-B"],"customAgent":"aurora-implementation","actions":["1. Implement GoalGraph DAG representation.","2. Define dependency edges, joins/fan-in, terminal/failure propagation and cancellation semantics.","3. Detect cycles and invalid dependency graphs.","4. Keep graph deterministic and bounded."],"ownership":"W04 goal graph packages","forbidden":"No model-driven implicit graph mutation without validation."},{"id":"W04-D","title":"W04-D Parallel Scheduler / Bounded Concurrency / Fairness","dependsOn":["W04-C","W04-F"],"customAgent":"aurora-implementation","actions":["1. Implement scheduler for independent DAG nodes.","2. Bound concurrency/fan-out and support cancellation/fairness/backpressure.","3. Define deterministic join behavior and resource budgets.","4. Prevent starvation and unbounded task explosion."],"ownership":"W04 scheduler/control packages","forbidden":"No provider execution."},{"id":"W04-E","title":"W04-E Fast Lane / Governed Lane Resolver","dependsOn":["W04-A","W04-B"],"customAgent":"aurora-implementation","actions":["1. Define lane eligibility using task/risk/reversibility/authority requirements.","2. Fast Lane may choose deterministic/template/low-cost paths but never bypass Policy/Authority/Executor.","3. Governed Lane handles complex/high-risk/approval-required work.","4. Produce explicit reason/evidence for lane selection."],"ownership":"W04 lane/control packages","forbidden":"Lane selection is not authority."},{"id":"W04-F","title":"W04-F ExecutionBudget Contract","dependsOn":["W04-00"],"customAgent":"aurora-contracts","actions":["1. Define latency, cost, reasoning, tool-call and concurrency budgets.","2. Define budget propagation and exhaustion/degradation semantics.","3. Budgets may constrain strategy but may not weaken safety validation.","4. Expose fields needed by W17 telemetry and W18 optimizer."],"ownership":"W04 budget contracts/schemas","forbidden":"No cost optimization that skips mandatory validation."},{"id":"W04-G","title":"W04-G Curated PlanTemplate / PlanBinding Foundation","dependsOn":["W04-A","W04-B"],"customAgent":"aurora-implementation","actions":["1. Define curated reusable PlanTemplate and PlanBinding contracts.","2. Support known safe deterministic plans and template matching.","3. Store version/hash/provenance/compatibility and invalidation conditions.","4. Foundation only: learning/promotion remains W18."],"ownership":"W04 template/binding packages","forbidden":"No adaptive self-promotion in W04."},{"id":"W04-H","title":"W04-H Integration / Performance / Contract Tests","dependsOn":["W04-D","W04-E","W04-G"],"customAgent":"aurora-performance","actions":["1. Prove a mock goal selects capabilities, lane and budget.","2. Prove independent DAG nodes execute in parallel deterministically.","3. Prove known template path avoids frontier replanning.","4. Test cycle rejection, concurrency bounds, cancellation/fairness and target-neutral capability bindings."],"ownership":"W04 integration/benchmark tests","forbidden":"No external side effects."}]}
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W04",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W01-W03 accepted; W02 policy core available",
+    "mission": "Objective/Task lifecycle, target-neutral Capability Registry, CapabilityPlan, GoalGraph DAG, bounded parallel scheduler, Fast/Governed lanes, ExecutionBudget, PlanTemplate/PlanBinding.",
+    "sources": [
+      "- Developer Manual v0.5",
+      "- Action Plan v0.4.1",
+      "- Device ownership/dependency matrices",
+      "- Legacy capability seed catalog",
+      "- TOCA MCP capability catalog/lifecycle/resolution"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W04-00",
+      "title": "W04-00 Coordination / Ownership / Contract Freeze",
+      "dependsOn": ["W03-F"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Freeze control-core boundaries and target-neutral capability ownership.",
+        "2. Audit 69 legacy capability seeds and TOCA capability references as seed-only.",
+        "3. Define internal DAG/subwave dependencies and publication points required by W05/W07/W14/W15.",
+        "4. Enforce capability-first, not agent-first, planning."
+      ],
+      "ownership": "W04 governance + control/capability shared surfaces",
+      "forbidden": "No executor/provider/device runtime."
+    },
+    {
+      "id": "W04-A",
+      "title": "W04-A Objective / Goal / Task Lifecycle",
+      "dependsOn": ["W04-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define Objective/Goal/Task lifecycle contracts, states, transitions, cancellation and correlation.",
+        "2. Support deterministic supersession/terminal-state rules and evidence hooks.",
+        "3. Avoid embedding model/agent implementation details in lifecycle primitives."
+      ],
+      "ownership": "W04 control/goal/task packages",
+      "forbidden": "No W05 agent runtime."
+    },
+    {
+      "id": "W04-B",
+      "title": "W04-B Target-Neutral Capability Registry + CapabilityPlan",
+      "dependsOn": ["W04-00"],
+      "customAgent": "aurora-contracts",
+      "actions": [
+        "1. Create exactly one Capability Registry foundation.",
+        "2. Define capability metadata/binding: target kind, compatibility, availability/freshness, permissions/preconditions, risk/side-effect class, readback/evidence strategy.",
+        "3. Define CapabilityPlan that selects needed capabilities independent of agents/providers/devices.",
+        "4. Accept/reject/rename/decompose legacy/TOCA seeds explicitly.",
+        "5. Allow future DEVICE bindings without Android business logic; satisfy DP1 conditions."
+      ],
+      "ownership": "packages/registries/src/capabilities/** and W04 capability planning paths",
+      "forbidden": "No second registry; no device executor; capability availability is not authority."
+    },
+    {
+      "id": "W04-C",
+      "title": "W04-C Goal Graph DAG / Dependency / Join Semantics",
+      "dependsOn": ["W04-A", "W04-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement GoalGraph DAG representation.",
+        "2. Define dependency edges, joins/fan-in, terminal/failure propagation and cancellation semantics.",
+        "3. Detect cycles and invalid dependency graphs.",
+        "4. Keep graph deterministic and bounded."
+      ],
+      "ownership": "W04 goal graph packages",
+      "forbidden": "No model-driven implicit graph mutation without validation."
+    },
+    {
+      "id": "W04-D",
+      "title": "W04-D Parallel Scheduler / Bounded Concurrency / Fairness",
+      "dependsOn": ["W04-C", "W04-F"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement scheduler for independent DAG nodes.",
+        "2. Bound concurrency/fan-out and support cancellation/fairness/backpressure.",
+        "3. Define deterministic join behavior and resource budgets.",
+        "4. Prevent starvation and unbounded task explosion."
+      ],
+      "ownership": "W04 scheduler/control packages",
+      "forbidden": "No provider execution."
+    },
+    {
+      "id": "W04-E",
+      "title": "W04-E Fast Lane / Governed Lane Resolver",
+      "dependsOn": ["W04-A", "W04-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define lane eligibility using task/risk/reversibility/authority requirements.",
+        "2. Fast Lane may choose deterministic/template/low-cost paths but never bypass Policy/Authority/Executor.",
+        "3. Governed Lane handles complex/high-risk/approval-required work.",
+        "4. Produce explicit reason/evidence for lane selection."
+      ],
+      "ownership": "W04 lane/control packages",
+      "forbidden": "Lane selection is not authority."
+    },
+    {
+      "id": "W04-F",
+      "title": "W04-F ExecutionBudget Contract",
+      "dependsOn": ["W04-00"],
+      "customAgent": "aurora-contracts",
+      "actions": [
+        "1. Define latency, cost, reasoning, tool-call and concurrency budgets.",
+        "2. Define budget propagation and exhaustion/degradation semantics.",
+        "3. Budgets may constrain strategy but may not weaken safety validation.",
+        "4. Expose fields needed by W17 telemetry and W18 optimizer."
+      ],
+      "ownership": "W04 budget contracts/schemas",
+      "forbidden": "No cost optimization that skips mandatory validation."
+    },
+    {
+      "id": "W04-G",
+      "title": "W04-G Curated PlanTemplate / PlanBinding Foundation",
+      "dependsOn": ["W04-A", "W04-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define curated reusable PlanTemplate and PlanBinding contracts.",
+        "2. Support known safe deterministic plans and template matching.",
+        "3. Store version/hash/provenance/compatibility and invalidation conditions.",
+        "4. Foundation only: learning/promotion remains W18."
+      ],
+      "ownership": "W04 template/binding packages",
+      "forbidden": "No adaptive self-promotion in W04."
+    },
+    {
+      "id": "W04-H",
+      "title": "W04-H Integration / Performance / Contract Tests",
+      "dependsOn": ["W04-D", "W04-E", "W04-G"],
+      "customAgent": "aurora-performance",
+      "actions": [
+        "1. Prove a mock goal selects capabilities, lane and budget.",
+        "2. Prove independent DAG nodes execute in parallel deterministically.",
+        "3. Prove known template path avoids frontier replanning.",
+        "4. Test cycle rejection, concurrency bounds, cancellation/fairness and target-neutral capability bindings."
+      ],
+      "ownership": "W04 integration/benchmark tests",
+      "forbidden": "No external side effects."
+    }
+  ]
+}

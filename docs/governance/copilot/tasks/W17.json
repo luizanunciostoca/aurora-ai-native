@@ -1,1 +1,139 @@
-{"schemaVersion":1,"authority":"Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.","wave":"W17","defaults":{"mode":"IMPLEMENTATION","sourceDependencies":"Sufficient runtime foundations through W16; W15 where device telemetry applies","mission":"Production-grade telemetry/evidence, StrategyExecutionRecord, SLO/error budgets, cost/latency/tool/model/context metrics, business outcome linkage and backup/PITR/restore/replay/self-healing rehearsal.","sources":["- Developer Manual v0.5 ss. 22, 26, 29-34","- Action Plan v0.4.1 W17-A..G","- TOCA MCP reliability/audit/SLO/DR references","- Risk Framework v1.0","- Device dependency matrix DP6"]},"tasks":[{"id":"W17-00","title":"W17-00 - Observability/Evidence Coordination & Telemetry Freeze","dependsOn":["W11-H","W12-H","W13-H","W16-G"],"customAgent":"aurora-coordinator","actions":["1. Inventory all runtime correlation/evidence surfaces W03-W16.","2. Freeze telemetry/evidence ownership, identifiers, cardinality constraints, retention/redaction and SLO dimensions.","3. Define reconstruction requirements for a task from intake to business outcome.","4. Define DP6 device telemetry requirements where applicable.","5. Create premortem for observability gaps, metric cardinality, evidence loss and DR false confidence."],"ownership":"W17 observability/evidence/telemetry governance and packages.","forbidden":"Do not make telemetry decide authority or adaptive promotion."},{"id":"W17-A","title":"W17-A - OpenTelemetry & Correlation Completeness","dependsOn":["W17-00"],"customAgent":"aurora-implementation","actions":["1. Instrument gateway/context/router/planner/tools/policy/executor/provider/workflow/device paths with correlation/causation.","2. Define span/event naming and bounded attributes.","3. Propagate tenant-safe correlation without secrets.","4. Measure missing-correlation rate and async context propagation.","5. Add cross-service trace tests."],"ownership":"W17 telemetry instrumentation.","forbidden":"Do not store raw secrets/private CoT in spans."},{"id":"W17-B","title":"W17-B - Durable Evidence Chain","dependsOn":["W17-00"],"customAgent":"aurora-implementation","actions":["1. Implement durable Evidence chain/index using canonical Evidence contracts.","2. Link receipts/readback/policy refs/outcomes and immutable provenance.","3. Detect missing/broken evidence links and tampering where architecture supports.","4. Support query/reconstruction by correlation.","5. Add partial-chain/integrity tests."],"ownership":"W17 evidence storage/indexing.","forbidden":"Do not create a parallel authority/audit decision model."},{"id":"W17-C","title":"W17-C - StrategyExecutionRecord","dependsOn":["W17-A","W17-B"],"customAgent":"aurora-implementation","actions":["1. Define StrategyExecutionRecord for task class, route, model/context/tools, budgets, confidence, policy/executor outcome and business result refs.","2. Exclude private chain-of-thought.","3. Version schema for W18 eval consumption.","4. Record fallback/escalation/degraded path.","5. Add schema/privacy tests."],"ownership":"W17 strategy telemetry contract/runtime.","forbidden":"Telemetry record is observation, not permission or promotion."},{"id":"W17-D","title":"W17-D - SLO & Error Budgets by Lane","dependsOn":["W17-C","W17-E","W17-F"],"customAgent":"aurora-implementation","actions":["1. Define measurable SLOs for Fast/Governed lanes and critical services.","2. Track availability/latency/error/uncertain/reconciliation/evidence completeness.","3. Define error budgets and alert/degraded-mode policies.","4. Calibrate thresholds from Aurora telemetry, not copied TOCA constants.","5. Add budget-burn simulations."],"ownership":"W17 SLO/error-budget layer.","forbidden":"Do not automatically relax safety to meet latency SLO."},{"id":"W17-E","title":"W17-E - Cost, Latency, Tool, Model & Context Metrics","dependsOn":["W17-A","W17-B"],"customAgent":"aurora-implementation","actions":["1. Measure p50/p95/p99 end-to-end and stage latency.","2. Track model/tool/retrieval/context fan-out, cache hit/miss, cost and coordination overhead.","3. Measure concurrency/queueing and bounded fan-out.","4. Provide dashboards/queries for W18 Economic Governor.","5. Add cardinality/cost controls."],"ownership":"W17 performance/economic telemetry.","forbidden":"Do not optimize by omitting mandatory Policy/Authority/Evidence stages."},{"id":"W17-F","title":"W17-F - Human Correction & Business Outcome Linkage","dependsOn":["W17-A","W17-B"],"customAgent":"aurora-implementation","actions":["1. Link human correction/review and downstream business outcomes to StrategyExecutionRecord/evidence.","2. Preserve attribution uncertainty and provenance.","3. Define delayed-outcome update semantics.","4. Expose dataset-ready observations for W18 without direct learning promotion.","5. Add late/corrected outcome tests."],"ownership":"W17 outcome linkage.","forbidden":"Do not treat correlation as causal proof or auto-promote strategy."},{"id":"W17-G","title":"W17-G - Backup / PITR / Restore / Replay & Self-Healing Rehearsal","dependsOn":["W17-D"],"customAgent":"aurora-implementation","actions":["1. Define backup/PITR/restore scope for durable program data.","2. Run restore drills and verify consistency of outbox/inbox/evidence/read models.","3. Exercise replay/reconciliation/self-healing without duplicate side effects.","4. Measure RPO/RTO and document degraded/manual recovery.","5. Run four Risk Gates and publish W17 evidence sufficient for W18 and DP6 contribution."],"ownership":"W17 DR/recovery/acceptance.","forbidden":"Do not claim recovery if side-effect state cannot be reconciled."}]}
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W17",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "Sufficient runtime foundations through W16; W15 where device telemetry applies",
+    "mission": "Production-grade telemetry/evidence, StrategyExecutionRecord, SLO/error budgets, cost/latency/tool/model/context metrics, business outcome linkage and backup/PITR/restore/replay/self-healing rehearsal.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 22, 26, 29-34",
+      "- Action Plan v0.4.1 W17-A..G",
+      "- TOCA MCP reliability/audit/SLO/DR references",
+      "- Risk Framework v1.0",
+      "- Device dependency matrix DP6"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W17-00",
+      "title": "W17-00 - Observability/Evidence Coordination & Telemetry Freeze",
+      "dependsOn": ["W11-H", "W12-H", "W13-H", "W16-G"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Inventory all runtime correlation/evidence surfaces W03-W16.",
+        "2. Freeze telemetry/evidence ownership, identifiers, cardinality constraints, retention/redaction and SLO dimensions.",
+        "3. Define reconstruction requirements for a task from intake to business outcome.",
+        "4. Define DP6 device telemetry requirements where applicable.",
+        "5. Create premortem for observability gaps, metric cardinality, evidence loss and DR false confidence."
+      ],
+      "ownership": "W17 observability/evidence/telemetry governance and packages.",
+      "forbidden": "Do not make telemetry decide authority or adaptive promotion."
+    },
+    {
+      "id": "W17-A",
+      "title": "W17-A - OpenTelemetry & Correlation Completeness",
+      "dependsOn": ["W17-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Instrument gateway/context/router/planner/tools/policy/executor/provider/workflow/device paths with correlation/causation.",
+        "2. Define span/event naming and bounded attributes.",
+        "3. Propagate tenant-safe correlation without secrets.",
+        "4. Measure missing-correlation rate and async context propagation.",
+        "5. Add cross-service trace tests."
+      ],
+      "ownership": "W17 telemetry instrumentation.",
+      "forbidden": "Do not store raw secrets/private CoT in spans."
+    },
+    {
+      "id": "W17-B",
+      "title": "W17-B - Durable Evidence Chain",
+      "dependsOn": ["W17-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement durable Evidence chain/index using canonical Evidence contracts.",
+        "2. Link receipts/readback/policy refs/outcomes and immutable provenance.",
+        "3. Detect missing/broken evidence links and tampering where architecture supports.",
+        "4. Support query/reconstruction by correlation.",
+        "5. Add partial-chain/integrity tests."
+      ],
+      "ownership": "W17 evidence storage/indexing.",
+      "forbidden": "Do not create a parallel authority/audit decision model."
+    },
+    {
+      "id": "W17-C",
+      "title": "W17-C - StrategyExecutionRecord",
+      "dependsOn": ["W17-A", "W17-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define StrategyExecutionRecord for task class, route, model/context/tools, budgets, confidence, policy/executor outcome and business result refs.",
+        "2. Exclude private chain-of-thought.",
+        "3. Version schema for W18 eval consumption.",
+        "4. Record fallback/escalation/degraded path.",
+        "5. Add schema/privacy tests."
+      ],
+      "ownership": "W17 strategy telemetry contract/runtime.",
+      "forbidden": "Telemetry record is observation, not permission or promotion."
+    },
+    {
+      "id": "W17-D",
+      "title": "W17-D - SLO & Error Budgets by Lane",
+      "dependsOn": ["W17-C", "W17-E", "W17-F"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define measurable SLOs for Fast/Governed lanes and critical services.",
+        "2. Track availability/latency/error/uncertain/reconciliation/evidence completeness.",
+        "3. Define error budgets and alert/degraded-mode policies.",
+        "4. Calibrate thresholds from Aurora telemetry, not copied TOCA constants.",
+        "5. Add budget-burn simulations."
+      ],
+      "ownership": "W17 SLO/error-budget layer.",
+      "forbidden": "Do not automatically relax safety to meet latency SLO."
+    },
+    {
+      "id": "W17-E",
+      "title": "W17-E - Cost, Latency, Tool, Model & Context Metrics",
+      "dependsOn": ["W17-A", "W17-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Measure p50/p95/p99 end-to-end and stage latency.",
+        "2. Track model/tool/retrieval/context fan-out, cache hit/miss, cost and coordination overhead.",
+        "3. Measure concurrency/queueing and bounded fan-out.",
+        "4. Provide dashboards/queries for W18 Economic Governor.",
+        "5. Add cardinality/cost controls."
+      ],
+      "ownership": "W17 performance/economic telemetry.",
+      "forbidden": "Do not optimize by omitting mandatory Policy/Authority/Evidence stages."
+    },
+    {
+      "id": "W17-F",
+      "title": "W17-F - Human Correction & Business Outcome Linkage",
+      "dependsOn": ["W17-A", "W17-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Link human correction/review and downstream business outcomes to StrategyExecutionRecord/evidence.",
+        "2. Preserve attribution uncertainty and provenance.",
+        "3. Define delayed-outcome update semantics.",
+        "4. Expose dataset-ready observations for W18 without direct learning promotion.",
+        "5. Add late/corrected outcome tests."
+      ],
+      "ownership": "W17 outcome linkage.",
+      "forbidden": "Do not treat correlation as causal proof or auto-promote strategy."
+    },
+    {
+      "id": "W17-G",
+      "title": "W17-G - Backup / PITR / Restore / Replay & Self-Healing Rehearsal",
+      "dependsOn": ["W17-D"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define backup/PITR/restore scope for durable program data.",
+        "2. Run restore drills and verify consistency of outbox/inbox/evidence/read models.",
+        "3. Exercise replay/reconciliation/self-healing without duplicate side effects.",
+        "4. Measure RPO/RTO and document degraded/manual recovery.",
+        "5. Run four Risk Gates and publish W17 evidence sufficient for W18 and DP6 contribution."
+      ],
+      "ownership": "W17 DR/recovery/acceptance.",
+      "forbidden": "Do not claim recovery if side-effect state cannot be reconciled."
+    }
+  ]
+}

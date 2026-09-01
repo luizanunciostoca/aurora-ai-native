@@ -14,17 +14,23 @@ const headers = {
 };
 
 async function request(path, options = {}) {
-  const response = await fetch(`${api}${path}`, { ...options, headers: { ...headers, ...(options.headers || {}) } });
+  const response = await fetch(`${api}${path}`, {
+    ...options,
+    headers: { ...headers, ...(options.headers || {}) },
+  });
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
-  if (!response.ok) throw new Error(`${options.method || 'GET'} ${path}: ${response.status} ${text}`);
+  if (!response.ok)
+    throw new Error(`${options.method || 'GET'} ${path}: ${response.status} ${text}`);
   return data;
 }
 
 async function listIssues() {
   const all = [];
   for (let page = 1; ; page += 1) {
-    const batch = await request(`/repos/${owner}/${repo}/issues?state=all&per_page=100&page=${page}`);
+    const batch = await request(
+      `/repos/${owner}/${repo}/issues?state=all&per_page=100&page=${page}`,
+    );
     all.push(...batch.filter((i) => !i.pull_request));
     if (batch.length < 100) break;
   }
@@ -47,7 +53,11 @@ const labelDefs = [
   ['aurora:copilot-ready', '0e8a16', 'Dependencies satisfied; eligible for Copilot dispatch'],
   ['aurora:copilot-gated', 'd29922', 'Blocked by task-graph dependencies'],
   ['aurora:copilot-dispatched', '8250df', 'Delegated to GitHub Copilot cloud agent'],
-  ['aurora:dispatch-blocked', 'b60205', 'Copilot dispatch could not start; inspect prerequisite/token/policy'],
+  [
+    'aurora:dispatch-blocked',
+    'b60205',
+    'Copilot dispatch could not start; inspect prerequisite/token/policy',
+  ],
   ['aurora:accepted', '2da44e', 'Accepted and eligible to satisfy downstream dependency'],
 ];
 for (const [name, color, description] of labelDefs) await ensureLabel(name, color, description);
@@ -78,7 +88,8 @@ for (const task of graph.tasks) {
 
 const completed = new Set(graph.tasks.filter((t) => t.initiallyComplete).map((t) => t.id));
 for (const [taskId, issue] of issueByTask.entries()) {
-  if (issue.state === 'closed' && issue.labels?.some((l) => l.name === 'aurora:accepted')) completed.add(taskId);
+  if (issue.state === 'closed' && issue.labels?.some((l) => l.name === 'aurora:accepted'))
+    completed.add(taskId);
 }
 
 function issueBody(task) {
@@ -129,4 +140,6 @@ for (const task of graph.tasks) {
   }
 }
 
-console.log(`Aurora graph validated: ${graph.tasks.length} tasks across ${new Set(graph.tasks.map((t) => t.wave)).size} waves.`);
+console.log(
+  `Aurora graph validated: ${graph.tasks.length} tasks across ${new Set(graph.tasks.map((t) => t.wave)).size} waves.`,
+);

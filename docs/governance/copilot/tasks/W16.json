@@ -1,1 +1,138 @@
-{"schemaVersion":1,"authority":"Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.","wave":"W16","defaults":{"mode":"IMPLEMENTATION","sourceDependencies":"W14-W15 accepted as applicable plus upstream read models/evidence","mission":"Schema-driven workspace and desktop/web control surfaces for progress, approvals, evidence, budgets, latency/cost and routing/cache/template summaries; UI is never authority and never exposes private chain-of-thought.","sources":["- Developer Manual v0.5 ss. 21, 26, 29-34","- Action Plan v0.4.1 W16","- MCP human control center / legacy dashboard references as UX-only input","- Risk Framework v1.0"]},"tasks":[{"id":"W16-00","title":"W16-00 - Workspace Coordination & Surface Freeze","dependsOn":["W14-H","W15-J"],"customAgent":"aurora-coordinator","actions":["1. Revalidate W14/W15 and upstream read/evidence contracts.","2. Freeze workspace views, command/control boundaries and ownership.","3. Define which UI actions create requests vs display state; UI must never mint authority.","4. Define schema-driven component strategy and desktop/web packaging.","5. Create risk/premortem for stale UI, misleading approval state, tenant leakage and private reasoning exposure."],"ownership":"W16 workspace/web/desktop packages/governance.","forbidden":"Do not implement new policy/executor/business logic in UI."},{"id":"W16-A","title":"W16-A - Workspace / Web / Desktop Foundation","dependsOn":["W16-00"],"customAgent":"aurora-implementation","actions":["1. Implement application shell, authentication/session consumption and navigation.","2. Use schema-driven domain views rather than hardcoded duplicate business state.","3. Support responsive tablet/desktop/web operation as planned.","4. Handle reconnect/degraded state visibly.","5. Add session/tenant/view isolation tests."],"ownership":"W16 client foundation.","forbidden":"Do not duplicate backend state machines."},{"id":"W16-B","title":"W16-B - Schema-Driven Views & Read Models","dependsOn":["W16-A"],"customAgent":"aurora-contracts","actions":["1. Render objectives/tasks/capabilities/receipts/evidence from accepted schemas/read models.","2. Respect tenant/data classification and field visibility.","3. Show freshness/provenance where relevant.","4. Represent unknown/stale/conflicting state explicitly.","5. Add schema compatibility tests."],"ownership":"W16 view/read-model adapters.","forbidden":"Do not infer authority or hidden state from missing fields."},{"id":"W16-C","title":"W16-C - Job / DAG / Lane Progress & Cancellation UX","dependsOn":["W16-B"],"customAgent":"aurora-implementation","actions":["1. Consume W14 progress/job/DAG/lane streams.","2. Display bounded progress and cancellation states.","3. Make cancel request idempotent and show pending/late-completion races correctly.","4. Handle reconnect/replay without duplicated UI commands.","5. Add UX state-machine tests."],"ownership":"W16 execution monitoring/control UX.","forbidden":"UI cancellation is a request; it does not directly mutate executor internals."},{"id":"W16-D","title":"W16-D - Approval & Evidence / Human Control Surfaces","dependsOn":["W16-B"],"customAgent":"aurora-implementation","actions":["1. Display current approval/authority-related state from canonical backend sources.","2. Create explicit user decision requests through authorized backend APIs.","3. Display evidence/readback and correlation for audit.","4. Prevent UI from fabricating approval or trusting stale screen state.","5. Add stale/revoked approval and race tests."],"ownership":"W16 human-control/evidence UX.","forbidden":"Do not mint OwnerDecision/PolicyToken client-side."},{"id":"W16-E","title":"W16-E - Budget, Latency, Cost, Cache/Template/Route Summaries","dependsOn":["W16-B"],"customAgent":"aurora-implementation","actions":["1. Display ExecutionBudget use, latency/cost, route/reasoning summary, cache/template hits and confidence summary.","2. Make clear these are observability/intelligence signals, not permission.","3. Show degraded/fallback conditions and provenance.","4. Avoid private chain-of-thought exposure.","5. Add privacy/redaction tests."],"ownership":"W16 operational/strategy summary UI.","forbidden":"Do not expose hidden CoT or secrets."},{"id":"W16-F","title":"W16-F - Desktop/Web UX, Offline & Degraded Modes","dependsOn":["W16-B"],"customAgent":"aurora-implementation","actions":["1. Implement desktop/web packaging and supported offline/degraded read behavior.","2. Queue only safe UI requests according to backend contracts.","3. Communicate stale/offline status and prevent unsafe action replay.","4. Support accessibility and keyboard/navigation where relevant.","5. Add reconnect/offline tests."],"ownership":"W16 client platform behavior.","forbidden":"Do not locally authorize actions while offline."},{"id":"W16-G","title":"W16-G - Workspace Integration, Auditability & Acceptance","dependsOn":["W16-C","W16-D","W16-E","W16-F"],"customAgent":"aurora-integration","actions":["1. Run UI E2E for progress, cancellation, approvals, evidence, stale state and reconnect.","2. Verify tenant isolation, no CoT/secret leakage and authority separation.","3. Run four Risk Gates/performance budget and exact-head CI.","4. Prove UI explains execution sufficiently for audit without becoming source of truth.","5. Publish W16 acceptance/handoff to W17."],"ownership":"W16 integration/acceptance.","forbidden":"No direct backend/runtime mutation bypass."}]}
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W16",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W14-W15 accepted as applicable plus upstream read models/evidence",
+    "mission": "Schema-driven workspace and desktop/web control surfaces for progress, approvals, evidence, budgets, latency/cost and routing/cache/template summaries; UI is never authority and never exposes private chain-of-thought.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 21, 26, 29-34",
+      "- Action Plan v0.4.1 W16",
+      "- MCP human control center / legacy dashboard references as UX-only input",
+      "- Risk Framework v1.0"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W16-00",
+      "title": "W16-00 - Workspace Coordination & Surface Freeze",
+      "dependsOn": ["W14-H", "W15-J"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Revalidate W14/W15 and upstream read/evidence contracts.",
+        "2. Freeze workspace views, command/control boundaries and ownership.",
+        "3. Define which UI actions create requests vs display state; UI must never mint authority.",
+        "4. Define schema-driven component strategy and desktop/web packaging.",
+        "5. Create risk/premortem for stale UI, misleading approval state, tenant leakage and private reasoning exposure."
+      ],
+      "ownership": "W16 workspace/web/desktop packages/governance.",
+      "forbidden": "Do not implement new policy/executor/business logic in UI."
+    },
+    {
+      "id": "W16-A",
+      "title": "W16-A - Workspace / Web / Desktop Foundation",
+      "dependsOn": ["W16-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement application shell, authentication/session consumption and navigation.",
+        "2. Use schema-driven domain views rather than hardcoded duplicate business state.",
+        "3. Support responsive tablet/desktop/web operation as planned.",
+        "4. Handle reconnect/degraded state visibly.",
+        "5. Add session/tenant/view isolation tests."
+      ],
+      "ownership": "W16 client foundation.",
+      "forbidden": "Do not duplicate backend state machines."
+    },
+    {
+      "id": "W16-B",
+      "title": "W16-B - Schema-Driven Views & Read Models",
+      "dependsOn": ["W16-A"],
+      "customAgent": "aurora-contracts",
+      "actions": [
+        "1. Render objectives/tasks/capabilities/receipts/evidence from accepted schemas/read models.",
+        "2. Respect tenant/data classification and field visibility.",
+        "3. Show freshness/provenance where relevant.",
+        "4. Represent unknown/stale/conflicting state explicitly.",
+        "5. Add schema compatibility tests."
+      ],
+      "ownership": "W16 view/read-model adapters.",
+      "forbidden": "Do not infer authority or hidden state from missing fields."
+    },
+    {
+      "id": "W16-C",
+      "title": "W16-C - Job / DAG / Lane Progress & Cancellation UX",
+      "dependsOn": ["W16-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Consume W14 progress/job/DAG/lane streams.",
+        "2. Display bounded progress and cancellation states.",
+        "3. Make cancel request idempotent and show pending/late-completion races correctly.",
+        "4. Handle reconnect/replay without duplicated UI commands.",
+        "5. Add UX state-machine tests."
+      ],
+      "ownership": "W16 execution monitoring/control UX.",
+      "forbidden": "UI cancellation is a request; it does not directly mutate executor internals."
+    },
+    {
+      "id": "W16-D",
+      "title": "W16-D - Approval & Evidence / Human Control Surfaces",
+      "dependsOn": ["W16-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Display current approval/authority-related state from canonical backend sources.",
+        "2. Create explicit user decision requests through authorized backend APIs.",
+        "3. Display evidence/readback and correlation for audit.",
+        "4. Prevent UI from fabricating approval or trusting stale screen state.",
+        "5. Add stale/revoked approval and race tests."
+      ],
+      "ownership": "W16 human-control/evidence UX.",
+      "forbidden": "Do not mint OwnerDecision/PolicyToken client-side."
+    },
+    {
+      "id": "W16-E",
+      "title": "W16-E - Budget, Latency, Cost, Cache/Template/Route Summaries",
+      "dependsOn": ["W16-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Display ExecutionBudget use, latency/cost, route/reasoning summary, cache/template hits and confidence summary.",
+        "2. Make clear these are observability/intelligence signals, not permission.",
+        "3. Show degraded/fallback conditions and provenance.",
+        "4. Avoid private chain-of-thought exposure.",
+        "5. Add privacy/redaction tests."
+      ],
+      "ownership": "W16 operational/strategy summary UI.",
+      "forbidden": "Do not expose hidden CoT or secrets."
+    },
+    {
+      "id": "W16-F",
+      "title": "W16-F - Desktop/Web UX, Offline & Degraded Modes",
+      "dependsOn": ["W16-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement desktop/web packaging and supported offline/degraded read behavior.",
+        "2. Queue only safe UI requests according to backend contracts.",
+        "3. Communicate stale/offline status and prevent unsafe action replay.",
+        "4. Support accessibility and keyboard/navigation where relevant.",
+        "5. Add reconnect/offline tests."
+      ],
+      "ownership": "W16 client platform behavior.",
+      "forbidden": "Do not locally authorize actions while offline."
+    },
+    {
+      "id": "W16-G",
+      "title": "W16-G - Workspace Integration, Auditability & Acceptance",
+      "dependsOn": ["W16-C", "W16-D", "W16-E", "W16-F"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Run UI E2E for progress, cancellation, approvals, evidence, stale state and reconnect.",
+        "2. Verify tenant isolation, no CoT/secret leakage and authority separation.",
+        "3. Run four Risk Gates/performance budget and exact-head CI.",
+        "4. Prove UI explains execution sufficiently for audit without becoming source of truth.",
+        "5. Publish W16 acceptance/handoff to W17."
+      ],
+      "ownership": "W16 integration/acceptance.",
+      "forbidden": "No direct backend/runtime mutation bypass."
+    }
+  ]
+}

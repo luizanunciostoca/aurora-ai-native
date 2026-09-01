@@ -1,6 +1,6 @@
 name: Aurora Copilot Task
 about: Create one ownership-locked task for the Aurora Copilot multi-agent queue
-title: "[AURORA][TASK ] "
+title: '[AURORA][TASK ] '
 labels: []
 body:
   - type: markdown
