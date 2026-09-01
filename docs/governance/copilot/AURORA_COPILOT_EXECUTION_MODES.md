@@ -1,63 +1,97 @@
 # Aurora Copilot Execution Modes
 
-Status: `ACTIVE_OPERATIONAL_GOVERNANCE_CANDIDATE`
+Status: `PUZZLE_EXECUTION_GOVERNANCE_CANDIDATE`
 
-This document describes how the accepted Aurora Copilot task fabric executes READY nodes under different GitHub Copilot plans. It is operational governance only and never overrides live `main`, exact-SHA acceptance evidence, `CURRENT_PROGRAM_STATUS.md`, Developer Manual v0.5, ADRs, wave ownership/dependency documents or Risk Framework gates.
+This document describes how Aurora maps the global Puzzle scheduler onto available execution mechanisms. It is operational governance only and never overrides live `main`, exact-SHA acceptance evidence, `CURRENT_PROGRAM_STATUS.md`, Developer Manual, accepted ADRs, wave ownership/dependency documents, Risk Gates or Drive acceptance evidence.
 
-The execution mechanism and the scheduler are separate concerns. Every mode uses the `READY_FRONTIER` scheduler defined by `AURORA_FULL_WAVE_PARALLEL_EXECUTION_STANDARD.md` and optimizes for `MINIMUM_SAFE_CRITICAL_PATH`.
+The execution mechanism and scheduler are separate concerns.
 
-## READY_FRONTIER scheduler
+Every execution mode uses `PUZZLE_FRONTIER` and optimizes for `MINIMUM_SAFE_CRITICAL_PATH`.
 
-- Only nodes whose dependencies are fully accepted may enter the implementation frontier.
-- The frontier is recalculated after every accepted state transition.
-- If READY nodes exceed available execution slots, explicit `dispatchPriority` wins first, then longest remaining DAG path.
-- Tasks declaring the same `sharedWriteSurfaces` value cannot occupy the same frontier; the collision is deferred fail-closed to Program Control.
-- Blocked nodes may perform only read-only readiness when the task permits it.
-- Tasks already running when a new scheduler standard is activated are non-retroactive and keep their legitimate original base/claim contract.
-- Workers use `AURORA_COMPACT_V1` handoffs; GitHub and Drive remain the canonical shared memory.
+## Two capacity controls
+
+### `physicalBuildSlots`
+
+Maximum canonical BUILD workers that may execute simultaneously under the active execution mechanism.
+
+Only tasks whose dependencies are fully accepted may compete for these slots.
+
+### `maxLogicalLanes`
+
+Maximum concurrently materialized Puzzle PREBUILD/READINESS lanes.
+
+Logical lanes do not grant execution authority and are intentionally decoupled from current Copilot worker count.
+
+A Free configuration can therefore have 2 physical BUILD slots while maintaining dozens of future-wave logical lanes.
+
+## PUZZLE_FRONTIER scheduler
+
+The scheduler computes two independent frontiers.
+
+### Canonical BUILD frontier
+
+- dependencies must be `aurora:accepted` and supported by live canonical evidence;
+- explicit `dispatchPriority` wins first when slots are scarce;
+- longest remaining DAG path breaks scheduling pressure next;
+- shared-write/path conflicts fail closed;
+- only BUILD_READY issues can be claimed by implementation workers.
+
+### Logical Puzzle frontier
+
+- may span multiple future waves;
+- prioritizes wave coordination seeds and lower speculation depth;
+- may prepare READINESS or governed PREBUILD artifacts while dependencies remain unavailable;
+- cannot open a canonical PR or satisfy a dependency;
+- ISOLATED_PATCH is allowed only with explicit `prebuildAllowedPaths`;
+- every PREBUILD artifact requires reconciliation after upstream acceptance.
+
+The full policy is defined by `AURORA_PUZZLE_MASSIVELY_PARALLEL_EXECUTION_STANDARD.md`.
 
 ## FREE_ACTIONS_CLI
 
-Current intended mode while the repository owner uses Copilot Free.
+Current mode.
 
-- Copilot cloud agent is disabled because GitHub documents it as a paid-plan feature.
-- Copilot CLI is available on all Copilot plans and may run in GitHub Actions with the built-in workflow `GITHUB_TOKEN` and `copilot-requests: write` permission.
-- Aurora caps task concurrency at 2 in this mode; the scheduler fills those slots from the maximum safe READY frontier rather than simply taking the oldest two tasks.
-- The AI worker receives `contents: read` only. It cannot push to `main`, create branches, merge or publish a PR directly.
-- Copilot produces a local patch artifact from an exact base SHA.
-- A separate deterministic publisher job, with no model invocation, applies the patch to an isolated branch and opens a candidate PR.
-- The publisher explicitly dispatches Quality, Test Build and Security against that candidate branch because changes performed with `GITHUB_TOKEN` do not implicitly satisfy Aurora exact-head acceptance requirements.
-- No candidate is merged or marked `aurora:accepted` automatically.
-- If Copilot exits unsuccessfully or produces no patch, the issue is marked accordingly and no candidate PR is published.
-- Infrastructure/control-plane paths are stripped from AI-generated patches before publication.
+- `physicalBuildSlots = 2`.
+- `maxParallelTasks = 2` remains a compatibility alias for existing workflows.
+- `maxLogicalLanes = 32` by current governance.
+- Copilot cloud agent remains disabled.
+- Copilot CLI BUILD execution is allowed through the existing governed Actions worker when quota is available.
+- The BUILD worker receives read-only repository authority; deterministic publisher logic handles candidate publication.
+- PREBUILD automatic AI workers are disabled by default. Logical lanes remain available to Program Control, dedicated engineering contexts and future worker mechanisms.
+- Copilot quota exhaustion may reduce physical AI execution throughput but does not collapse the logical Puzzle program or change acceptance authority.
+- No PREBUILD or BUILD candidate is automatically accepted or merged.
+
+The two-slot Free cap is therefore a **physical execution limit**, not a two-lane architecture limit.
 
 ## PRO_PLUS_CLOUD_AGENT
 
-Planned upgrade mode after the repository owner activates Copilot Pro+.
+Planned upgrade mode.
 
-- Set `mode` to `PRO_PLUS_CLOUD_AGENT` only through a normal reviewed PR.
-- Set `cloudAgentEnabled` to `true`.
-- The existing governed dispatcher may then use GitHub Copilot cloud-agent assignment for READY task issues.
-- Configure any required user-scoped assignment credential only as a GitHub Actions secret; never commit it or place it in issues/comments.
-- Existing task graph, READY frontier, custom agents, ownership, exact-head CI, independent acceptance and no-self-merge rules remain unchanged.
-- Increasing `maxParallelTasks` does not authorize unsafe fan-out; dependency and shared-write constraints still bound the actual frontier.
-- Switching plans never widens Aurora runtime authority or wave ownership.
+- activate only through normal reviewed governance;
+- enable cloud-agent execution;
+- increase `physicalBuildSlots` only after observing repository/integration capacity;
+- reuse the same already-materialized Puzzle lanes;
+- never widen ownership, dependency or authority because additional compute is available.
+
+The main acceleration benefit of an upgraded plan is that already prepared/reconciled pieces can fill more physical slots immediately.
 
 ## Invariants across all modes
 
-1. A task appearing in the 166-task graph is not a dependency release by itself.
-2. `aurora:accepted` plus live canonical evidence is required to satisfy downstream graph dependencies.
-3. One task has one isolated candidate surface at a time.
-4. Intelligence is not authority and neither Copilot nor ChatGPT may invent execution permission.
-5. No implementation agent self-accepts or self-merges.
-6. Main drift requires reconciliation and new exact-head gates before acceptance.
-7. Legacy/reference material remains non-authoritative unless explicitly promoted.
-8. W03+ Risk Gates A/B/C/D remain mandatory.
-9. Shared-write collisions fail closed to Program Control.
-10. The optimization target is minimum safe critical-path duration, not maximum agent count.
+1. Logical preparation is not canonical authority.
+2. A task graph node does not satisfy its own dependencies.
+3. `aurora:accepted` plus live canonical evidence is required for canonical dependency release.
+4. PREBUILD artifacts always declare `canonicalAuthority: false` and `requiresReconciliation: true`.
+5. No speculative runtime patch exists without an explicit path fence.
+6. Shared/root/publication surfaces remain Program Control-owned unless explicitly transferred.
+7. Intelligence is not Authority and neither is Execution.
+8. No implementation/PREBUILD agent self-accepts or self-merges.
+9. Main drift requires reconciliation and new exact-head evidence.
+10. W03+ Risk Gates remain mandatory at their canonical acceptance points.
+11. Increasing worker count never authorizes unsafe fan-out.
+12. The optimization target is minimum safe end-to-end program duration, not maximum agent count or speculative code volume.
 
 ## Current switch file
 
 `docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json`
 
-The switch file is validated by `tools/copilot/validate-execution-mode.mjs` and by the Aurora Copilot Fabric Validation workflow.
+The switch file is validated by `tools/copilot/validate-execution-mode.mjs`, the existing Aurora Fabric gate, and the dedicated Aurora Puzzle Validation workflow.
