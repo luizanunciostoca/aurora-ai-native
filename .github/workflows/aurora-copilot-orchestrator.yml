@@ -1,0 +1,37 @@
+name: Aurora Copilot Task Orchestrator
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/governance/copilot/AURORA_COPILOT_TASK_GRAPH.json'
+      - 'tools/copilot/**'
+      - '.github/agents/**'
+      - '.github/copilot-instructions.md'
+      - 'AGENTS.md'
+  issues:
+    types: [closed, reopened]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: aurora-copilot-task-orchestrator
+  cancel-in-progress: false
+
+jobs:
+  materialize-ready:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Materialize newly READY task nodes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/copilot/materialize-ready.mjs
