@@ -1,6 +1,6 @@
 # ADR-003 — Experience Layer & UX/UI Runtime Semantics
 
-Status: `PROPOSED_FOR_PLANNING`
+Status: `ACCEPTED_FOR_PLANNING`
 Date: 2026-09-01
 Base main at proposal: `c0860ac178bc8b34e1f5a34f3d2b9c6c5a138168`
 Owner: Program Architecture / W14-W17 cross-wave planning
