@@ -38,10 +38,10 @@ test('idempotency replay accepts only the same operation, payload and event', ()
     delivery.decideIdempotency(existing, { ...request, canonicalPayloadHash: hashB }),
     { kind: 'CONFLICT', reason: 'PAYLOAD_MISMATCH' },
   );
-  assert.deepEqual(
-    delivery.decideIdempotency(existing, { ...request, operationName: 'charge' }),
-    { kind: 'CONFLICT', reason: 'OPERATION_MISMATCH' },
-  );
+  assert.deepEqual(delivery.decideIdempotency(existing, { ...request, operationName: 'charge' }), {
+    kind: 'CONFLICT',
+    reason: 'OPERATION_MISMATCH',
+  });
 });
 
 test('idempotency payload hashes must be canonical lowercase SHA-256 hex', () => {
@@ -91,7 +91,16 @@ test('outbox claim is tenant-scoped, bounded and reclaimable only after unlock',
   assert.match(statement.text, /unlocked_at <= \$4::timestamptz/);
   assert.equal(statement.values[5], 5);
   assert.throws(
-    () => delivery.buildClaimOutboxStatement({ ...statement, tenantId, eventId, claimToken: 'x', now: 'n', unlockedAt: 'u', maxAttempts: 0 }),
+    () =>
+      delivery.buildClaimOutboxStatement({
+        ...statement,
+        tenantId,
+        eventId,
+        claimToken: 'x',
+        now: 'n',
+        unlockedAt: 'u',
+        maxAttempts: 0,
+      }),
     /positive integer/,
   );
 });

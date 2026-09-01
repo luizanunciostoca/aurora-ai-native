@@ -1,8 +1,4 @@
-import type {
-  IdempotencyDecision,
-  IdempotencyRecord,
-  IdempotencyRequest,
-} from './types';
+import type { IdempotencyDecision, IdempotencyRecord, IdempotencyRequest } from './types';
 import { assertCanonicalPayloadHash } from './canonical-json';
 
 export function decideIdempotency(

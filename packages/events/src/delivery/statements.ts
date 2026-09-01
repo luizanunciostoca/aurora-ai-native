@@ -114,7 +114,12 @@ RETURNING tenant_id, event_id, delivery_status, attempt_count;
 export function buildAckOutboxStatement(input: OutboxClaimCommitInput): SqlStatement {
   return {
     text: ACK_OUTBOX_SQL,
-    values: [input.tenantId, input.eventId, requireNonEmpty(input.claimToken, 'claimToken'), input.now],
+    values: [
+      input.tenantId,
+      input.eventId,
+      requireNonEmpty(input.claimToken, 'claimToken'),
+      input.now,
+    ],
   };
 }
 
@@ -172,7 +177,9 @@ WHERE tenant_id = $1
 RETURNING tenant_id, event_id, correlation_id, delivery_status;
 `.trim();
 
-export function buildClaimInboxStatement(input: Pick<InboxRegistrationInput, 'tenantId' | 'eventId' | 'now'>): SqlStatement {
+export function buildClaimInboxStatement(
+  input: Pick<InboxRegistrationInput, 'tenantId' | 'eventId' | 'now'>,
+): SqlStatement {
   return { text: CLAIM_INBOX_SQL, values: [input.tenantId, input.eventId, input.now] };
 }
 
@@ -185,7 +192,9 @@ WHERE tenant_id = $1
 RETURNING tenant_id, event_id, correlation_id, delivery_status, acked_at;
 `.trim();
 
-export function buildAckInboxStatement(input: Pick<InboxRegistrationInput, 'tenantId' | 'eventId' | 'now'>): SqlStatement {
+export function buildAckInboxStatement(
+  input: Pick<InboxRegistrationInput, 'tenantId' | 'eventId' | 'now'>,
+): SqlStatement {
   return { text: ACK_INBOX_SQL, values: [input.tenantId, input.eventId, input.now] };
 }
 
@@ -216,8 +225,13 @@ FROM w03_idempotency_key
 WHERE tenant_id = $1 AND idempotency_key = $2;
 `.trim();
 
-export function buildSelectIdempotencyStatement(input: Pick<IdempotencyRequest, 'tenantId' | 'key'>): SqlStatement {
-  return { text: SELECT_IDEMPOTENCY_SQL, values: [input.tenantId, requireNonEmpty(input.key, 'idempotency key')] };
+export function buildSelectIdempotencyStatement(
+  input: Pick<IdempotencyRequest, 'tenantId' | 'key'>,
+): SqlStatement {
+  return {
+    text: SELECT_IDEMPOTENCY_SQL,
+    values: [input.tenantId, requireNonEmpty(input.key, 'idempotency key')],
+  };
 }
 
 export const COMPLETE_IDEMPOTENCY_SQL = `

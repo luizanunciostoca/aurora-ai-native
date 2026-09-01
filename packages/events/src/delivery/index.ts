@@ -1,4 +1,8 @@
-export { assertCanonicalPayloadHash, canonicalizeJson, canonicalJsonString } from './canonical-json';
+export {
+  assertCanonicalPayloadHash,
+  canonicalizeJson,
+  canonicalJsonString,
+} from './canonical-json';
 export { boundedBackoffSeconds, decideIdempotency } from './idempotency';
 export {
   ACK_INBOX_SQL,

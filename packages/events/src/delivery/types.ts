@@ -61,7 +61,10 @@ export interface IdempotencyRecord {
 export type IdempotencyDecision =
   | { readonly kind: 'NEW' }
   | { readonly kind: 'REPLAY'; readonly status: IdempotencyStatus }
-  | { readonly kind: 'CONFLICT'; readonly reason: 'OPERATION_MISMATCH' | 'PAYLOAD_MISMATCH' | 'EVENT_MISMATCH' };
+  | {
+      readonly kind: 'CONFLICT';
+      readonly reason: 'OPERATION_MISMATCH' | 'PAYLOAD_MISMATCH' | 'EVENT_MISMATCH';
+    };
 
 export interface DeliveryEvidence {
   readonly tenantId: TenantId;
