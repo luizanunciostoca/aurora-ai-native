@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { URL } from 'node:url';
 
 const typecheck = JSON.parse(readFileSync(new URL('../tsconfig.json', import.meta.url), 'utf8'));
 const build = JSON.parse(readFileSync(new URL('../tsconfig.build.json', import.meta.url), 'utf8'));
