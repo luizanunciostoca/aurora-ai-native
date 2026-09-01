@@ -55,7 +55,9 @@ function killSwitch(overrides: Partial<KillSwitchSnapshot> = {}): KillSwitchSnap
   };
 }
 
-function snapshot(overrides: Partial<FailureContainmentSnapshot> = {}): FailureContainmentSnapshot {
+function snapshot(
+  overrides: Partial<FailureContainmentSnapshot> = {},
+): FailureContainmentSnapshot {
   return {
     circuit: circuit(),
     killSwitch: killSwitch(),
@@ -249,7 +251,11 @@ test('HALF_OPEN permits one fenced probe and blocks another concurrent probe', (
 });
 
 test('HALF_OPEN success closes circuit and failure reopens it', () => {
-  const halfOpen = circuit({ state: 'HALF_OPEN', consecutiveFailures: 2, halfOpenProbeInFlight: true });
+  const halfOpen = circuit({
+    state: 'HALF_OPEN',
+    consecutiveFailures: 2,
+    halfOpenProbeInFlight: true,
+  });
   const success = transitionCircuit({
     snapshot: halfOpen,
     event: 'SUCCESS',
