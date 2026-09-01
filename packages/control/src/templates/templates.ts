@@ -118,7 +118,8 @@ export function createPlanTemplate(input: CreatePlanTemplateInput): CreatePlanTe
   if (
     input.compatibility.registryVersions.length === 0 ||
     input.compatibility.registryVersions.some((version) => !nonEmpty(version)) ||
-    new Set(input.compatibility.registryVersions).size !== input.compatibility.registryVersions.length
+    new Set(input.compatibility.registryVersions).size !==
+      input.compatibility.registryVersions.length
   ) {
     return { status: 'REJECTED', code: 'INVALID_COMPATIBILITY' };
   }
