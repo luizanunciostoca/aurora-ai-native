@@ -3,6 +3,11 @@ import path from 'node:path';
 
 const TASK_DIR = 'docs/governance/copilot/tasks';
 const EXPECTED_TASK_COUNT = 166;
+const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2]);
+
+function stringArray(value, fallback = []) {
+  return Array.isArray(value) ? value : fallback;
+}
 
 export async function loadTaskGraph() {
   const names = (await fs.readdir(TASK_DIR)).filter((name) => /^W\d\d\.json$/.test(name)).sort();
@@ -12,6 +17,10 @@ export async function loadTaskGraph() {
   const sources = [];
   for (const name of names) {
     const raw = JSON.parse(await fs.readFile(path.join(TASK_DIR, name), 'utf8'));
+    if (!SUPPORTED_SCHEMA_VERSIONS.has(raw.schemaVersion || 1)) {
+      throw new Error(`${name} uses unsupported schemaVersion ${raw.schemaVersion}`);
+    }
+
     const defaults = raw.defaults || {};
     for (const task of raw.tasks || []) {
       tasks.push({
@@ -21,9 +30,23 @@ export async function loadTaskGraph() {
         mode: task.mode || defaults.mode || 'IMPLEMENTATION',
         sourceDependencies: task.sourceDependencies || defaults.sourceDependencies || '',
         mission: task.mission || defaults.mission || '',
-        sources: task.sources || defaults.sources || [],
-        actions: task.actions || [],
-        dependsOn: task.dependsOn || [],
+        sources: stringArray(task.sources, stringArray(defaults.sources)),
+        actions: stringArray(task.actions),
+        dependsOn: stringArray(task.dependsOn),
+        allowedPaths: stringArray(task.allowedPaths, stringArray(defaults.allowedPaths)),
+        sharedWriteSurfaces: stringArray(
+          task.sharedWriteSurfaces,
+          stringArray(defaults.sharedWriteSurfaces),
+        ),
+        coordinatorSurfaces: stringArray(
+          task.coordinatorSurfaces,
+          stringArray(defaults.coordinatorSurfaces),
+        ),
+        readinessPolicy:
+          task.readinessPolicy || defaults.readinessPolicy || 'READ_ONLY_WHILE_BLOCKED',
+        handoffFormat: task.handoffFormat || defaults.handoffFormat || 'AURORA_COMPACT_V1',
+        laneHint: task.laneHint || defaults.laneHint || null,
+        dispatchPriority: Number(task.dispatchPriority ?? defaults.dispatchPriority ?? 0),
       });
     }
     sources.push(name);
@@ -37,6 +60,20 @@ export async function loadTaskGraph() {
     if (!task.customAgent) throw new Error(`Task ${task.id} missing customAgent`);
     if (!task.ownership) throw new Error(`Task ${task.id} missing ownership`);
     if (!task.forbidden) throw new Error(`Task ${task.id} missing forbidden scope`);
+    if (!Number.isFinite(task.dispatchPriority)) {
+      throw new Error(`Task ${task.id} has invalid dispatchPriority`);
+    }
+    for (const field of ['allowedPaths', 'sharedWriteSurfaces', 'coordinatorSurfaces']) {
+      if (!task[field].every((entry) => typeof entry === 'string' && entry.length > 0)) {
+        throw new Error(`Task ${task.id} has invalid ${field}`);
+      }
+    }
+    if (!['READ_ONLY_WHILE_BLOCKED', 'NONE'].includes(task.readinessPolicy)) {
+      throw new Error(`Task ${task.id} has invalid readinessPolicy ${task.readinessPolicy}`);
+    }
+    if (task.handoffFormat !== 'AURORA_COMPACT_V1') {
+      throw new Error(`Task ${task.id} has unsupported handoffFormat ${task.handoffFormat}`);
+    }
   }
 
   for (const task of tasks) {
@@ -67,7 +104,7 @@ export async function loadTaskGraph() {
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     authority:
       'Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this graph.',
     expectedTaskCount: EXPECTED_TASK_COUNT,
@@ -79,11 +116,16 @@ export async function loadTaskGraph() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const graph = await loadTaskGraph();
   const initiallyComplete = graph.tasks.filter((t) => t.initiallyComplete).length;
+  const parallelMetadataTasks = graph.tasks.filter(
+    (t) => t.sharedWriteSurfaces.length || t.allowedPaths.length || t.laneHint,
+  ).length;
   console.log(
     JSON.stringify(
       {
+        schemaVersion: graph.schemaVersion,
         taskCount: graph.tasks.length,
         initiallyComplete,
+        parallelMetadataTasks,
         waves: [...new Set(graph.tasks.map((t) => t.wave))],
         sources: graph.sources,
       },
