@@ -121,7 +121,11 @@ function source(
       throw new TypeError(`${path}: provider conflicts with executionTarget`);
     }
   }
-  if (record.sourceType === 'PROVIDER_READBACK' && executionTarget?.kind !== undefined && executionTarget.kind !== 'PROVIDER') {
+  if (
+    record.sourceType === 'PROVIDER_READBACK' &&
+    executionTarget?.kind !== undefined &&
+    executionTarget.kind !== 'PROVIDER'
+  ) {
     throw new TypeError(`${path}.executionTarget: PROVIDER_READBACK requires PROVIDER target`);
   }
 
@@ -142,7 +146,11 @@ function verification(
 ): EvidenceVerification {
   const record = asRecord(input, path);
   exactKeys(record, ['state', 'verifiedAt', 'verifier', 'method'], ['state'], path);
-  if (record.state !== 'UNVERIFIED' && record.state !== 'VERIFIED' && record.state !== 'REJECTED') {
+  if (
+    record.state !== 'UNVERIFIED' &&
+    record.state !== 'VERIFIED' &&
+    record.state !== 'REJECTED'
+  ) {
     throw new TypeError(`${path}.state: unsupported verification state`);
   }
   const verifiedAt =
