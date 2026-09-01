@@ -22,5 +22,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Validate executor service
+        run: |
+          npx tsc -p services/executors/tsconfig.json --noEmit --pretty false
+          rm -rf services/executors/dist
+          npx tsc -p services/executors/tsconfig.json --pretty false
+          node --test services/executors/dist/services/executors/test/*.test.js
+          rm -rf services/executors/dist
       - run: npm run build
       - run: npm run audit:cleanup
