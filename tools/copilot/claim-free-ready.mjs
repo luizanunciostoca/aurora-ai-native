@@ -62,6 +62,11 @@ for (const [name, color, description] of [
   ],
   ['aurora:copilot-free-pr-open', '8250df', 'Copilot Free candidate PR has been published'],
   [
+    'aurora:copilot-free-branch-ready',
+    'bf8700',
+    'Copilot Free candidate branch exists but PR publication requires Program Control',
+  ],
+  [
     'aurora:copilot-free-no-change',
     'd4c5f9',
     'Copilot Free worker completed without a candidate patch',
@@ -70,6 +75,11 @@ for (const [name, color, description] of [
     'aurora:copilot-free-failed',
     'b60205',
     'Copilot Free worker failed before publishing a candidate PR',
+  ],
+  [
+    'aurora:canonical-pr-open',
+    '8250df',
+    'A canonical open PR already owns this Aurora task; do not create a duplicate candidate',
   ],
 ]) {
   await ensureLabel(name, color, description);
@@ -87,13 +97,30 @@ async function listIssues() {
   return all;
 }
 
+async function listOpenPullRequests() {
+  const all = [];
+  for (let page = 1; ; page += 1) {
+    const batch = await request(`/repos/${owner}/${repo}/pulls?state=open&per_page=100&page=${page}`);
+    all.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return all;
+}
+
 function taskIdFromIssue(issue) {
   const marker = issue.body?.match(/<!--\s*AURORA_TASK_ID:\s*([^\s]+)\s*-->/i);
   if (marker) return marker[1];
   return issue.title?.match(/^\[AURORA\]\[TASK\s+([^\]]+)\]/i)?.[1];
 }
 
+function pullRequestOwnsTask(pullRequest, issue, task) {
+  const text = `${pullRequest.title || ''}\n${pullRequest.body || ''}`;
+  if (text.includes(task.id)) return true;
+  return new RegExp(`(?:closes|fixes|resolves)\\s+#${issue.number}\\b`, 'i').test(text);
+}
+
 const issues = await listIssues();
+const openPullRequests = await listOpenPullRequests();
 const accepted = new Set(
   graph.tasks.filter((task) => task.initiallyComplete).map((task) => task.id),
 );
@@ -108,6 +135,11 @@ for (const issue of issues) {
   }
 }
 
+const programControlAgents = new Set([
+  'aurora-coordinator',
+  'aurora-governance',
+  'aurora-acceptance',
+]);
 const candidates = [];
 for (const issue of issues) {
   if (issue.state !== 'open') continue;
@@ -116,7 +148,8 @@ for (const issue of issues) {
   if (
     labels.has('aurora:copilot-dispatched') ||
     labels.has('aurora:copilot-free-running') ||
-    labels.has('aurora:copilot-free-pr-open')
+    labels.has('aurora:copilot-free-pr-open') ||
+    labels.has('aurora:copilot-free-branch-ready')
   ) {
     continue;
   }
@@ -125,6 +158,28 @@ for (const issue of issues) {
   const task = graph.tasks.find((entry) => entry.id === taskId);
   if (!task) continue;
   if (!task.dependsOn.every((dependency) => accepted.has(dependency))) continue;
+
+  if (programControlAgents.has(task.customAgent)) {
+    console.log(`leaving ${task.id} for Program Control agent ${task.customAgent}`);
+    continue;
+  }
+
+  const owningPullRequest = openPullRequests.find((pullRequest) =>
+    pullRequestOwnsTask(pullRequest, issue, task),
+  );
+  if (owningPullRequest) {
+    labels.delete('aurora:copilot-free-ready');
+    labels.delete('aurora:copilot-free-running');
+    labels.add('aurora:canonical-pr-open');
+    await request(`/repos/${owner}/${repo}/issues/${issue.number}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ labels: [...labels] }),
+    });
+    console.log(
+      `skipping ${task.id}: canonical PR #${owningPullRequest.number} already owns issue #${issue.number}`,
+    );
+    continue;
+  }
 
   candidates.push({ issue, task });
 }
@@ -138,6 +193,7 @@ for (const { issue, task } of selected) {
   labels.delete('aurora:dispatch-blocked');
   labels.delete('aurora:copilot-free-failed');
   labels.delete('aurora:copilot-free-no-change');
+  labels.delete('aurora:canonical-pr-open');
   labels.add('aurora:copilot-free-ready');
   labels.add('aurora:copilot-free-running');
   await request(`/repos/${owner}/${repo}/issues/${issue.number}`, {
