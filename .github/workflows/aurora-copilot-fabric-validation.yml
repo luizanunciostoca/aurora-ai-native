@@ -33,6 +33,8 @@ jobs:
         run: node tools/copilot/load-task-graph.mjs
       - name: Validate Copilot execution mode
         run: node tools/copilot/validate-execution-mode.mjs
+      - name: Validate safe READY frontier policy
+        run: node tools/copilot/frontier-policy.test.mjs
       - name: Verify custom-agent profiles
         shell: bash
         run: |
@@ -63,3 +65,8 @@ jobs:
           grep -q 'aurora-governance' tools/copilot/claim-free-ready.mjs
           grep -q 'aurora-acceptance' tools/copilot/claim-free-ready.mjs
           grep -q 'aurora-coordinator' tools/copilot/claim-free-ready.mjs
+          grep -q 'selectSafeReadyFrontier' tools/copilot/claim-free-ready.mjs
+          grep -q 'READY FRONTIER' tools/copilot/claim-free-ready.mjs
+          grep -q 'SHARED_WRITE_SURFACE' tools/copilot/frontier-policy.mjs
+          grep -q 'MINIMUM_SAFE_CRITICAL_PATH' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'NON_RETROACTIVE' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
