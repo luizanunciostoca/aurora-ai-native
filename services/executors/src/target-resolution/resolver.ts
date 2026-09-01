@@ -9,8 +9,11 @@ import type {
 
 const RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
-function sameTarget(left: ExecutionTargetReference, right: ExecutionTargetReference): boolean {
-  if (left.schemaVersion !== right.schemaVersion || left.kind !== right.kind) return false;
+function sameTargetIdentity(
+  left: ExecutionTargetReference,
+  right: ExecutionTargetReference,
+): boolean {
+  if (left.kind !== right.kind) return false;
 
   switch (left.kind) {
     case 'PROVIDER':
@@ -73,16 +76,27 @@ export function resolveExecutionTarget(request: TargetResolutionRequest): Target
   const evaluatedAt = parseRfc3339Timestamp(request.evaluatedAt);
   if (evaluatedAt === undefined) return unresolved(request, 'TARGET_TIME_INVALID');
 
-  const targetMatches = request.bindings.filter((binding) => sameTarget(binding.target, request.target));
+  const targetMatches = request.bindings.filter((binding) =>
+    sameTargetIdentity(binding.target, request.target),
+  );
   if (targetMatches.length === 0) return unresolved(request, 'TARGET_NOT_FOUND');
 
   const tenantMatches = targetMatches.filter(
     (binding) => binding.tenant.tenantId === request.tenant.tenantId,
   );
   if (tenantMatches.length === 0) return unresolved(request, 'TARGET_TENANT_MISMATCH');
-  if (tenantMatches.length > 1) return unresolved(request, 'TARGET_AMBIGUOUS');
 
-  const binding = tenantMatches[0];
+  const targetVersionMatches = tenantMatches.filter(
+    (binding) => binding.target.schemaVersion === request.target.schemaVersion,
+  );
+  if (targetVersionMatches.length === 0) return unresolved(request, 'TARGET_INCOMPATIBLE');
+  if (targetVersionMatches.length > 1) return unresolved(request, 'TARGET_AMBIGUOUS');
+
+  const binding = targetVersionMatches[0];
+  if (binding.schemaVersion !== request.schemaVersion) {
+    return unresolved(request, 'TARGET_INCOMPATIBLE');
+  }
+
   const stateReason = bindingStateReason(binding);
   if (stateReason !== undefined) return unresolved(request, stateReason);
 
