@@ -1,4 +1,6 @@
+// @ts-expect-error -- executor harness intentionally has no package manifest/@types/node; Node 22 provides this built-in at runtime.
 import assert from 'node:assert/strict';
+// @ts-expect-error -- executor harness intentionally has no package manifest/@types/node; Node 22 provides this built-in at runtime.
 import test from 'node:test';
 
 import type { Rfc3339Timestamp, TenantContext } from '@aurora/contracts/context';
@@ -10,6 +12,7 @@ import { resolveExecutionTarget } from '../src/target-resolution/index.js';
 import type { ExecutableTargetBinding } from '../src/target-resolution/types.js';
 
 const version = '1.0.0' as ContractVersion;
+const otherVersion = '2.0.0' as ContractVersion;
 const tenant: TenantContext = { tenantId: 'tenant:alpha' as TenantId };
 const otherTenant: TenantContext = { tenantId: 'tenant:beta' as TenantId };
 const target: ExecutionTargetReference = {
@@ -69,7 +72,7 @@ test('fails closed for every non-available binding state', () => {
   assert.deepEqual(resolve([binding({ state: 'RETIRED' })]).reasons, ['TARGET_RETIRED']);
 });
 
-test('fails closed for freshness, compatibility and generic preconditions', () => {
+test('fails closed for freshness, ActionIntent compatibility and generic preconditions', () => {
   const stale = resolve([binding({ freshUntil: '2026-09-01T16:00:00Z' })]);
   const incompatible = resolve([binding({ compatibleActionIntentSchemaVersions: [] })]);
   const preconditionFailed = resolve([binding({ preconditionsSatisfied: false })]);
@@ -93,12 +96,13 @@ test('malformed or non-RFC3339 timing fails closed', () => {
   assert.equal(invalidFreshness.authorizesExecution, false);
 });
 
-test('target schema version participates in deterministic target identity', () => {
+test('binding and target schema incompatibility fail closed explicitly', () => {
+  const incompatibleBindingSchema = resolve([binding({ schemaVersion: otherVersion })]);
   const otherVersionTarget: ExecutionTargetReference = {
     ...target,
-    schemaVersion: '2.0.0' as ContractVersion,
+    schemaVersion: otherVersion,
   };
-  const result = resolveExecutionTarget({
+  const incompatibleTargetSchema = resolveExecutionTarget({
     schemaVersion: version,
     actionIntentSchemaVersion: version,
     tenant,
@@ -107,8 +111,10 @@ test('target schema version participates in deterministic target identity', () =
     bindings: [binding()],
   });
 
-  assert.deepEqual(result.reasons, ['TARGET_NOT_FOUND']);
-  assert.equal(result.authorizesExecution, false);
+  assert.deepEqual(incompatibleBindingSchema.reasons, ['TARGET_INCOMPATIBLE']);
+  assert.deepEqual(incompatibleTargetSchema.reasons, ['TARGET_INCOMPATIBLE']);
+  assert.equal(incompatibleBindingSchema.authorizesExecution, false);
+  assert.equal(incompatibleTargetSchema.authorizesExecution, false);
 });
 
 test('matches provider targets using the complete target identity', () => {
