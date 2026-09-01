@@ -1,4 +1,4 @@
-name: Aurora Puzzle Program Orchestrator
+name: Aurora Copilot Task Orchestrator
 
 on:
   push:
