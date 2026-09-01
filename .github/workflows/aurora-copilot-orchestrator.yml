@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/governance/copilot/tasks/**'
+      - 'docs/governance/copilot/**'
       - 'tools/copilot/**'
       - '.github/agents/**'
       - '.github/copilot-instructions.md'
@@ -34,6 +34,8 @@ jobs:
           ref: main
       - name: Validate 166-task Aurora DAG
         run: node tools/copilot/load-task-graph.mjs
+      - name: Validate Copilot execution mode
+        run: node tools/copilot/validate-execution-mode.mjs
 
   materialize-ready:
     needs: validate-graph

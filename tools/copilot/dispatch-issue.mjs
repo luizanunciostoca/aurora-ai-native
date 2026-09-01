@@ -10,6 +10,9 @@ if (!owner || !repo || !githubToken)
   throw new Error('GITHUB_REPOSITORY and GITHUB_TOKEN are required');
 
 const graph = await loadTaskGraph();
+const executionMode = JSON.parse(
+  await fs.readFile('docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json', 'utf8'),
+);
 const event = eventPath ? JSON.parse(await fs.readFile(eventPath, 'utf8')) : {};
 const issueNumber = Number(process.env.AURORA_ISSUE_NUMBER || event.issue?.number || 0);
 if (!issueNumber) throw new Error('No issue number supplied');
@@ -99,13 +102,39 @@ if (missing.length) {
   process.exit(0);
 }
 
+if (executionMode.mode === 'FREE_ACTIONS_CLI') {
+  const currentLabels = new Set((issue.labels || []).map((l) => l.name));
+  const alreadyQueued = currentLabels.has('aurora:copilot-free-ready');
+  currentLabels.delete('aurora:dispatch-blocked');
+  currentLabels.add('aurora:copilot-free-ready');
+  await patchIssue({ labels: [...currentLabels] });
+  if (!alreadyQueued) {
+    await comment(
+      `Aurora Copilot execution mode is \`FREE_ACTIONS_CLI\`. Cloud-agent assignment is intentionally disabled. Task ${task.id} is queued for the governed Copilot Free GitHub Actions worker, which uses the workflow GITHUB_TOKEN and a maximum of ${executionMode.maxParallelTasks || 2} parallel tasks.`,
+    );
+  }
+  console.log(`queued ${task.id} for FREE_ACTIONS_CLI`);
+  process.exit(0);
+}
+
+if (!executionMode.cloudAgentEnabled) {
+  const labels = [
+    ...new Set([...(issue.labels || []).map((l) => l.name), 'aurora:dispatch-blocked']),
+  ];
+  await patchIssue({ labels });
+  await comment(
+    `Copilot cloud-agent dispatch is disabled by execution mode ${executionMode.mode}.`,
+  );
+  process.exit(0);
+}
+
 if (!copilotToken) {
   const labels = [
     ...new Set([...(issue.labels || []).map((l) => l.name), 'aurora:dispatch-blocked']),
   ];
   await patchIssue({ labels });
   await comment(
-    'Copilot dispatch is structurally ready but `AURORA_COPILOT_USER_TOKEN` is not configured as a repository secret. No agent was started. Add a user-scoped token permitted to assign Copilot/cloud-agent work, then rerun the dispatcher workflow for this issue. Do not paste the token into an issue or repository file.',
+    'Copilot cloud-agent dispatch is enabled but `AURORA_COPILOT_USER_TOKEN` is not configured as a repository secret. No cloud agent was started. Do not paste the token into an issue or repository file.',
   );
   process.exit(0);
 }

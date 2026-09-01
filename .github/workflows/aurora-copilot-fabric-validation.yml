@@ -8,7 +8,7 @@ on:
       - '.github/instructions/**'
       - '.github/workflows/aurora-copilot-*.yml'
       - 'AGENTS.md'
-      - 'docs/governance/copilot/tasks/**'
+      - 'docs/governance/copilot/**'
       - 'tools/copilot/**'
   push:
     branches: [main]
@@ -18,7 +18,7 @@ on:
       - '.github/instructions/**'
       - '.github/workflows/aurora-copilot-*.yml'
       - 'AGENTS.md'
-      - 'docs/governance/copilot/tasks/**'
+      - 'docs/governance/copilot/**'
       - 'tools/copilot/**'
 
 permissions:
@@ -31,6 +31,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate governed Aurora DAG
         run: node tools/copilot/load-task-graph.mjs
+      - name: Validate Copilot execution mode
+        run: node tools/copilot/validate-execution-mode.mjs
       - name: Verify custom-agent profiles
         shell: bash
         run: |
@@ -39,7 +41,7 @@ jobs:
           test "$count" -eq 9
           grep -R --line-number '^description:' .github/agents/*.agent.md >/dev/null
           echo "Validated $count Aurora Copilot custom agents."
-      - name: Verify dispatcher fails closed without committed secret
+      - name: Verify dispatcher and Free worker safeguards
         shell: bash
         run: |
           set -euo pipefail
@@ -47,3 +49,10 @@ jobs:
           grep -q 'AURORA_COPILOT_USER_TOKEN' .github/workflows/aurora-copilot-dispatch.yml
           grep -q 'aurora:accepted' tools/copilot/materialize-ready.mjs
           grep -q 'aurora:accepted' tools/copilot/dispatch-issue.mjs
+          grep -q 'copilot-requests: write' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'max-parallel: 2' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'contents: read' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'Remove infrastructure/control-plane edits from AI patch' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'gh workflow run quality.yml' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'gh workflow run test-build.yml' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'gh workflow run security.yml' .github/workflows/aurora-copilot-free-worker.yml
