@@ -13,8 +13,10 @@ import type {
   DataClassification,
   TenantContext,
 } from '@aurora/contracts/context';
+import { providerBindingMatchesExecutionTarget } from '@aurora/contracts/execution-target';
 import type { ActionIntentId, DecisionId, PolicyTokenId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
+import { ExecutionTargetReferenceSchema } from '../execution-target';
 import {
   asRecord,
   exactKeys,
@@ -154,6 +156,7 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
       'actionIntentId',
       'capability',
       'providerBinding',
+      'executionTarget',
       'tenant',
       'actor',
       'requestOrigin',
@@ -224,6 +227,24 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
     record.providerBinding === undefined
       ? undefined
       : providerBinding(record.providerBinding, 'ActionIntent.providerBinding');
+  const executionTargetValue =
+    record.executionTarget === undefined
+      ? undefined
+      : ExecutionTargetReferenceSchema.parse(
+          record.executionTarget,
+          { parseContractVersion: dependencies.parseContractVersion },
+          'ActionIntent.executionTarget',
+        );
+  if (
+    providerBindingValue !== undefined &&
+    executionTargetValue !== undefined &&
+    !providerBindingMatchesExecutionTarget(providerBindingValue, executionTargetValue)
+  ) {
+    throw new TypeError(
+      'ActionIntent.executionTarget: conflicts with legacy providerBinding or uses non-PROVIDER target',
+    );
+  }
+
   const expectedStateValue =
     record.expectedState === undefined
       ? undefined
@@ -239,6 +260,7 @@ function parse(input: unknown, dependencies: ActionIntentSchemaDependencies): Ac
     actionIntentId: dependencies.parseActionIntentId(record.actionIntentId),
     capability: capability(record.capability, 'ActionIntent.capability'),
     ...(providerBindingValue === undefined ? {} : { providerBinding: providerBindingValue }),
+    ...(executionTargetValue === undefined ? {} : { executionTarget: executionTargetValue }),
     tenant: dependencies.parseTenantContext(record.tenant),
     actor: dependencies.parseActorRef(record.actor),
     requestOrigin: dependencies.parseActorRef(record.requestOrigin),

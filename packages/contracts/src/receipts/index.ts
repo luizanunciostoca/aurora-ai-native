@@ -1,1 +1,7 @@
-export type { Receipt, ReceiptExecutorReference, ReceiptProviderReference } from './receipt.js';
+export type {
+  LegacyProviderReceipt,
+  Receipt,
+  ReceiptExecutorReference,
+  ReceiptProviderReference,
+  TargetedReceipt,
+} from './receipt.js';

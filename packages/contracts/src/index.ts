@@ -14,6 +14,7 @@ export {
   type EventType,
 } from './envelopes/index.js';
 export * from './actions/index.js';
+export * from './execution-target/index.js';
 export * from './receipts/index.js';
 export * from './evidence/index.js';
 export * from './policy/index.js';
