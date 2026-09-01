@@ -137,7 +137,9 @@ export function createPlanTemplate(input: CreatePlanTemplateInput): CreatePlanTe
     semanticVersion: input.semanticVersion,
     contentHash: input.contentHash,
     status: input.status,
-    ...(input.status === 'INVALIDATED' ? { invalidationReason } : {}),
+    ...(input.status === 'INVALIDATED' && invalidationReason !== undefined
+      ? { invalidationReason }
+      : {}),
     match: { ...input.match },
     requirementOrder: [...input.requirementOrder],
     compatibility: {
