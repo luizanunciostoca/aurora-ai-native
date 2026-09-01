@@ -18,6 +18,7 @@ interface MutableWorkerRecord {
   generation: number;
   ownerToken: string | null;
   cancelRequested: boolean;
+  cancelRequestedAtEpochMs: number | null;
   terminalReason: WorkerTerminalReason | null;
   lastTransitionEpochMs: number;
   lastHeartbeatEpochMs: number | null;
@@ -128,6 +129,7 @@ export class BoundedAgentWorkerPool {
       generation: 0,
       ownerToken: null,
       cancelRequested: false,
+      cancelRequestedAtEpochMs: null,
       terminalReason: null,
       lastTransitionEpochMs: nowEpochMs,
       lastHeartbeatEpochMs: null,
@@ -136,7 +138,11 @@ export class BoundedAgentWorkerPool {
     return this.#decision('SUBMITTED', record);
   }
 
-  async claim(taskId: string, ownerToken: string, nowEpochMs: number): Promise<WorkerRuntimeDecision> {
+  async claim(
+    taskId: string,
+    ownerToken: string,
+    nowEpochMs: number,
+  ): Promise<WorkerRuntimeDecision> {
     return this.#acquireOwnership(taskId, ownerToken, nowEpochMs, 'CLAIM');
   }
 
@@ -207,7 +213,11 @@ export class BoundedAgentWorkerPool {
     );
   }
 
-  async fail(taskId: string, ownerToken: string, nowEpochMs: number): Promise<WorkerRuntimeDecision> {
+  async fail(
+    taskId: string,
+    ownerToken: string,
+    nowEpochMs: number,
+  ): Promise<WorkerRuntimeDecision> {
     return this.#terminalRelease(
       taskId,
       ownerToken,
@@ -225,6 +235,7 @@ export class BoundedAgentWorkerPool {
     if (TERMINAL_STATES.has(record.state)) return this.#decision('INVALID_STATE', record);
 
     record.cancelRequested = true;
+    record.cancelRequestedAtEpochMs = nowEpochMs;
     if (record.state === 'CLAIMING') {
       record.lastTransitionEpochMs = nowEpochMs;
       return this.#decision('CANCEL_REQUESTED', record);
@@ -255,7 +266,7 @@ export class BoundedAgentWorkerPool {
     if (!record) return this.#decision('TASK_NOT_FOUND', null);
     if (!TERMINAL_STATES.has(record.state)) return this.#decision('INVALID_STATE', record);
     this.#records.delete(taskId);
-    return this.#decision('COMPLETED', null);
+    return this.#decision('PRUNED', null);
   }
 
   async #acquireOwnership(
@@ -299,19 +310,24 @@ export class BoundedAgentWorkerPool {
         expiresAtEpochMs,
       });
     } catch {
-      record.state = previousState;
-      record.ownerToken = previousOwnerToken;
-      record.lastTransitionEpochMs = nowEpochMs;
+      record.state = 'LEASE_UNCERTAIN';
+      record.lastTransitionEpochMs = Math.max(record.lastTransitionEpochMs, nowEpochMs);
       return this.#decision('LEASE_PORT_ERROR', record);
     }
 
     if (!leaseResultMatches(result, record.task.tenant.tenantId, expectedLeaseKey, ownerToken)) {
-      record.state = previousState;
-      record.ownerToken = previousOwnerToken;
-      record.lastTransitionEpochMs = nowEpochMs;
+      record.state = 'LEASE_UNCERTAIN';
+      record.lastTransitionEpochMs = Math.max(record.lastTransitionEpochMs, nowEpochMs);
       return this.#decision('INVALID_LEASE_RESULT', record);
     }
     if (result.status !== 'ACQUIRED') {
+      if (record.cancelRequested) {
+        record.state = 'CANCELLED';
+        record.ownerToken = null;
+        record.terminalReason = 'CANCELLED_BY_CONTROL';
+        record.lastTransitionEpochMs = record.cancelRequestedAtEpochMs ?? nowEpochMs;
+        return this.#decision('CANCELLED', record);
+      }
       record.state = previousState;
       record.ownerToken = previousOwnerToken;
       record.lastTransitionEpochMs = nowEpochMs;
@@ -321,10 +337,11 @@ export class BoundedAgentWorkerPool {
     record.generation += 1;
     record.lastHeartbeatEpochMs = nowEpochMs;
     if (record.cancelRequested) {
+      const cancellationEpochMs = record.cancelRequestedAtEpochMs ?? nowEpochMs;
       return this.#terminalRelease(
         taskId,
         ownerToken,
-        nowEpochMs,
+        cancellationEpochMs,
         'CANCELLED',
         'CANCELLED_BY_CONTROL',
         'CANCELLED',
@@ -345,7 +362,11 @@ export class BoundedAgentWorkerPool {
   ): Promise<WorkerRuntimeDecision> {
     const record = this.#records.get(taskId);
     if (!record) return this.#decision('TASK_NOT_FOUND', null);
-    if (record.state !== 'ACTIVE' && record.state !== 'LEASE_UNCERTAIN' && record.state !== 'CLAIMING') {
+    if (
+      record.state !== 'ACTIVE' &&
+      record.state !== 'LEASE_UNCERTAIN' &&
+      record.state !== 'CLAIMING'
+    ) {
       return this.#decision('INVALID_STATE', record);
     }
     if (record.ownerToken !== ownerToken) return this.#decision('OWNER_MISMATCH', record);
