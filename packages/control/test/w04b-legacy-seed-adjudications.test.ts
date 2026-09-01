@@ -1,4 +1,6 @@
+// @ts-expect-error -- control harness intentionally has no package manifest/@types/node; Node 22 provides this built-in at runtime.
 import assert from 'node:assert/strict';
+// @ts-expect-error -- control harness intentionally has no package manifest/@types/node; Node 22 provides this built-in at runtime.
 import test from 'node:test';
 import { validateSeedAdjudication } from '../../registries/src/capabilities/adjudication.ts';
 import {
