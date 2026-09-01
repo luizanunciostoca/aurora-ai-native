@@ -13,8 +13,7 @@ export const STRATEGY_AVAILABILITY_STATES = [
   'UNAVAILABLE',
   'UNKNOWN',
 ] as const;
-export type StrategyAvailabilityState =
-  (typeof STRATEGY_AVAILABILITY_STATES)[number];
+export type StrategyAvailabilityState = (typeof STRATEGY_AVAILABILITY_STATES)[number];
 export type StrategyCurrentAvailability =
   | 'CURRENT_AVAILABLE'
   | 'CURRENT_DEGRADED'
@@ -97,14 +96,11 @@ function nonEmpty(value: string): boolean {
 }
 
 function nonEmptyUnique(values: readonly string[]): boolean {
-  if (values.length === 0 || values.some((value) => !nonEmpty(value)))
-    return false;
+  if (values.length === 0 || values.some((value) => !nonEmpty(value))) return false;
   return new Set(values).size === values.length;
 }
 
-function validObservation(
-  observation: StrategyAvailabilityObservation,
-): boolean {
+function validObservation(observation: StrategyAvailabilityObservation): boolean {
   return (
     STRATEGY_AVAILABILITY_STATES.includes(observation.state) &&
     nonEmpty(observation.source) &&
@@ -124,17 +120,14 @@ function validStrategy(strategy: StrategyDescriptor): boolean {
     nonEmptyUnique(strategy.compatibility.modalities) &&
     nonEmptyUnique(strategy.compatibility.taskClasses) &&
     nonEmptyUnique(strategy.compatibility.reasoningLevels) &&
-    new Set(strategy.fallbackStrategyIds).size ===
-      strategy.fallbackStrategyIds.length &&
+    new Set(strategy.fallbackStrategyIds).size === strategy.fallbackStrategyIds.length &&
     strategy.fallbackStrategyIds.every(nonEmpty) &&
     !strategy.fallbackStrategyIds.includes(strategy.strategyId) &&
     validObservation(strategy.availability)
   );
 }
 
-function hasFallbackCycle(
-  entries: readonly StrategyDescriptor[],
-): string | undefined {
+function hasFallbackCycle(entries: readonly StrategyDescriptor[]): string | undefined {
   const byId = new Map(entries.map((entry) => [entry.strategyId, entry]));
   const visiting = new Set<string>();
   const visited = new Set<string>();
@@ -210,9 +203,7 @@ export function createStrategyRegistry(
     registry: {
       registryKind: 'AURORA_INTELLIGENCE_STRATEGY_REGISTRY',
       registryVersion,
-      entries: [...entries].sort((left, right) =>
-        left.strategyId.localeCompare(right.strategyId),
-      ),
+      entries: [...entries].sort((left, right) => left.strategyId.localeCompare(right.strategyId)),
     },
   };
 }
@@ -229,10 +220,8 @@ export function evaluateStrategyAvailability(
   nowEpochMs: number,
 ): StrategyCurrentAvailability {
   const observedAt = Date.parse(observation.observedAt);
-  if (!Number.isFinite(observedAt) || !Number.isFinite(nowEpochMs))
-    return 'UNKNOWN';
-  if (nowEpochMs < observedAt || nowEpochMs - observedAt > observation.maxAgeMs)
-    return 'STALE';
+  if (!Number.isFinite(observedAt) || !Number.isFinite(nowEpochMs)) return 'UNKNOWN';
+  if (nowEpochMs < observedAt || nowEpochMs - observedAt > observation.maxAgeMs) return 'STALE';
 
   switch (observation.state) {
     case 'AVAILABLE':
@@ -248,10 +237,7 @@ export function evaluateStrategyAvailability(
 
 export function isStrategyCompatible(
   strategy: StrategyDescriptor,
-  request: Pick<
-    StrategySelectionRequest,
-    'modality' | 'taskClass' | 'reasoningLevel'
-  >,
+  request: Pick<StrategySelectionRequest, 'modality' | 'taskClass' | 'reasoningLevel'>,
 ): boolean {
   return (
     strategy.compatibility.modalities.includes(request.modality) &&
@@ -273,9 +259,7 @@ export function selectStrategy(
     };
   }
 
-  const byId = new Map(
-    registry.entries.map((entry) => [entry.strategyId, entry]),
-  );
+  const byId = new Map(registry.entries.map((entry) => [entry.strategyId, entry]));
   const queue: Array<{
     readonly id: string;
     readonly via: 'PREFERRED' | 'FALLBACK';
@@ -289,13 +273,9 @@ export function selectStrategy(
     const candidate = byId.get(candidateRef.id);
     if (!candidate) continue;
 
-    const availability = evaluateStrategyAvailability(
-      candidate.availability,
-      request.nowEpochMs,
-    );
+    const availability = evaluateStrategyAvailability(candidate.availability, request.nowEpochMs);
     if (
-      (availability === 'CURRENT_AVAILABLE' ||
-        availability === 'CURRENT_DEGRADED') &&
+      (availability === 'CURRENT_AVAILABLE' || availability === 'CURRENT_DEGRADED') &&
       isStrategyCompatible(candidate, request)
     ) {
       return {
