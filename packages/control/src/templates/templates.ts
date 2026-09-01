@@ -36,7 +36,8 @@ function validRequirement(requirement: PlanTemplateRequirementCompatibility): bo
     nonEmpty(requirement.capabilityId) &&
     requirement.allowedCapabilityVersions.length > 0 &&
     requirement.allowedCapabilityVersions.every(nonEmpty) &&
-    new Set(requirement.allowedCapabilityVersions).size === requirement.allowedCapabilityVersions.length &&
+    new Set(requirement.allowedCapabilityVersions).size ===
+      requirement.allowedCapabilityVersions.length &&
     requirement.requiredCompatibilityKeys.every(nonEmpty) &&
     new Set(requirement.requiredCompatibilityKeys).size ===
       requirement.requiredCompatibilityKeys.length
@@ -65,8 +66,11 @@ export function createPlanTemplate(input: CreatePlanTemplateInput): CreatePlanTe
 
   const invalidationReason = input.invalidationReason?.trim();
   if (
-    (input.status === 'ACTIVE' && invalidationReason !== undefined && invalidationReason.length > 0) ||
-    (input.status === 'INVALIDATED' && (invalidationReason === undefined || invalidationReason.length === 0))
+    (input.status === 'ACTIVE' &&
+      invalidationReason !== undefined &&
+      invalidationReason.length > 0) ||
+    (input.status === 'INVALIDATED' &&
+      (invalidationReason === undefined || invalidationReason.length === 0))
   ) {
     return { status: 'REJECTED', code: 'INVALID_STATUS_METADATA' };
   }
