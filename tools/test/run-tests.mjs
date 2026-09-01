@@ -23,10 +23,7 @@ const testFiles = ['tools/test/smoke.test.mjs', ...controlTests];
 const result = spawnSync(
   process.execPath,
   ['--experimental-strip-types', '--test', ...testFiles],
-  {
-    cwd: repoRoot,
-    stdio: 'inherit',
-  },
+  { cwd: repoRoot, stdio: 'inherit' },
 );
 const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 console.log(
