@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
   "wave": "W04",
   "defaults": {
@@ -9,9 +9,31 @@
     "sources": [
       "- Developer Manual v0.5",
       "- Action Plan v0.4.1",
+      "- Risk Framework v1.0",
+      "- W04 canonical charter/dependency/ownership/acceptance/risk freeze",
       "- Device ownership/dependency matrices",
       "- Legacy capability seed catalog",
       "- TOCA MCP capability catalog/lifecycle/resolution"
+    ],
+    "readinessPolicy": "READ_ONLY_WHILE_BLOCKED",
+    "handoffFormat": "AURORA_COMPACT_V1",
+    "coordinatorSurfaces": [
+      "root-workspace-config",
+      "lockfiles",
+      "root-build-config",
+      "ci-workflows",
+      "codeowners",
+      "cross-package-publication",
+      "packages/control/package.json",
+      "packages/control/tsconfig.json",
+      "packages/control/tsconfig.build.json",
+      "packages/control/src/index.ts",
+      "packages/registries/package.json",
+      "packages/registries/tsconfig.json",
+      "packages/registries/tsconfig.build.json",
+      "packages/registries/src/index.ts",
+      "packages/contracts-public-evolution",
+      "packages/schemas-public-evolution"
     ]
   },
   "tasks": [
@@ -26,8 +48,20 @@
         "3. Define internal DAG/subwave dependencies and publication points required by W05/W07/W14/W15.",
         "4. Enforce capability-first, not agent-first, planning."
       ],
-      "ownership": "W04 governance + control/capability shared surfaces",
-      "forbidden": "No executor/provider/device runtime."
+      "ownership": "W04 governance + Program Control-owned control/capability shared surfaces",
+      "forbidden": "No runtime feature code; no executor/provider/device runtime.",
+      "allowedPaths": [
+        "docs/governance/w04/**",
+        "docs/governance/CURRENT_PROGRAM_STATUS.md",
+        "docs/governance/copilot/tasks/W04.json"
+      ],
+      "laneHint": "PROGRAM-CONTROL",
+      "dispatchPriority": 120,
+      "sharedWriteSurfaces": [
+        "w04:governance-freeze",
+        "w04:ownership-allocation",
+        "w04:publication-barriers"
+      ]
     },
     {
       "id": "W04-A",
@@ -39,8 +73,15 @@
         "2. Support deterministic supersession/terminal-state rules and evidence hooks.",
         "3. Avoid embedding model/agent implementation details in lifecycle primitives."
       ],
-      "ownership": "W04 control/goal/task packages",
-      "forbidden": "No W05 agent runtime."
+      "ownership": "packages/control/src/lifecycle/** plus W04-A-prefixed control tests; shared package/publication surfaces remain Program Control-owned",
+      "forbidden": "No W05 agent runtime; no scheduler, capability registry or W03 durability implementation.",
+      "allowedPaths": [
+        "packages/control/src/lifecycle/**",
+        "packages/control/test/w04a-**"
+      ],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": ["w04:control-lifecycle"]
     },
     {
       "id": "W04-B",
@@ -51,53 +92,24 @@
         "1. Create exactly one Capability Registry foundation.",
         "2. Define capability metadata/binding: target kind, compatibility, availability/freshness, permissions/preconditions, risk/side-effect class, readback/evidence strategy.",
         "3. Define CapabilityPlan that selects needed capabilities independent of agents/providers/devices.",
-        "4. Accept/reject/rename/decompose legacy/TOCA seeds explicitly.",
-        "5. Allow future DEVICE bindings without Android business logic; satisfy DP1 conditions."
+        "4. Accept/reject/rename/decompose legacy/TOCA seeds explicitly with provenance.",
+        "5. Allow future DEVICE bindings without Android business logic and satisfy DP1 conditions."
       ],
-      "ownership": "packages/registries/src/capabilities/** and W04 capability planning paths",
-      "forbidden": "No second registry; no device executor; capability availability is not authority."
-    },
-    {
-      "id": "W04-C",
-      "title": "W04-C Goal Graph DAG / Dependency / Join Semantics",
-      "dependsOn": ["W04-A", "W04-B"],
-      "customAgent": "aurora-implementation",
-      "actions": [
-        "1. Implement GoalGraph DAG representation.",
-        "2. Define dependency edges, joins/fan-in, terminal/failure propagation and cancellation semantics.",
-        "3. Detect cycles and invalid dependency graphs.",
-        "4. Keep graph deterministic and bounded."
+      "ownership": "packages/registries/src/capabilities/** + packages/control/src/capability-plan/** plus W04-B-prefixed tests; shared package/publication surfaces remain Program Control-owned",
+      "forbidden": "No second registry; no provider/device executor; capability availability/permission metadata is not authority; no W14 DeviceId/session/trust or W15 Android logic.",
+      "allowedPaths": [
+        "packages/registries/src/capabilities/**",
+        "packages/registries/test/w04b-**",
+        "packages/control/src/capability-plan/**",
+        "packages/control/test/w04b-**"
       ],
-      "ownership": "W04 goal graph packages",
-      "forbidden": "No model-driven implicit graph mutation without validation."
-    },
-    {
-      "id": "W04-D",
-      "title": "W04-D Parallel Scheduler / Bounded Concurrency / Fairness",
-      "dependsOn": ["W04-C", "W04-F"],
-      "customAgent": "aurora-implementation",
-      "actions": [
-        "1. Implement scheduler for independent DAG nodes.",
-        "2. Bound concurrency/fan-out and support cancellation/fairness/backpressure.",
-        "3. Define deterministic join behavior and resource budgets.",
-        "4. Prevent starvation and unbounded task explosion."
-      ],
-      "ownership": "W04 scheduler/control packages",
-      "forbidden": "No provider execution."
-    },
-    {
-      "id": "W04-E",
-      "title": "W04-E Fast Lane / Governed Lane Resolver",
-      "dependsOn": ["W04-A", "W04-B"],
-      "customAgent": "aurora-implementation",
-      "actions": [
-        "1. Define lane eligibility using task/risk/reversibility/authority requirements.",
-        "2. Fast Lane may choose deterministic/template/low-cost paths but never bypass Policy/Authority/Executor.",
-        "3. Governed Lane handles complex/high-risk/approval-required work.",
-        "4. Produce explicit reason/evidence for lane selection."
-      ],
-      "ownership": "W04 lane/control packages",
-      "forbidden": "Lane selection is not authority."
+      "laneHint": "LANE-2",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": [
+        "w04:capability-registry",
+        "w04:capability-plan",
+        "device:dp1-capability-contract"
+      ]
     },
     {
       "id": "W04-F",
@@ -110,8 +122,57 @@
         "3. Budgets may constrain strategy but may not weaken safety validation.",
         "4. Expose fields needed by W17 telemetry and W18 optimizer."
       ],
-      "ownership": "W04 budget contracts/schemas",
-      "forbidden": "No cost optimization that skips mandatory validation."
+      "ownership": "packages/control/src/budget/** plus W04-F-prefixed tests; shared publication surfaces remain Program Control-owned",
+      "forbidden": "No cost optimization that skips mandatory validation; budget is not authority.",
+      "allowedPaths": [
+        "packages/control/src/budget/**",
+        "packages/control/test/w04f-**"
+      ],
+      "laneHint": "LANE-3",
+      "dispatchPriority": 90,
+      "sharedWriteSurfaces": ["w04:execution-budget"]
+    },
+    {
+      "id": "W04-C",
+      "title": "W04-C Goal Graph DAG / Dependency / Join Semantics",
+      "dependsOn": ["W04-A", "W04-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement GoalGraph DAG representation.",
+        "2. Define dependency edges, joins/fan-in, terminal/failure propagation and cancellation semantics.",
+        "3. Detect cycles and invalid dependency graphs.",
+        "4. Keep graph deterministic and bounded."
+      ],
+      "ownership": "packages/control/src/goal-graph/** plus W04-C-prefixed tests; shared publication surfaces remain Program Control-owned",
+      "forbidden": "No model-driven implicit graph mutation without validation; no replacement for W03 durable workflow/timers/leases/replay.",
+      "allowedPaths": [
+        "packages/control/src/goal-graph/**",
+        "packages/control/test/w04c-**"
+      ],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w04:goal-graph"]
+    },
+    {
+      "id": "W04-E",
+      "title": "W04-E Fast Lane / Governed Lane Resolver",
+      "dependsOn": ["W04-A", "W04-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define lane eligibility using task/risk/reversibility/authority requirements.",
+        "2. Fast Lane may choose deterministic/template/low-cost paths but never bypass Policy/Authority/Executor.",
+        "3. Governed Lane handles complex/high-risk/approval-required work.",
+        "4. Produce explicit reason/evidence for lane selection."
+      ],
+      "ownership": "packages/control/src/lanes/** plus W04-E-prefixed tests; shared publication surfaces remain Program Control-owned",
+      "forbidden": "Lane selection is not authority; no W05 Intelligence Router and no W07 execution validation implementation.",
+      "allowedPaths": [
+        "packages/control/src/lanes/**",
+        "packages/control/test/w04e-**"
+      ],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w04:lane-resolver"]
     },
     {
       "id": "W04-G",
@@ -124,8 +185,36 @@
         "3. Store version/hash/provenance/compatibility and invalidation conditions.",
         "4. Foundation only: learning/promotion remains W18."
       ],
-      "ownership": "W04 template/binding packages",
-      "forbidden": "No adaptive self-promotion in W04."
+      "ownership": "packages/control/src/templates/** plus W04-G-prefixed tests; shared publication surfaces remain Program Control-owned",
+      "forbidden": "No adaptive self-promotion in W04; templates never create authority.",
+      "allowedPaths": [
+        "packages/control/src/templates/**",
+        "packages/control/test/w04g-**"
+      ],
+      "laneHint": "LANE-3",
+      "dispatchPriority": 75,
+      "sharedWriteSurfaces": ["w04:plan-template-binding"]
+    },
+    {
+      "id": "W04-D",
+      "title": "W04-D Parallel Scheduler / Bounded Concurrency / Fairness",
+      "dependsOn": ["W04-C", "W04-F"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement scheduler for independent DAG nodes.",
+        "2. Bound concurrency/fan-out and support cancellation/fairness/backpressure.",
+        "3. Define deterministic join behavior and resource budgets.",
+        "4. Prevent starvation and unbounded task explosion."
+      ],
+      "ownership": "packages/control/src/scheduler/** plus W04-D-prefixed tests; shared publication surfaces remain Program Control-owned",
+      "forbidden": "No provider/device execution; no duplicate W03 durable lease/timer/workflow implementation.",
+      "allowedPaths": [
+        "packages/control/src/scheduler/**",
+        "packages/control/test/w04d-**"
+      ],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 70,
+      "sharedWriteSurfaces": ["w04:parallel-scheduler"]
     },
     {
       "id": "W04-H",
@@ -138,8 +227,16 @@
         "3. Prove known template path avoids frontier replanning.",
         "4. Test cycle rejection, concurrency bounds, cancellation/fairness and target-neutral capability bindings."
       ],
-      "ownership": "W04 integration/benchmark tests",
-      "forbidden": "No external side effects."
+      "ownership": "W04 integration/benchmark/contract tests and W04 evidence/runbook only",
+      "forbidden": "No new semantic runtime implementation and no external side effects.",
+      "allowedPaths": [
+        "packages/control/test/w04h-**",
+        "packages/registries/test/w04h-**",
+        "docs/governance/w04/**"
+      ],
+      "laneHint": "CONVERGENCE",
+      "dispatchPriority": 60,
+      "sharedWriteSurfaces": ["w04:integration-performance-contract-gate"]
     }
   ]
 }
