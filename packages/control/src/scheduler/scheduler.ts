@@ -109,6 +109,9 @@ function nextFairnessCursor(
     return { nextTopologicalIndex: current.nextTopologicalIndex, turn: nextTurn };
   }
   const lastNodeId = dispatched[dispatched.length - 1];
+  if (lastNodeId === undefined) {
+    return { nextTopologicalIndex: current.nextTopologicalIndex, turn: nextTurn };
+  }
   const lastIndex = graph.topologicalOrder.indexOf(lastNodeId);
   return {
     nextTopologicalIndex: (lastIndex + 1) % graph.topologicalOrder.length,
@@ -185,5 +188,6 @@ export function planSchedulerTick(input: SchedulerTickInput): SchedulerTickResul
     durableCoordinationBoundary: 'W03_WHEN_REQUIRED',
     authorizesExecution: false,
   };
+
   return { status: 'PLANNED', plan };
 }
