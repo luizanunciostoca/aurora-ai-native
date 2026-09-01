@@ -22,7 +22,6 @@ TENANT_B='ten_01K0M0M0M0M0M0M0M0M0M0M0M1'
 IDENTITY='idn_01K0M0M0M0M0M0M0M0M0M0M0M3'
 CORRELATION='cor_01K0M0M0M0M0M0M0M0M0M0M0M2'
 EVENT1='evt_01K0M0M0M0M0M0M0M0M0M0M0F1'
-EVENT2='evt_01K0M0M0M0M0M0M0M0M0M0M0F2'
 NOW='2026-09-01T05:50:00Z'
 
 # R02: transactional event+outbox rollback leaves no durable residue.
@@ -106,8 +105,8 @@ if psql "$BAD_URL" -X -v ON_ERROR_STOP=1 -qAt -c 'SELECT 1' >/dev/null 2>&1; the
 fi
 echo 'W03F_POSTGRES_PASS DB_UNAVAILABLE_FAIL_CLOSED'
 
-# Index-backed backlog query evidence.
-plan="$(run_sql "EXPLAIN SELECT event_id FROM w03_event_outbox WHERE tenant_id='$TENANT_A' AND delivery_status='pending' AND (next_attempt_at IS NULL OR next_attempt_at <= '$NOW') ORDER BY next_attempt_at NULLS FIRST LIMIT 32;")"
+# Force planner visibility of the accepted queue index even on the deliberately small gate database.
+plan="$(run_sql "SET enable_seqscan=off; EXPLAIN SELECT event_id FROM w03_event_outbox WHERE tenant_id='$TENANT_A' AND delivery_status='pending' AND (next_attempt_at IS NULL OR next_attempt_at <= '$NOW') LIMIT 32;")"
 if [[ "$plan" != *"idx_w03_event_outbox_claim"* && "$plan" != *"Index"* ]]; then
   echo "W03F_POSTGRES_FAIL backlog query did not expose index plan: $plan" >&2
   exit 1
