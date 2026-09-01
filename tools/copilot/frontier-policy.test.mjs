@@ -35,7 +35,10 @@ const parallelCandidates = [
   },
 ];
 const parallel = selectSafeReadyFrontier(parallelCandidates, tasks, 2);
-assert.deepEqual(parallel.selected.map((entry) => entry.task.id), ['B', 'C']);
+assert.deepEqual(
+  parallel.selected.map((entry) => entry.task.id),
+  ['B', 'C'],
+);
 assert.equal(parallel.deferred.length, 0);
 
 const conflictingCandidates = [
@@ -65,7 +68,10 @@ const conflictingTasks = [
   { id: 'Y', dependsOn: [] },
 ];
 const conflicting = selectSafeReadyFrontier(conflictingCandidates, conflictingTasks, 2);
-assert.deepEqual(conflicting.selected.map((entry) => entry.task.id), ['X']);
+assert.deepEqual(
+  conflicting.selected.map((entry) => entry.task.id),
+  ['X'],
+);
 assert.equal(conflicting.deferred[0].reason, 'SHARED_WRITE_SURFACE');
 assert.equal(conflicting.deferred[0].surface, 'shared:manifest');
 
