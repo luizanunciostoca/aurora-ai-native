@@ -6,13 +6,24 @@ CREATE TYPE w03_timer_status AS ENUM ('scheduled', 'claimed', 'completed', 'canc
 CREATE TYPE w03_lease_status AS ENUM ('active', 'released', 'expired');
 
 CREATE TABLE IF NOT EXISTS w03_event (
-    event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL,
+    event_id TEXT PRIMARY KEY CHECK (event_id ~ '^evt_[0-9A-HJKMNP-TV-Z]{26}$'),
+    tenant_id TEXT NOT NULL CHECK (tenant_id ~ '^ten_[0-9A-HJKMNP-TV-Z]{26}$'),
+    envelope_kind TEXT NOT NULL DEFAULT 'EVENT' CHECK (envelope_kind = 'EVENT'),
     event_type TEXT NOT NULL CHECK (event_type <> ''),
-    schema_version TEXT NOT NULL CHECK (schema_version <> ''),
-    producer TEXT NOT NULL CHECK (producer <> ''),
-    correlation_id TEXT,
-    causation_id TEXT,
+    schema_version TEXT NOT NULL CHECK (schema_version ~ '^[0-9]+\.[0-9]+\.[0-9]+$'),
+    occurred_at TIMESTAMPTZ NOT NULL,
+    producer_kind TEXT NOT NULL CHECK (producer_kind IN ('HUMAN', 'AGENT', 'SERVICE', 'SYSTEM')),
+    producer_identity_id TEXT NOT NULL CHECK (producer_identity_id ~ '^idn_[0-9A-HJKMNP-TV-Z]{26}$'),
+    source_service TEXT NOT NULL CHECK (source_service <> ''),
+    source_component TEXT,
+    source_instance TEXT,
+    correlation_id TEXT NOT NULL CHECK (correlation_id ~ '^cor_[0-9A-HJKMNP-TV-Z]{26}$'),
+    causation_id TEXT CHECK (causation_id IS NULL OR causation_id ~ '^cau_[0-9A-HJKMNP-TV-Z]{26}$'),
+    subject TEXT,
+    data_classification TEXT CHECK (
+        data_classification IS NULL OR
+        data_classification IN ('PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED')
+    ),
     payload JSONB NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     status w03_event_status NOT NULL DEFAULT 'queued',
@@ -21,12 +32,13 @@ CREATE TABLE IF NOT EXISTS w03_event (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     acknowledged_at TIMESTAMPTZ,
-    last_error TEXT
+    last_error TEXT,
+    UNIQUE (tenant_id, event_id)
 );
 
 CREATE TABLE IF NOT EXISTS w03_event_outbox (
-    event_id UUID PRIMARY KEY REFERENCES w03_event (event_id) ON DELETE CASCADE,
-    tenant_id UUID NOT NULL,
+    event_id TEXT PRIMARY KEY CHECK (event_id ~ '^evt_[0-9A-HJKMNP-TV-Z]{26}$'),
+    tenant_id TEXT NOT NULL CHECK (tenant_id ~ '^ten_[0-9A-HJKMNP-TV-Z]{26}$'),
     delivery_status w03_delivery_status NOT NULL DEFAULT 'pending',
     attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
     claim_token TEXT,
@@ -35,36 +47,46 @@ CREATE TABLE IF NOT EXISTS w03_event_outbox (
     enqueued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_attempted_at TIMESTAMPTZ,
     last_error TEXT,
-    UNIQUE (tenant_id, event_id)
+    UNIQUE (tenant_id, event_id),
+    FOREIGN KEY (tenant_id, event_id)
+        REFERENCES w03_event (tenant_id, event_id)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS w03_event_inbox (
     inbox_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL,
-    event_id UUID NOT NULL REFERENCES w03_event (event_id) ON DELETE CASCADE,
-    correlation_id TEXT,
+    tenant_id TEXT NOT NULL CHECK (tenant_id ~ '^ten_[0-9A-HJKMNP-TV-Z]{26}$'),
+    event_id TEXT NOT NULL CHECK (event_id ~ '^evt_[0-9A-HJKMNP-TV-Z]{26}$'),
+    correlation_id TEXT NOT NULL CHECK (correlation_id ~ '^cor_[0-9A-HJKMNP-TV-Z]{26}$'),
     delivery_status w03_delivery_status NOT NULL DEFAULT 'pending',
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     acked_at TIMESTAMPTZ,
-    UNIQUE (tenant_id, event_id)
+    UNIQUE (tenant_id, event_id),
+    FOREIGN KEY (tenant_id, event_id)
+        REFERENCES w03_event (tenant_id, event_id)
+        ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS w03_idempotency_key (
-    tenant_id UUID NOT NULL,
+    tenant_id TEXT NOT NULL CHECK (tenant_id ~ '^ten_[0-9A-HJKMNP-TV-Z]{26}$'),
     idempotency_key TEXT NOT NULL CHECK (idempotency_key <> ''),
     operation_name TEXT NOT NULL CHECK (operation_name <> ''),
     canonical_payload_hash CHAR(64) NOT NULL CHECK (canonical_payload_hash ~ '^[0-9a-fA-F]{64}$'),
-    event_id UUID REFERENCES w03_event (event_id) ON DELETE SET NULL,
+    event_id TEXT CHECK (event_id IS NULL OR event_id ~ '^evt_[0-9A-HJKMNP-TV-Z]{26}$'),
     status TEXT NOT NULL CHECK (status IN ('accepted', 'rejected', 'inflight', 'completed')),
     first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (tenant_id, idempotency_key)
+    PRIMARY KEY (tenant_id, idempotency_key),
+    FOREIGN KEY (tenant_id, event_id)
+        REFERENCES w03_event (tenant_id, event_id)
+        ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS w03_timer (
+    -- timer_id is a database-local surrogate, not a new Aurora canonical ID namespace.
     timer_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL,
+    tenant_id TEXT NOT NULL CHECK (tenant_id ~ '^ten_[0-9A-HJKMNP-TV-Z]{26}$'),
     timer_name TEXT NOT NULL CHECK (timer_name <> ''),
     schedule_key TEXT NOT NULL CHECK (schedule_key <> ''),
     status w03_timer_status NOT NULL DEFAULT 'scheduled',
@@ -77,12 +99,13 @@ CREATE TABLE IF NOT EXISTS w03_timer (
 );
 
 CREATE TABLE IF NOT EXISTS w03_lease (
+    -- lease_id is a database-local surrogate, not a new Aurora canonical ID namespace.
     lease_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL,
+    tenant_id TEXT NOT NULL CHECK (tenant_id ~ '^ten_[0-9A-HJKMNP-TV-Z]{26}$'),
     lease_key TEXT NOT NULL CHECK (lease_key <> ''),
     owner_token TEXT NOT NULL CHECK (owner_token <> ''),
     subject_type TEXT NOT NULL CHECK (subject_type <> ''),
-    subject_id UUID NOT NULL,
+    subject_id TEXT NOT NULL CHECK (subject_id <> ''),
     status w03_lease_status NOT NULL DEFAULT 'active',
     acquired_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at TIMESTAMPTZ NOT NULL,
@@ -112,11 +135,12 @@ CREATE INDEX IF NOT EXISTS idx_w03_timer_status_schedule
 CREATE INDEX IF NOT EXISTS idx_w03_lease_tenant_key_expiry
     ON w03_lease (tenant_id, status, expires_at);
 
-COMMENT ON TABLE w03_event IS 'W03 durable event store. Retention: 90 days for acknowledged and successful records, 30 days for failed attempts, 180 days for DLQ records.';
+COMMENT ON TABLE w03_event IS 'W03 durable canonical EventEnvelope store. Canonical Aurora IDs remain prefixed ULID strings; local UUIDs are not used for event/tenant/correlation identity. Retention: 90 days for acknowledged and successful records, 30 days for failed attempts, 180 days for DLQ records.';
 COMMENT ON TABLE w03_event_outbox IS 'Transactional outbox delivery ledger for W03 event fan-out and bounded retry semantics.';
 COMMENT ON TABLE w03_event_inbox IS 'Inbox ack state used to prevent duplicate processing of replayed event envelopes.';
+COMMENT ON COLUMN w03_event_inbox.inbox_id IS 'Database-local surrogate only; not an Aurora canonical ID.';
 COMMENT ON TABLE w03_idempotency_key IS 'Idempotency ledger keyed by tenant and operation id to prevent duplicate side effects.';
-COMMENT ON TABLE w03_timer IS 'Durable timer state for schedule-driven workflow re-entry and cancellation.';
-COMMENT ON TABLE w03_lease IS 'Lease/heartbeat state used for contention fencing and safe worker reclaims.';
+COMMENT ON TABLE w03_timer IS 'Durable timer state for schedule-driven workflow re-entry and cancellation. timer_id is database-local only.';
+COMMENT ON TABLE w03_lease IS 'Lease/heartbeat state used for contention fencing and safe worker reclaims. lease_id is database-local only.';
 
 COMMIT;
