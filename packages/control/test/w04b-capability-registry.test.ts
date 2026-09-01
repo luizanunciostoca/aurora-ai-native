@@ -129,10 +129,12 @@ test('W04-B DEVICE binding stays target-neutral without Android runtime identity
       },
     ],
   });
-  assert.equal(descriptor.bindings[0]?.targetKind, 'DEVICE');
-  assert.equal('deviceId' in descriptor.bindings[0]!, false);
-  assert.equal('androidPackage' in descriptor.bindings[0]!, false);
-  assert.equal('session' in descriptor.bindings[0]!, false);
+  const [binding] = descriptor.bindings;
+  assert.ok(binding);
+  assert.equal(binding.targetKind, 'DEVICE');
+  assert.equal('deviceId' in binding, false);
+  assert.equal('androidPackage' in binding, false);
+  assert.equal('session' in binding, false);
 });
 
 test('W04-B fails closed when tenant-scoped capability belongs to another tenant', () => {
