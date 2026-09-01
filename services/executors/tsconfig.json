@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "outDir": "dist",
+    "rootDir": "../..",
+    "declaration": false,
+    "baseUrl": ".",
+    "paths": {
+      "@aurora/contracts": ["../../packages/contracts/src/index.ts"],
+      "@aurora/contracts/*": ["../../packages/contracts/src/*/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"]
+}
