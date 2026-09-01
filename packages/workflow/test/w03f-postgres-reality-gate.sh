@@ -90,6 +90,15 @@ cancel_count="$(run_sql "WITH u AS (UPDATE w03_timer SET status='cancelled' WHER
 assert_eq 1 "$complete_count" R15_first_terminal_transition_wins
 assert_eq 0 "$cancel_count" R15_second_terminal_transition_rejected
 
+# R14: durable workflow follow-up metadata/version survives a restart recovery cycle.
+workflow_timer_id="$(run_sql "INSERT INTO w03_timer (tenant_id,timer_name,schedule_key,status,scheduled_for,claimed_by,metadata) VALUES ('$TENANT_A','workflow-follow-up','workflow:objective:1500:await-durable-event','claimed','$NOW','workflow-worker','{\"workflowKey\":\"objective:1500\",\"stepKey\":\"await-durable-event\",\"workflowVersion\":\"1.2.3\",\"expectedPrecondition\":\"event-acknowledged\",\"durableWorkflowPrimitive\":true}'::jsonb) RETURNING timer_id;")"
+run_sql "INSERT INTO w03_lease (tenant_id,lease_key,owner_token,subject_type,subject_id,status,acquired_at,expires_at,heartbeat_at) VALUES ('$TENANT_A','timer:$workflow_timer_id','workflow-worker','timer','$workflow_timer_id','active','2026-09-01T05:49:00Z','2026-09-01T05:49:59Z','2026-09-01T05:49:30Z');" >/dev/null
+resume_count="$(run_sql "WITH expired AS (UPDATE w03_lease SET status='expired',heartbeat_at='$NOW',last_error='lease expired before timer completion' WHERE tenant_id='$TENANT_A' AND status='active' AND subject_type='timer' AND expires_at <= '$NOW' RETURNING subject_id,owner_token), recovered AS (UPDATE w03_timer AS timer SET status='scheduled',claimed_by=NULL,updated_at='$NOW' FROM expired WHERE timer.tenant_id='$TENANT_A' AND timer.timer_id::text=expired.subject_id AND timer.status='claimed' AND timer.claimed_by=expired.owner_token RETURNING 1) SELECT count(*) FROM recovered;")"
+assert_eq 1 "$resume_count" R14_restart_requeues_exact_stale_owner
+assert_eq scheduled "$(run_sql "SELECT status FROM w03_timer WHERE timer_id='$workflow_timer_id';")" R14_resume_state
+assert_eq 1.2.3 "$(run_sql "SELECT metadata->>'workflowVersion' FROM w03_timer WHERE timer_id='$workflow_timer_id';")" R14_version_preserved
+assert_eq event-acknowledged "$(run_sql "SELECT metadata->>'expectedPrecondition' FROM w03_timer WHERE timer_id='$workflow_timer_id';")" R14_precondition_preserved
+
 # R17: malformed canonical EventId is rejected by database constraints.
 if run_sql "INSERT INTO w03_event (event_id,tenant_id,event_type,schema_version,occurred_at,producer_kind,producer_identity_id,source_service,correlation_id,payload) VALUES ('bad-id','$TENANT_A','bad','1.0.0','$NOW','SYSTEM','$IDENTITY','w03f-postgres','$CORRELATION','{}');" >/dev/null 2>&1; then
   echo 'W03F_POSTGRES_FAIL R17 malformed event unexpectedly accepted' >&2
@@ -104,6 +113,40 @@ if psql "$BAD_URL" -X -v ON_ERROR_STOP=1 -qAt -c 'SELECT 1' >/dev/null 2>&1; the
   exit 1
 fi
 echo 'W03F_POSTGRES_PASS DB_UNAVAILABLE_FAIL_CLOSED'
+
+# R18: real durable backlog and repeated bounded claim batches with recorded latency.
+"${PSQL[@]}" <<SQL >/dev/null
+INSERT INTO w03_event (
+  event_id, tenant_id, event_type, schema_version, occurred_at,
+  producer_kind, producer_identity_id, source_service, correlation_id, payload, metadata
+)
+SELECT
+  'evt_' || lpad(gs::text, 26, '0'), '$TENANT_A', 'aurora.w03.load', '1.0.0', '$NOW',
+  'SYSTEM', '$IDENTITY', 'w03f-postgres-load', '$CORRELATION',
+  jsonb_build_object('objective', gs), '{"class":"load"}'::jsonb
+FROM generate_series(1, 1500) AS gs;
+INSERT INTO w03_event_outbox (event_id, tenant_id)
+SELECT event_id, tenant_id FROM w03_event WHERE tenant_id='$TENANT_A' AND event_type='aurora.w03.load';
+SQL
+assert_eq 1500 "$(run_sql "SELECT count(*) FROM w03_event_outbox WHERE tenant_id='$TENANT_A' AND delivery_status='pending';")" R18_durable_backlog_1500
+
+durations=()
+for batch in $(seq 1 10); do
+  start_ns="$(date +%s%N)"
+  claimed="$(run_sql "WITH candidate AS (SELECT event_id FROM w03_event_outbox WHERE tenant_id='$TENANT_A' AND delivery_status='pending' ORDER BY enqueued_at,event_id FOR UPDATE SKIP LOCKED LIMIT 32), updated AS (UPDATE w03_event_outbox AS o SET delivery_status='claimed',claim_token='load-$batch',unlocked_at='2026-09-01T06:10:00Z',attempt_count=attempt_count+1,last_attempted_at='$NOW' FROM candidate WHERE o.tenant_id='$TENANT_A' AND o.event_id=candidate.event_id RETURNING 1) SELECT count(*) FROM updated;")"
+  end_ns="$(date +%s%N)"
+  assert_eq 32 "$claimed" "R18_claim_batch_$batch"
+  durations+=( $(( (end_ns - start_ns) / 1000000 )) )
+done
+mapfile -t sorted_durations < <(printf '%s\n' "${durations[@]}" | sort -n)
+p50_ms="${sorted_durations[4]}"
+p95_ms="${sorted_durations[9]}"
+max_ms="${sorted_durations[9]}"
+if (( max_ms >= 5000 )); then
+  echo "W03F_POSTGRES_FAIL R18 claim latency unbounded max_ms=$max_ms" >&2
+  exit 1
+fi
+echo "W03F_POSTGRES_LOAD_METRICS {\"durableBacklog\":1500,\"claimBatches\":10,\"batchSize\":32,\"claimP50Ms\":$p50_ms,\"claimP95Ms\":$p95_ms,\"claimMaxMs\":$max_ms}"
 
 # Force planner visibility of the accepted queue index even on the deliberately small gate database.
 plan="$(run_sql "SET enable_seqscan=off; EXPLAIN SELECT event_id FROM w03_event_outbox WHERE tenant_id='$TENANT_A' AND delivery_status='pending' AND (next_attempt_at IS NULL OR next_attempt_at <= '$NOW') LIMIT 32;")"
