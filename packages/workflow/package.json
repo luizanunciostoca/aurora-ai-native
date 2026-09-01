@@ -1,0 +1,24 @@
+{
+  "name": "@aurora/workflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "W03 durable timer, lease and workflow primitives over the canonical Postgres baseline.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "test": "npm run typecheck && npm run build && node --test"
+  },
+  "dependencies": {
+    "@aurora/contracts": "0.1.0"
+  },
+  "engines": {
+    "node": ">=22.16.0 <23",
+    "npm": "10.9.2"
+  }
+}
