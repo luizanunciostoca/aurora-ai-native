@@ -52,7 +52,14 @@ jobs:
           grep -q 'copilot-requests: write' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'max-parallel: 2' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'contents: read' .github/workflows/aurora-copilot-free-worker.yml
-          grep -q 'Remove infrastructure/control-plane edits from AI patch' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'Remove generated outputs before candidate classification' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'Remove protected and generated edits from AI patch' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'aurora:copilot-free-branch-ready' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'gh workflow run quality.yml' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'gh workflow run test-build.yml' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'gh workflow run security.yml' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'listOpenPullRequests' tools/copilot/claim-free-ready.mjs
+          grep -q 'aurora:canonical-pr-open' tools/copilot/claim-free-ready.mjs
+          grep -q 'aurora-governance' tools/copilot/claim-free-ready.mjs
+          grep -q 'aurora-acceptance' tools/copilot/claim-free-ready.mjs
+          grep -q 'aurora-coordinator' tools/copilot/claim-free-ready.mjs
