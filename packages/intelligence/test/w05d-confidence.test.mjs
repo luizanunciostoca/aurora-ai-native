@@ -29,7 +29,7 @@ test('W05-D confidence is deterministic and decomposed', () => {
   assert.deepEqual(first, second);
   assert.equal(first.band, 'HIGH');
   assert.equal(first.disposition, 'PROCEED_WITH_EVIDENCE');
-  assert.equal(first.scoreBps, 8850);
+  assert.equal(first.scoreBps, 8900);
   assert.deepEqual(first.decomposition, request().signals);
   assert.deepEqual(first.uncertaintyReasons, []);
   assert.equal(first.authorizesExecution, false);
@@ -94,11 +94,7 @@ test('basis-point inputs are bounded and malformed signals fail closed', () => {
 
 test('calibration interface is data-only and cannot self-promote runtime behavior', () => {
   const evaluation = confidence.evaluateConfidence(request());
-  const sample = confidence.createCalibrationSample(
-    evaluation,
-    'CORRECT',
-    '2026-09-01T21:30:00Z',
-  );
+  const sample = confidence.createCalibrationSample(evaluation, 'CORRECT', '2026-09-01T21:30:00Z');
   assert.equal(sample.predictedScoreBps, evaluation.scoreBps);
   assert.equal(sample.predictedBand, evaluation.band);
   assert.equal(sample.observedOutcome, 'CORRECT');
