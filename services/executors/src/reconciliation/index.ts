@@ -18,4 +18,5 @@ export type {
   ReconciliationObservation,
   ReconciliationReason,
   ReconciliationResult,
+  RetrySafeguardEvidence,
 } from './types.js';
