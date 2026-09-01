@@ -17,3 +17,4 @@ const diff = execFileSync('git', ['diff', '--', ...files], {
   encoding: 'utf8',
 });
 console.log(`W07A_PRETTIER_DIFF_BEGIN\n${diff}W07A_PRETTIER_DIFF_END`);
+throw new Error('W07A_PRETTIER_DIAGNOSTIC_COMPLETE');
