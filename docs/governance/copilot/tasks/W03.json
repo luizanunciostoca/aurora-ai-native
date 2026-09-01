@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
   "wave": "W03",
   "defaults": {
@@ -12,6 +12,20 @@
       "- Risk Framework v1.0",
       "- Legacy W03 salvage",
       "- TOCA MCP event/persistence patterns"
+    ],
+    "readinessPolicy": "READ_ONLY_WHILE_BLOCKED",
+    "handoffFormat": "AURORA_COMPACT_V1",
+    "coordinatorSurfaces": [
+      "root-workspace-config",
+      "lockfiles",
+      "root-build-config",
+      "ci-workflows",
+      "codeowners",
+      "cross-package-publication",
+      "packages/events/package.json",
+      "packages/events/tsconfig.json",
+      "packages/events/tsconfig.build.json",
+      "packages/events/src/index.ts"
     ]
   },
   "tasks": [
@@ -28,7 +42,10 @@
         "5. Define risk register/pre-mortem/stress plan including duplicate/replay/out-of-order and database failure."
       ],
       "ownership": "W03 governance + coordinator-owned shared persistence/event surfaces",
-      "forbidden": "No feature code before W02 release."
+      "forbidden": "No feature code before W02 release.",
+      "laneHint": "PROGRAM-CONTROL",
+      "dispatchPriority": 110,
+      "sharedWriteSurfaces": ["w03:governance-freeze", "w03:migration-allocation"]
     },
     {
       "id": "W03-A",
@@ -43,7 +60,11 @@
         "5. Use TOCA migrations only as schema pattern references."
       ],
       "ownership": "W03-owned persistence/migrations paths after freeze",
-      "forbidden": "No W04 capability/control schema; no provider/device domain tables."
+      "forbidden": "No W04 capability/control schema; no provider/device domain tables.",
+      "allowedPaths": ["migrations/**", "packages/persistence/**"],
+      "laneHint": "FOUNDATION",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": ["w03:persistence-baseline", "w03:migration-allocation"]
     },
     {
       "id": "W03-B",
@@ -57,8 +78,12 @@
         "4. Prove repeated delivery/replay does not duplicate downstream side effects.",
         "5. Expose deterministic evidence/correlation hooks."
       ],
-      "ownership": "W03 event/persistence outbox-inbox modules",
-      "forbidden": "No provider execution; no blind retry semantics."
+      "ownership": "packages/events/src/delivery/** plus W03-B-prefixed event tests; shared @aurora/events package/publication surfaces remain Program Control-owned",
+      "forbidden": "No provider execution; no blind retry semantics; no packages/events manifest, root barrel or transport/subscription leaf edits.",
+      "allowedPaths": ["packages/events/src/delivery/**", "packages/events/test/w03b-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 90,
+      "sharedWriteSurfaces": ["w03:events-outbox-inbox-idempotency"]
     },
     {
       "id": "W03-C",
@@ -72,8 +97,12 @@
         "4. Define transport-independent contracts and local/test transport if needed.",
         "5. Replace polling only where reliable events exist; document fallback."
       ],
-      "ownership": "W03 event transport/subscription packages",
-      "forbidden": "Legacy in-memory AuroraEventBus is test/reference only, never production backbone."
+      "ownership": "packages/events/src/transport/** plus W03-C-prefixed event tests; shared @aurora/events package/publication surfaces remain Program Control-owned",
+      "forbidden": "Legacy in-memory AuroraEventBus is test/reference only, never production backbone; no packages/events manifest, root barrel or delivery/idempotency leaf edits.",
+      "allowedPaths": ["packages/events/src/transport/**", "packages/events/test/w03c-**"],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 90,
+      "sharedWriteSurfaces": ["w03:events-transport-subscription"]
     },
     {
       "id": "W03-D",
@@ -87,8 +116,12 @@
         "4. Handle duplicate, replayed and out-of-order EventEnvelope deterministically.",
         "5. Add replay safety invariants for future provider/device side effects."
       ],
-      "ownership": "W03 ordering/replay/DLQ modules",
-      "forbidden": "Replay may not grant authority or blindly repeat uncertain side effects."
+      "ownership": "packages/events/src/replay/** plus W03-D-prefixed event tests; shared package/publication surfaces remain Program Control-owned",
+      "forbidden": "Replay may not grant authority or blindly repeat uncertain side effects; no packages/events manifest or root barrel edits.",
+      "allowedPaths": ["packages/events/src/replay/**", "packages/events/test/w03d-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w03:events-ordering-replay-dlq"]
     },
     {
       "id": "W03-E",
@@ -103,7 +136,11 @@
         "5. Provide deterministic recovery after process restart."
       ],
       "ownership": "W03 scheduler/lease/workflow packages",
-      "forbidden": "No W05 agent runtime; no W15 Android runtime."
+      "forbidden": "No W05 agent runtime; no W15 Android runtime.",
+      "allowedPaths": ["packages/workflow/**"],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w03:workflow-timers-leases-durable-state"]
     },
     {
       "id": "W03-F",
@@ -117,8 +154,11 @@
         "4. Measure queue/claim throughput and bounded concurrency.",
         "5. Produce W03 Reality Gate evidence and migration/recovery runbook."
       ],
-      "ownership": "W03 integration tests/fixtures/benchmarks",
-      "forbidden": "No external provider/device side effects."
+      "ownership": "W03 integration tests/fixtures/benchmarks/runbook",
+      "forbidden": "No external provider/device side effects.",
+      "laneHint": "CONVERGENCE",
+      "dispatchPriority": 70,
+      "sharedWriteSurfaces": ["w03:integration-failure-load-validation"]
     }
   ]
 }

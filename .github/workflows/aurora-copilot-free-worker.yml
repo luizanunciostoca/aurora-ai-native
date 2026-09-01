@@ -158,6 +158,10 @@ jobs:
             fi
           done
           git add -A
+      - name: Enforce machine task path fence
+        env:
+          AURORA_TASK_ID: ${{ matrix.taskId }}
+        run: node tools/copilot/validate-candidate-paths.mjs
       - name: Build candidate patch artifact
         shell: bash
         run: |
@@ -267,7 +271,7 @@ jobs:
             --base main \
             --head "$branch" \
             --title "[Copilot Free] ${{ matrix.taskId }} candidate" \
-            --body "Automated Copilot Free CLI candidate for issue #${{ matrix.issue }}. Base SHA: ${{ matrix.baseSha }}. The AI worker had read-only repository permission; this deterministic publisher applied the patch. This PR is NOT accepted and must pass Aurora exact-head gates and independent acceptance before merge." 2>/tmp/aurora-pr-create-error.txt)"
+            --body "Automated Copilot Free CLI candidate for issue #${{ matrix.issue }}. Base SHA: ${{ matrix.baseSha }}. The AI worker had read-only repository permission; this deterministic publisher applied the path-fenced patch. This PR is NOT accepted and must pass Aurora exact-head gates and independent acceptance before merge." 2>/tmp/aurora-pr-create-error.txt)"
           pr_status=$?
           set -e
 
