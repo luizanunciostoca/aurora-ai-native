@@ -1,8 +1,4 @@
-import type {
-  LaneResolution,
-  LaneResolutionInput,
-  LaneResolutionReason,
-} from './types.ts';
+import type { LaneResolution, LaneResolutionInput, LaneResolutionReason } from './types.ts';
 
 function preferredStrategy(
   input: LaneResolutionInput,

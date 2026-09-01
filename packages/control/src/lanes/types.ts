@@ -7,10 +7,20 @@ import type {
 export const PLANNING_LANES = ['FAST', 'GOVERNED'] as const;
 export type PlanningLane = (typeof PLANNING_LANES)[number];
 
-export const TASK_REVERSIBILITY = ['REVERSIBLE', 'COMPENSATABLE', 'IRREVERSIBLE', 'UNKNOWN'] as const;
+export const TASK_REVERSIBILITY = [
+  'REVERSIBLE',
+  'COMPENSATABLE',
+  'IRREVERSIBLE',
+  'UNKNOWN',
+] as const;
 export type TaskReversibility = (typeof TASK_REVERSIBILITY)[number];
 
-export const TASK_COMPLEXITY = ['DETERMINISTIC', 'TEMPLATE_ELIGIBLE', 'ADAPTIVE', 'UNKNOWN'] as const;
+export const TASK_COMPLEXITY = [
+  'DETERMINISTIC',
+  'TEMPLATE_ELIGIBLE',
+  'ADAPTIVE',
+  'UNKNOWN',
+] as const;
 export type TaskComplexity = (typeof TASK_COMPLEXITY)[number];
 
 export interface LaneResolutionInput {
