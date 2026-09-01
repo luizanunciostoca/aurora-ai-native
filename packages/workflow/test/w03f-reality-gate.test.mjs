@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
+import { stdout } from 'node:process';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
@@ -46,7 +47,7 @@ function percentile(values, p) {
 }
 
 function emitEvidence(prefix, value) {
-  process.stdout.write(`${prefix} ${JSON.stringify(value)}\n`);
+  stdout.write(`${prefix} ${JSON.stringify(value)}\n`);
 }
 
 const scenarioEvidence = new Map();
