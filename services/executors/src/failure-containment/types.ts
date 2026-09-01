@@ -9,6 +9,8 @@ export interface CircuitSnapshot {
   readonly consecutiveFailures: number;
   readonly openedAt?: Rfc3339Timestamp;
   readonly halfOpenProbeInFlight: boolean;
+  /** Bound only while a HALF_OPEN probe is reserved. */
+  readonly halfOpenProbeActionIntentId?: ActionIntent['actionIntentId'];
 }
 
 export type DependencyHealth = 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
@@ -54,6 +56,7 @@ export type FailureContainmentReason =
   | 'INVALID_CONTAINMENT_CONFIG'
   | 'KILL_SWITCH_ACTIVE'
   | 'CIRCUIT_OPEN'
+  | 'HALF_OPEN_PROBE_RESERVATION_REQUIRED'
   | 'HALF_OPEN_PROBE_IN_FLIGHT'
   | 'DEPENDENCY_UNAVAILABLE'
   | 'OVERLOAD_LIMIT_REACHED'
@@ -69,6 +72,7 @@ export interface FailureContainmentResult {
   readonly actionIntentId: ActionIntent['actionIntentId'];
   readonly mayProceedToOtherGuards: boolean;
   readonly degradedMode: boolean;
+  /** True only when this caller may reserve the one HALF_OPEN probe. */
   readonly halfOpenProbeEligible: boolean;
   readonly cancellationDisposition: CancellationDisposition;
   readonly requiresReconciliationHandoff: boolean;
@@ -86,6 +90,8 @@ export interface CircuitTransitionRequest {
   readonly observedAt: Rfc3339Timestamp;
   readonly failureThreshold: number;
   readonly recoveryAfterMs: number;
+  /** Required to reserve or complete a HALF_OPEN probe. */
+  readonly probeActionIntentId?: ActionIntent['actionIntentId'];
 }
 
 export type CircuitTransitionReason =
@@ -93,7 +99,9 @@ export type CircuitTransitionReason =
   | 'INVALID_CIRCUIT_CONFIG'
   | 'INVALID_CIRCUIT_TRANSITION'
   | 'RECOVERY_WINDOW_NOT_ELAPSED'
-  | 'HALF_OPEN_PROBE_ALREADY_IN_FLIGHT';
+  | 'HALF_OPEN_PROBE_ALREADY_IN_FLIGHT'
+  | 'HALF_OPEN_PROBE_OWNER_REQUIRED'
+  | 'HALF_OPEN_PROBE_OWNER_MISMATCH';
 
 export interface CircuitTransitionResult {
   readonly kind: 'CIRCUIT_TRANSITION_RESULT';
@@ -114,7 +122,11 @@ export interface KillSwitchTransitionRequest {
   readonly recoveryGate: RecoveryGate;
 }
 
-export type KillSwitchTransitionReason = 'INVALID_TIME' | 'KILL_SWITCH_RECOVERY_NOT_VALIDATED';
+export type KillSwitchTransitionReason =
+  | 'INVALID_TIME'
+  | 'STALE_KILL_SWITCH_TRANSITION'
+  | 'KILL_SWITCH_TIME_CONFLICT'
+  | 'KILL_SWITCH_RECOVERY_NOT_VALIDATED';
 
 export interface KillSwitchTransitionResult {
   readonly kind: 'KILL_SWITCH_TRANSITION_RESULT';
