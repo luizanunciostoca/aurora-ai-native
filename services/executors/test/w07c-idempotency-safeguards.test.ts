@@ -43,27 +43,24 @@ function request(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test(
-  'allows downstream external invocation only after generic guards and W03-owned reservation',
-  () => {
-    let reservations = 0;
-    const fence: IdempotencyFencePort = {
-      reserve: (input) => {
-        reservations += 1;
-        assert.equal(input.tenantId, 'tenant:alpha');
-        assert.equal(input.key, 'idem:publish:1');
-        assert.equal(input.operationName, 'social.publish:PUBLISH');
-        return { kind: 'RESERVED' };
-      },
-    };
-    const result = evaluateExecutionSafeguards(request({ idempotencyFence: fence }));
+test('reserves W03 idempotency before allowing downstream external invocation', () => {
+  let reservations = 0;
+  const fence: IdempotencyFencePort = {
+    reserve: (input) => {
+      reservations += 1;
+      assert.equal(input.tenantId, 'tenant:alpha');
+      assert.equal(input.key, 'idem:publish:1');
+      assert.equal(input.operationName, 'social.publish:PUBLISH');
+      return { kind: 'RESERVED' };
+    },
+  };
+  const result = evaluateExecutionSafeguards(request({ idempotencyFence: fence }));
 
-    assert.equal(reservations, 1);
-    assert.equal(result.safeToInvokeExternal, true);
-    assert.equal(result.idempotencyReserved, true);
-    assert.equal(result.authorizesExecution, false);
-  },
-);
+  assert.equal(reservations, 1);
+  assert.equal(result.safeToInvokeExternal, true);
+  assert.equal(result.idempotencyReserved, true);
+  assert.equal(result.authorizesExecution, false);
+});
 
 test('fences duplicate race deterministically before any external call', () => {
   let reserved = false;
@@ -84,16 +81,14 @@ test('fences duplicate race deterministically before any external call', () => {
 });
 
 test('completed replay and conflicts fail closed rather than re-executing', () => {
-  const replay = evaluateExecutionSafeguards(
-    request({ idempotencyFence: { reserve: () => ({ kind: 'REPLAY_COMPLETED' }) } }),
-  );
-  const conflict = evaluateExecutionSafeguards(
-    request({
-      idempotencyFence: {
-        reserve: () => ({ kind: 'CONFLICT', reason: 'PAYLOAD_MISMATCH' }),
-      },
-    }),
-  );
+  const replayFence: IdempotencyFencePort = {
+    reserve: () => ({ kind: 'REPLAY_COMPLETED' }),
+  };
+  const conflictFence: IdempotencyFencePort = {
+    reserve: () => ({ kind: 'CONFLICT', reason: 'PAYLOAD_MISMATCH' }),
+  };
+  const replay = evaluateExecutionSafeguards(request({ idempotencyFence: replayFence }));
+  const conflict = evaluateExecutionSafeguards(request({ idempotencyFence: conflictFence }));
 
   assert.deepEqual(replay.reasons, ['IDEMPOTENCY_REPLAY_COMPLETED']);
   assert.deepEqual(conflict.reasons, ['IDEMPOTENCY_CONFLICT']);
@@ -109,7 +104,7 @@ test('required idempotency cannot proceed without W03 fence/hash configuration',
   assert.deepEqual(missingHash.reasons, ['IDEMPOTENCY_CONFIGURATION_INVALID']);
 });
 
-test('deadline, bounded attempts and quota each fail closed before reservation', () => {
+test('deadline, bounded attempts and quota fail closed before reservation', () => {
   let reservations = 0;
   const fence: IdempotencyFencePort = {
     reserve: () => {
@@ -160,10 +155,13 @@ test('failed or throwing preconditions fail closed before idempotency reservatio
   assert.equal(reservations, 0);
 });
 
-test('NOT_APPLICABLE idempotency can pass generic guards without inventing a ledger record', () => {
+test('NOT_APPLICABLE idempotency passes generic guards without a ledger record', () => {
+  const nonIdempotentIntent = actionIntent({
+    idempotency: { mode: 'NOT_APPLICABLE', reason: 'read-only' },
+  });
   const result = evaluateExecutionSafeguards(
     request({
-      actionIntent: actionIntent({ idempotency: { mode: 'NOT_APPLICABLE', reason: 'read-only' } }),
+      actionIntent: nonIdempotentIntent,
       canonicalPayloadHash: undefined,
       idempotencyFence: undefined,
     }),
@@ -174,15 +172,12 @@ test('NOT_APPLICABLE idempotency can pass generic guards without inventing a led
   assert.equal(result.authorizesExecution, false);
 });
 
-test('invalid RFC3339 time and malformed quota/attempt values fail closed', () => {
-  assert.deepEqual(evaluateExecutionSafeguards(request({ evaluatedAt: 'not-a-time' })).reasons, [
-    'INVALID_TIME',
-  ]);
-  assert.deepEqual(evaluateExecutionSafeguards(request({ attemptNumber: 0 })).reasons, [
-    'ATTEMPT_INVALID',
-  ]);
-  assert.deepEqual(
-    evaluateExecutionSafeguards(request({ quota: { limit: 0, used: -1 } })).reasons,
-    ['QUOTA_INVALID'],
-  );
+test('invalid time and malformed quota/attempt values fail closed', () => {
+  const invalidTime = evaluateExecutionSafeguards(request({ evaluatedAt: 'not-a-time' }));
+  const invalidAttempt = evaluateExecutionSafeguards(request({ attemptNumber: 0 }));
+  const invalidQuota = evaluateExecutionSafeguards(request({ quota: { limit: 0, used: -1 } }));
+
+  assert.deepEqual(invalidTime.reasons, ['INVALID_TIME']);
+  assert.deepEqual(invalidAttempt.reasons, ['ATTEMPT_INVALID']);
+  assert.deepEqual(invalidQuota.reasons, ['QUOTA_INVALID']);
 });
