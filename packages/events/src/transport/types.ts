@@ -1,4 +1,4 @@
-import type { EventEnvelope, EventType } from '@aurora/contracts/envelopes';
+import type { EventEnvelope, EventType } from '@aurora/contracts';
 
 /** Internal transport key only. This is not a new Aurora canonical ID namespace. */
 export type SubscriptionKey = string;
