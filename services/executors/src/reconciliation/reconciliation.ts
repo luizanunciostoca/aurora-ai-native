@@ -62,7 +62,9 @@ function knownPreExecutionFailure(
   };
 }
 
-function uncertainExecutionFact(request: ClassifyExecutionAmbiguityRequest): ExecutionUncertainFact {
+function uncertainExecutionFact(
+  request: ClassifyExecutionAmbiguityRequest,
+): ExecutionUncertainFact {
   return {
     kind: 'ExecutionResult',
     schemaVersion: request.schemaVersion,
