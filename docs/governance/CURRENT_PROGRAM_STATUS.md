@@ -1,8 +1,8 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_A_E_ACCEPTED_W05_C_D_F_READY_W07_A_ACCEPTED_W07_B_C_D_E_READY`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_A_E_ACCEPTED_W05_C_D_F_READY_W07_A_D_ACCEPTED_W07_B_C_E_READY`
 Audit date: 2026-09-01
-Accepted implementation baseline before this status publication: `972c2429de43909ee42c1f77ecc1f4fe1af28faa`
+Accepted implementation baseline before this status publication: `5318fec80a4e61541cea3690d075d515e5514373`
 
 ## Authority order
 
@@ -32,8 +32,9 @@ No prompt, task node, PREBUILD artifact, draft PR, agent output, green CI on a s
 - W06: gated on accepted W05-H.
 - W07-00: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
 - W07-A: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W07-B/C/D/E: `DEPENDENCY_READY`; implementation remains subject to exact ownership/shared-surface controls and the same two-code-task batch ceiling.
-- W07-F/G: gated on accepted W07-B + W07-C + W07-D + W07-E.
+- W07-D: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
+- W07-B/C/E: `DEPENDENCY_READY`; implementation remains subject to exact ownership/shared-surface controls and the same two-code-task batch ceiling.
+- W07-F/G: gated on accepted W07-B + W07-C + W07-E; W07-D is already accepted.
 - W07-H: gated on accepted W07-F + W07-G.
 - W08-W20 remain dependency-gated except PREBUILD/readiness explicitly allowed by accepted Puzzle governance.
 - W15-00 remains additionally dependent on W02-PB5, W03-F, W07-H and W14-H.
@@ -151,7 +152,27 @@ Accepted W07-A invariants:
 - receipt/acknowledgement remains distinct from verified external state/readback;
 - no provider/device/workflow runtime or external side effect was introduced by W07-A.
 
-Current W07 implementation frontier remains `{ W07-B, W07-C, W07-D, W07-E }`, subject to the global two-code-task ceiling and shared-surface controls. W07-F/G/H remain gated.
+### W07-D
+
+PR #180 accepted exact current-main candidate `2766264c79540dd803d8d7e4ccc9e0ef80e662e4` on accepted executor bootstrap base/main `84a42291dc64d7e0e4d561c18c82420ef5b5111b`.
+
+Candidate Quality `33534237054`, Test Build `33534237072`, Security `33534237900`: SUCCESS. Test Build job `99944482205` compiled the executor leaf and executed 8/8 W07-D tests with zero failures; the cleanup audit reported `canonicalBrokenRelativeRefs=0`.
+
+Controlled merge/main: `5318fec80a4e61541cea3690d075d515e5514373`.
+Post-merge exact-main Quality `33534674425`, Test Build `33534674451`, Security `33534675235`: SUCCESS.
+
+Drive evidence: `W07_D_ACCEPTANCE_EVIDENCE_2026-09-01` / `1cr33O-J-FmG7FpEjv5Iptf5uQYKHnv9oE4vmTpDuiLE`.
+
+Accepted W07-D invariants:
+
+- deterministic target-neutral resolution for PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE;
+- complete provider identity matching, including optional account reference;
+- tenant mismatch, missing/ambiguous binding, unavailable/degraded/retired state, stale binding, malformed time, incompatible binding/target/ActionIntent and failed generic preconditions all fail closed;
+- target freshness uses an exclusive boundary and malformed/non-RFC3339 time fails as `TARGET_TIME_INVALID`;
+- every success and failure result fixes `authorizesExecution=false`;
+- no PolicyToken/OwnerDecision issuance or widening, provider credential, concrete provider/device/workflow runtime or external side effect is introduced.
+
+Current W07 implementation frontier is `{ W07-B, W07-C, W07-E }`, subject to the global two-code-task ceiling and shared-surface controls. W07-F/G remain gated until W07-B, W07-C and W07-E are accepted in addition to already accepted W07-D; W07-H remains gated on W07-F + W07-G.
 
 ## Architecture boundaries retained
 
