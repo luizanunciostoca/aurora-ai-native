@@ -275,7 +275,10 @@ test('W04-G refuses invalidated, hash-stale, and input-contract-incompatible tem
   const active = createActiveTemplate();
   const invalidated = expectCreated(
     createPlanTemplate(
-      templateInput({ status: 'INVALIDATED', invalidationReason: 'explicit governance revocation' }),
+      templateInput({
+        status: 'INVALIDATED',
+        invalidationReason: 'explicit governance revocation',
+      }),
     ),
   );
 
