@@ -194,7 +194,6 @@ test('VERIFY and ESCALATE confidence dispositions raise the route without granti
   assert.equal(verify.status, 'SELECTED');
   assert.equal(verify.family, 'MODEL');
   assert.ok(verify.reasons.includes('CONFIDENCE_REQUIRES_VERIFICATION'));
-
   const escalate = router.routeIntelligence(
     request({ confidence: confidence({ band: 'LOW', disposition: 'ESCALATE', scoreBps: 4500 }) }),
   );
@@ -215,9 +214,12 @@ test('computer-use planning is never selected on FAST lane', () => {
   const fast = router.routeIntelligence(request({ preferences: onlyComputerUse }));
   assert.equal(fast.status, 'ABSTAINED');
   assert.equal(fast.code, 'NO_COMPATIBLE_AVAILABLE_STRATEGY');
-
   const governed = router.routeIntelligence(
-    request({ preferences: onlyComputerUse, lane: lane({ lane: 'GOVERNED' }), reasoning: reasoning('L3') }),
+    request({
+      preferences: onlyComputerUse,
+      lane: lane({ lane: 'GOVERNED' }),
+      reasoning: reasoning('L3'),
+    }),
   );
   assert.equal(governed.status, 'SELECTED');
   assert.equal(governed.family, 'COMPUTER_USE_PLANNING');
@@ -230,7 +232,6 @@ test('blocked capability, held reasoning, abstention and budget stops fail close
   );
   assert.equal(blocked.status, 'ABSTAINED');
   assert.equal(blocked.code, 'CAPABILITY_PLAN_BLOCKED');
-
   const held = router.routeIntelligence(
     request({
       reasoning: {
@@ -248,19 +249,18 @@ test('blocked capability, held reasoning, abstention and budget stops fail close
   assert.equal(held.status, 'ABSTAINED');
   assert.equal(held.code, 'REASONING_HELD');
   assert.equal(held.recommendedEscalation, 'HUMAN');
-
   const abstained = router.routeIntelligence(
-    request({ confidence: confidence({ band: 'UNKNOWN', disposition: 'ABSTAIN', scoreBps: null }) }),
+    request({
+      confidence: confidence({ band: 'UNKNOWN', disposition: 'ABSTAIN', scoreBps: null }),
+    }),
   );
   assert.equal(abstained.status, 'ABSTAINED');
   assert.equal(abstained.code, 'CONFIDENCE_ABSTAIN');
-
   const exhausted = router.routeIntelligence(
     request({ budget: budget({ state: 'EXHAUSTED', action: 'HOLD' }) }),
   );
   assert.equal(exhausted.status, 'ABSTAINED');
   assert.equal(exhausted.code, 'BUDGET_HOLD_OR_EXHAUSTED');
-
   const stopped = router.routeIntelligence(
     request({ budget: budget({ action: 'STOP_OPTIONAL' }) }),
   );
@@ -296,12 +296,9 @@ test('W05-E fallback/degraded results remain evidence, never execution authority
 });
 
 test('tampered control/authority projections and context mismatches fail closed', () => {
-  const tampered = router.routeIntelligence(
-    request({ lane: lane({ authorizesExecution: true }) }),
-  );
+  const tampered = router.routeIntelligence(request({ lane: lane({ authorizesExecution: true }) }));
   assert.equal(tampered.status, 'ABSTAINED');
   assert.equal(tampered.code, 'INVALID_CONTROL_PROJECTION');
-
   const crossTenant = router.routeIntelligence(
     request({ capabilityPlan: capabilityPlan({ tenantId: 'ten_other' }) }),
   );
