@@ -18,7 +18,10 @@ const mode = JSON.parse(
   await fs.readFile('docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json', 'utf8'),
 );
 if (mode.mode !== 'FREE_ACTIONS_CLI' || !mode.freeActionsCliEnabled) {
-  await fs.appendFile(outputPath, 'matrix={"include":[]}\ncount=0\nfrontier={"selected":[],"deferred":[]}\n');
+  await fs.appendFile(
+    outputPath,
+    'matrix={"include":[]}\ncount=0\nfrontier={"selected":[],"deferred":[]}\n',
+  );
   console.log(`Free worker disabled by mode ${mode.mode}`);
   process.exit(0);
 }
