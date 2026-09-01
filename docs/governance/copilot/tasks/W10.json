@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W10",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W04-W07 accepted; W08/provider prerequisites as needed",
+    "mission": "Lead/customer/conversation lifecycle, qualification/scoring, nurture/sales/customer success and next-best-action with deterministic/cache/template fast paths and governed handling for complex/high-value cases.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 15, 26, 28-34",
+      "- Action Plan v0.4.1 W10",
+      "- MASTER_TASK_REGISTRY W10",
+      "- n8n W10 sanitized references (167 patterns) and TOCA CRM/omnichannel/measurement references",
+      "- Risk Framework v1.0"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W10-00",
+      "title": "W10-00 - Revenue/CRM Coordination & Domain Freeze",
+      "dependsOn": ["W05-H", "W07-H"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Revalidate W04-W08 outputs required by revenue flows.",
+        "2. Freeze canonical domain boundaries for lead, conversation, opportunity/customer lifecycle and read models.",
+        "3. Define capability plan/route ownership and external-provider dependencies.",
+        "4. Define business-result/evidence metrics and publication barriers for W11 consumers.",
+        "5. Create risk/premortem for stale CRM state, duplicate outreach, tenant leakage and automated sales actions."
+      ],
+      "ownership": "W10 revenue/crm/conversation packages and governance.",
+      "forbidden": "Do not implement social-provider transport, Meta/Google Ads or authority semantics."
+    },
+    {
+      "id": "W10-A",
+      "title": "W10-A - Lead, Customer & Conversation Lifecycle",
+      "dependsOn": ["W10-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define lifecycle states/transitions for lead/customer/conversation entities using canonical IDs.",
+        "2. Model provenance/source and tenant isolation.",
+        "3. Handle duplicate/merge/closed/reopened scenarios deterministically.",
+        "4. Emit W03 events for material state transitions.",
+        "5. Add transition/property tests."
+      ],
+      "ownership": "W10 domain lifecycle contracts/runtime.",
+      "forbidden": "Do not create parallel identity/tenant primitives."
+    },
+    {
+      "id": "W10-B",
+      "title": "W10-B - Qualification & Scoring",
+      "dependsOn": ["W10-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement deterministic and model-assisted qualification/scoring with explicit features/provenance.",
+        "2. Separate score/confidence from authority and irreversible actions.",
+        "3. Define thresholds/escalation policies as domain rules, not permission.",
+        "4. Support recalculation when source facts change.",
+        "5. Add calibration/edge-case tests."
+      ],
+      "ownership": "W10 qualification/scoring services.",
+      "forbidden": "Do not auto-authorize outreach/spend based on score."
+    },
+    {
+      "id": "W10-C",
+      "title": "W10-C - CRM Persistence & Read Models",
+      "dependsOn": ["W10-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement domain persistence/read models on W03 durable foundation.",
+        "2. Support idempotent writes, optimistic/version checks and event-driven projections.",
+        "3. Maintain tenant/account boundaries and provenance.",
+        "4. Provide query surfaces needed by next-best-action and W11 lead handoff.",
+        "5. Add replay/rebuild tests."
+      ],
+      "ownership": "W10 CRM persistence/read-model layer.",
+      "forbidden": "Do not duplicate W03 generic persistence framework."
+    },
+    {
+      "id": "W10-D",
+      "title": "W10-D - Nurture, Sales & Customer Success Flows",
+      "dependsOn": ["W10-B", "W10-C"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Model nurture/sales/customer-success state machines and task generation.",
+        "2. Use deterministic templates/workflows for known safe steps.",
+        "3. Require W07/W08 governed execution for external messages/actions.",
+        "4. Bound cadence/retries and prevent duplicate outreach.",
+        "5. Add cancellation/opt-out/consent tests."
+      ],
+      "ownership": "W10 domain workflows/controllers.",
+      "forbidden": "Do not perform direct provider writes or bypass consent/current policy."
+    },
+    {
+      "id": "W10-E",
+      "title": "W10-E - Next-Best-Action Planning",
+      "dependsOn": ["W10-B", "W10-C"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define next-best-action candidate generation from verified CRM/context facts.",
+        "2. Use W04 CapabilityPlan and W05 routing where reasoning is needed.",
+        "3. Carry rationale/provenance/budget/confidence without converting them to authority.",
+        "4. Return abstain/escalate when evidence is insufficient.",
+        "5. Add deterministic/benchmark scenarios."
+      ],
+      "ownership": "W10 NBA domain planning.",
+      "forbidden": "Do not mint ActionIntent for unsafe side effects without policy/authority flow."
+    },
+    {
+      "id": "W10-F",
+      "title": "W10-F - Fast Paths: Deterministic / Cache / Templates",
+      "dependsOn": ["W10-B", "W10-C"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Identify common low-risk high-frequency revenue tasks.",
+        "2. Route verified facts through deterministic/cache/template paths where sufficient.",
+        "3. Define freshness/invalidation and template versioning.",
+        "4. Escalate conflict/uncertainty/high-value cases to Governed Lane.",
+        "5. Measure latency/cost improvement without quality/safety regression."
+      ],
+      "ownership": "W10 fast-path domain compositions using W04-W06.",
+      "forbidden": "Do not bypass W07 for any external write."
+    },
+    {
+      "id": "W10-G",
+      "title": "W10-G - Revenue Integration & Business Outcome Evals",
+      "dependsOn": ["W10-D", "W10-E", "W10-F"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Run lead -> qualification -> next-best-action -> governed execution/evidence scenarios.",
+        "2. Test duplicate events, stale CRM state, consent changes, provider failures and human correction.",
+        "3. Link outcomes to business-result evidence suitable for W17/W18.",
+        "4. Run four Risk Gates and performance/economic budgets.",
+        "5. Publish W10 handoff for W11."
+      ],
+      "ownership": "W10 integration/eval/publication.",
+      "forbidden": "Do not claim adaptive learning promotion before W17/W18."
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+name: Aurora Copilot Fabric Validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/agents/**'
+      - '.github/copilot-instructions.md'
+      - '.github/instructions/**'
+      - '.github/workflows/aurora-copilot-*.yml'
+      - 'AGENTS.md'
+      - 'docs/governance/copilot/tasks/**'
+      - 'tools/copilot/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/agents/**'
+      - '.github/copilot-instructions.md'
+      - '.github/instructions/**'
+      - '.github/workflows/aurora-copilot-*.yml'
+      - 'AGENTS.md'
+      - 'docs/governance/copilot/tasks/**'
+      - 'tools/copilot/**'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-fabric:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate governed Aurora DAG
+        run: node tools/copilot/load-task-graph.mjs
+      - name: Verify custom-agent profiles
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(find .github/agents -maxdepth 1 -type f -name '*.agent.md' | wc -l | tr -d ' ')
+          test "$count" -eq 9
+          grep -R --line-number '^description:' .github/agents/*.agent.md >/dev/null
+          echo "Validated $count Aurora Copilot custom agents."
+      - name: Verify dispatcher fails closed without committed secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -R --line-number -E '(github_pat_|ghp_|AURORA_COPILOT_USER_TOKEN=)' . --exclude-dir=.git
+          grep -q 'AURORA_COPILOT_USER_TOKEN' .github/workflows/aurora-copilot-dispatch.yml
+          grep -q 'aurora:accepted' tools/copilot/materialize-ready.mjs
+          grep -q 'aurora:accepted' tools/copilot/dispatch-issue.mjs

@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W15",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W02 policy/authority + W03 durable foundation + W04 target-neutral capabilities + W07 execution-target contracts + W14 Device Gateway/session/trust; DP1-DP3 satisfied before implementation",
+    "mission": "Android application/runtime: presence/lifecycle, secure device identity/session/Keystore, native capability bridge, installed-app integration, permission/consent broker, Device Executor, voice fast path, offline-safe queue, optional Device Owner/Launcher and physical acceptance.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 20, 26, 29-34",
+      "- Action Plan v0.4.1 W15-00..J",
+      "- ADR-002 Device & Edge Execution Plane",
+      "- DEVICE_PLANE_CROSS_WAVE_OWNERSHIP",
+      "- DEVICE_PLANE_DEPENDENCY_MATRIX DP1-DP5",
+      "- Risk Framework v1.0",
+      "- Legacy Windows/voice/device references as behavior vocabulary only"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W15-00",
+      "title": "W15-00 - Device Plane Coordination & Ownership Freeze",
+      "dependsOn": ["W02-PB5", "W03-F", "W04-H", "W07-H", "W14-H"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Revalidate DP1 W04, DP2 W07 and DP3 W14 accepted contracts plus W02/W03 prerequisites.",
+        "2. Freeze apps/aurora-android ownership, native service boundaries, device executor integration and internal W15 DAG.",
+        "3. Confirm Android permissions/session/Keystore never substitute Aurora authority.",
+        "4. Define DP4/DP5 publication and physical acceptance criteria.",
+        "5. Create device-specific premortem/risk register covering replay, permissions, package impersonation, offline queue, privilege and evidence."
+      ],
+      "ownership": "W15 Android/device runtime governance and W15-owned paths.",
+      "forbidden": "Do not redefine DeviceId/DeviceRef, capability registry, PolicyToken, ActionIntent or generic executor semantics."
+    },
+    {
+      "id": "W15-A",
+      "title": "W15-A - Android Application Foundation, Presence & Lifecycle",
+      "dependsOn": ["W15-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Build Android app foundation and supported lifecycle architecture.",
+        "2. Implement presence/foreground/background/service state model appropriate to platform constraints.",
+        "3. Define secure local configuration and environment separation.",
+        "4. Implement connectivity/session lifecycle hooks without implying authority.",
+        "5. Add lifecycle/process-death/restart tests."
+      ],
+      "ownership": "apps/aurora-android application/lifecycle foundation.",
+      "forbidden": "Do not implement app-specific side effects or authority logic."
+    },
+    {
+      "id": "W15-B",
+      "title": "W15-B - Device Identity, Registration, Secure Session & Keystore",
+      "dependsOn": ["W15-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Consume W14 DeviceId/DeviceRef and registration/session contracts.",
+        "2. Implement Android-side registration/session client and secure key material use via Keystore.",
+        "3. Support session rotation/revocation/expiry and compromised-device handling.",
+        "4. Never serialize secrets into logs/evidence/cache.",
+        "5. Add key/session/reinstall/revocation tests."
+      ],
+      "ownership": "W15 Android secure identity/session client.",
+      "forbidden": "Do not create a second device identity namespace or treat Keystore possession as action authority."
+    },
+    {
+      "id": "W15-C",
+      "title": "W15-C - Native Device Capability Bridge",
+      "dependsOn": ["W15-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement native capability bridge mapped to W04 capability bindings and W07 target semantics.",
+        "2. Expose capability availability/freshness/compatibility/preconditions.",
+        "3. Support examples such as app.open, navigation, camera, media, location, file/share, notification only when OS/platform permits.",
+        "4. Keep capability discovery separate from execution permission.",
+        "5. Add availability/permission/staleness tests."
+      ],
+      "ownership": "W15 native capability bridge.",
+      "forbidden": "Do not create agent-per-app architecture or bypass W07."
+    },
+    {
+      "id": "W15-D",
+      "title": "W15-D - Installed App Integration Layer",
+      "dependsOn": ["W15-C", "W15-E"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Implement app integration in precedence order: official API/SDK -> Intent/App Link/Deep Link -> governed app adapter -> Accessibility/computer-use fallback only if explicitly high-risk governed.",
+        "2. Resolve package/app availability and supported actions safely.",
+        "3. Validate deep links/intents and protect against package impersonation.",
+        "4. Define readback/evidence capability where app/OS allows.",
+        "5. Add app-missing/wrong-package/deep-link tests."
+      ],
+      "ownership": "W15 installed-app adapters/integration layer.",
+      "forbidden": "Do not silently use Accessibility for convenience."
+    },
+    {
+      "id": "W15-E",
+      "title": "W15-E - Permission & Consent Broker",
+      "dependsOn": ["W15-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement Android runtime permission state/precondition broker.",
+        "2. Map local permission/consent state to capability availability without changing Aurora authority.",
+        "3. Handle denied/permanently denied/revoked/background restrictions.",
+        "4. Ensure permission prompts occur only in appropriate UX context.",
+        "5. Add permission drift and denial tests."
+      ],
+      "ownership": "W15 local permission/precondition layer.",
+      "forbidden": "Android permission is not PolicyToken/OwnerDecision/approval."
+    },
+    {
+      "id": "W15-F",
+      "title": "W15-F - Device Executor Runtime",
+      "dependsOn": ["W15-C", "W15-E"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement Android device-target executor consuming W07-compatible authorized ActionIntent/target requests.",
+        "2. Validate target/session/capability/permission/preconditions before native action.",
+        "3. Execute native/app action and return Receipt/Evidence/readback.",
+        "4. Classify ambiguous outcome as EXECUTION_UNCERTAIN and reconcile-before-retry.",
+        "5. Support kill switch/cancellation and bounded execution."
+      ],
+      "ownership": "W15 concrete DEVICE executor implementation.",
+      "forbidden": "Do not bypass current policy/authority or execute direct planner/model commands."
+    },
+    {
+      "id": "W15-G",
+      "title": "W15-G - Voice / Wake / Presence Fast Path",
+      "dependsOn": ["W15-C", "W15-E"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement voice/wake/presence loop for deterministic common commands.",
+        "2. Separate speech recognition/intent inference from action authority.",
+        "3. Use fast path only for capability/policy-safe deterministic flows.",
+        "4. Escalate ambiguity/high-risk commands and respect lifecycle/privacy constraints.",
+        "5. Add wake false-positive, transcript ambiguity and permission tests."
+      ],
+      "ownership": "W15 voice/presence runtime.",
+      "forbidden": "Voice confidence cannot grant permission or bypass W07/W15-F."
+    },
+    {
+      "id": "W15-H",
+      "title": "W15-H - Offline-Safe Queue, Reconnect, Dedupe & Reconciliation",
+      "dependsOn": ["W15-D", "W15-F", "W15-G"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Implement offline queue only for actions safe to defer/reconcile.",
+        "2. Use W03 durable/idempotency semantics and W14 reconnect/session rules.",
+        "3. Deduplicate commands across reconnect/process restart.",
+        "4. Never blindly replay EXECUTION_UNCERTAIN or stale-authority commands; revalidate required current state.",
+        "5. Test prolonged offline, stale session, duplicate queue and late receipt."
+      ],
+      "ownership": "W15 offline/reconnect orchestration.",
+      "forbidden": "Do not cache executable authority beyond validity/current-policy requirements."
+    },
+    {
+      "id": "W15-I",
+      "title": "W15-I - Optional Device Owner / Aurora Launcher Profile",
+      "dependsOn": ["W15-C", "W15-E"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Evaluate whether dedicated-device/Device Owner/Launcher mode solves a concrete deployment requirement.",
+        "2. Implement only if justified by explicit deployment profile and platform feasibility.",
+        "3. Separate optional privileged profile from standard app architecture.",
+        "4. Document elevated permissions, rollback/recovery and security implications.",
+        "5. Add provisioning/unprovisioning tests if implemented."
+      ],
+      "ownership": "Optional W15 deployment profile.",
+      "forbidden": "Do not make Device Owner mandatory or use elevated privilege to bypass Aurora policy."
+    },
+    {
+      "id": "W15-J",
+      "title": "W15-J - Physical Device Integration, Security & Acceptance",
+      "dependsOn": ["W15-H", "W15-I"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Run physical Android integration across lifecycle, registration/session, native/app capabilities, permission denial, offline/reconnect and voice.",
+        "2. Test missing app, revoked session, stale capability, duplicate command, late receipt, EXECUTION_UNCERTAIN and kill switch.",
+        "3. Run four Risk Gates plus device-specific threat scenarios owned now vs deferred to W19.",
+        "4. Run performance/battery/resource observations appropriate to tablet target.",
+        "5. Close DP4/DP5 only with exact-head evidence and W14/W17 handoffs."
+      ],
+      "ownership": "W15 integration/physical acceptance.",
+      "forbidden": "Do not claim Release 1.0; final device security/release remains W19/W20."
+    }
+  ]
+}

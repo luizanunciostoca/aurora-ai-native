@@ -1,0 +1,84 @@
+name: Aurora Copilot Task
+about: Create one ownership-locked task for the Aurora Copilot multi-agent queue
+title: '[AURORA][TASK ] '
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is an execution unit, not implementation authority. Live dependencies, ownership and publication barriers must be revalidated before work.
+  - type: input
+    id: task_id
+    attributes:
+      label: Task ID
+      placeholder: W03-B
+    validations:
+      required: true
+  - type: input
+    id: wave
+    attributes:
+      label: Wave
+      placeholder: W03
+    validations:
+      required: true
+  - type: dropdown
+    id: custom_agent
+    attributes:
+      label: Copilot custom agent
+      options:
+        - aurora-coordinator
+        - aurora-contracts
+        - aurora-implementation
+        - aurora-integration
+        - aurora-tests
+        - aurora-red-team
+        - aurora-performance
+        - aurora-governance
+        - aurora-acceptance
+    validations:
+      required: true
+  - type: input
+    id: base_ref
+    attributes:
+      label: Base ref
+      value: main
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Accepted task IDs / issue numbers / publication barriers required before implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: ownership
+    attributes:
+      label: Exclusive ownership
+      description: Exact files/directories this task may modify.
+    validations:
+      required: true
+  - type: textarea
+    id: forbidden
+    attributes:
+      label: Prohibited / shared surfaces
+      description: Paths and scope that remain coordinator-owned or out of scope.
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective and required work
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance evidence required
+      value: |
+        - deterministic positive/negative/boundary tests
+        - cleanup/duplication/scope-leak audit
+        - Quality + Test Build + Security on one exact final HEAD
+        - structured Aurora handoff; no self-merge or self-acceptance
+    validations:
+      required: true

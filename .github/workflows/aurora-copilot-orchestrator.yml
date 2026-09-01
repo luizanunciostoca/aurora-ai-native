@@ -1,0 +1,49 @@
+name: Aurora Copilot Task Orchestrator
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/governance/copilot/tasks/**'
+      - 'tools/copilot/**'
+      - '.github/agents/**'
+      - '.github/copilot-instructions.md'
+      - '.github/instructions/**'
+      - 'AGENTS.md'
+  issues:
+    types: [closed, reopened]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: aurora-copilot-task-orchestrator
+  cancel-in-progress: false
+
+jobs:
+  validate-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Validate 166-task Aurora DAG
+        run: node tools/copilot/load-task-graph.mjs
+
+  materialize-ready:
+    needs: validate-graph
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Materialize newly READY task nodes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/copilot/materialize-ready.mjs

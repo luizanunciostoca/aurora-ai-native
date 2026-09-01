@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W18",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W05-W17 with trustworthy W17 telemetry/evidence accepted",
+    "mission": "Governed evaluation and adaptation: model/prompt/profile registry, golden datasets, confidence calibration, shadow strategies, template promotion, adaptive router optimizer and quality x latency x cost Economic Governor.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 23, 26-34",
+      "- Action Plan v0.4.1 W18-A..I",
+      "- TOCA experimentation/learning governance references",
+      "- Risk Framework v1.0"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W18-00",
+      "title": "W18-00 - Evals/Learning Coordination & Promotion Governance Freeze",
+      "dependsOn": ["W17-G"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Revalidate W17 telemetry/evidence quality before any adaptive claim.",
+        "2. Freeze registry/eval/promotion ownership and Observation -> Eval -> Candidate -> SHADOW -> CANARY -> LearningPromotionRecord -> rollback flow.",
+        "3. Define datasets, holdouts, success/safety metrics and rollback criteria.",
+        "4. Define no-online-self-promotion invariant.",
+        "5. Create premortem for reward hacking, biased datasets, silent regressions and economic runaway."
+      ],
+      "ownership": "W18 eval/learning/optimizer governance and packages.",
+      "forbidden": "Do not modify authority semantics or permit ungated production self-learning."
+    },
+    {
+      "id": "W18-A",
+      "title": "W18-A - Model / Prompt / Profile Registry & Compatibility",
+      "dependsOn": ["W18-00"],
+      "customAgent": "aurora-contracts",
+      "actions": [
+        "1. Create versioned registry for model/prompt/agent-profile/strategy configurations.",
+        "2. Track compatibility, provenance, status and rollout phase.",
+        "3. Support reproducible evaluation references.",
+        "4. Separate capability/strategy availability from authority.",
+        "5. Add registry/version tests."
+      ],
+      "ownership": "W18 strategy/model registry.",
+      "forbidden": "Do not duplicate W04 Capability Registry."
+    },
+    {
+      "id": "W18-B",
+      "title": "W18-B - Golden Datasets & Regression Gates",
+      "dependsOn": ["W18-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Build versioned golden/benchmark datasets from synthetic, historical and evidence-derived cases with provenance/privacy controls.",
+        "2. Define train/eval/holdout separation where applicable.",
+        "3. Cover correctness, safety, cost/latency and failure scenarios.",
+        "4. Create regression gates for known task classes.",
+        "5. Add dataset drift/version integrity checks."
+      ],
+      "ownership": "W18 eval datasets/harness.",
+      "forbidden": "Do not leak secrets/personal runtime data into fixtures."
+    },
+    {
+      "id": "W18-C",
+      "title": "W18-C - Confidence Calibration",
+      "dependsOn": ["W18-A", "W18-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Evaluate confidence against observed correctness/uncertainty by task class.",
+        "2. Implement calibration metrics and abstention/escalation thresholds.",
+        "3. Detect overconfidence and distribution drift.",
+        "4. Use confidence only for routing/verification strategy.",
+        "5. Prove confidence cannot elevate authority."
+      ],
+      "ownership": "W18 calibration layer.",
+      "forbidden": "No permission/spend/action authority from calibrated confidence."
+    },
+    {
+      "id": "W18-D",
+      "title": "W18-D - Shadow Strategy Comparison",
+      "dependsOn": ["W18-A", "W18-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Run candidate strategies in SHADOW against production-like observations without side effects.",
+        "2. Compare quality, latency, cost, tool/model calls and safety.",
+        "3. Use W17 StrategyExecutionRecord for matched analysis.",
+        "4. Define statistical/minimum-evidence criteria and stop conditions.",
+        "5. Add leakage/side-effect prohibition tests."
+      ],
+      "ownership": "W18 shadow evaluation runtime.",
+      "forbidden": "Shadow candidates must not execute external writes."
+    },
+    {
+      "id": "W18-E",
+      "title": "W18-E - PlanTemplate Learning Candidate Generation",
+      "dependsOn": ["W18-C", "W18-D"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Mine repeated successful task/plan patterns from evidence.",
+        "2. Generate candidate PlanTemplate/PlanBinding improvements under W04-compatible schema.",
+        "3. Record source observations, support count, context constraints and risk class.",
+        "4. Reject candidates with insufficient evidence or authority assumptions.",
+        "5. Add candidate reproducibility tests."
+      ],
+      "ownership": "W18 template candidate generation.",
+      "forbidden": "Do not directly modify active W04 templates."
+    },
+    {
+      "id": "W18-F",
+      "title": "W18-F - Validated TemplatePromotionRecord & Rollback",
+      "dependsOn": ["W18-E"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Define promotion record for evaluated templates/strategies with evidence, scope, version, rollout phase and rollback.",
+        "2. Require evaluation thresholds and safety gates.",
+        "3. Support SHADOW/CANARY/LIMITED/GENERAL/RETIRED-style governed lifecycle as accepted.",
+        "4. Implement rollback and supersession.",
+        "5. Add failed-canary/rollback tests."
+      ],
+      "ownership": "W18 promotion governance/runtime.",
+      "forbidden": "No direct online promotion from usage signal alone."
+    },
+    {
+      "id": "W18-G",
+      "title": "W18-G - Adaptive Model / Strategy Router Optimizer",
+      "dependsOn": ["W18-C", "W18-D"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Optimize routing based on evidence by task class, complexity, risk, latency and cost.",
+        "2. Respect hard safety/authority constraints and minimum quality.",
+        "3. Support exploration only within governed shadow/canary bounds.",
+        "4. Fall back to known safe route on uncertainty/drift.",
+        "5. Add adversarial/economic-runaway tests."
+      ],
+      "ownership": "W18 router optimizer.",
+      "forbidden": "Optimizer cannot select a path that bypasses mandatory safety stages."
+    },
+    {
+      "id": "W18-H",
+      "title": "W18-H - Economic Governor",
+      "dependsOn": ["W18-C", "W18-D"],
+      "customAgent": "aurora-performance",
+      "actions": [
+        "1. Implement quality x latency x cost objective/budget evaluation.",
+        "2. Use bounded compute/tool/model/retrieval budgets and business-value context.",
+        "3. Define graceful degradation/abstention/escalation.",
+        "4. Measure coordination overhead and avoid over-agentification.",
+        "5. Add budget exhaustion/fan-out tests."
+      ],
+      "ownership": "W18 Economic Governor.",
+      "forbidden": "Cost reduction cannot reduce authority/evidence completeness."
+    },
+    {
+      "id": "W18-I",
+      "title": "W18-I - Learning Promotion Governance, Canary & Acceptance",
+      "dependsOn": ["W18-F", "W18-G", "W18-H"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Integrate registry/datasets/calibration/shadow/template/router/economic governance.",
+        "2. Run canary promotion and rollback drills.",
+        "3. Test dataset drift, stale telemetry, reward hacking, unsafe strategy and economic runaway.",
+        "4. Run four Risk Gates/exact-head CI.",
+        "5. Publish governed W18 handoff; no unbounded self-adaptation."
+      ],
+      "ownership": "W18 integration/promotion acceptance.",
+      "forbidden": "Do not auto-promote or mutate authority/policy."
+    }
+  ]
+}

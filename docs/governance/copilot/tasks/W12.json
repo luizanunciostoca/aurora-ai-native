@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W12",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W05-W08 accepted",
+    "mission": "Meta Ads domain planning and governed operations with financial/risk classification, paused-first writes, budgets/approvals/current authority, analytics/readback and optimization decision support.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 17, 26, 28-34",
+      "- Action Plan v0.4.1 W12",
+      "- TOCA MCP Meta Ads/paid-media references",
+      "- n8n corpus: only limited Meta Lead Ads-specific reference; no inferred full coverage",
+      "- Risk Framework v1.0"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W12-00",
+      "title": "W12-00 - Meta Ads Coordination & Financial Risk Freeze",
+      "dependsOn": ["W05-H", "W06-H", "W08-G"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Revalidate W05-W08 and current policy/authority interfaces.",
+        "2. Freeze Meta Ads domain objects/capabilities, write risk classes and financial-impact boundaries.",
+        "3. Define paused-first/staging strategy, account/tenant bindings and approval/budget requirements.",
+        "4. Define measurement/readback and publication barriers.",
+        "5. Create premortem for overspend, wrong account, duplicate mutation, stale audience/creative and provider rate limits."
+      ],
+      "ownership": "W12 Meta Ads domain packages/governance.",
+      "forbidden": "Do not duplicate W08 provider transport or W07 executor."
+    },
+    {
+      "id": "W12-A",
+      "title": "W12-A - Meta Ads Domain Contracts & Capability Plans",
+      "dependsOn": ["W12-00"],
+      "customAgent": "aurora-contracts",
+      "actions": [
+        "1. Define domain intents for campaign/adset/ad/audience/creative operations using W04 capabilities.",
+        "2. Model financial impact/risk class and reversibility.",
+        "3. Preserve Meta external IDs separately from Aurora IDs.",
+        "4. Define read vs write capability boundaries.",
+        "5. Add contract/schema tests."
+      ],
+      "ownership": "W12 domain contracts/planning.",
+      "forbidden": "Do not embed credentials or executable authority in plans."
+    },
+    {
+      "id": "W12-B",
+      "title": "W12-B - Account Binding & Read Surfaces",
+      "dependsOn": ["W12-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Compose explicit Meta account/business/ad-account binding via W08.",
+        "2. Implement normalized reads for campaigns/adsets/ads/audiences/metrics needed by W12.",
+        "3. Validate tenant/account and freshness/provenance.",
+        "4. Treat account verification as precondition only.",
+        "5. Add wrong-account/cross-tenant tests."
+      ],
+      "ownership": "W12 domain read composition.",
+      "forbidden": "Do not perform mutations."
+    },
+    {
+      "id": "W12-C",
+      "title": "W12-C - Creative & Audience Planning",
+      "dependsOn": ["W12-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement creative/audience candidate planning from verified facts and constraints.",
+        "2. Use W05 reasoning level appropriate to ambiguity/risk.",
+        "3. Carry evidence, confidence and budget estimates separately from authority.",
+        "4. Support deterministic templates for known safe patterns.",
+        "5. Add policy/content/targeting constraint tests."
+      ],
+      "ownership": "W12 planning/intelligence domain.",
+      "forbidden": "Confidence must never increase spend authority."
+    },
+    {
+      "id": "W12-D",
+      "title": "W12-D - Campaign/AdSet/Ad Paused-First Operations",
+      "dependsOn": ["W12-B", "W12-C", "W12-E"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement governed create/update operations through W07/W08.",
+        "2. Default to paused/non-serving state where supported before activation-sensitive actions.",
+        "3. Use idempotency, preconditions, current policy/authority and readback.",
+        "4. Classify ambiguous writes as EXECUTION_UNCERTAIN and reconcile.",
+        "5. Test duplicate/timeouts/rate-limits."
+      ],
+      "ownership": "W12 domain commands composed over W07/W08.",
+      "forbidden": "No direct provider mutation from planner/router."
+    },
+    {
+      "id": "W12-E",
+      "title": "W12-E - Financial Budget, Approval & Current Authority",
+      "dependsOn": ["W12-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Map financial-impact actions to required authority/budget/approval constraints.",
+        "2. Use W02 current-policy/authority validation at execution time.",
+        "3. Ensure low latency/cost goals cannot relax financial safety.",
+        "4. Fail closed on stale precheck, missing approval, budget ceiling or tenant mismatch.",
+        "5. Add overspend/authority attack matrix."
+      ],
+      "ownership": "W12 financial governance composition.",
+      "forbidden": "Do not create a parallel Policy Engine or financial token."
+    },
+    {
+      "id": "W12-F",
+      "title": "W12-F - Meta Ads Analytics & Measurement",
+      "dependsOn": ["W12-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Normalize provider metrics/read models needed for optimization.",
+        "2. Preserve attribution/provenance/freshness and account scope.",
+        "3. Link actions to evidence/outcomes without claiming causality beyond data.",
+        "4. Expose W17/W18-compatible telemetry/eval inputs.",
+        "5. Add delayed/incomplete metrics tests."
+      ],
+      "ownership": "W12 analytics/read models.",
+      "forbidden": "Analytics cannot directly authorize spend changes."
+    },
+    {
+      "id": "W12-G",
+      "title": "W12-G - Optimization Decision Support",
+      "dependsOn": ["W12-F"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Generate optimization candidates with expected benefit/risk/cost.",
+        "2. Use adaptive reasoning only as decision support.",
+        "3. Separate recommendation from ActionIntent/authority.",
+        "4. Support abstain/human review when evidence is weak or impact high.",
+        "5. Add benchmark and counterfactual-style eval fixtures where appropriate."
+      ],
+      "ownership": "W12 optimization intelligence.",
+      "forbidden": "No automatic spend escalation from confidence/model output."
+    },
+    {
+      "id": "W12-H",
+      "title": "W12-H - Meta Ads Reconciliation & Integration Acceptance",
+      "dependsOn": ["W12-D", "W12-G"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Run paused-first creation/update/readback/evidence scenarios.",
+        "2. Test wrong account, expired auth, rate limits, duplicate writes, stale policy, financial ceiling and uncertain provider state.",
+        "3. Run four Risk Gates, exact-head CI and cleanup.",
+        "4. Prove no n8n Lead Ads reference is falsely treated as full Meta Ads implementation.",
+        "5. Publish W12 acceptance/handoff."
+      ],
+      "ownership": "W12 integration/acceptance.",
+      "forbidden": "No production activation without explicit release/authority."
+    }
+  ]
+}

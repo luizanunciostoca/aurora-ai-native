@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
+  "wave": "W11",
+  "defaults": {
+    "mode": "IMPLEMENTATION",
+    "sourceDependencies": "W05-W08 + W10 as applicable",
+    "mission": "Organic publishing, comments/DM community, verified FAQ fast path, sensitive escalation, lead handoff and analytics, using W07 generic executor and W08 provider adapters.",
+    "sources": [
+      "- Developer Manual v0.5 ss. 16, 26, 28-34",
+      "- Action Plan v0.4.1 W11",
+      "- TOCA MCP Instagram/publication/engagement/creative references",
+      "- n8n W11 sanitized references (343 patterns)",
+      "- Risk Framework v1.0"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "W11-00",
+      "title": "W11-00 - Social/Community Coordination & Ownership Freeze",
+      "dependsOn": ["W10-G", "W08-G"],
+      "customAgent": "aurora-coordinator",
+      "actions": [
+        "1. Revalidate W05-W10 outputs and provider capabilities.",
+        "2. Freeze ownership between W11 domain logic, W08 provider adapters and W07 executor.",
+        "3. Define publication/community intent contracts, moderation/escalation rules and analytics outcomes.",
+        "4. Define safe staging and no-real-side-effect test strategy.",
+        "5. Create risk/premortem for duplicate posts, wrong account, harmful replies, consent/lead leakage and ambiguous publication state."
+      ],
+      "ownership": "W11 social/community domain packages and governance.",
+      "forbidden": "Do not duplicate Instagram transport/executor primitives owned by W08/W07."
+    },
+    {
+      "id": "W11-A",
+      "title": "W11-A - Organic Publication Contracts & Scheduling",
+      "dependsOn": ["W11-00"],
+      "customAgent": "aurora-contracts",
+      "actions": [
+        "1. Define post/story/reel/publication intents and lifecycle states.",
+        "2. Model scheduled time, media references, account/tenant binding, idempotency and cancellation.",
+        "3. Use W03 timers/events for scheduling and W07 for writes.",
+        "4. Support draft/prepare/paused-safe states where relevant.",
+        "5. Add time/replay/cancel tests."
+      ],
+      "ownership": "W11 domain publication planning/scheduling.",
+      "forbidden": "Do not perform direct Meta/Instagram writes."
+    },
+    {
+      "id": "W11-B",
+      "title": "W11-B - Publication Provider Integration & Reconciliation",
+      "dependsOn": ["W11-A"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Compose W11 publication intents with W08 Instagram/Meta adapters through W07.",
+        "2. Implement provider readback/reconciliation for create/publish ambiguity.",
+        "3. Prevent duplicate publication on timeout/replay.",
+        "4. Record provider post IDs as external references only.",
+        "5. Test late readback, missing media, token expiry and wrong account."
+      ],
+      "ownership": "W11 domain composition/reconciliation.",
+      "forbidden": "Do not create a second generic executor."
+    },
+    {
+      "id": "W11-C",
+      "title": "W11-C - Comments/DM Ingestion & Conversation Routing",
+      "dependsOn": ["W11-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Ingest comments/DM events idempotently.",
+        "2. Bind conversation/user/provider references to W10 lifecycle.",
+        "3. Classify intent/risk/modality and route deterministic vs governed paths.",
+        "4. Handle duplicates, edits/deletes and pagination/reconnect safely.",
+        "5. Add tenant/account isolation tests."
+      ],
+      "ownership": "W11 inbound social/community orchestration.",
+      "forbidden": "Do not let inbound content directly execute tools/side effects."
+    },
+    {
+      "id": "W11-D",
+      "title": "W11-D - Verified FAQ / Fact Fast Path",
+      "dependsOn": ["W11-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Implement verified fact lookup for hours/location/common FAQ using W06 context/cache/templates.",
+        "2. Require freshness/provenance and invalidate on source change.",
+        "3. Return deterministic/template answer when confidence/facts suffice.",
+        "4. Escalate conflicts or stale facts.",
+        "5. Benchmark latency/cost improvement."
+      ],
+      "ownership": "W11 common-query fast path.",
+      "forbidden": "Cache/template match is not authority for external actions."
+    },
+    {
+      "id": "W11-E",
+      "title": "W11-E - Sensitive Escalation, Moderation & Response Planning",
+      "dependsOn": ["W11-C", "W11-D"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Classify complaint/refund/safety/legal/sensitive cases for Governed Lane/human escalation.",
+        "2. Use W05 reasoning only when needed and preserve policy/consent constraints.",
+        "3. Generate response candidates without direct send authority.",
+        "4. Define moderation/hide/delete intents as governed side effects.",
+        "5. Add adversarial/prompt-injection/toxic-content tests."
+      ],
+      "ownership": "W11 community moderation/response planning.",
+      "forbidden": "Do not auto-send sensitive responses based only on confidence."
+    },
+    {
+      "id": "W11-F",
+      "title": "W11-F - Lead Handoff to W10",
+      "dependsOn": ["W11-C", "W10-G"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Detect lead signals in comments/DMs using explicit provenance.",
+        "2. Create idempotent W10 lead/conversation handoff.",
+        "3. Preserve consent/purpose and source channel/account.",
+        "4. Prevent duplicate lead creation across repeated provider events.",
+        "5. Add opt-out and wrong-tenant tests."
+      ],
+      "ownership": "W11->W10 integration boundary.",
+      "forbidden": "Do not create competing CRM state inside W11."
+    },
+    {
+      "id": "W11-G",
+      "title": "W11-G - Organic/Community Analytics",
+      "dependsOn": ["W11-00"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "1. Build read models for publication/community outcomes and operational metrics.",
+        "2. Separate provider observations from Aurora business outcomes.",
+        "3. Link correlation/evidence to publication/reply/lead handoff.",
+        "4. Expose data suitable for W17 telemetry and W18 evals.",
+        "5. Add stale/partial provider analytics tests."
+      ],
+      "ownership": "W11 analytics/read models.",
+      "forbidden": "Do not make analytics a source of authority."
+    },
+    {
+      "id": "W11-H",
+      "title": "W11-H - Social E2E Validation",
+      "dependsOn": ["W11-B", "W11-E", "W11-F", "W11-G"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "1. Run staged publication, duplicate timeout/reconciliation, inbound FAQ, sensitive escalation and lead-handoff scenarios.",
+        "2. Prove all writes pass W07/current Policy/Authority.",
+        "3. Run provider failure/rate limit and event replay stress.",
+        "4. Run four Risk Gates and exact-head CI.",
+        "5. Publish W11 acceptance/evidence."
+      ],
+      "ownership": "W11 integration/acceptance.",
+      "forbidden": "No unsafe real production side effect in acceptance unless explicitly authorized by later staging governance."
+    }
+  ]
+}
