@@ -31,7 +31,7 @@ function baseInput(overrides = {}) {
 test('W05-A classification is deterministic and propagates tenant/correlation', () => {
   const input = baseInput();
   const first = intelligence.classifyTask(input);
-  const second = intelligence.classifyTask(structuredClone(input));
+  const second = intelligence.classifyTask(JSON.parse(JSON.stringify(input)));
   assert.deepEqual(first, second);
   assert.deepEqual(first.tenant, tenant);
   assert.deepEqual(first.correlation, correlation);
