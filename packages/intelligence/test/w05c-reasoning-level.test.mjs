@@ -120,11 +120,13 @@ test('exhausted or held W04 budget does not silently choose an unsafe cheaper ro
 
 test('budget consumer projection fails closed if W04 non-authority invariants are tampered', () => {
   assert.throws(
-    () => reasoning.resolveReasoningLevel(request({ budget: budget({ authorizesExecution: true }) })),
+    () =>
+      reasoning.resolveReasoningLevel(request({ budget: budget({ authorizesExecution: true }) })),
     /invalid W04 ExecutionBudget consumer projection/,
   );
   assert.throws(
-    () => reasoning.resolveReasoningLevel(request({ budget: budget({ remainingReasoningUnits: -1 }) })),
+    () =>
+      reasoning.resolveReasoningLevel(request({ budget: budget({ remainingReasoningUnits: -1 }) })),
     /non-negative safe integer/,
   );
 });
