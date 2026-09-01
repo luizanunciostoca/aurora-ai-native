@@ -218,20 +218,14 @@ export class BoundedAgentWorkerPool {
     ownerToken: string,
     nowEpochMs: number,
   ): Promise<WorkerRuntimeDecision> {
-    return this.#terminalRelease(
-      taskId,
-      ownerToken,
-      nowEpochMs,
-      'FAILED',
-      'WORK_FAILED',
-      'FAILED',
-    );
+    return this.#terminalRelease(taskId, ownerToken, nowEpochMs, 'FAILED', 'WORK_FAILED', 'FAILED');
   }
 
   async cancel(taskId: string, nowEpochMs: number): Promise<WorkerRuntimeDecision> {
     const record = this.#records.get(taskId);
     if (!record) return this.#decision('TASK_NOT_FOUND', null);
-    if (!this.#validOperationTime(record, nowEpochMs)) return this.#decision('INVALID_STATE', record);
+    if (!this.#validOperationTime(record, nowEpochMs))
+      return this.#decision('INVALID_STATE', record);
     if (TERMINAL_STATES.has(record.state)) return this.#decision('INVALID_STATE', record);
 
     record.cancelRequested = true;
