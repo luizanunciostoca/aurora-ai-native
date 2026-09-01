@@ -34,7 +34,8 @@ function uncertaintyReasons(signals: ConfidenceSignalSet): ConfidenceUncertainty
   if (signals.coverageBps === null) reasons.push('COVERAGE_UNKNOWN');
   if (signals.freshnessBps === null) reasons.push('FRESHNESS_UNKNOWN');
   if (signals.ambiguityBps === null) reasons.push('AMBIGUITY_UNKNOWN');
-  if (signals.ambiguityBps !== null && signals.ambiguityBps >= 7_000) reasons.push('HIGH_AMBIGUITY');
+  if (signals.ambiguityBps !== null && signals.ambiguityBps >= 7_000)
+    reasons.push('HIGH_AMBIGUITY');
   if (signals.evidenceQualityBps !== null && signals.evidenceQualityBps < 4_000) {
     reasons.push('LOW_EVIDENCE_QUALITY');
   }
@@ -59,7 +60,6 @@ function completeScore(signals: ConfidenceSignalSet): number | null {
   ) {
     return null;
   }
-
   const positive =
     evidenceQualityBps * 30 +
     consistencyBps * 25 +
@@ -93,7 +93,6 @@ export function evaluateConfidence(request: ConfidenceEvaluationRequest): Confid
   const reasons = uncertaintyReasons(request.signals);
   const scoreBps = completeScore(request.signals);
   const { band, disposition } = classify(scoreBps, request.signals, reasons);
-
   return {
     kind: 'CONFIDENCE_EVALUATION',
     schemaVersion: '1.0.0',
