@@ -1,6 +1,6 @@
 # UX/UI Requirements Handoff — W14 to W17
 
-Status: `PROPOSED_HANDOFF`
+Status: `ACCEPTED_FOR_PLANNING`
 Date: 2026-09-01
 Base main: `c0860ac178bc8b34e1f5a34f3d2b9c6c5a138168`
 Sources: Developer Manual v0.5, UX/UI Design & Interaction Manual Master v1.0, ADR-003 proposal, cross-wave matrix.
