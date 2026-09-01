@@ -48,14 +48,22 @@ export class LocalEventTransport {
       throw new Error('fan-out limit exceeded');
     }
 
-    const planned: { subscriptionKey: SubscriptionKey; deliveryKey: string; duplicate: boolean }[] = [];
+    const planned: {
+      subscriptionKey: SubscriptionKey;
+      deliveryKey: string;
+      duplicate: boolean;
+    }[] = [];
     for (const subscription of subscriptions) {
       const queue = this.#queue(subscription.subscriptionKey);
       const deliveryKey = `${envelope.eventId}:${subscription.subscriptionKey}`;
       const duplicate = queue.has(deliveryKey);
-      const pendingCount = [...queue.values()].filter((record) => record.status === 'pending').length;
+      const pendingCount = [...queue.values()].filter(
+        (record) => record.status === 'pending',
+      ).length;
       if (!duplicate && pendingCount >= this.#limits.maxPendingPerSubscription) {
-        throw new Error(`pending delivery capacity exceeded for ${subscription.subscriptionKey}`);
+        throw new Error(
+          `pending delivery capacity exceeded for ${subscription.subscriptionKey}`,
+        );
       }
       planned.push({ subscriptionKey: subscription.subscriptionKey, deliveryKey, duplicate });
     }
@@ -84,9 +92,17 @@ export class LocalEventTransport {
     };
   }
 
-  pull(subscriptionKey: SubscriptionKey, requestedLimit = this.#limits.maxPullBatch): readonly DeliveryRecord[] {
-    this.#registry.get(subscriptionKey) ?? (() => { throw new Error(`unknown subscription: ${subscriptionKey}`); })();
-    const limit = Math.min(positiveInteger(requestedLimit, 'requestedLimit'), this.#limits.maxPullBatch);
+  pull(
+    subscriptionKey: SubscriptionKey,
+    requestedLimit = this.#limits.maxPullBatch,
+  ): readonly DeliveryRecord[] {
+    if (!this.#registry.get(subscriptionKey)) {
+      throw new Error(`unknown subscription: ${subscriptionKey}`);
+    }
+    const limit = Math.min(
+      positiveInteger(requestedLimit, 'requestedLimit'),
+      this.#limits.maxPullBatch,
+    );
     return [...this.#queue(subscriptionKey).values()]
       .filter((record) => record.status === 'pending')
       .sort((left, right) => left.deliveryKey.localeCompare(right.deliveryKey))
@@ -104,10 +120,12 @@ export class LocalEventTransport {
   }
 
   pendingCount(subscriptionKey: SubscriptionKey): number {
-    return [...this.#queue(subscriptionKey).values()].filter((record) => record.status === 'pending').length;
+    return [...this.#queue(subscriptionKey).values()].filter(
+      (record) => record.status === 'pending',
+    ).length;
   }
 
-  private #queue(subscriptionKey: SubscriptionKey): Map<string, DeliveryRecord> {
+  #queue(subscriptionKey: SubscriptionKey): Map<string, DeliveryRecord> {
     let queue = this.#queues.get(subscriptionKey);
     if (!queue) {
       queue = new Map<string, DeliveryRecord>();
