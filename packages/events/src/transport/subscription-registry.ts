@@ -1,4 +1,4 @@
-import type { EventEnvelope } from '@aurora/contracts/envelopes';
+import type { EventEnvelope } from '@aurora/contracts';
 import type {
   RegisterSubscriptionInput,
   SubscriptionDefinition,
