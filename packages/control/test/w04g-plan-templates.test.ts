@@ -159,9 +159,7 @@ function capabilityPlan(overrides: Partial<CapabilityPlan> = {}): CapabilityPlan
   };
 }
 
-function bindingInput(
-  overrides: Partial<PlanTemplateBindingInput> = {},
-): PlanTemplateBindingInput {
+function bindingInput(overrides: Partial<PlanTemplateBindingInput> = {}): PlanTemplateBindingInput {
   return {
     tenantId,
     correlationId,
