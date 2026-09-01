@@ -104,8 +104,11 @@ function containsSensitiveField(value: JsonValue): boolean {
 function canonicalize(value: JsonValue): JsonValue {
   if (Array.isArray(value)) return value.map((item) => canonicalize(item));
   if (value === null || typeof value !== 'object') return value;
+  const objectValue = value as JsonObject;
   const result: Record<string, JsonValue> = {};
-  for (const key of Object.keys(value).sort()) result[key] = canonicalize(value[key]);
+  for (const key of Object.keys(objectValue).sort()) {
+    result[key] = canonicalize(objectValue[key]);
+  }
   return result;
 }
 
@@ -248,12 +251,13 @@ function assessReadback(
 
   const matches = sameJsonObject(expectedState.value, observation.observedState);
   if (!matches) {
+    const mismatchReasons: ReadbackReason[] = ['READBACK_MISMATCH'];
+    if (observation.verification.state !== 'VERIFIED') {
+      mismatchReasons.push('READBACK_UNVERIFIED');
+    }
     return {
       state: 'MISMATCH',
-      reasons: uniqueSorted<ReadbackReason>([
-        'READBACK_MISMATCH',
-        ...(observation.verification.state === 'VERIFIED' ? [] : ['READBACK_UNVERIFIED']),
-      ]),
+      reasons: uniqueSorted(mismatchReasons),
       receiptAcknowledged,
       verifiedExternalState: false,
       derivedExecutionOutcome: 'EXECUTION_UNCERTAIN',
@@ -344,7 +348,7 @@ export function captureReadbackEvidence(
     kind: 'EVIDENCE',
     schemaVersion: request.schemaVersion,
     evidenceId: request.evidenceId,
-    subject: { kind: 'RECEIPT', receiptId: request.receipt.receiptId },
+    subject: { kind: 'RECEIPT' as const, receiptId: request.receipt.receiptId },
     evidenceType: 'READBACK',
     capturedAt: observation.capturedAt,
     source: {
