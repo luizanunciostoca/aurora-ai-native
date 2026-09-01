@@ -1,4 +1,4 @@
-import type { EventEnvelope } from '@aurora/contracts/envelopes';
+import type { EventEnvelope } from '@aurora/contracts';
 import { SubscriptionRegistry } from './subscription-registry';
 import type { DeliveryRecord, LocalTransportLimits, PublishResult, SubscriptionKey } from './types';
 
