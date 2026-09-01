@@ -1,6 +1,10 @@
 import type { JsonObject, JsonValue } from '@aurora/contracts/actions';
 import type { CorrelationContext } from '@aurora/contracts/context';
-import type { ExecutionTargetReference } from '@aurora/contracts/execution-target';
+import {
+  executionTargetFromProviderBinding,
+  providerBindingMatchesExecutionTarget,
+  type ExecutionTargetReference,
+} from '@aurora/contracts/execution-target';
 import type { Evidence } from '@aurora/contracts/evidence';
 import type { TargetedReceipt } from '@aurora/contracts/receipts';
 
@@ -12,10 +16,21 @@ import type {
   ReadbackReason,
   ReceiptCreationReason,
   ReceiptCreationResult,
+  TargetReadbackObservation,
 } from './types.js';
 
 const RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
-const SENSITIVE_KEY_PATTERN = /(?:^|[_-])(password|passwd|secret|token|api[_-]?key|credential|authorization|cookie)(?:$|[_-])/i;
+const SENSITIVE_KEY_TERMS = [
+  'password',
+  'passwd',
+  'secret',
+  'token',
+  'apikey',
+  'credential',
+  'authorization',
+  'cookie',
+  'privatekey',
+] as const;
 
 function timestampMs(value: string): number | undefined {
   if (!RFC3339_PATTERN.test(value)) return undefined;
@@ -54,11 +69,35 @@ function sameTarget(left: ExecutionTargetReference, right: ExecutionTargetRefere
   }
 }
 
+function actionIntentTarget(
+  actionIntent: CreateTargetedReceiptRequest['actionIntent'],
+): ExecutionTargetReference | undefined {
+  const { executionTarget, providerBinding } = actionIntent;
+  if (executionTarget !== undefined) {
+    if (
+      providerBinding !== undefined &&
+      !providerBindingMatchesExecutionTarget(providerBinding, executionTarget)
+    ) {
+      return undefined;
+    }
+    return executionTarget;
+  }
+  if (providerBinding !== undefined) {
+    return executionTargetFromProviderBinding(providerBinding, actionIntent.schemaVersion);
+  }
+  return undefined;
+}
+
+function sensitiveKey(key: string): boolean {
+  const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return SENSITIVE_KEY_TERMS.some((term) => normalized.includes(term));
+}
+
 function containsSensitiveField(value: JsonValue): boolean {
   if (Array.isArray(value)) return value.some((item) => containsSensitiveField(item));
   if (value === null || typeof value !== 'object') return false;
   return Object.entries(value).some(
-    ([key, child]) => SENSITIVE_KEY_PATTERN.test(key) || containsSensitiveField(child),
+    ([key, child]) => sensitiveKey(key) || containsSensitiveField(child),
   );
 }
 
@@ -88,10 +127,22 @@ export function createTargetedExecutionReceipt(
   if (request.schemaVersion !== request.actionIntent.schemaVersion) {
     return rejectedReceipt('RECEIPT_SCHEMA_MISMATCH');
   }
-  const executionTarget = request.actionIntent.executionTarget;
+  const executionTarget = actionIntentTarget(request.actionIntent);
   if (executionTarget === undefined) return rejectedReceipt('EXECUTION_TARGET_REQUIRED');
+  if (executionTarget.schemaVersion !== request.schemaVersion) {
+    return rejectedReceipt('RECEIPT_SCHEMA_MISMATCH');
+  }
   if (!Number.isInteger(request.attempt) || request.attempt < 1) {
     return rejectedReceipt('RECEIPT_ATTEMPT_INVALID');
+  }
+  if (request.executionOutcome === 'VERIFIED') {
+    return rejectedReceipt('RECEIPT_VERIFIED_REQUIRES_READBACK');
+  }
+  if (
+    request.executionOutcome === 'EXECUTED_ACKNOWLEDGED' &&
+    request.acknowledgedAt === undefined
+  ) {
+    return rejectedReceipt('RECEIPT_ACKNOWLEDGEMENT_REQUIRED');
   }
 
   const attemptedAt = timestampMs(request.attemptedAt);
@@ -155,16 +206,20 @@ function readbackBindingReasons(
   if (!sameCorrelation(request.receipt.correlation, request.actionIntent.correlation)) {
     reasons.push('READBACK_CORRELATION_MISMATCH');
   }
-  const expectedTarget = request.actionIntent.executionTarget;
+  const expectedTarget = actionIntentTarget(request.actionIntent);
   if (expectedTarget === undefined || !sameTarget(request.receipt.executionTarget, expectedTarget)) {
     reasons.push('READBACK_TARGET_MISMATCH');
   }
   return uniqueSorted(reasons);
 }
 
+function unresolvedOutcome(receiptAcknowledged: boolean) {
+  return receiptAcknowledged ? ('EXECUTED_ACKNOWLEDGED' as const) : ('EXECUTION_UNCERTAIN' as const);
+}
+
 function assessReadback(
   request: CaptureReadbackEvidenceRequest,
-  observedState: JsonObject | undefined,
+  observation: TargetReadbackObservation,
 ): ReadbackAssessment {
   const receiptAcknowledged = request.receipt.acknowledgedAt !== undefined;
   const expectedState = request.actionIntent.expectedState;
@@ -174,32 +229,58 @@ function assessReadback(
       reasons: ['EXPECTED_STATE_NOT_DECLARED'],
       receiptAcknowledged,
       verifiedExternalState: false,
+      derivedExecutionOutcome: unresolvedOutcome(receiptAcknowledged),
+      requiresReconciliation: true,
       authorizesExecution: false,
     };
   }
-  if (observedState === undefined) {
+  if (observation.observedState === undefined) {
     return {
       state: 'UNKNOWN',
       reasons: ['OBSERVED_STATE_NOT_RETURNED'],
       receiptAcknowledged,
       verifiedExternalState: false,
+      derivedExecutionOutcome: unresolvedOutcome(receiptAcknowledged),
+      requiresReconciliation: true,
       authorizesExecution: false,
     };
   }
-  if (sameJsonObject(expectedState.value, observedState)) {
+
+  const matches = sameJsonObject(expectedState.value, observation.observedState);
+  if (!matches) {
     return {
-      state: 'MATCH',
-      reasons: [],
+      state: 'MISMATCH',
+      reasons: uniqueSorted<ReadbackReason>([
+        'READBACK_MISMATCH',
+        ...(observation.verification.state === 'VERIFIED' ? [] : ['READBACK_UNVERIFIED']),
+      ]),
       receiptAcknowledged,
-      verifiedExternalState: true,
+      verifiedExternalState: false,
+      derivedExecutionOutcome: 'EXECUTION_UNCERTAIN',
+      requiresReconciliation: true,
       authorizesExecution: false,
     };
   }
+
+  if (observation.verification.state !== 'VERIFIED') {
+    return {
+      state: 'UNKNOWN',
+      reasons: ['READBACK_UNVERIFIED'],
+      receiptAcknowledged,
+      verifiedExternalState: false,
+      derivedExecutionOutcome: unresolvedOutcome(receiptAcknowledged),
+      requiresReconciliation: true,
+      authorizesExecution: false,
+    };
+  }
+
   return {
-    state: 'MISMATCH',
-    reasons: ['READBACK_MISMATCH'],
+    state: 'MATCH',
+    reasons: [],
     receiptAcknowledged,
-    verifiedExternalState: false,
+    verifiedExternalState: true,
+    derivedExecutionOutcome: 'VERIFIED',
+    requiresReconciliation: false,
     authorizesExecution: false,
   };
 }
@@ -216,7 +297,7 @@ export function captureReadbackEvidence(
     return { status: 'REJECTED', reasons: bindingReasons, authorizesExecution: false };
   }
 
-  let observation;
+  let observation: TargetReadbackObservation;
   try {
     observation = request.readback({
       schemaVersion: request.schemaVersion,
@@ -229,10 +310,22 @@ export function captureReadbackEvidence(
 
   const capturedAt = timestampMs(observation.capturedAt);
   const attemptedAt = timestampMs(request.receipt.attemptedAt);
-  if (capturedAt === undefined || attemptedAt === undefined) {
+  const acknowledgedAt =
+    request.receipt.acknowledgedAt === undefined
+      ? undefined
+      : timestampMs(request.receipt.acknowledgedAt);
+  const returnedAt =
+    request.receipt.returnedAt === undefined ? undefined : timestampMs(request.receipt.returnedAt);
+  if (
+    capturedAt === undefined ||
+    attemptedAt === undefined ||
+    (request.receipt.acknowledgedAt !== undefined && acknowledgedAt === undefined) ||
+    (request.receipt.returnedAt !== undefined && returnedAt === undefined)
+  ) {
     return { status: 'REJECTED', reasons: ['READBACK_TIME_INVALID'], authorizesExecution: false };
   }
-  if (capturedAt < attemptedAt) {
+  const latestReceiptTime = returnedAt ?? acknowledgedAt ?? attemptedAt;
+  if (capturedAt < latestReceiptTime) {
     return {
       status: 'REJECTED',
       reasons: ['READBACK_TIME_ORDER_INVALID'],
@@ -260,7 +353,15 @@ export function captureReadbackEvidence(
       reference: observation.reference,
     },
     correlation: request.actionIntent.correlation,
-    verification: { state: 'UNVERIFIED' },
+    verification: {
+      state: observation.verification.state,
+      ...(observation.verification.state === 'VERIFIED'
+        ? { verifiedAt: observation.capturedAt }
+        : {}),
+      ...(observation.verification.method === undefined
+        ? {}
+        : { method: observation.verification.method }),
+    },
     readback: {
       reference: observation.reference,
       ...(observation.observedState === undefined
@@ -274,7 +375,7 @@ export function captureReadbackEvidence(
   return {
     status: 'CAPTURED',
     evidence,
-    assessment: assessReadback(request, observation.observedState),
+    assessment: assessReadback(request, observation),
     authorizesExecution: false,
   };
 }
