@@ -78,10 +78,7 @@ export interface FailureContainmentResult {
 }
 
 export type CircuitEvent =
-  | 'SUCCESS'
-  | 'FAILURE'
-  | 'RECOVERY_WINDOW_ELAPSED'
-  | 'HALF_OPEN_PROBE_STARTED';
+  'SUCCESS' | 'FAILURE' | 'RECOVERY_WINDOW_ELAPSED' | 'HALF_OPEN_PROBE_STARTED';
 
 export interface CircuitTransitionRequest {
   readonly snapshot: CircuitSnapshot;
@@ -117,9 +114,7 @@ export interface KillSwitchTransitionRequest {
   readonly recoveryGate: RecoveryGate;
 }
 
-export type KillSwitchTransitionReason =
-  | 'INVALID_TIME'
-  | 'KILL_SWITCH_RECOVERY_NOT_VALIDATED';
+export type KillSwitchTransitionReason = 'INVALID_TIME' | 'KILL_SWITCH_RECOVERY_NOT_VALIDATED';
 
 export interface KillSwitchTransitionResult {
   readonly kind: 'KILL_SWITCH_TRANSITION_RESULT';
