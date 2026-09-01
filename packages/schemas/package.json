@@ -39,6 +39,11 @@
       "require": "./dist/evidence/index.js",
       "default": "./dist/evidence/index.js"
     },
+    "./execution-target": {
+      "types": "./dist/execution-target/index.d.ts",
+      "require": "./dist/execution-target/index.js",
+      "default": "./dist/execution-target/index.js"
+    },
     "./ids": {
       "types": "./dist/ids/index.d.ts",
       "require": "./dist/ids/index.js",
