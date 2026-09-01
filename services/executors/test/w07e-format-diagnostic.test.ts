@@ -5,8 +5,9 @@ import test from 'node:test';
 
 import { format } from 'prettier';
 
+const target = 'services/executors/test/w07e-receipt-evidence-readback.test.ts';
+
 test('prints canonical W07-E formatting', async () => {
-  const target = new URL('./w07e-receipt-evidence-readback.test.ts', import.meta.url);
   const source = readFileSync(target, 'utf8');
   const formatted = await format(source, {
     parser: 'typescript',
