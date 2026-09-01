@@ -43,7 +43,12 @@ test('timer scheduling serializes active schedule keys with a transaction adviso
 });
 
 test('due timer claim establishes a fencing lease in the same statement', () => {
-  const statement = claimDueTimerStatement({ tenantId, now, ownerToken, leaseExpiresAt: expiresAt });
+  const statement = claimDueTimerStatement({
+    tenantId,
+    now,
+    ownerToken,
+    leaseExpiresAt: expiresAt,
+  });
 
   assert.match(statement.text, /FOR UPDATE SKIP LOCKED/);
   assert.match(statement.text, /INSERT INTO w03_lease/);

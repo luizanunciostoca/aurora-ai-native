@@ -5,7 +5,9 @@
   "description": "W03 durable timer, lease and workflow primitives over the canonical Postgres baseline.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "sideEffects": false,
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
