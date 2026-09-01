@@ -1,6 +1,6 @@
-// @ts-expect-error -- executor harness intentionally has no package manifest/@types/node; Node 22 provides this built-in at runtime.
+// @ts-expect-error -- executor harness has no @types/node; Node 22 provides this built-in.
 import assert from 'node:assert/strict';
-// @ts-expect-error -- executor harness intentionally has no package manifest/@types/node; Node 22 provides this built-in at runtime.
+// @ts-expect-error -- executor harness has no @types/node; Node 22 provides this built-in.
 import test from 'node:test';
 
 import type { Rfc3339Timestamp, TenantContext } from '@aurora/contracts/context';
@@ -21,6 +21,10 @@ const target: ExecutionTargetReference = {
   bindingReference: 'workflow:publish-approved-post',
 };
 
+function timestamp(value: string): Rfc3339Timestamp {
+  return value as Rfc3339Timestamp;
+}
+
 function binding(overrides: Partial<ExecutableTargetBinding> = {}): ExecutableTargetBinding {
   return {
     schemaVersion: version,
@@ -28,7 +32,7 @@ function binding(overrides: Partial<ExecutableTargetBinding> = {}): ExecutableTa
     tenant,
     target,
     state: 'AVAILABLE',
-    freshUntil: '2026-09-01T17:00:00Z',
+    freshUntil: timestamp('2026-09-01T17:00:00Z'),
     compatibleActionIntentSchemaVersions: [version],
     preconditionsSatisfied: true,
     ...overrides,
@@ -37,7 +41,7 @@ function binding(overrides: Partial<ExecutableTargetBinding> = {}): ExecutableTa
 
 function resolve(
   bindings: readonly ExecutableTargetBinding[],
-  evaluatedAt: Rfc3339Timestamp = '2026-09-01T16:00:00Z',
+  evaluatedAt: Rfc3339Timestamp = timestamp('2026-09-01T16:00:00Z'),
 ) {
   return resolveExecutionTarget({
     schemaVersion: version,
@@ -66,14 +70,18 @@ test('fails closed for missing, cross-tenant and ambiguous bindings', () => {
   assert.deepEqual(ambiguous.reasons, ['TARGET_AMBIGUOUS']);
 });
 
-test('fails closed for every non-available binding state', () => {
-  assert.deepEqual(resolve([binding({ state: 'UNAVAILABLE' })]).reasons, ['TARGET_UNAVAILABLE']);
-  assert.deepEqual(resolve([binding({ state: 'DEGRADED' })]).reasons, ['TARGET_DEGRADED']);
-  assert.deepEqual(resolve([binding({ state: 'RETIRED' })]).reasons, ['TARGET_RETIRED']);
+test('fails closed for all non-available binding states', () => {
+  const unavailable = resolve([binding({ state: 'UNAVAILABLE' })]);
+  const degraded = resolve([binding({ state: 'DEGRADED' })]);
+  const retired = resolve([binding({ state: 'RETIRED' })]);
+
+  assert.deepEqual(unavailable.reasons, ['TARGET_UNAVAILABLE']);
+  assert.deepEqual(degraded.reasons, ['TARGET_DEGRADED']);
+  assert.deepEqual(retired.reasons, ['TARGET_RETIRED']);
 });
 
-test('fails closed for freshness, ActionIntent compatibility and generic preconditions', () => {
-  const stale = resolve([binding({ freshUntil: '2026-09-01T16:00:00Z' })]);
+test('fails closed for freshness, compatibility and preconditions', () => {
+  const stale = resolve([binding({ freshUntil: timestamp('2026-09-01T16:00:00Z') })]);
   const incompatible = resolve([binding({ compatibleActionIntentSchemaVersions: [] })]);
   const preconditionFailed = resolve([binding({ preconditionsSatisfied: false })]);
 
@@ -83,11 +91,9 @@ test('fails closed for freshness, ActionIntent compatibility and generic precond
 });
 
 test('malformed or non-RFC3339 timing fails closed', () => {
-  const invalidEvaluation = resolve([binding()], 'not-a-timestamp' as Rfc3339Timestamp);
-  const dateOnlyEvaluation = resolve([binding()], '2026-09-01' as Rfc3339Timestamp);
-  const invalidFreshness = resolve([
-    binding({ freshUntil: 'not-a-timestamp' as Rfc3339Timestamp }),
-  ]);
+  const invalidEvaluation = resolve([binding()], timestamp('not-a-timestamp'));
+  const dateOnlyEvaluation = resolve([binding()], timestamp('2026-09-01'));
+  const invalidFreshness = resolve([binding({ freshUntil: timestamp('not-a-timestamp') })]);
 
   assert.deepEqual(invalidEvaluation.reasons, ['TARGET_TIME_INVALID']);
   assert.deepEqual(dateOnlyEvaluation.reasons, ['TARGET_TIME_INVALID']);
@@ -96,7 +102,7 @@ test('malformed or non-RFC3339 timing fails closed', () => {
   assert.equal(invalidFreshness.authorizesExecution, false);
 });
 
-test('binding and target schema incompatibility fail closed explicitly', () => {
+test('binding and target schema incompatibility fail closed', () => {
   const incompatibleBindingSchema = resolve([binding({ schemaVersion: otherVersion })]);
   const otherVersionTarget: ExecutionTargetReference = {
     ...target,
@@ -106,7 +112,7 @@ test('binding and target schema incompatibility fail closed explicitly', () => {
     schemaVersion: version,
     actionIntentSchemaVersion: version,
     tenant,
-    evaluatedAt: '2026-09-01T16:00:00Z',
+    evaluatedAt: timestamp('2026-09-01T16:00:00Z'),
     target: otherVersionTarget,
     bindings: [binding()],
   });
@@ -131,7 +137,7 @@ test('matches provider targets using the complete target identity', () => {
     schemaVersion: version,
     actionIntentSchemaVersion: version,
     tenant,
-    evaluatedAt: '2026-09-01T16:00:00Z',
+    evaluatedAt: timestamp('2026-09-01T16:00:00Z'),
     target: providerTarget,
     bindings: [providerBinding],
   });
@@ -143,24 +149,30 @@ test('matches provider targets using the complete target identity', () => {
     schemaVersion: version,
     actionIntentSchemaVersion: version,
     tenant,
-    evaluatedAt: '2026-09-01T16:00:00Z',
+    evaluatedAt: timestamp('2026-09-01T16:00:00Z'),
     target: { ...providerTarget, accountReference: 'business:other' },
     bindings: [providerBinding],
   });
   assert.deepEqual(differentAccount.reasons, ['TARGET_NOT_FOUND']);
 });
 
-test('opaque DEVICE, WORKFLOW and LOCAL_SERVICE bindings remain target-neutral and non-authoritative', () => {
-  for (const opaqueTarget of [
+test('keeps opaque non-provider bindings target-neutral and non-authoritative', () => {
+  const opaqueTargets = [
     { schemaVersion: version, kind: 'DEVICE', bindingReference: 'device-binding:alpha' },
     { schemaVersion: version, kind: 'WORKFLOW', bindingReference: 'workflow-binding:alpha' },
-    { schemaVersion: version, kind: 'LOCAL_SERVICE', bindingReference: 'local-service-binding:alpha' },
-  ] satisfies readonly ExecutionTargetReference[]) {
+    {
+      schemaVersion: version,
+      kind: 'LOCAL_SERVICE',
+      bindingReference: 'local-service-binding:alpha',
+    },
+  ] satisfies readonly ExecutionTargetReference[];
+
+  for (const opaqueTarget of opaqueTargets) {
     const result = resolveExecutionTarget({
       schemaVersion: version,
       actionIntentSchemaVersion: version,
       tenant,
-      evaluatedAt: '2026-09-01T16:00:00Z',
+      evaluatedAt: timestamp('2026-09-01T16:00:00Z'),
       target: opaqueTarget,
       bindings: [binding({ target: opaqueTarget })],
     });
