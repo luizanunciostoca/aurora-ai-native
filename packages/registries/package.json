@@ -24,6 +24,11 @@
       "require": "./dist/policy/index.js",
       "default": "./dist/policy/index.js"
     },
+    "./strategies": {
+      "types": "./dist/strategies/index.d.ts",
+      "require": "./dist/strategies/index.js",
+      "default": "./dist/strategies/index.js"
+    },
     "./versioning": {
       "types": "./dist/versioning/index.d.ts",
       "require": "./dist/versioning/index.js",
@@ -33,7 +38,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "build": "rm -rf dist && tsc -p tsconfig.build.json",
-    "test": "npm run typecheck && npm run build && node --test test/shipping.test.mjs",
+    "test": "npm run typecheck && npm run build && node --test test/shipping.test.mjs test/w05e-strategy-registry.test.mjs",
     "clean": "rm -rf dist dist-test"
   },
   "dependencies": {
