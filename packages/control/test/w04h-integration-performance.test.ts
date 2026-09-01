@@ -230,7 +230,11 @@ function fixtureBindingInput(
 
 function percentile(samples: readonly number[], fraction: number): number {
   const sorted = [...samples].sort((left, right) => left - right);
-  return sorted[Math.max(0, Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1))] ?? 0;
+  const index = Math.max(
+    0,
+    Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1),
+  );
+  return sorted[index] ?? 0;
 }
 
 function measure(samples: number, operation: () => void): readonly number[] {
@@ -243,7 +247,7 @@ function measure(samples: number, operation: () => void): readonly number[] {
   return results;
 }
 
-test('W04-H integrates lifecycle, capabilities, graph, lane, budget, template and scheduler without authority or side effects', () => {
+test('W04-H integrates accepted W04 surfaces without authority or side effects', () => {
   const objective = createLifecycleRecord({
     entity: { kind: 'OBJECTIVE', id: 'objective:w04h:mock' },
     tenantId,
@@ -345,7 +349,11 @@ test('W04-H integrates lifecycle, capabilities, graph, lane, budget, template an
       correlationId: graph.correlationId,
       topologicalOrder: graph.topologicalOrder,
     },
-    lane: { tenantId: lane.tenantId, correlationId: lane.correlationId, lane: lane.lane },
+    lane: {
+      tenantId: lane.tenantId,
+      correlationId: lane.correlationId,
+      lane: lane.lane,
+    },
     budget: {
       budgetId: budget.budgetId,
       tenantId: budget.tenantId,
@@ -376,10 +384,13 @@ test('W04-H integrates lifecycle, capabilities, graph, lane, budget, template an
     assert.equal(linked.correlationId, correlationId);
   }
   const serialized = JSON.stringify(evidenceChain).toLowerCase();
-  assert.doesNotMatch(serialized, /providercredential|providersecret|deviceid|androidpackage|accesstoken/);
+  assert.doesNotMatch(
+    serialized,
+    /providercredential|providersecret|deviceid|androidpackage|accesstoken/,
+  );
 });
 
-test('W04-H proves cycle rejection, bounded concurrency, deterministic fairness and cancellation under pressure', () => {
+test('W04-H bounds concurrency and preserves deterministic fairness', () => {
   const cycle = createGoalGraph({
     graphId: 'graph:w04h:cycle',
     tenantId,
@@ -390,7 +401,10 @@ test('W04-H proves cycle rejection, bounded concurrency, deterministic fairness 
       { fromNodeId: 'b', toNodeId: 'a' },
     ],
   });
-  assert.deepEqual(cycle.status === 'REJECTED' ? cycle.code : null, 'CYCLE_DETECTED');
+  assert.deepEqual(
+    cycle.status === 'REJECTED' ? cycle.code : null,
+    'CYCLE_DETECTED',
+  );
 
   const pressureNodes = Array.from({ length: 256 }, (_, index) =>
     graphNode(`n${String(index).padStart(3, '0')}`),
@@ -411,7 +425,10 @@ test('W04-H proves cycle rejection, bounded concurrency, deterministic fairness 
     nodes: [...pressureNodes, graphNode('overflow')],
     edges: [],
   });
-  assert.deepEqual(overBound.status === 'REJECTED' ? overBound.code : null, 'NODE_LIMIT_EXCEEDED');
+  assert.deepEqual(
+    overBound.status === 'REJECTED' ? overBound.code : null,
+    'NODE_LIMIT_EXCEEDED',
+  );
 
   const pressureStates = Object.fromEntries(
     pressureNodes.map((node) => [node.nodeId, 'READY']),
@@ -443,7 +460,9 @@ test('W04-H proves cycle rejection, bounded concurrency, deterministic fairness 
   const fairnessStates = Object.fromEntries(
     fairnessResult.graph.nodes.map((node) => [node.nodeId, 'READY']),
   ) as GoalGraphStateSnapshot;
-  let fairness: { readonly nextTopologicalIndex: number; readonly turn: number } | undefined;
+  let fairness:
+    | { readonly nextTopologicalIndex: number; readonly turn: number }
+    | undefined;
   const observed: string[] = [];
   for (let round = 0; round < 4; round += 1) {
     const result = planSchedulerTick({
@@ -481,12 +500,14 @@ test('W04-H proves cycle rejection, bounded concurrency, deterministic fairness 
   assert.equal(cancelled.plan.authorizesExecution, false);
 });
 
-test('W04-H template hit avoids frontier replanning while stale binding falls back deterministically', () => {
+test('W04-H template hit avoids replanning and stale binding falls back', () => {
   const registry = fixtureRegistry();
   const plan = fixturePlan(registry);
   const template = fixtureTemplate();
   let replans = 0;
-  const resolve = (input: PlanTemplateBindingInput): 'TEMPLATE_HIT' | 'FRONTIER_REPLAN' => {
+  const resolve = (
+    input: PlanTemplateBindingInput,
+  ): 'TEMPLATE_HIT' | 'FRONTIER_REPLAN' => {
     if (bindPlanTemplate(input).status === 'BOUND') return 'TEMPLATE_HIT';
     replans += 1;
     return 'FRONTIER_REPLAN';
@@ -505,7 +526,7 @@ test('W04-H template hit avoids frontier replanning while stale binding falls ba
   assert.equal(replans, 1);
 });
 
-test('W04-H target-neutral bindings and exhausted budgets remain non-authoritative', () => {
+test('W04-H target-neutral bindings remain non-authoritative', () => {
   const registry = fixtureRegistry();
   const plan = fixturePlan(registry);
   assert.equal(plan.authorizesExecution, false);
@@ -531,7 +552,7 @@ test('W04-H target-neutral bindings and exhausted budgets remain non-authoritati
   assert.equal(constrained.authorizesExecution, false);
 });
 
-test('W04-H records p50/p95/p99 control-plane overhead without asserting an invented production SLO', () => {
+test('W04-H records observed p50/p95/p99 control-plane overhead', () => {
   const registry = fixtureRegistry();
   const plan = fixturePlan(registry);
   const template = fixtureTemplate();
@@ -548,7 +569,9 @@ test('W04-H records p50/p95/p99 control-plane overhead without asserting an inve
       graphId: 'graph:w04h:benchmark',
       tenantId,
       correlationId,
-      nodes: Array.from({ length: 32 }, (_, index) => graphNode(`b${String(index).padStart(2, '0')}`)),
+      nodes: Array.from({ length: 32 }, (_, index) =>
+        graphNode(`b${String(index).padStart(2, '0')}`),
+      ),
       edges: [],
     });
     if (result.status !== 'CREATED') throw new Error('benchmark graph rejected');
