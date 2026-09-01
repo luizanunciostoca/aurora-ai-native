@@ -8,10 +8,7 @@ export type ReasoningUncertainty = 'NONE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN
 
 export type ReasoningBudgetState = 'WITHIN_BUDGET' | 'DEGRADED' | 'EXHAUSTED';
 export type ReasoningBudgetAction =
-  | 'CONTINUE_OPTIONAL'
-  | 'DEGRADE_OPTIONAL'
-  | 'STOP_OPTIONAL'
-  | 'HOLD';
+  'CONTINUE_OPTIONAL' | 'DEGRADE_OPTIONAL' | 'STOP_OPTIONAL' | 'HOLD';
 
 /**
  * Read-only consumer projection of the accepted W04 ExecutionBudgetAssessment.
