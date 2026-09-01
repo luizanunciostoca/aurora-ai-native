@@ -4,6 +4,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@aurora/contracts": ["../contracts/src/index.ts"],
+      "@aurora/contracts/*": ["../contracts/src/*/index.ts"]
+    },
     "noEmit": true
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
