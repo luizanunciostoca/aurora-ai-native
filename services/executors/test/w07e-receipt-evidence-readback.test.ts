@@ -10,10 +10,7 @@ import type { ExecutionTargetReference } from '@aurora/contracts/execution-targe
 import type { TargetedReceipt } from '@aurora/contracts/receipts';
 import type { ContractVersion } from '@aurora/contracts/versioning';
 
-import {
-  captureReadbackEvidence,
-  createTargetedExecutionReceipt,
-} from '../src/readback/index.js';
+import { captureReadbackEvidence, createTargetedExecutionReceipt } from '../src/readback/index.js';
 
 const version = '1.0.0' as ContractVersion;
 const at = (value: string) => value as Rfc3339Timestamp;
@@ -52,10 +49,7 @@ function makeIntent(overrides: Record<string, unknown> = {}): ActionIntent {
   } as unknown as ActionIntent;
 }
 
-function makeReceipt(
-  actionIntent = makeIntent(),
-  overrides: Record<string, unknown> = {},
-) {
+function makeReceipt(actionIntent = makeIntent(), overrides: Record<string, unknown> = {}) {
   return createTargetedExecutionReceipt({
     schemaVersion: version,
     actionIntent,
@@ -166,11 +160,7 @@ test('conflicting provider targets fail closed', () => {
 
 test('matching readback stays unverified', () => {
   const actionIntent = makeIntent();
-  const result = capture(
-    actionIntent,
-    receipt(actionIntent),
-    { count: 1, status: 'published' },
-  );
+  const result = capture(actionIntent, receipt(actionIntent), { count: 1, status: 'published' });
   assert.equal(result.status, 'CAPTURED');
   if (result.status !== 'CAPTURED') return;
   assert.equal(result.assessment.state, 'MATCH');
@@ -182,11 +172,7 @@ test('matching readback stays unverified', () => {
 
 test('mismatched readback is explicit', () => {
   const actionIntent = makeIntent();
-  const result = capture(
-    actionIntent,
-    receipt(actionIntent),
-    { count: 1, status: 'draft' },
-  );
+  const result = capture(actionIntent, receipt(actionIntent), { count: 1, status: 'draft' });
   assert.equal(result.status, 'CAPTURED');
   if (result.status !== 'CAPTURED') return;
   assert.equal(result.assessment.state, 'MISMATCH');
@@ -196,11 +182,7 @@ test('mismatched readback is explicit', () => {
 
 test('missing expected state is UNKNOWN', () => {
   const actionIntent = makeIntent({ expectedState: undefined });
-  const result = capture(
-    actionIntent,
-    receipt(actionIntent),
-    { status: 'published' },
-  );
+  const result = capture(actionIntent, receipt(actionIntent), { status: 'published' });
   assert.equal(result.status, 'CAPTURED');
   if (result.status !== 'CAPTURED') return;
   assert.equal(result.assessment.state, 'UNKNOWN');
