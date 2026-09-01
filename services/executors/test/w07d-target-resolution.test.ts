@@ -52,19 +52,19 @@ test('resolves one fresh compatible binding without granting authority', () => {
 
 test('fails closed for missing, cross-tenant and ambiguous bindings', () => {
   assert.deepEqual(resolve([]).reasons, ['TARGET_NOT_FOUND']);
-  assert.deepEqual(resolve([binding({ tenant: otherTenant })]).reasons, ['TARGET_TENANT_MISMATCH']);
-  assert.deepEqual(
-    resolve([binding(), binding({ bindingId: 'binding:two' })]).reasons,
-    ['TARGET_AMBIGUOUS'],
-  );
+  assert.deepEqual(resolve([binding({ tenant: otherTenant })]).reasons, [
+    'TARGET_TENANT_MISMATCH',
+  ]);
+  assert.deepEqual(resolve([binding(), binding({ bindingId: 'binding:two' })]).reasons, [
+    'TARGET_AMBIGUOUS',
+  ]);
 });
 
 test('fails closed for availability, freshness, compatibility and preconditions', () => {
   assert.deepEqual(resolve([binding({ state: 'UNAVAILABLE' })]).reasons, ['TARGET_UNAVAILABLE']);
-  assert.deepEqual(
-    resolve([binding({ freshUntil: '2026-09-01T16:00:00Z' })]).reasons,
-    ['TARGET_STALE'],
-  );
+  assert.deepEqual(resolve([binding({ freshUntil: '2026-09-01T16:00:00Z' })]).reasons, [
+    'TARGET_STALE',
+  ]);
   assert.deepEqual(resolve([binding({ compatibleActionIntentSchemaVersions: [] })]).reasons, [
     'TARGET_INCOMPATIBLE',
   ]);
