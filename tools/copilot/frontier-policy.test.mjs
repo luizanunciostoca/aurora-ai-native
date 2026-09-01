@@ -24,10 +24,7 @@ const parallel = selectSafeReadyFrontier(
   tasks,
   2,
 );
-assert.deepEqual(
-  parallel.selected.map((entry) => entry.task.id),
-  ['B', 'C'],
-);
+assert.deepEqual(parallel.selected.map((entry) => entry.task.id), ['B', 'C']);
 assert.equal(parallel.deferred.length, 0);
 
 const conflicting = selectSafeReadyFrontier(
