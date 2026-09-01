@@ -53,10 +53,7 @@
       ],
       "ownership": "W07 governance, executor-owned contracts/services and coordinator-controlled publication surfaces.",
       "forbidden": "No runtime feature code, provider adapters, Android runtime, n8n runtime or business-domain decisions.",
-      "allowedPaths": [
-        "docs/governance/w07/**",
-        "docs/governance/copilot/tasks/W07.json"
-      ],
+      "allowedPaths": ["docs/governance/w07/**", "docs/governance/copilot/tasks/W07.json"],
       "laneHint": "PROGRAM-CONTROL",
       "dispatchPriority": 120,
       "sharedWriteSurfaces": [
