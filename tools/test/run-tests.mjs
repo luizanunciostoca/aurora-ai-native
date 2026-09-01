@@ -19,6 +19,36 @@ function run(command, args) {
   return spawnSync(command, args, { cwd: repoRoot, stdio: 'inherit' }).status ?? 1;
 }
 
+function compileAndRunServiceTests(servicePath, testFiles) {
+  if (testFiles.length === 0) return 0;
+  const tsc = resolve(
+    repoRoot,
+    'node_modules',
+    '.bin',
+    process.platform === 'win32' ? 'tsc.cmd' : 'tsc',
+  );
+  let serviceStatus = run(tsc, [
+    '--project',
+    `${servicePath}/tsconfig.test.json`,
+    '--pretty',
+    'false',
+  ]);
+  if (serviceStatus === 0) {
+    const testRoot = resolve(repoRoot, servicePath, 'test');
+    const compiledTests = testFiles.map((testFile) =>
+      join(
+        repoRoot,
+        servicePath,
+        'dist-test/test',
+        relative(testRoot, testFile).replace(/\.ts$/, '.js'),
+      ),
+    );
+    serviceStatus = run(process.execPath, ['--test', ...compiledTests]);
+  }
+  rmSync(resolve(repoRoot, servicePath, 'dist-test'), { recursive: true, force: true });
+  return serviceStatus;
+}
+
 const controlTests = [];
 collectTests(resolve(repoRoot, 'packages/control/test'), controlTests);
 controlTests.sort();
@@ -30,37 +60,25 @@ const executorTests = [];
 collectTests(resolve(repoRoot, 'services/executors/test'), executorTests);
 executorTests.sort();
 
-if (status === 0 && executorTests.length > 0) {
+const agentRuntimeTests = [];
+collectTests(resolve(repoRoot, 'services/agent-runtime/test'), agentRuntimeTests);
+agentRuntimeTests.sort();
+
+if (status === 0 && (executorTests.length > 0 || agentRuntimeTests.length > 0)) {
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   status = run(npm, ['run', 'build', '--workspace', '@aurora/contracts']);
+}
 
-  if (status === 0) {
-    const tsc = resolve(
-      repoRoot,
-      'node_modules',
-      '.bin',
-      process.platform === 'win32' ? 'tsc.cmd' : 'tsc',
-    );
-    status = run(tsc, ['--project', 'services/executors/tsconfig.test.json', '--pretty', 'false']);
-  }
+if (status === 0) {
+  status = compileAndRunServiceTests('services/executors', executorTests);
+}
 
-  if (status === 0) {
-    const testRoot = resolve(repoRoot, 'services/executors/test');
-    const compiledTests = executorTests.map((testFile) =>
-      join(
-        repoRoot,
-        'services/executors/dist-test/test',
-        relative(testRoot, testFile).replace(/\.ts$/, '.js'),
-      ),
-    );
-    status = run(process.execPath, ['--test', ...compiledTests]);
-  }
-
-  rmSync(resolve(repoRoot, 'services/executors/dist-test'), { recursive: true, force: true });
+if (status === 0) {
+  status = compileAndRunServiceTests('services/agent-runtime', agentRuntimeTests);
 }
 
 const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 console.log(
-  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
+  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
 );
 process.exit(status);
