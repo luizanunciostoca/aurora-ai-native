@@ -112,10 +112,7 @@
       ],
       "ownership": "services/executors/src/sdk/** plus W07-B tests",
       "forbidden": "No token issuance, second Policy Engine, provider adapter or confidence/precheck authorization.",
-      "allowedPaths": [
-        "services/executors/src/sdk/**",
-        "services/executors/test/w07b-**"
-      ],
+      "allowedPaths": ["services/executors/src/sdk/**", "services/executors/test/w07b-**"],
       "laneHint": "LANE-1",
       "dispatchPriority": 100,
       "sharedWriteSurfaces": ["w07:executor-sdk-current-validation"]
@@ -132,10 +129,7 @@
       ],
       "ownership": "services/executors/src/safeguards/** plus W07-C tests",
       "forbidden": "No second W03 ledger and no provider-specific rate-limit or business budget policy.",
-      "allowedPaths": [
-        "services/executors/src/safeguards/**",
-        "services/executors/test/w07c-**"
-      ],
+      "allowedPaths": ["services/executors/src/safeguards/**", "services/executors/test/w07c-**"],
       "laneHint": "LANE-2",
       "dispatchPriority": 100,
       "sharedWriteSurfaces": ["w07:executor-safeguards"]
@@ -172,10 +166,7 @@
       ],
       "ownership": "services/executors/src/readback/** plus W07-E tests",
       "forbidden": "No W17 telemetry platform and no provider/device credential material in evidence.",
-      "allowedPaths": [
-        "services/executors/src/readback/**",
-        "services/executors/test/w07e-**"
-      ],
+      "allowedPaths": ["services/executors/src/readback/**", "services/executors/test/w07e-**"],
       "laneHint": "LANE-4",
       "dispatchPriority": 95,
       "sharedWriteSurfaces": ["w07:readback-receipt-evidence-runtime"]
@@ -233,10 +224,7 @@
       ],
       "ownership": "W07 integration/fault-injection tests, evidence and publication handoff only",
       "forbidden": "No new semantic runtime and no consumer-wave/provider/device/workflow implementation.",
-      "allowedPaths": [
-        "services/executors/test/w07h-**",
-        "docs/governance/w07/**"
-      ],
+      "allowedPaths": ["services/executors/test/w07h-**", "docs/governance/w07/**"],
       "laneHint": "CONVERGENCE",
       "dispatchPriority": 60,
       "sharedWriteSurfaces": ["w07:integration-fault-injection-publication-gate"]
