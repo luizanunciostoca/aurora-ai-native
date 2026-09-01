@@ -61,10 +61,10 @@ export function evaluateFailureContainment(
   if (request.snapshot.dependencyHealth === 'UNAVAILABLE') {
     reasons.push('DEPENDENCY_UNAVAILABLE');
   }
-  if (request.snapshot.currentInFlight >= request.snapshot.maxInFlight) {
+  if (validConfig && request.snapshot.currentInFlight >= request.snapshot.maxInFlight) {
     reasons.push('OVERLOAD_LIMIT_REACHED');
   }
-  if (request.snapshot.retryDepth >= request.snapshot.maxRetryDepth) {
+  if (validConfig && request.snapshot.retryDepth >= request.snapshot.maxRetryDepth) {
     reasons.push('CASCADING_RETRY_LIMIT_REACHED');
   }
 
