@@ -75,10 +75,7 @@
       ],
       "ownership": "packages/control/src/lifecycle/** plus W04-A-prefixed control tests; shared package/publication surfaces remain Program Control-owned",
       "forbidden": "No W05 agent runtime; no scheduler, capability registry or W03 durability implementation.",
-      "allowedPaths": [
-        "packages/control/src/lifecycle/**",
-        "packages/control/test/w04a-**"
-      ],
+      "allowedPaths": ["packages/control/src/lifecycle/**", "packages/control/test/w04a-**"],
       "laneHint": "LANE-1",
       "dispatchPriority": 100,
       "sharedWriteSurfaces": ["w04:control-lifecycle"]
@@ -124,10 +121,7 @@
       ],
       "ownership": "packages/control/src/budget/** plus W04-F-prefixed tests; shared publication surfaces remain Program Control-owned",
       "forbidden": "No cost optimization that skips mandatory validation; budget is not authority.",
-      "allowedPaths": [
-        "packages/control/src/budget/**",
-        "packages/control/test/w04f-**"
-      ],
+      "allowedPaths": ["packages/control/src/budget/**", "packages/control/test/w04f-**"],
       "laneHint": "LANE-3",
       "dispatchPriority": 90,
       "sharedWriteSurfaces": ["w04:execution-budget"]
@@ -145,10 +139,7 @@
       ],
       "ownership": "packages/control/src/goal-graph/** plus W04-C-prefixed tests; shared publication surfaces remain Program Control-owned",
       "forbidden": "No model-driven implicit graph mutation without validation; no replacement for W03 durable workflow/timers/leases/replay.",
-      "allowedPaths": [
-        "packages/control/src/goal-graph/**",
-        "packages/control/test/w04c-**"
-      ],
+      "allowedPaths": ["packages/control/src/goal-graph/**", "packages/control/test/w04c-**"],
       "laneHint": "LANE-1",
       "dispatchPriority": 80,
       "sharedWriteSurfaces": ["w04:goal-graph"]
@@ -166,10 +157,7 @@
       ],
       "ownership": "packages/control/src/lanes/** plus W04-E-prefixed tests; shared publication surfaces remain Program Control-owned",
       "forbidden": "Lane selection is not authority; no W05 Intelligence Router and no W07 execution validation implementation.",
-      "allowedPaths": [
-        "packages/control/src/lanes/**",
-        "packages/control/test/w04e-**"
-      ],
+      "allowedPaths": ["packages/control/src/lanes/**", "packages/control/test/w04e-**"],
       "laneHint": "LANE-2",
       "dispatchPriority": 80,
       "sharedWriteSurfaces": ["w04:lane-resolver"]
@@ -187,10 +175,7 @@
       ],
       "ownership": "packages/control/src/templates/** plus W04-G-prefixed tests; shared publication surfaces remain Program Control-owned",
       "forbidden": "No adaptive self-promotion in W04; templates never create authority.",
-      "allowedPaths": [
-        "packages/control/src/templates/**",
-        "packages/control/test/w04g-**"
-      ],
+      "allowedPaths": ["packages/control/src/templates/**", "packages/control/test/w04g-**"],
       "laneHint": "LANE-3",
       "dispatchPriority": 75,
       "sharedWriteSurfaces": ["w04:plan-template-binding"]
@@ -208,10 +193,7 @@
       ],
       "ownership": "packages/control/src/scheduler/** plus W04-D-prefixed tests; shared publication surfaces remain Program Control-owned",
       "forbidden": "No provider/device execution; no duplicate W03 durable lease/timer/workflow implementation.",
-      "allowedPaths": [
-        "packages/control/src/scheduler/**",
-        "packages/control/test/w04d-**"
-      ],
+      "allowedPaths": ["packages/control/src/scheduler/**", "packages/control/test/w04d-**"],
       "laneHint": "LANE-1",
       "dispatchPriority": 70,
       "sharedWriteSurfaces": ["w04:parallel-scheduler"]
