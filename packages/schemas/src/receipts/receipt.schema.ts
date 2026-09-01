@@ -1,8 +1,10 @@
 import type { CorrelationContext } from '@aurora/contracts/context';
+import type { ExecutionTargetReference } from '@aurora/contracts/execution-target';
 import type { ActionIntentId, ExecutionId, ReceiptId } from '@aurora/contracts/ids';
-import type { Receipt } from '@aurora/contracts/receipts';
+import type { Receipt, ReceiptProviderReference } from '@aurora/contracts/receipts';
 import type { ExecutionOutcome } from '@aurora/contracts/results';
 import type { ContractVersion } from '@aurora/contracts/versioning';
+import { ExecutionTargetReferenceSchema } from '../execution-target';
 import {
   asRecord,
   exactKeys,
@@ -23,6 +25,49 @@ export interface ReceiptSchemaDependencies {
   readonly parseExecutionOutcome: DependencyParser<ExecutionOutcome>;
 }
 
+function parseProvider(input: unknown, path: string): ReceiptProviderReference {
+  const provider = asRecord(input, path);
+  exactKeys(provider, ['provider', 'accountReference'], ['provider'], path);
+  const accountReference = optionalNonEmptyString(
+    provider.accountReference,
+    `${path}.accountReference`,
+    512,
+  );
+  return {
+    provider: nonEmptyString(provider.provider, `${path}.provider`, 128),
+    ...(accountReference === undefined ? {} : { accountReference }),
+  };
+}
+
+function validateTargetProviderCompatibility(
+  target: ExecutionTargetReference | undefined,
+  provider: ReceiptProviderReference | undefined,
+  providerReferencePresent: boolean,
+  rawProviderDataReferencePresent: boolean,
+): void {
+  if (!target) {
+    if (!provider) throw new TypeError('Receipt.provider: required for legacy receipt without executionTarget');
+    return;
+  }
+  if (target.kind !== 'PROVIDER') {
+    if (provider) throw new TypeError('Receipt.provider: forbidden for non-PROVIDER executionTarget');
+    if (providerReferencePresent || rawProviderDataReferencePresent) {
+      throw new TypeError('Receipt: provider-specific references forbidden for non-PROVIDER executionTarget');
+    }
+    return;
+  }
+  if (provider && provider.provider !== target.provider) {
+    throw new TypeError('Receipt.provider: conflicts with PROVIDER executionTarget');
+  }
+  if (
+    provider?.accountReference !== undefined &&
+    target.accountReference !== undefined &&
+    provider.accountReference !== target.accountReference
+  ) {
+    throw new TypeError('Receipt.provider.accountReference: conflicts with executionTarget');
+  }
+}
+
 function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt {
   const record = asRecord(input, 'Receipt');
   exactKeys(
@@ -34,6 +79,7 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
       'actionIntentId',
       'executionId',
       'executor',
+      'executionTarget',
       'provider',
       'attempt',
       'attemptedAt',
@@ -51,7 +97,6 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
       'receiptId',
       'actionIntentId',
       'executor',
-      'provider',
       'attempt',
       'attemptedAt',
       'correlation',
@@ -65,8 +110,20 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
 
   const executor = asRecord(record.executor, 'Receipt.executor');
   exactKeys(executor, ['executor', 'instanceReference'], ['executor'], 'Receipt.executor');
-  const provider = asRecord(record.provider, 'Receipt.provider');
-  exactKeys(provider, ['provider', 'accountReference'], ['provider'], 'Receipt.provider');
+  const instanceReference = optionalNonEmptyString(
+    executor.instanceReference,
+    'Receipt.executor.instanceReference',
+    512,
+  );
+  const provider = record.provider === undefined ? undefined : parseProvider(record.provider, 'Receipt.provider');
+  const executionTarget =
+    record.executionTarget === undefined
+      ? undefined
+      : ExecutionTargetReferenceSchema.parse(
+          record.executionTarget,
+          { parseContractVersion: dependencies.parseContractVersion },
+          'Receipt.executionTarget',
+        );
 
   const attemptedAt = timestamp(record.attemptedAt, 'Receipt.attemptedAt');
   const acknowledgedAt =
@@ -87,16 +144,13 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
     throw new TypeError('Receipt.returnedAt: cannot precede acknowledgedAt');
   }
 
-  const instanceReference = optionalNonEmptyString(
-    executor.instanceReference,
-    'Receipt.executor.instanceReference',
-    512,
+  validateTargetProviderCompatibility(
+    executionTarget,
+    provider,
+    record.providerReference !== undefined,
+    record.rawProviderDataReference !== undefined,
   );
-  const accountReference = optionalNonEmptyString(
-    provider.accountReference,
-    'Receipt.provider.accountReference',
-    512,
-  );
+
   const executionId =
     record.executionId === undefined
       ? undefined
@@ -118,8 +172,8 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
       ? undefined
       : restrictedMetadata(record.metadata, 'Receipt.metadata');
 
-  return {
-    kind: 'RECEIPT',
+  const base = {
+    kind: 'RECEIPT' as const,
     schemaVersion: dependencies.parseContractVersion(record.schemaVersion),
     receiptId: dependencies.parseReceiptId(record.receiptId),
     actionIntentId: dependencies.parseActionIntentId(record.actionIntentId),
@@ -128,19 +182,31 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
       executor: nonEmptyString(executor.executor, 'Receipt.executor.executor', 256),
       ...(instanceReference === undefined ? {} : { instanceReference }),
     },
-    provider: {
-      provider: nonEmptyString(provider.provider, 'Receipt.provider.provider', 128),
-      ...(accountReference === undefined ? {} : { accountReference }),
-    },
     attempt: record.attempt as number,
     attemptedAt,
     ...(acknowledgedAt === undefined ? {} : { acknowledgedAt }),
     ...(returnedAt === undefined ? {} : { returnedAt }),
-    ...(providerReference === undefined ? {} : { providerReference }),
     ...(executionOutcome === undefined ? {} : { executionOutcome }),
     correlation: dependencies.parseCorrelationContext(record.correlation),
-    ...(rawProviderDataReference === undefined ? {} : { rawProviderDataReference }),
     ...(metadata === undefined ? {} : { metadata }),
+  };
+
+  if (executionTarget === undefined) {
+    if (!provider) throw new TypeError('Receipt.provider: required for legacy receipt');
+    return {
+      ...base,
+      provider,
+      ...(providerReference === undefined ? {} : { providerReference }),
+      ...(rawProviderDataReference === undefined ? {} : { rawProviderDataReference }),
+    };
+  }
+
+  return {
+    ...base,
+    executionTarget,
+    ...(provider === undefined ? {} : { provider }),
+    ...(providerReference === undefined ? {} : { providerReference }),
+    ...(rawProviderDataReference === undefined ? {} : { rawProviderDataReference }),
   };
 }
 
