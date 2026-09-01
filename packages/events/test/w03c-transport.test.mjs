@@ -91,12 +91,7 @@ test('subscription registry fails closed across tenant boundaries', () => {
   register(registry, { subscriptionKey: 'sub-a', subscriber: 'a', interest: {} });
 
   const tenantA = envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M4');
-  const tenantB = envelope(
-    'evt_01K0M0M0M0M0M0M0M0M0M0M0MB',
-    'aurora.test.created',
-    {},
-    tenantBId,
-  );
+  const tenantB = envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0MB', 'aurora.test.created', {}, tenantBId);
 
   assert.equal(registry.matching(tenantA).length, 1);
   assert.equal(registry.matching(tenantB).length, 0);
@@ -143,11 +138,7 @@ test('fan-out capacity is checked before any queue is mutated', () => {
 
   transport.publish(envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M6'), '2026-09-01T03:00:00.000Z');
   assert.throws(
-    () =>
-      transport.publish(
-        envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M7'),
-        '2026-09-01T03:00:01.000Z',
-      ),
+    () => transport.publish(envelope('evt_01K0M0M0M0M0M0M0M0M0M0M0M7'), '2026-09-01T03:00:01.000Z'),
     /pending delivery capacity exceeded/,
   );
   assert.equal(transport.pendingCount('sub-a'), 1);
