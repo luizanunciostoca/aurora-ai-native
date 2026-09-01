@@ -451,7 +451,7 @@ test('W04-H bounds concurrency and preserves deterministic fairness', () => {
   const fairnessStates = Object.fromEntries(
     fairnessResult.graph.nodes.map((node) => [node.nodeId, 'READY']),
   ) as GoalGraphStateSnapshot;
-  let fairness: { readonly nextTopologicalIndex: number; readonly turn: number } | undefined;
+  let fairness = { nextTopologicalIndex: 0, turn: 0 };
   const observed: string[] = [];
   for (let round = 0; round < 4; round += 1) {
     const result = planSchedulerTick({
