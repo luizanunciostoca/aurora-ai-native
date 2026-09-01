@@ -167,11 +167,7 @@ export function createStrategyRegistry(
       return { status: 'REJECTED', code: 'INVALID_STRATEGY', strategyId: entry.strategyId };
     }
     if (byId.has(entry.strategyId)) {
-      return {
-        status: 'REJECTED',
-        code: 'DUPLICATE_STRATEGY_ID',
-        strategyId: entry.strategyId,
-      };
+      return { status: 'REJECTED', code: 'DUPLICATE_STRATEGY_ID', strategyId: entry.strategyId };
     }
     byId.set(entry.strategyId, entry);
   }
@@ -199,9 +195,7 @@ export function createStrategyRegistry(
     registry: {
       registryKind: 'AURORA_INTELLIGENCE_STRATEGY_REGISTRY',
       registryVersion,
-      entries: [...entries].sort((left, right) =>
-        left.strategyId.localeCompare(right.strategyId),
-      ),
+      entries: [...entries].sort((left, right) => left.strategyId.localeCompare(right.strategyId)),
     },
   };
 }
