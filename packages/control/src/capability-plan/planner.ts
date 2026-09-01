@@ -50,8 +50,7 @@ function currentEnough(
   allowDegraded: boolean,
 ): boolean {
   return (
-    availability === 'CURRENT_AVAILABLE' ||
-    (allowDegraded && availability === 'CURRENT_DEGRADED')
+    availability === 'CURRENT_AVAILABLE' || (allowDegraded && availability === 'CURRENT_DEGRADED')
   );
 }
 
