@@ -1,4 +1,4 @@
-name: Aurora Copilot Task Orchestrator
+name: Aurora Puzzle Program Orchestrator
 
 on:
   push:
@@ -21,7 +21,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: aurora-copilot-task-orchestrator
+  group: aurora-puzzle-program-orchestrator
   cancel-in-progress: false
 
 jobs:
@@ -32,12 +32,16 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-      - name: Validate 166-task Aurora DAG
+      - name: Validate 166-task Aurora Puzzle DAG
         run: node tools/copilot/load-task-graph.mjs
-      - name: Validate Copilot execution mode
+      - name: Validate Puzzle execution mode
         run: node tools/copilot/validate-execution-mode.mjs
+      - name: Validate Puzzle scheduling policy
+        run: node tools/copilot/puzzle-policy.test.mjs
+      - name: Validate PREBUILD artifact authority boundary
+        run: node tools/copilot/puzzle-prebuild-artifact.test.mjs
 
-  materialize-ready:
+  materialize-puzzle-frontier:
     needs: validate-graph
     runs-on: ubuntu-latest
     steps:
@@ -45,7 +49,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
-      - name: Materialize newly READY task nodes
+      - name: Materialize canonical BUILD and logical Puzzle lanes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node tools/copilot/materialize-ready.mjs
