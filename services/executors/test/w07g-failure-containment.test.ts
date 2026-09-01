@@ -55,9 +55,7 @@ function killSwitch(overrides: Partial<KillSwitchSnapshot> = {}): KillSwitchSnap
   };
 }
 
-function snapshot(
-  overrides: Partial<FailureContainmentSnapshot> = {},
-): FailureContainmentSnapshot {
+function snapshot(overrides: Partial<FailureContainmentSnapshot> = {}): FailureContainmentSnapshot {
   return {
     circuit: circuit(),
     killSwitch: killSwitch(),
@@ -276,40 +274,37 @@ test('HALF_OPEN success closes circuit and failure reopens it', () => {
   assert.equal(failure.snapshot.consecutiveFailures, 3);
 });
 
-test(
-  'kill switch activation is fail-safe and deactivation requires governed recovery validation',
-  () => {
-    const initial = killSwitch();
-    const activated = transitionKillSwitch({
-      snapshot: initial,
-      command: 'ACTIVATE',
-      changedAt: at('2026-09-01T18:00:00Z'),
-      recoveryGate: 'NOT_REQUIRED',
-    });
-    assert.equal(activated.accepted, true);
-    assert.equal(activated.snapshot.state, 'ACTIVE');
+test('kill switch activation is fail-safe and deactivation requires governed recovery validation', () => {
+  const initial = killSwitch();
+  const activated = transitionKillSwitch({
+    snapshot: initial,
+    command: 'ACTIVATE',
+    changedAt: at('2026-09-01T18:00:00Z'),
+    recoveryGate: 'NOT_REQUIRED',
+  });
+  assert.equal(activated.accepted, true);
+  assert.equal(activated.snapshot.state, 'ACTIVE');
 
-    const rejected = transitionKillSwitch({
-      snapshot: activated.snapshot,
-      command: 'DEACTIVATE',
-      changedAt: at('2026-09-01T18:01:00Z'),
-      recoveryGate: 'NOT_VALIDATED',
-    });
-    assert.equal(rejected.accepted, false);
-    assert.equal(rejected.snapshot.state, 'ACTIVE');
-    assert.deepEqual(rejected.reasons, ['KILL_SWITCH_RECOVERY_NOT_VALIDATED']);
+  const rejected = transitionKillSwitch({
+    snapshot: activated.snapshot,
+    command: 'DEACTIVATE',
+    changedAt: at('2026-09-01T18:01:00Z'),
+    recoveryGate: 'NOT_VALIDATED',
+  });
+  assert.equal(rejected.accepted, false);
+  assert.equal(rejected.snapshot.state, 'ACTIVE');
+  assert.deepEqual(rejected.reasons, ['KILL_SWITCH_RECOVERY_NOT_VALIDATED']);
 
-    const recovered = transitionKillSwitch({
-      snapshot: activated.snapshot,
-      command: 'DEACTIVATE',
-      changedAt: at('2026-09-01T18:02:00Z'),
-      recoveryGate: 'VALIDATED',
-    });
-    assert.equal(recovered.accepted, true);
-    assert.equal(recovered.snapshot.state, 'INACTIVE');
-    assert.equal(recovered.authorizesExecution, false);
-  },
-);
+  const recovered = transitionKillSwitch({
+    snapshot: activated.snapshot,
+    command: 'DEACTIVATE',
+    changedAt: at('2026-09-01T18:02:00Z'),
+    recoveryGate: 'VALIDATED',
+  });
+  assert.equal(recovered.accepted, true);
+  assert.equal(recovered.snapshot.state, 'INACTIVE');
+  assert.equal(recovered.authorizesExecution, false);
+});
 
 test('invalid containment config and timestamp fail closed', () => {
   const gate = evaluateFailureContainment({
