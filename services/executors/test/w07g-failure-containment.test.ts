@@ -38,6 +38,11 @@ const actionIntent = {
   dataClassification: 'INTERNAL',
 } as unknown as ActionIntent;
 
+const otherActionIntent = {
+  ...actionIntent,
+  actionIntentId: 'action-intent:other-containment',
+} as unknown as ActionIntent;
+
 function circuit(overrides: Partial<CircuitSnapshot> = {}): CircuitSnapshot {
   return {
     state: 'CLOSED',
@@ -216,14 +221,26 @@ test('open circuit cannot recover before window and becomes HALF_OPEN after wind
   assert.equal(ready.snapshot.state, 'HALF_OPEN');
 });
 
-test('HALF_OPEN permits one fenced probe and blocks another concurrent probe', () => {
+test('HALF_OPEN requires reservation, permits only the owner and blocks concurrent callers', () => {
   const halfOpen = circuit({ state: 'HALF_OPEN', consecutiveFailures: 2 });
+  const beforeReservation = evaluateFailureContainment({
+    schemaVersion: version,
+    actionIntent,
+    evaluatedAt: at('2026-09-01T18:00:01.500Z'),
+    phase: 'PRE_EXTERNAL',
+    snapshot: snapshot({ circuit: halfOpen }),
+  });
+  assert.equal(beforeReservation.halfOpenProbeEligible, true);
+  assert.equal(beforeReservation.mayProceedToOtherGuards, false);
+  assert.deepEqual(beforeReservation.reasons, ['HALF_OPEN_PROBE_RESERVATION_REQUIRED']);
+
   const started = transitionCircuit({
     snapshot: halfOpen,
     event: 'HALF_OPEN_PROBE_STARTED',
     observedAt: at('2026-09-01T18:00:02Z'),
     failureThreshold: 2,
     recoveryAfterMs: 1000,
+    probeActionIntentId: actionIntent.actionIntentId,
   });
   const duplicate = transitionCircuit({
     snapshot: started.snapshot,
@@ -231,28 +248,73 @@ test('HALF_OPEN permits one fenced probe and blocks another concurrent probe', (
     observedAt: at('2026-09-01T18:00:02.100Z'),
     failureThreshold: 2,
     recoveryAfterMs: 1000,
+    probeActionIntentId: otherActionIntent.actionIntentId,
   });
   assert.equal(started.accepted, true);
   assert.equal(started.snapshot.halfOpenProbeInFlight, true);
+  assert.equal(started.snapshot.halfOpenProbeActionIntentId, actionIntent.actionIntentId);
   assert.equal(duplicate.accepted, false);
   assert.deepEqual(duplicate.reasons, ['HALF_OPEN_PROBE_ALREADY_IN_FLIGHT']);
 
-  const gate = evaluateFailureContainment({
+  const ownerGate = evaluateFailureContainment({
     schemaVersion: version,
     actionIntent,
     evaluatedAt: at('2026-09-01T18:00:02.200Z'),
     phase: 'PRE_EXTERNAL',
     snapshot: snapshot({ circuit: started.snapshot }),
   });
-  assert.equal(gate.mayProceedToOtherGuards, false);
-  assert.deepEqual(gate.reasons, ['HALF_OPEN_PROBE_IN_FLIGHT']);
+  assert.equal(ownerGate.mayProceedToOtherGuards, true);
+  assert.equal(ownerGate.halfOpenProbeEligible, false);
+  assert.deepEqual(ownerGate.reasons, []);
+
+  const nonOwnerGate = evaluateFailureContainment({
+    schemaVersion: version,
+    actionIntent: otherActionIntent,
+    evaluatedAt: at('2026-09-01T18:00:02.200Z'),
+    phase: 'PRE_EXTERNAL',
+    snapshot: snapshot({ circuit: started.snapshot }),
+  });
+  assert.equal(nonOwnerGate.mayProceedToOtherGuards, false);
+  assert.deepEqual(nonOwnerGate.reasons, ['HALF_OPEN_PROBE_IN_FLIGHT']);
 });
 
-test('HALF_OPEN success closes circuit and failure reopens it', () => {
+test('HALF_OPEN completion requires a reserved matching owner', () => {
+  const unreserved = circuit({ state: 'HALF_OPEN', consecutiveFailures: 2 });
+  const noReservation = transitionCircuit({
+    snapshot: unreserved,
+    event: 'SUCCESS',
+    observedAt: at('2026-09-01T18:00:03Z'),
+    failureThreshold: 2,
+    recoveryAfterMs: 1000,
+    probeActionIntentId: actionIntent.actionIntentId,
+  });
+  assert.equal(noReservation.accepted, false);
+  assert.deepEqual(noReservation.reasons, ['HALF_OPEN_PROBE_OWNER_REQUIRED']);
+
+  const reserved = circuit({
+    state: 'HALF_OPEN',
+    consecutiveFailures: 2,
+    halfOpenProbeInFlight: true,
+    halfOpenProbeActionIntentId: actionIntent.actionIntentId,
+  });
+  const wrongOwner = transitionCircuit({
+    snapshot: reserved,
+    event: 'FAILURE',
+    observedAt: at('2026-09-01T18:00:03Z'),
+    failureThreshold: 2,
+    recoveryAfterMs: 1000,
+    probeActionIntentId: otherActionIntent.actionIntentId,
+  });
+  assert.equal(wrongOwner.accepted, false);
+  assert.deepEqual(wrongOwner.reasons, ['HALF_OPEN_PROBE_OWNER_MISMATCH']);
+});
+
+test('HALF_OPEN owner success closes circuit and owner failure reopens it', () => {
   const halfOpen = circuit({
     state: 'HALF_OPEN',
     consecutiveFailures: 2,
     halfOpenProbeInFlight: true,
+    halfOpenProbeActionIntentId: actionIntent.actionIntentId,
   });
   const success = transitionCircuit({
     snapshot: halfOpen,
@@ -260,6 +322,7 @@ test('HALF_OPEN success closes circuit and failure reopens it', () => {
     observedAt: at('2026-09-01T18:00:03Z'),
     failureThreshold: 2,
     recoveryAfterMs: 1000,
+    probeActionIntentId: actionIntent.actionIntentId,
   });
   const failure = transitionCircuit({
     snapshot: halfOpen,
@@ -267,6 +330,7 @@ test('HALF_OPEN success closes circuit and failure reopens it', () => {
     observedAt: at('2026-09-01T18:00:03Z'),
     failureThreshold: 2,
     recoveryAfterMs: 1000,
+    probeActionIntentId: actionIntent.actionIntentId,
   });
   assert.equal(success.snapshot.state, 'CLOSED');
   assert.equal(success.snapshot.consecutiveFailures, 0);
@@ -306,6 +370,31 @@ test('kill switch activation is fail-safe and deactivation requires governed rec
   assert.equal(recovered.authorizesExecution, false);
 });
 
+test('kill switch rejects stale and same-time conflicting recovery commands', () => {
+  const active = killSwitch({
+    state: 'ACTIVE',
+    changedAt: at('2026-09-01T18:00:00Z'),
+  });
+  const stale = transitionKillSwitch({
+    snapshot: active,
+    command: 'DEACTIVATE',
+    changedAt: at('2026-09-01T17:59:59Z'),
+    recoveryGate: 'VALIDATED',
+  });
+  const conflict = transitionKillSwitch({
+    snapshot: active,
+    command: 'DEACTIVATE',
+    changedAt: at('2026-09-01T18:00:00Z'),
+    recoveryGate: 'VALIDATED',
+  });
+  assert.equal(stale.accepted, false);
+  assert.deepEqual(stale.reasons, ['STALE_KILL_SWITCH_TRANSITION']);
+  assert.equal(stale.snapshot.state, 'ACTIVE');
+  assert.equal(conflict.accepted, false);
+  assert.deepEqual(conflict.reasons, ['KILL_SWITCH_TIME_CONFLICT']);
+  assert.equal(conflict.snapshot.state, 'ACTIVE');
+});
+
 test('invalid containment config and timestamp fail closed', () => {
   const gate = evaluateFailureContainment({
     schemaVersion: version,
@@ -316,6 +405,21 @@ test('invalid containment config and timestamp fail closed', () => {
   });
   assert.equal(gate.mayProceedToOtherGuards, false);
   assert.deepEqual(gate.reasons, ['INVALID_CONTAINMENT_CONFIG', 'INVALID_TIME']);
+
+  const malformedProbe = evaluateFailureContainment({
+    schemaVersion: version,
+    actionIntent,
+    evaluatedAt: at('2026-09-01T18:00:00Z'),
+    phase: 'PRE_EXTERNAL',
+    snapshot: snapshot({
+      circuit: circuit({
+        state: 'HALF_OPEN',
+        halfOpenProbeInFlight: true,
+      }),
+    }),
+  });
+  assert.equal(malformedProbe.mayProceedToOtherGuards, false);
+  assert.ok(malformedProbe.reasons.includes('INVALID_CONTAINMENT_CONFIG'));
 
   const transition = transitionCircuit({
     snapshot: circuit(),
