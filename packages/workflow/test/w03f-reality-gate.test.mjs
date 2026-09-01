@@ -45,6 +45,10 @@ function percentile(values, p) {
   return sorted[Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1)] ?? 0;
 }
 
+function emitEvidence(prefix, value) {
+  process.stdout.write(`${prefix} ${JSON.stringify(value)}\n`);
+}
+
 const scenarioEvidence = new Map();
 function pass(id, evidence) {
   scenarioEvidence.set(id, { status: 'PASS', evidence });
@@ -263,7 +267,7 @@ test('R18 modeled load processes more than 10k bounded deliveries and records la
     publishP95Ms: Number(percentile(durations, 95).toFixed(4)),
     publishP99Ms: Number(percentile(durations, 99).toFixed(4)),
   };
-  console.log(`W03F_LOAD_METRICS ${JSON.stringify(metrics)}`);
+  emitEvidence('W03F_LOAD_METRICS', metrics);
   pass('R18', metrics);
 });
 
@@ -308,5 +312,5 @@ test('W03-F scenario evidence summary is explicit and delegates real-DB scenario
   ];
   for (const id of requiredHere)
     assert.equal(scenarioEvidence.get(id)?.status, 'PASS', `${id} missing`);
-  console.log(`W03F_SCENARIO_EVIDENCE ${JSON.stringify(Object.fromEntries(scenarioEvidence))}`);
+  emitEvidence('W03F_SCENARIO_EVIDENCE', Object.fromEntries(scenarioEvidence));
 });
