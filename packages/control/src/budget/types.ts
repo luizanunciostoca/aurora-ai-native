@@ -13,10 +13,7 @@ export type ExecutionBudgetScope = 'OBJECTIVE' | 'GOAL' | 'TASK';
 export type ExecutionBudgetExhaustionPolicy = 'DEGRADE_OPTIONAL' | 'STOP_OPTIONAL' | 'HOLD';
 export type ExecutionBudgetState = 'WITHIN_BUDGET' | 'DEGRADED' | 'EXHAUSTED';
 export type ExecutionBudgetAction =
-  | 'CONTINUE_OPTIONAL'
-  | 'DEGRADE_OPTIONAL'
-  | 'STOP_OPTIONAL'
-  | 'HOLD';
+  'CONTINUE_OPTIONAL' | 'DEGRADE_OPTIONAL' | 'STOP_OPTIONAL' | 'HOLD';
 
 export interface ExecutionBudgetLimits {
   readonly maxLatencyMs: number;
