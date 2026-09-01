@@ -4,28 +4,63 @@ const path = 'docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json';
 const mode = JSON.parse(await fs.readFile(path, 'utf8'));
 
 const allowed = new Set(['FREE_ACTIONS_CLI', 'PRO_PLUS_CLOUD_AGENT']);
-if (!allowed.has(mode.mode))
+if (!allowed.has(mode.mode)) {
   throw new Error(`Unsupported Aurora Copilot execution mode: ${mode.mode}`);
+}
+if ((mode.schemaVersion || 1) < 3) {
+  throw new Error('Puzzle execution requires execution-mode schemaVersion >= 3');
+}
 
-if (!Number.isInteger(mode.maxParallelTasks) || mode.maxParallelTasks < 1) {
-  throw new Error('maxParallelTasks must be a positive integer');
+if (!Number.isInteger(mode.physicalBuildSlots) || mode.physicalBuildSlots < 1) {
+  throw new Error('physicalBuildSlots must be a positive integer');
+}
+if (!Number.isInteger(mode.maxParallelTasks) || mode.maxParallelTasks !== mode.physicalBuildSlots) {
+  throw new Error('maxParallelTasks must remain a compatibility alias of physicalBuildSlots');
+}
+if (!Number.isInteger(mode.maxLogicalLanes) || mode.maxLogicalLanes < mode.physicalBuildSlots) {
+  throw new Error('maxLogicalLanes must be an integer >= physicalBuildSlots');
+}
+if (mode.maxLogicalLanes > 256) {
+  throw new Error('maxLogicalLanes may not exceed 256 without a new reviewed scheduler policy');
+}
+if (
+  !Number.isInteger(mode.maxPrebuildArtifactLanes) ||
+  mode.maxPrebuildArtifactLanes < 0 ||
+  mode.maxPrebuildArtifactLanes > mode.maxLogicalLanes
+) {
+  throw new Error('maxPrebuildArtifactLanes must be between 0 and maxLogicalLanes');
+}
+if (typeof mode.prebuildWorkerEnabled !== 'boolean') {
+  throw new Error('prebuildWorkerEnabled must be boolean');
 }
 
 const scheduler = mode.scheduler || {};
-if (scheduler.strategy !== 'READY_FRONTIER') {
-  throw new Error('Aurora execution requires scheduler.strategy=READY_FRONTIER');
+if (scheduler.strategy !== 'PUZZLE_FRONTIER') {
+  throw new Error('Aurora execution requires scheduler.strategy=PUZZLE_FRONTIER');
 }
 if (scheduler.optimizeFor !== 'MINIMUM_SAFE_CRITICAL_PATH') {
   throw new Error('Aurora scheduler must optimize for MINIMUM_SAFE_CRITICAL_PATH');
 }
-if (scheduler.selection !== 'EXPLICIT_PRIORITY_THEN_LONGEST_REMAINING_PATH') {
-  throw new Error('Unsupported Aurora READY frontier selection policy');
+if (scheduler.buildSelection !== 'EXPLICIT_PRIORITY_THEN_LONGEST_REMAINING_PATH') {
+  throw new Error('Unsupported Aurora canonical BUILD selection policy');
+}
+if (scheduler.prebuildSelection !== 'WAVE_SEEDS_THEN_LOWEST_SPECULATION_DEPTH_THEN_CRITICAL_PATH') {
+  throw new Error('Unsupported Aurora PREBUILD selection policy');
+}
+if (scheduler.canonicalDependencyPolicy !== 'ACCEPTED_ONLY') {
+  throw new Error('Canonical BUILD/integration dependencies must be ACCEPTED_ONLY');
+}
+if (scheduler.prebuildPublicationPolicy !== 'ARTIFACT_ONLY_UNTIL_DEPENDENCIES_ACCEPTED') {
+  throw new Error('Aurora PREBUILD must remain artifact-only until dependencies are accepted');
 }
 if (scheduler.sharedWriteConflictPolicy !== 'FAIL_CLOSED_DEFER') {
   throw new Error('Aurora shared write conflicts must fail closed and defer');
 }
-if (scheduler.blockedTaskReadinessPolicy !== 'READ_ONLY_ONLY') {
-  throw new Error('Blocked Aurora tasks may perform READ_ONLY_ONLY readiness work');
+if (scheduler.pathFencePolicy !== 'REQUIRED_FOR_PATCH_PREBUILD') {
+  throw new Error('Patch PREBUILD requires an explicit path fence');
+}
+if (scheduler.contractReconciliationPolicy !== 'REQUIRED_BEFORE_BUILD_PROMOTION') {
+  throw new Error('PREBUILD contract reconciliation is required before BUILD promotion');
 }
 if (scheduler.runningTaskActivationPolicy !== 'NON_RETROACTIVE') {
   throw new Error('Scheduler activation must be NON_RETROACTIVE for already-running tasks');
@@ -35,27 +70,30 @@ if (scheduler.handoffFormat !== 'AURORA_COMPACT_V1') {
 }
 
 if (mode.mode === 'FREE_ACTIONS_CLI') {
-  if (!mode.freeActionsCliEnabled)
+  if (!mode.freeActionsCliEnabled) {
     throw new Error('FREE_ACTIONS_CLI requires freeActionsCliEnabled=true');
+  }
   if (mode.cloudAgentEnabled) throw new Error('FREE_ACTIONS_CLI must keep cloudAgentEnabled=false');
-  if (mode.maxParallelTasks > 2) {
-    throw new Error('Copilot Free execution mode may not exceed 2 parallel tasks');
+  if (mode.physicalBuildSlots > 2) {
+    throw new Error('Copilot Free canonical BUILD execution may not exceed 2 physical slots');
   }
 }
 
-if (mode.mode === 'PRO_PLUS_CLOUD_AGENT') {
-  if (!mode.cloudAgentEnabled)
-    throw new Error('PRO_PLUS_CLOUD_AGENT requires cloudAgentEnabled=true');
+if (mode.mode === 'PRO_PLUS_CLOUD_AGENT' && !mode.cloudAgentEnabled) {
+  throw new Error('PRO_PLUS_CLOUD_AGENT requires cloudAgentEnabled=true');
 }
 
 console.log(
   JSON.stringify(
     {
-      schemaVersion: mode.schemaVersion || 1,
+      schemaVersion: mode.schemaVersion,
       mode: mode.mode,
       freeActionsCliEnabled: Boolean(mode.freeActionsCliEnabled),
       cloudAgentEnabled: Boolean(mode.cloudAgentEnabled),
-      maxParallelTasks: mode.maxParallelTasks,
+      prebuildWorkerEnabled: mode.prebuildWorkerEnabled,
+      physicalBuildSlots: mode.physicalBuildSlots,
+      maxLogicalLanes: mode.maxLogicalLanes,
+      maxPrebuildArtifactLanes: mode.maxPrebuildArtifactLanes,
       scheduler,
       upgradeTarget: mode.upgradeTarget || null,
     },

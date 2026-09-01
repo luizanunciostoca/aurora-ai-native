@@ -1,0 +1,52 @@
+name: Aurora Puzzle Validation
+
+on:
+  pull_request:
+    paths:
+      - '.github/agents/**'
+      - '.github/workflows/aurora-copilot-puzzle-validation.yml'
+      - '.github/workflows/aurora-copilot-orchestrator.yml'
+      - 'docs/governance/copilot/**'
+      - 'tools/copilot/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/agents/**'
+      - '.github/workflows/aurora-copilot-puzzle-validation.yml'
+      - '.github/workflows/aurora-copilot-orchestrator.yml'
+      - 'docs/governance/copilot/**'
+      - 'tools/copilot/**'
+
+permissions:
+  contents: read
+
+jobs:
+  validate-puzzle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate 166-task graph and Puzzle metadata
+        run: node tools/copilot/load-task-graph.mjs
+      - name: Validate physical and logical execution capacities
+        run: node tools/copilot/validate-execution-mode.mjs
+      - name: Validate canonical BUILD frontier safety
+        run: node tools/copilot/frontier-policy.test.mjs
+      - name: Validate Puzzle scheduling semantics
+        run: node tools/copilot/puzzle-policy.test.mjs
+      - name: Validate PREBUILD artifact authority boundary
+        run: node tools/copilot/puzzle-prebuild-artifact.test.mjs
+      - name: Verify Puzzle control-plane invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'PUZZLE_FRONTIER' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'physicalBuildSlots' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'maxLogicalLanes' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'ARTIFACT_ONLY_UNTIL_DEPENDENCIES_ACCEPTED' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'REQUIRED_BEFORE_BUILD_PROMOTION' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'aurora:puzzle-build-ready' tools/copilot/claim-free-ready.mjs
+          grep -q 'aurora:puzzle-prebuild' tools/copilot/materialize-ready.mjs
+          grep -q 'aurora:puzzle-readiness' tools/copilot/materialize-ready.mjs
+          grep -q 'canonicalAuthority must be false' tools/copilot/puzzle-prebuild-artifact.mjs
+          grep -q 'PREBUILD_PATH_FENCE_VIOLATION' tools/copilot/puzzle-prebuild-artifact.mjs
+          grep -q 'Massively Parallel Program Execution Standard' docs/governance/copilot/AURORA_PUZZLE_MASSIVELY_PARALLEL_EXECUTION_STANDARD.md
