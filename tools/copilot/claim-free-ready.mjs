@@ -1,10 +1,12 @@
 /* global fetch */
 import fs from 'node:fs/promises';
 import { loadTaskGraph } from './load-task-graph.mjs';
+import { compactFrontierSummary, selectSafeReadyFrontier } from './frontier-policy.mjs';
 
 const [owner, repo] = (process.env.GITHUB_REPOSITORY || '').split('/');
 const token = process.env.GITHUB_TOKEN;
 const outputPath = process.env.GITHUB_OUTPUT;
+const summaryPath = process.env.GITHUB_STEP_SUMMARY;
 const baseSha = process.env.AURORA_BASE_SHA;
 if (!owner || !repo || !token || !outputPath || !baseSha) {
   throw new Error(
@@ -16,9 +18,12 @@ const mode = JSON.parse(
   await fs.readFile('docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json', 'utf8'),
 );
 if (mode.mode !== 'FREE_ACTIONS_CLI' || !mode.freeActionsCliEnabled) {
-  await fs.appendFile(outputPath, 'matrix={"include":[]}\ncount=0\n');
+  await fs.appendFile(outputPath, 'matrix={"include":[]}\ncount=0\nfrontier={"selected":[],"deferred":[]}\n');
   console.log(`Free worker disabled by mode ${mode.mode}`);
   process.exit(0);
+}
+if (mode.scheduler?.strategy !== 'READY_FRONTIER') {
+  throw new Error('FREE_ACTIONS_CLI requires READY_FRONTIER scheduler policy');
 }
 
 const graph = await loadTaskGraph();
@@ -186,9 +191,41 @@ for (const issue of issues) {
   candidates.push({ issue, task });
 }
 
-candidates.sort((a, b) => a.issue.number - b.issue.number);
-const selected = candidates.slice(0, Number(mode.maxParallelTasks || 2));
+const frontier = selectSafeReadyFrontier(
+  candidates,
+  graph.tasks,
+  Number(mode.maxParallelTasks || 2),
+);
+const selected = frontier.selected;
+const frontierSummary = compactFrontierSummary(frontier);
 const include = [];
+
+console.log(`READY FRONTIER ${JSON.stringify(frontierSummary)}`);
+if (summaryPath) {
+  const lines = [
+    '## Aurora READY Frontier',
+    '',
+    `Base SHA: \`${baseSha}\``,
+    '',
+    `Selected: ${frontierSummary.selected.length}; deferred: ${frontierSummary.deferred.length}`,
+    '',
+    '| Task | Issue | Lane | Critical depth | Shared write surfaces |',
+    '|---|---:|---|---:|---|',
+    ...frontierSummary.selected.map(
+      (entry) =>
+        `| ${entry.taskId} | ${entry.issue ?? '-'} | ${entry.lane ?? '-'} | ${entry.criticalPathDepth} | ${entry.sharedWriteSurfaces.join(', ') || '-'} |`,
+    ),
+  ];
+  if (frontierSummary.deferred.length) {
+    lines.push('', '### Deferred', '');
+    for (const entry of frontierSummary.deferred) {
+      lines.push(
+        `- ${entry.taskId}: ${entry.reason}${entry.conflictsWith ? ` with ${entry.conflictsWith}` : ''}${entry.surface ? ` on ${entry.surface}` : ''}`,
+      );
+    }
+  }
+  await fs.appendFile(summaryPath, `${lines.join('\n')}\n`);
+}
 
 for (const { issue, task } of selected) {
   const labels = new Set((issue.labels || []).map((label) => label.name));
@@ -208,8 +245,12 @@ for (const { issue, task } of selected) {
     taskId: task.id,
     agent: task.customAgent || 'aurora-implementation',
     baseSha,
+    lane: task.laneHint || '',
   });
-  console.log(`claimed ${task.id} from issue #${issue.number}`);
+  console.log(`claimed ${task.id} from issue #${issue.number} on ${task.laneHint || 'AUTO'} lane`);
 }
 
-await fs.appendFile(outputPath, `matrix=${JSON.stringify({ include })}\ncount=${include.length}\n`);
+await fs.appendFile(
+  outputPath,
+  `matrix=${JSON.stringify({ include })}\ncount=${include.length}\nfrontier=${JSON.stringify(frontierSummary)}\n`,
+);
