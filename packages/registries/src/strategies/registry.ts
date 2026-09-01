@@ -15,11 +15,7 @@ export const STRATEGY_AVAILABILITY_STATES = [
 ] as const;
 export type StrategyAvailabilityState = (typeof STRATEGY_AVAILABILITY_STATES)[number];
 export type StrategyCurrentAvailability =
-  | 'CURRENT_AVAILABLE'
-  | 'CURRENT_DEGRADED'
-  | 'UNAVAILABLE'
-  | 'UNKNOWN'
-  | 'STALE';
+  'CURRENT_AVAILABLE' | 'CURRENT_DEGRADED' | 'UNAVAILABLE' | 'UNKNOWN' | 'STALE';
 
 export interface StrategyAvailabilityObservation {
   readonly state: StrategyAvailabilityState;
