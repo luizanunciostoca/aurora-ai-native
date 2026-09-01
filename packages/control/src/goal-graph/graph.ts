@@ -16,12 +16,7 @@ export const GOAL_GRAPH_LIMITS = {
   maxFanOut: 64,
 } as const;
 
-const TERMINAL_STATES = new Set<LifecycleState>([
-  'SUCCEEDED',
-  'FAILED',
-  'CANCELLED',
-  'SUPERSEDED',
-]);
+const TERMINAL_STATES = new Set<LifecycleState>(['SUCCEEDED', 'FAILED', 'CANCELLED', 'SUPERSEDED']);
 
 function nonEmpty(value: string): boolean {
   return value.trim().length > 0;

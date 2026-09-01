@@ -13,7 +13,10 @@ import {
 const tenantId = 'ten_01J00000000000000000000000' as TenantId;
 const correlationId = 'cor_01J00000000000000000000000' as CorrelationId;
 
-function node(nodeId: string, joinPolicy: GoalGraphNode['joinPolicy'] = 'ALL_SUCCESS'): GoalGraphNode {
+function node(
+  nodeId: string,
+  joinPolicy: GoalGraphNode['joinPolicy'] = 'ALL_SUCCESS',
+): GoalGraphNode {
   return {
     nodeId,
     lifecycleRef: { kind: 'TASK', id: `task:${nodeId}` },
@@ -45,7 +48,10 @@ test('W04-C creates a deterministic bounded DAG and stable topological order', (
   });
   assert.equal(result.status, 'CREATED');
   if (result.status !== 'CREATED') return;
-  assert.deepEqual(result.graph.nodes.map((entry) => entry.nodeId), ['a', 'b', 'join']);
+  assert.deepEqual(
+    result.graph.nodes.map((entry) => entry.nodeId),
+    ['a', 'b', 'join'],
+  );
   assert.deepEqual(result.graph.topologicalOrder, ['a', 'b', 'join']);
   assert.equal(result.graph.authorizesExecution, false);
 });
@@ -77,7 +83,10 @@ test('W04-C ALL_SUCCESS join propagates failure and cancellation deterministical
   assert.equal(result.status, 'CREATED');
   if (result.status !== 'CREATED') return;
 
-  const waiting = assessGoalGraphDependencies(result.graph, 'join', { a: 'SUCCEEDED', b: 'ACTIVE' });
+  const waiting = assessGoalGraphDependencies(result.graph, 'join', {
+    a: 'SUCCEEDED',
+    b: 'ACTIVE',
+  });
   assert.equal(waiting.disposition, 'WAITING');
 
   const failed = assessGoalGraphDependencies(result.graph, 'join', { a: 'SUCCEEDED', b: 'FAILED' });
@@ -104,7 +113,8 @@ test('W04-C supports explicit ALL_TERMINAL and ANY_SUCCESS fan-in semantics', ()
   assert.equal(allTerminal.status, 'CREATED');
   if (allTerminal.status !== 'CREATED') return;
   assert.equal(
-    assessGoalGraphDependencies(allTerminal.graph, 'join', { a: 'FAILED', b: 'CANCELLED' }).disposition,
+    assessGoalGraphDependencies(allTerminal.graph, 'join', { a: 'FAILED', b: 'CANCELLED' })
+      .disposition,
     'READY',
   );
 
@@ -114,11 +124,13 @@ test('W04-C supports explicit ALL_TERMINAL and ANY_SUCCESS fan-in semantics', ()
   assert.equal(anySuccess.status, 'CREATED');
   if (anySuccess.status !== 'CREATED') return;
   assert.equal(
-    assessGoalGraphDependencies(anySuccess.graph, 'join', { a: 'FAILED', b: 'SUCCEEDED' }).disposition,
+    assessGoalGraphDependencies(anySuccess.graph, 'join', { a: 'FAILED', b: 'SUCCEEDED' })
+      .disposition,
     'READY',
   );
   assert.equal(
-    assessGoalGraphDependencies(anySuccess.graph, 'join', { a: 'FAILED', b: 'CANCELLED' }).disposition,
+    assessGoalGraphDependencies(anySuccess.graph, 'join', { a: 'FAILED', b: 'CANCELLED' })
+      .disposition,
     'PROPAGATE_FAILURE',
   );
 });

@@ -60,11 +60,7 @@ export type CreateGoalGraphResult =
     };
 
 export type GoalGraphDependencyDisposition =
-  | 'READY'
-  | 'WAITING'
-  | 'PROPAGATE_FAILURE'
-  | 'PROPAGATE_CANCELLATION'
-  | 'TERMINAL';
+  'READY' | 'WAITING' | 'PROPAGATE_FAILURE' | 'PROPAGATE_CANCELLATION' | 'TERMINAL';
 
 export interface GoalGraphDependencyAssessment {
   readonly nodeId: string;
