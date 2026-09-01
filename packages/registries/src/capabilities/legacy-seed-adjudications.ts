@@ -78,38 +78,35 @@ const REJECTED_SEEDS = [
 ] as const;
 
 export const LEGACY_CAPABILITY_SEED_ADJUDICATIONS: readonly CapabilitySeedAdjudication[] = [
-  ...ACCEPTED_SEEDS.map(
-    (seedId): CapabilitySeedAdjudication => ({
-      adjudicationId: `W04-B:${seedId}`,
-      seedId,
-      sourceRef: `${LEGACY_CAPABILITY_SEED_CATALOG_SOURCE}:${seedId}`,
-      decision: 'ACCEPT',
-      resultingCapabilityIds: [seedId],
-      reason:
-        seedId === 'task.schedule'
-          ? 'Target-neutral vocabulary accepted; durable timer and dispatch semantics remain W03-owned.'
-          : 'Target-neutral vocabulary accepted only; implementation, current authority and execution remain with downstream owner waves.',
-    }),
-  ),
-  ...REJECTED_SEEDS.map(
-    (seedId): CapabilitySeedAdjudication => ({
-      adjudicationId: `W04-B:${seedId}`,
-      seedId,
-      sourceRef: `${LEGACY_CAPABILITY_SEED_CATALOG_SOURCE}:${seedId}`,
-      decision: 'REJECT',
-      resultingCapabilityIds: [],
-      reason: seedId.startsWith('agent.')
-        ? 'Agent-internal lifecycle or plan mutation belongs to W05 runtime, not the target-neutral capability registry.'
-        : 'The seed is too generic to preserve stable capability semantics; require explicit provider-neutral capabilities.',
-    }),
-  ),
+  ...ACCEPTED_SEEDS.map((seedId): CapabilitySeedAdjudication => ({
+    adjudicationId: `W04-B:${seedId}`,
+    seedId,
+    sourceRef: `${LEGACY_CAPABILITY_SEED_CATALOG_SOURCE}:${seedId}`,
+    decision: 'ACCEPT',
+    resultingCapabilityIds: [seedId],
+    reason:
+      seedId === 'task.schedule'
+        ? 'Target-neutral vocabulary accepted; durable timer and dispatch semantics remain W03-owned.'
+        : 'Target-neutral vocabulary accepted only; implementation, current authority and execution remain with downstream owner waves.',
+  })),
+  ...REJECTED_SEEDS.map((seedId): CapabilitySeedAdjudication => ({
+    adjudicationId: `W04-B:${seedId}`,
+    seedId,
+    sourceRef: `${LEGACY_CAPABILITY_SEED_CATALOG_SOURCE}:${seedId}`,
+    decision: 'REJECT',
+    resultingCapabilityIds: [],
+    reason: seedId.startsWith('agent.')
+      ? 'Agent-internal lifecycle or plan mutation belongs to W05 runtime, not the target-neutral capability registry.'
+      : 'The seed is too generic to preserve stable capability semantics; require explicit provider-neutral capabilities.',
+  })),
   {
     adjudicationId: 'W04-B:browser.scroll',
     seedId: 'browser.scroll',
     sourceRef: `${LEGACY_CAPABILITY_SEED_CATALOG_SOURCE}:browser.scroll`,
     decision: 'DECOMPOSE',
     resultingCapabilityIds: ['browser.scroll.up', 'browser.scroll.down'],
-    reason: 'Direction changes behavior and evidence, so the legacy combined seed is decomposed explicitly.',
+    reason:
+      'Direction changes behavior and evidence, so the legacy combined seed is decomposed explicitly.',
   },
 ];
 
