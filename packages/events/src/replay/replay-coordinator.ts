@@ -30,13 +30,12 @@ export class ReplayCoordinator {
   process(input: ReplayInput, observedAt: string): ReplayDecision {
     const eventId = nonEmpty(input.envelope.eventId, 'eventId');
     if (this.#seenEventIds.has(eventId)) {
-      return {
-        status: 'DUPLICATE',
-        eventId,
-        checkpoint: input.ordering
-          ? this.#checkpoints.get(input.ordering.streamKey)
-          : undefined,
-      };
+      const checkpoint = input.ordering
+        ? this.#checkpoints.get(input.ordering.streamKey)
+        : undefined;
+      return checkpoint === undefined
+        ? { status: 'DUPLICATE', eventId }
+        : { status: 'DUPLICATE', eventId, checkpoint };
     }
 
     if (input.ordering) {
@@ -87,7 +86,7 @@ export class ReplayCoordinator {
     return {
       envelope: record.envelope,
       reason: record.reason,
-      ordering: record.ordering,
+      ...(record.ordering ? { ordering: record.ordering } : {}),
       safety: record.safety,
       executionAuthorized: false,
       requiresFreshAuthorityValidation: record.reason === 'FRESH_AUTHORITY_REQUIRED',
@@ -107,13 +106,8 @@ export class ReplayCoordinator {
   ): ReplayDecision {
     const deadLetterId = `${input.envelope.eventId}:${reason}`;
     const existing = this.#deadLetters.get(deadLetterId);
-    const deadLetter: DeadLetterRecord = existing
+    const fresh: DeadLetterRecord = input.ordering
       ? {
-          ...existing,
-          lastQuarantinedAt: observedAt,
-          attempts: existing.attempts + 1,
-        }
-      : {
           deadLetterId,
           envelope: input.envelope,
           reason,
@@ -123,7 +117,24 @@ export class ReplayCoordinator {
           lastQuarantinedAt: observedAt,
           attempts: 1,
           executionAuthorized: false,
+        }
+      : {
+          deadLetterId,
+          envelope: input.envelope,
+          reason,
+          safety: input.safety,
+          firstQuarantinedAt: observedAt,
+          lastQuarantinedAt: observedAt,
+          attempts: 1,
+          executionAuthorized: false,
         };
+    const deadLetter: DeadLetterRecord = existing
+      ? {
+          ...existing,
+          lastQuarantinedAt: observedAt,
+          attempts: existing.attempts + 1,
+        }
+      : fresh;
     this.#deadLetters.set(deadLetterId, deadLetter);
     return {
       status: 'QUARANTINED',
