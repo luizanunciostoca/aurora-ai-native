@@ -12,11 +12,17 @@ import type {
   CapabilityRequirement,
 } from './types.ts';
 
-function capabilityTenantMatches(descriptor: CapabilityDescriptor, input: CapabilityPlanInput): boolean {
+function capabilityTenantMatches(
+  descriptor: CapabilityDescriptor,
+  input: CapabilityPlanInput,
+): boolean {
   return descriptor.tenantId === undefined || descriptor.tenantId === input.tenantId;
 }
 
-function bindingMatchesTenant(binding: CapabilityBindingDescriptor, input: CapabilityPlanInput): boolean {
+function bindingMatchesTenant(
+  binding: CapabilityBindingDescriptor,
+  input: CapabilityPlanInput,
+): boolean {
   return binding.tenantId === undefined || binding.tenantId === input.tenantId;
 }
 
@@ -43,7 +49,10 @@ function currentEnough(
   availability: ReturnType<typeof evaluateCapabilityAvailability>,
   allowDegraded: boolean,
 ): boolean {
-  return availability === 'CURRENT_AVAILABLE' || (allowDegraded && availability === 'CURRENT_DEGRADED');
+  return (
+    availability === 'CURRENT_AVAILABLE' ||
+    (allowDegraded && availability === 'CURRENT_DEGRADED')
+  );
 }
 
 function selectRequirement(
@@ -82,7 +91,10 @@ function selectRequirement(
     };
   }
 
-  const currentAvailability = evaluateCapabilityAvailability(descriptor.availability, input.nowEpochMs);
+  const currentAvailability = evaluateCapabilityAvailability(
+    descriptor.availability,
+    input.nowEpochMs,
+  );
   if (!currentEnough(currentAvailability, requirement.allowDegraded ?? false)) {
     return {
       requirementId: requirement.requirementId,
