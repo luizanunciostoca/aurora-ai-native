@@ -27,7 +27,12 @@ function compileAndRunServiceTests(servicePath, testFiles) {
     '.bin',
     process.platform === 'win32' ? 'tsc.cmd' : 'tsc',
   );
-  let serviceStatus = run(tsc, ['--project', `${servicePath}/tsconfig.test.json`, '--pretty', 'false']);
+  let serviceStatus = run(tsc, [
+    '--project',
+    `${servicePath}/tsconfig.test.json`,
+    '--pretty',
+    'false',
+  ]);
   if (serviceStatus === 0) {
     const testRoot = resolve(repoRoot, servicePath, 'test');
     const compiledTests = testFiles.map((testFile) =>
