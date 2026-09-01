@@ -159,7 +159,9 @@ function capabilityPlan(overrides: Partial<CapabilityPlan> = {}): CapabilityPlan
   };
 }
 
-function bindingInput(overrides: Partial<PlanTemplateBindingInput> = {}): PlanTemplateBindingInput {
+function bindingInput(
+  overrides: Partial<PlanTemplateBindingInput> = {},
+): PlanTemplateBindingInput {
   return {
     tenantId,
     correlationId,
@@ -264,10 +266,15 @@ test('W04-G refuses invalidated, hash-stale, and input-contract-incompatible tem
     status: 'REJECTED',
     code: 'TEMPLATE_INVALIDATED',
   });
-  assert.deepEqual(bindPlanTemplate(bindingInput({ template: active, expectedContentHash: `sha256:${'b'.repeat(64)}` })), {
-    status: 'REJECTED',
-    code: 'CONTENT_HASH_MISMATCH',
-  });
+  assert.deepEqual(
+    bindPlanTemplate(
+      bindingInput({ template: active, expectedContentHash: `sha256:${'b'.repeat(64)}` }),
+    ),
+    {
+      status: 'REJECTED',
+      code: 'CONTENT_HASH_MISMATCH',
+    },
+  );
   assert.deepEqual(
     bindPlanTemplate(
       bindingInput({
