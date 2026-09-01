@@ -4,10 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'docs/governance/copilot/AURORA_COPILOT_TASK_GRAPH.json'
+      - 'docs/governance/copilot/tasks/**'
       - 'tools/copilot/**'
       - '.github/agents/**'
       - '.github/copilot-instructions.md'
+      - '.github/instructions/**'
       - 'AGENTS.md'
   issues:
     types: [closed, reopened]
@@ -24,7 +25,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-graph:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout canonical main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Validate 166-task Aurora DAG
+        run: node tools/copilot/load-task-graph.mjs
+
   materialize-ready:
+    needs: validate-graph
     runs-on: ubuntu-latest
     steps:
       - name: Checkout canonical main
