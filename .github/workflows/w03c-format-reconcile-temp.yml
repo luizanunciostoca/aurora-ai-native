@@ -1,0 +1,38 @@
+name: W03-C Format Reconcile Temp
+
+on:
+  push:
+    branches:
+      - wave/03c-event-transport-subscriptions
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-self-delete:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout lane branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/03c-event-transport-subscriptions
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install workspace
+        run: npm ci
+      - name: Format only W03-C owned test
+        run: npx prettier --write packages/events/test/w03c-transport.test.mjs
+      - name: Commit formatted lane and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/w03c-format-reconcile-temp.yml
+          git add packages/events/test/w03c-transport.test.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore(W03-C): apply canonical formatting after tenant hardening'
+          git push origin HEAD:wave/03c-event-transport-subscriptions
