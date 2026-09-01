@@ -1,5 +1,4 @@
-import type { EventEnvelope, JsonValue } from '@aurora/contracts/envelopes';
-import type { CorrelationId, EventId, TenantId } from '@aurora/contracts/ids';
+import type { CorrelationId, EventEnvelope, EventId, TenantId } from '@aurora/contracts';
 
 export type DeliveryStatus = 'pending' | 'claimed' | 'acked' | 'failed' | 'dead_lettered';
 export type IdempotencyStatus = 'accepted' | 'rejected' | 'inflight' | 'completed';
@@ -72,5 +71,5 @@ export interface DeliveryEvidence {
   readonly correlationId?: CorrelationId;
   readonly transition: string;
   readonly at: string;
-  readonly details?: Readonly<Record<string, JsonValue>>;
+  readonly details?: Readonly<Record<string, unknown>>;
 }
