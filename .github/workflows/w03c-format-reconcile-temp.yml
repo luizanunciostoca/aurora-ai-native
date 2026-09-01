@@ -1,0 +1,38 @@
+name: W03-C Format Reconcile Temp
+
+on:
+  push:
+    branches:
+      - wave/03c-event-transport-subscriptions
+    paths:
+      - '.github/workflows/w03c-format-reconcile-temp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-self-delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout lane branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/03c-event-transport-subscriptions
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Format only W03-C owned files
+        run: npx prettier --write 'packages/events/src/transport/**/*.ts' 'packages/events/test/w03c-*.mjs'
+      - name: Commit formatted lane and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/w03c-format-reconcile-temp.yml
+          git add packages/events/src/transport packages/events/test/w03c-transport.test.mjs
+          git commit -m 'chore(W03-C): apply canonical formatting'
+          git push origin HEAD:wave/03c-event-transport-subscriptions
