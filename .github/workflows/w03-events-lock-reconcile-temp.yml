@@ -1,0 +1,60 @@
+name: W03 Events Lock Reconcile Temp
+
+on:
+  push:
+    branches:
+      - wave/03-program-control-parallel-standard
+
+permissions:
+  contents: write
+
+jobs:
+  reconcile-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Program Control branch
+        uses: actions/checkout@v4
+        with:
+          ref: wave/03-program-control-parallel-standard
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Set up canonical Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Regenerate only the events workspace lock metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          git fetch origin main --depth=1
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+
+          const generated = JSON.parse(fs.readFileSync('package-lock.json', 'utf8'));
+          const base = JSON.parse(execFileSync('git', ['show', 'origin/main:package-lock.json'], { encoding: 'utf8' }));
+
+          assert.equal(generated.packages['node_modules/@aurora/events']?.resolved, 'packages/events');
+          assert.equal(generated.packages['node_modules/@aurora/events']?.link, true);
+          assert.equal(generated.packages['packages/events']?.name, '@aurora/events');
+          assert.equal(generated.packages['packages/events']?.version, '0.1.0');
+          assert.equal(generated.packages['packages/events']?.dependencies?.['@aurora/contracts'], '0.1.0');
+
+          delete generated.packages['node_modules/@aurora/events'];
+          delete generated.packages['packages/events'];
+          assert.deepEqual(generated, base, 'npm changed lock content beyond the two events workspace records');
+          NODE
+      - name: Commit deterministic lock and self-delete workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json
+          git rm .github/workflows/w03-events-lock-reconcile-temp.yml
+          git diff --cached --quiet && { echo 'No reconciliation changes produced'; exit 1; }
+          git commit -m 'chore(program-control): deterministically reconcile events scaffold lock'
+          git push origin HEAD:wave/03-program-control-parallel-standard
