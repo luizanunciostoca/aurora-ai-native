@@ -80,7 +80,10 @@
       ],
       "ownership": "packages/intelligence/src/classification/** plus W05-A tests",
       "forbidden": "No authority decision and no router implementation.",
-      "allowedPaths": ["packages/intelligence/src/classification/**", "packages/intelligence/test/w05a-**"],
+      "allowedPaths": [
+        "packages/intelligence/src/classification/**",
+        "packages/intelligence/test/w05a-**"
+      ],
       "laneHint": "LANE-1",
       "dispatchPriority": 100,
       "sharedWriteSurfaces": ["w05:classification"]
@@ -97,7 +100,10 @@
       ],
       "ownership": "packages/intelligence/src/reasoning-level/** plus W05-C tests",
       "forbidden": "No hidden authority and no W04 ExecutionBudget source-of-truth duplication.",
-      "allowedPaths": ["packages/intelligence/src/reasoning-level/**", "packages/intelligence/test/w05c-**"],
+      "allowedPaths": [
+        "packages/intelligence/src/reasoning-level/**",
+        "packages/intelligence/test/w05c-**"
+      ],
       "laneHint": "LANE-2",
       "dispatchPriority": 100,
       "sharedWriteSurfaces": ["w05:reasoning-level"]
@@ -114,7 +120,10 @@
       ],
       "ownership": "packages/intelligence/src/confidence/** plus W05-D tests",
       "forbidden": "No spend/write authority from confidence and no W18 adaptive promotion.",
-      "allowedPaths": ["packages/intelligence/src/confidence/**", "packages/intelligence/test/w05d-**"],
+      "allowedPaths": [
+        "packages/intelligence/src/confidence/**",
+        "packages/intelligence/test/w05d-**"
+      ],
       "laneHint": "LANE-3",
       "dispatchPriority": 95,
       "sharedWriteSurfaces": ["w05:confidence"]
@@ -131,7 +140,10 @@
       ],
       "ownership": "packages/registries/src/strategies/** plus W05-E tests",
       "forbidden": "No second capability registry and no executable authority metadata.",
-      "allowedPaths": ["packages/registries/src/strategies/**", "packages/registries/test/w05e-**"],
+      "allowedPaths": [
+        "packages/registries/src/strategies/**",
+        "packages/registries/test/w05e-**"
+      ],
       "laneHint": "LANE-4",
       "dispatchPriority": 95,
       "sharedWriteSurfaces": ["w05:strategy-registry"]
@@ -148,7 +160,10 @@
       ],
       "ownership": "services/agent-runtime/src/runtime/** plus W05-F tests",
       "forbidden": "No god-object orchestrator, no duplicate durable workflow and no direct side effects.",
-      "allowedPaths": ["services/agent-runtime/src/runtime/**", "services/agent-runtime/test/w05f-**"],
+      "allowedPaths": [
+        "services/agent-runtime/src/runtime/**",
+        "services/agent-runtime/test/w05f-**"
+      ],
       "laneHint": "LANE-5",
       "dispatchPriority": 90,
       "sharedWriteSurfaces": ["w05:agent-runtime"]
@@ -165,7 +180,10 @@
       ],
       "ownership": "packages/intelligence/src/router/** plus W05-B tests",
       "forbidden": "No direct tools/executor side effects and no control-core duplication.",
-      "allowedPaths": ["packages/intelligence/src/router/**", "packages/intelligence/test/w05b-**"],
+      "allowedPaths": [
+        "packages/intelligence/src/router/**",
+        "packages/intelligence/test/w05b-**"
+      ],
       "laneHint": "LANE-1",
       "dispatchPriority": 80,
       "sharedWriteSurfaces": ["w05:intelligence-router"]
@@ -182,7 +200,10 @@
       ],
       "ownership": "services/agent-runtime/src/loop/** plus W05-G tests",
       "forbidden": "No unbounded autonomous loop and no direct external execution.",
-      "allowedPaths": ["services/agent-runtime/src/loop/**", "services/agent-runtime/test/w05g-**"],
+      "allowedPaths": [
+        "services/agent-runtime/src/loop/**",
+        "services/agent-runtime/test/w05g-**"
+      ],
       "laneHint": "LANE-1",
       "dispatchPriority": 70,
       "sharedWriteSurfaces": ["w05:bounded-adaptive-loop"]
