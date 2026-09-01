@@ -1,8 +1,8 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W04_00_ACCEPTED`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_W04_ABF_ACCEPTED`
 Audit date: 2026-09-01
-Current accepted main: `8ae384809fa25ddf7dd78511d12c021874fd6a6b`
+Current accepted feature baseline before this governance-status publication: `5fac1a0c317b060f2da11545066f2dfffe3eceb7`
 
 ## Authority order
 
@@ -23,10 +23,14 @@ No prompt, task node, PREBUILD artifact, draft PR, agent output or reference sou
 - W02-00/A/B/C/D/E/F/G: `COMPLETE_ACCEPTED_MERGED`.
 - PB1-PB5: `COMPLETE_RELEASED / ACCEPTED` as applicable.
 - W03: `COMPLETE_ACCEPTED / REALITY_GATE_DURABLE_EVENT_DELIVERY_VERIFIED`.
-- W03-00/A/B/C/D/E/F: accepted according to canonical exact-SHA/Drive evidence; W03-F issue #88 is closed with `aurora:accepted`.
+- W03-00/A/B/C/D/E/F: accepted according to canonical exact-SHA/Drive evidence.
 - W04-00: `COMPLETE_ACCEPTED / W04_COORDINATION_FREEZE_VERIFIED`.
-- W04-A, W04-B and W04-F: dependency-ready after W04-00 acceptance; current `FREE_ACTIONS_CLI maxParallelTasks=2` allows two simultaneous code BUILD nodes, with critical-path default W04-A + W04-B and W04-F immediately next-ready.
-- W04-C/D/E/G/H: dependency-gated by the W04 matrix.
+- W04-A: `COMPLETE_ACCEPTED_MERGED`.
+- W04-B: `COMPLETE_ACCEPTED_MERGED`.
+- W04-F: `COMPLETE_ACCEPTED_MERGED`.
+- W04-C, W04-E and W04-G: `DEPENDENCY_READY` because W04-A + W04-B are accepted.
+- W04-D: blocked only on W04-C because W04-F is accepted.
+- W04-H: blocked on W04-D + W04-E + W04-G.
 - W05-W20: dependency-gated except PREBUILD/readiness explicitly allowed by accepted Puzzle governance.
 
 ## W02 final evidence
@@ -41,15 +45,12 @@ W03 final outcome: `DURABLE_EVENT_DELIVERY_VERIFIED`.
 
 Canonical W03-F / Reality Gate evidence:
 - PR #126 — `test(w03-f): integrated Reality Gate and recovery validation`.
-- Base main `c5343528219f21761a8171cf5ae14fd1b6e4e55c`.
 - Exact accepted candidate HEAD `8108a9259823e27064ca3254785978982d382c2e`.
 - Candidate Quality `33476434872`, Test Build `33476434863`, Security `33476435285`: SUCCESS.
-- Exact-head PostgreSQL Reality Gate `33476470808`: SUCCESS with explicit checkout/provenance assertion of the candidate SHA.
+- Exact-head PostgreSQL Reality Gate `33476470808`: SUCCESS.
 - Merge/main `76ba0db1bf399c21d08e2190915213ceb8f4eb02`.
 - Post-merge Quality `33476605969`, Test Build `33476605936`, Security `33476606422`: SUCCESS.
 - Risk Gates A/B/C/D: PASS for W03 acceptance scope.
-- R01-R20 applicable scenarios: PASS via normal CI + PostgreSQL gate + recovery runbook.
-- Issue #88: closed `completed` with `aurora:accepted`.
 
 Canonical W03 Drive folder: `W03_PERSISTENCE_EVENT_BACKBONE_DURABLE_WORKFLOW` / `1ZO73FVedMQM77dtfRtWF9wm54eulBkXc`.
 
@@ -59,24 +60,43 @@ W04-00 is governance/control-plane freeze only; it does not implement runtime fe
 
 Canonical acceptance evidence:
 - PR #128 — `docs(w04): freeze control-core ownership, DAG and risk gates`.
-- Base accepted main `76ba0db1bf399c21d08e2190915213ceb8f4eb02`.
 - Exact accepted candidate HEAD `475e4eda3e13f14519621e09cbc21504b2d3e8b3`.
-- Candidate Aurora Puzzle Validation `33478965459`: SUCCESS.
-- Candidate Aurora Copilot Fabric Validation `33478965512`: SUCCESS.
-- Candidate Quality `33478965521`: SUCCESS.
-- Candidate Test Build `33478965531`: SUCCESS.
-- Candidate Security `33478966351`: SUCCESS.
-- Merge/current accepted main `8ae384809fa25ddf7dd78511d12c021874fd6a6b`.
-- Post-merge Aurora Puzzle Validation `33479274060`: SUCCESS.
-- Post-merge Aurora Copilot Fabric Validation `33479274049`: SUCCESS.
-- Post-merge Quality `33479274084`: SUCCESS.
-- Post-merge Test Build `33479274081`: SUCCESS.
-- Post-merge Security `33479274671`: SUCCESS.
-- Risk Gate A / Correctness: PASS.
-- Risk Gate B / Safety & Authority: PASS.
-- Risk Gate C / Performance & Economics: `PASS_FOR_GOVERNANCE_SCOPE_ONLY`.
-- Risk Gate D / Failure & Recoverability: `PASS_FOR_GOVERNANCE_SCOPE_ONLY`.
+- Candidate Puzzle/Copilot/Quality/Test Build/Security gates: SUCCESS.
+- Merge accepted main `8ae384809fa25ddf7dd78511d12c021874fd6a6b` with post-merge gates SUCCESS.
+- Risk Gate A/B: PASS.
+- Risk Gate C/D: `PASS_FOR_GOVERNANCE_SCOPE_ONLY`.
 - Drive acceptance evidence: `W04-00_ACCEPTANCE_EVIDENCE_2026-09-01` / `1fXfgev71f69dcmWyI77033wQTtgdEvWWEGl1YlsA0X0`.
+
+## W04-A final evidence
+
+- PR #135 — `feat(w04-a): implement deterministic objective goal task lifecycle`.
+- Exact final BUILD HEAD `b5a6a9ee56c26858cae0fc9544c804ef87075d91`.
+- Candidate Quality `33485742600`, Test Build `33485742585`, Security `33485743047`: SUCCESS.
+- Merge/main `ddea4dfb8b50ed9f1d833b614c303d0f7d10be9b` with post-merge acceptance verification completed.
+- Drive acceptance evidence: `W04_A_ACCEPTANCE_EVIDENCE` / `1pIAw_uVQvRO9Sw5znzaombTvPQ2o-S4o8mWA-hAqOSw`.
+- Issue #90: closed with `aurora:accepted`.
+
+## W04-B final evidence
+
+- PR #136 — `feat(w04-b): add target-neutral capability registry and planning`.
+- Exact final BUILD HEAD `887e021b596b7d515d1b9ad710b3c12b94f31507`.
+- Candidate Quality `33488395342`, Test Build `33488395172`, Security `33488395983`: SUCCESS.
+- Merge/main `4bb1feaba290a4a108c5ad95c95033392f305caf`.
+- Post-merge Quality `33488589748`, Test Build `33488589739`, Security `33488590573`: SUCCESS.
+- Complete 69-seed legacy adjudication is accepted exactly once; CapabilityPlan and registry remain target-neutral and non-authoritative.
+- Drive acceptance evidence: `W04_B_ACCEPTANCE_EVIDENCE` / `15-0ZeBNXPtOnFQyqjxrOtn59R_jRthVpe3oYSKh0x4o`.
+- Issue #91: closed with `aurora:accepted`.
+
+## W04-F final evidence
+
+- PR #137 — `feat(w04-f): add deterministic execution budget contract`.
+- Exact final BUILD HEAD `b93adf37973fe7828d760a049c003d8fe659f0de`.
+- Candidate Quality `33488535098`, Test Build `33488535086`, Security `33488535582`: SUCCESS.
+- Merge/main `5fac1a0c317b060f2da11545066f2dfffe3eceb7`.
+- Post-merge Quality `33488826903`, Test Build `33488826823`, Security `33488827621`: SUCCESS.
+- ExecutionBudget constrains latency/cost/reasoning/tool calls/concurrency without minting execution authority or weakening mandatory safety validation.
+- Drive acceptance evidence: `W04_F_ACCEPTANCE_EVIDENCE` / `1sKxZhQjhDQGpPxZzayX7ZmT3s6NjvpjcaepMOg29zCQ`.
+- Issue #95: closed with `aurora:accepted`.
 
 Canonical W04 Drive folder: `W04_CONTROL_CORE_CAPABILITY_PLANNING_GOAL_GRAPH` / `1Vz45N4p5zhubQvBFAf_zFinkhCFZcQdp`.
 
@@ -98,7 +118,11 @@ Canonical W04 governance set:
 
 `W04-D + W04-E + W04-G -> W04-H`
 
-Current dependency-ready frontier after W04-00 acceptance is `{ W04-A, W04-B, W04-F }`. With current execution capacity, Program Control should dispatch W04-A + W04-B first and keep W04-F next-ready unless live ownership/shared-write reconciliation reduces the safe frontier.
+Accepted nodes: `{ W04-00, W04-A, W04-B, W04-F }`.
+
+Current dependency-ready frontier: `{ W04-C, W04-E, W04-G }`.
+
+With `FREE_ACTIONS_CLI maxParallelTasks=2`, Program Control should prioritize W04-C in one code slot because accepted W04-C + W04-F unlock W04-D. The second code slot may safely use W04-E or W04-G after live branch/PR/ownership revalidation. W04-D remains blocked until W04-C acceptance; W04-H remains blocked until W04-D, W04-E and W04-G acceptance.
 
 ## W04 architecture boundaries
 
@@ -123,7 +147,7 @@ Core invariants:
 
 ## Legacy / TOCA W04 input status
 
-Legacy capability register remains `ACTIVE_CANONICAL_PLANNING_INPUT`: 541 files classified, 69 deduplicated capability seeds, every seed `SEED_ONLY_NOT_CANONICAL` and `NO_DIRECT_RUNTIME_IMPORT` by default.
+Legacy capability register remains `ACTIVE_CANONICAL_PLANNING_INPUT`: 541 files classified, 69 deduplicated capability seeds, every seed `SEED_ONLY_NOT_CANONICAL` and `NO_DIRECT_RUNTIME_IMPORT` by default. W04-B has now completed the explicit adjudication of all 69 seeds into accepted/rejected/decomposed canonical registry vocabulary without direct legacy runtime import.
 
 TOCA MCP salvage remains reference-only at audited commit `8a6cfe055be9b34e498cfbdb481e8232dc51df05`. Capability catalog/IDs/lifecycle/resolution/validation-evidence are semantic references only. TOCA Approval/Autonomy/route/business bindings cannot become parallel Aurora authority.
 
