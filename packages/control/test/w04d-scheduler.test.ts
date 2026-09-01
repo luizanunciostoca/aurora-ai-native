@@ -93,10 +93,13 @@ function input(
 }
 
 test('W04-D dispatches only lifecycle-ready nodes whose graph dependencies are ready', () => {
-  const goalGraph = graph([node('a'), node('b'), node('c')], [
-    { fromNodeId: 'a', toNodeId: 'c' },
-    { fromNodeId: 'b', toNodeId: 'c' },
-  ]);
+  const goalGraph = graph(
+    [node('a'), node('b'), node('c')],
+    [
+      { fromNodeId: 'a', toNodeId: 'c' },
+      { fromNodeId: 'b', toNodeId: 'c' },
+    ],
+  );
   const first = planSchedulerTick(
     input(goalGraph, {
       a: 'SUCCEEDED',
@@ -196,10 +199,13 @@ test('W04-D applies cancellation and backpressure without creating execution aut
 });
 
 test('W04-D surfaces deterministic graph failure and cancellation propagation plans', () => {
-  const goalGraph = graph([node('a'), node('b'), node('c')], [
-    { fromNodeId: 'a', toNodeId: 'c' },
-    { fromNodeId: 'b', toNodeId: 'c' },
-  ]);
+  const goalGraph = graph(
+    [node('a'), node('b'), node('c')],
+    [
+      { fromNodeId: 'a', toNodeId: 'c' },
+      { fromNodeId: 'b', toNodeId: 'c' },
+    ],
+  );
 
   const failed = planSchedulerTick(
     input(goalGraph, {
