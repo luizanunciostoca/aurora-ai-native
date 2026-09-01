@@ -60,7 +60,10 @@ test('R01/R02 contract integration keeps canonical envelope and atomic event+out
   assert.match(statement.text, /INSERT INTO w03_event_outbox/);
   assert.match(statement.text, /FROM persisted_event/);
   pass('R01', 'EventEnvelope tenant/correlation preserved in durable statement');
-  pass('R02-MODEL', 'event and outbox are one SQL statement; rollback is proven by PostgreSQL gate');
+  pass(
+    'R02-MODEL',
+    'event and outbox are one SQL statement; rollback is proven by PostgreSQL gate',
+  );
 });
 
 test('R04/R05/R12 idempotency and duplicate delivery produce one simulated side effect', () => {
@@ -97,7 +100,8 @@ test('R04/R05/R12 idempotency and duplicate delivery produce one simulated side 
     status: 'completed',
   });
   assert.equal(
-    delivery.decideIdempotency(completed, { ...request, canonicalPayloadHash: 'a'.repeat(64) }).kind,
+    delivery.decideIdempotency(completed, { ...request, canonicalPayloadHash: 'a'.repeat(64) })
+      .kind,
     'CONFLICT',
   );
 
@@ -145,18 +149,30 @@ test('R08/R16 fan-out is bounded, acknowledgements independent and tenant scoped
 test('R09/R10/R11 replay ordering, poison quarantine and authority safety are deterministic', () => {
   const coordinator = new replayApi.ReplayCoordinator();
   const first = coordinator.process(
-    { envelope: envelope(4), safety: 'IDEMPOTENT_INTERNAL', ordering: { streamKey: 'orders', sequence: 1 } },
+    {
+      envelope: envelope(4),
+      safety: 'IDEMPOTENT_INTERNAL',
+      ordering: { streamKey: 'orders', sequence: 1 },
+    },
     baseTime,
   );
   assert.equal(first.status, 'ACCEPTED');
   const gap = coordinator.process(
-    { envelope: envelope(6), safety: 'IDEMPOTENT_INTERNAL', ordering: { streamKey: 'orders', sequence: 3 } },
+    {
+      envelope: envelope(6),
+      safety: 'IDEMPOTENT_INTERNAL',
+      ordering: { streamKey: 'orders', sequence: 3 },
+    },
     baseTime,
   );
   assert.equal(gap.status, 'QUARANTINED');
   assert.equal(gap.deadLetter.reason, 'SEQUENCE_GAP');
   const external = coordinator.process(
-    { envelope: envelope(7), safety: 'EXTERNAL_SIDE_EFFECT', ordering: { streamKey: 'external', sequence: 1 } },
+    {
+      envelope: envelope(7),
+      safety: 'EXTERNAL_SIDE_EFFECT',
+      ordering: { streamKey: 'external', sequence: 1 },
+    },
     baseTime,
   );
   assert.equal(external.status, 'QUARANTINED');
@@ -173,9 +189,24 @@ test('R07/R13/R14/R15 workflow SQL preserves fencing, restart and one-terminal-s
   const expiresAt = '2026-09-01T05:51:00.000Z';
   const ownerToken = 'worker:fence-99';
   const timerId = '11111111-1111-4111-8111-111111111111';
-  const claim = workflow.claimDueTimerStatement({ tenantId: tenantA, now, ownerToken, leaseExpiresAt: expiresAt });
-  const complete = workflow.completeClaimedTimerStatement({ tenantId: tenantA, timerId, ownerToken, now });
-  const cancel = workflow.cancelClaimedTimerStatement({ tenantId: tenantA, timerId, ownerToken, now });
+  const claim = workflow.claimDueTimerStatement({
+    tenantId: tenantA,
+    now,
+    ownerToken,
+    leaseExpiresAt: expiresAt,
+  });
+  const complete = workflow.completeClaimedTimerStatement({
+    tenantId: tenantA,
+    timerId,
+    ownerToken,
+    now,
+  });
+  const cancel = workflow.cancelClaimedTimerStatement({
+    tenantId: tenantA,
+    timerId,
+    ownerToken,
+    now,
+  });
   const recovery = workflow.recoverExpiredTimerClaimsStatement(tenantA, now);
   assert.match(claim.text, /FOR UPDATE SKIP LOCKED/);
   assert.match(claim.text, /INSERT INTO w03_lease/);
@@ -185,7 +216,10 @@ test('R07/R13/R14/R15 workflow SQL preserves fencing, restart and one-terminal-s
     assert.match(statement.text, /timer\.claimed_by = \$3/);
   }
   assert.match(recovery.text, /timer\.claimed_by = expired\.owner_token/);
-  pass('R07-MODEL', 'lease/timer statements are stale-owner fenced; PostgreSQL gate proves reclaim');
+  pass(
+    'R07-MODEL',
+    'lease/timer statements are stale-owner fenced; PostgreSQL gate proves reclaim',
+  );
   pass('R13-MODEL', 'claim uses SKIP LOCKED + lease fence; PostgreSQL gate proves single winner');
   pass('R14-MODEL', 'restart recovery is exact stale-owner scoped');
   pass('R15-MODEL', 'completion/cancellation require same current owner and claimed state');
@@ -246,11 +280,33 @@ test('R19 evidence is deterministic/correlated and R20 test boundary invokes no 
   assert.equal(evidence.correlationId, correlationId);
   assert.deepEqual(Object.keys(evidence.details), ['a', 'z']);
   pass('R19', 'tenant/event/correlation preserved in canonical deterministic evidence');
-  pass('R20', 'Reality Gate imports only W03 contracts/events/workflow test surfaces; no provider/device executor');
+  pass(
+    'R20',
+    'Reality Gate imports only W03 contracts/events/workflow test surfaces; no provider/device executor',
+  );
 });
 
 test('W03-F scenario evidence summary is explicit and delegates real-DB scenarios to PostgreSQL gate', () => {
-  const requiredHere = ['R01','R02-MODEL','R04','R05','R07-MODEL','R08','R09','R10','R11','R12','R13-MODEL','R14-MODEL','R15-MODEL','R16','R18','R19','R20'];
-  for (const id of requiredHere) assert.equal(scenarioEvidence.get(id)?.status, 'PASS', `${id} missing`);
+  const requiredHere = [
+    'R01',
+    'R02-MODEL',
+    'R04',
+    'R05',
+    'R07-MODEL',
+    'R08',
+    'R09',
+    'R10',
+    'R11',
+    'R12',
+    'R13-MODEL',
+    'R14-MODEL',
+    'R15-MODEL',
+    'R16',
+    'R18',
+    'R19',
+    'R20',
+  ];
+  for (const id of requiredHere)
+    assert.equal(scenarioEvidence.get(id)?.status, 'PASS', `${id} missing`);
   console.log(`W03F_SCENARIO_EVIDENCE ${JSON.stringify(Object.fromEntries(scenarioEvidence))}`);
 });
