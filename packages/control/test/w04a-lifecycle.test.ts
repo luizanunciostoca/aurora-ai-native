@@ -1,4 +1,6 @@
+// @ts-expect-error -- control harness intentionally has no package manifest/@types/node; Node 22 provides this built-in at runtime.
 import assert from 'node:assert/strict';
+// @ts-expect-error -- control harness intentionally has no package manifest/@types/node; Node 22 provides this built-in at runtime.
 import test from 'node:test';
 import type { CorrelationId, TenantId } from '../../contracts/src/ids/types.ts';
 import {
@@ -134,5 +136,6 @@ test('W04-A fails closed on tenant mismatch before mutation', () => {
     }),
   );
   assert.deepEqual(mismatch.status === 'REJECTED' ? mismatch.code : null, 'TENANT_MISMATCH');
+  if (mismatch.status !== 'REJECTED') return;
   assert.equal(mismatch.current, draft);
 });
