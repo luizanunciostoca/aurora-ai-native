@@ -1,3 +1,4 @@
+/* global fetch */
 import fs from 'node:fs/promises';
 import { loadTaskGraph } from './load-task-graph.mjs';
 
