@@ -3,7 +3,10 @@
   "compilerOptions": {
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "@aurora/contracts": ["../contracts/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "dist-test", "node_modules"]
