@@ -130,7 +130,7 @@ test('W04-B DEVICE binding stays target-neutral without Android runtime identity
     ],
   });
   const [binding] = descriptor.bindings;
-  assert.ok(binding);
+  if (binding === undefined) throw new Error('device binding fixture is required');
   assert.equal(binding.targetKind, 'DEVICE');
   assert.equal('deviceId' in binding, false);
   assert.equal('androidPackage' in binding, false);
