@@ -5,7 +5,7 @@ import test from 'node:test';
 const require = createRequire(import.meta.url);
 const reasoning = require('../dist/reasoning-level/index.js');
 
-const tenant = { tenantId: 'ten_01K0M0M0M0M0M0M0M0M0M0M0M0' };
+const tenant = { tenantId: 'ten_01K0M0M0M0M0M0M0M0M0M0M0M0M0' };
 const correlation = { correlationId: 'cor_01K0M0M0M0M0M0M0M0M0M0M0M1' };
 
 function classification(complexity = 'MEDIUM') {
@@ -80,7 +80,6 @@ test('uncertainty escalates boundedly without changing authority', () => {
   assert.equal(high.level, 'L4');
   assert.ok(high.reasons.includes('VERY_HIGH_UNCERTAINTY_ESCALATION'));
   assert.equal(high.authorizesExecution, false);
-
   const maximum = reasoning.resolveReasoningLevel(
     request({ classification: classification('VERY_HIGH'), uncertainty: 'UNKNOWN' }),
   );
@@ -106,13 +105,14 @@ test('W04 budget projection may degrade optional reasoning but never safety vali
 
 test('exhausted or held W04 budget does not silently choose an unsafe cheaper route', () => {
   const exhausted = reasoning.resolveReasoningLevel(
-    request({ budget: budget({ state: 'EXHAUSTED', action: 'STOP_OPTIONAL', remainingReasoningUnits: 0 }) }),
+    request({
+      budget: budget({ state: 'EXHAUSTED', action: 'STOP_OPTIONAL', remainingReasoningUnits: 0 }),
+    }),
   );
   assert.equal(exhausted.status, 'HELD');
   assert.ok(exhausted.reasons.includes('BUDGET_EXHAUSTED'));
   assert.equal('level' in exhausted, false);
   assert.equal(exhausted.authorizesExecution, false);
-
   const held = reasoning.resolveReasoningLevel(request({ budget: budget({ action: 'HOLD' }) }));
   assert.equal(held.status, 'HELD');
   assert.ok(held.reasons.includes('BUDGET_HOLD'));
@@ -135,10 +135,7 @@ test('tenant and correlation mismatch fail closed', () => {
     /tenant must match/,
   );
   assert.throws(
-    () =>
-      reasoning.resolveReasoningLevel(
-        request({ correlation: { correlationId: 'cor_other' } }),
-      ),
+    () => reasoning.resolveReasoningLevel(request({ correlation: { correlationId: 'cor_other' } })),
     /correlation must match/,
   );
 });
