@@ -147,11 +147,7 @@ function parse(input: unknown, dependencies: ReceiptSchemaDependencies): Receipt
   if (returnedAt && Date.parse(returnedAt) < Date.parse(attemptedAt)) {
     throw new TypeError('Receipt.returnedAt: cannot precede attemptedAt');
   }
-  if (
-    acknowledgedAt &&
-    returnedAt &&
-    Date.parse(returnedAt) < Date.parse(acknowledgedAt)
-  ) {
+  if (acknowledgedAt && returnedAt && Date.parse(returnedAt) < Date.parse(acknowledgedAt)) {
     throw new TypeError('Receipt.returnedAt: cannot precede acknowledgedAt');
   }
 
