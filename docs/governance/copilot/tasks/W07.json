@@ -1,155 +1,224 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
   "wave": "W07",
   "defaults": {
     "mode": "IMPLEMENTATION",
-    "sourceDependencies": "W01-W04 + W02 policy/authority core; W04 acceptance before runtime release",
-    "mission": "Deterministic execution boundary: ActionIntent -> current Policy/Authority -> target resolution -> execute -> readback -> Receipt/Evidence; idempotency, preconditions, quotas, uncertainty reconciliation, circuit breaker and kill switch.",
+    "sourceDependencies": "W02 authority/policy + W03 durability + W04-H accepted control/capability outputs",
+    "mission": "Deterministic target-neutral execution boundary: ActionIntent -> current Policy/Authority -> target resolution -> safeguards -> execute -> readback -> Receipt/Evidence -> reconcile uncertainty, with circuit breaker and kill switch.",
     "sources": [
-      "- Developer Manual v0.5 ss. 12, 26, 29, 31-34",
-      "- Action Plan v0.4.1 W07 + Device/Edge amendment",
-      "- DEVICE_PLANE_CROSS_WAVE_OWNERSHIP",
-      "- DEVICE_PLANE_DEPENDENCY_MATRIX",
-      "- Risk & Architecture Validation Framework v1.0",
-      "- TOCA MCP salvage register (executor/approval/readback/failure-containment patterns)"
+      "Developer Manual v0.5 ss. 12, 26, 29, 31-34",
+      "Action Plan v0.4.1 + Device/Edge amendment",
+      "ADR-002 execution-target direction",
+      "W07 canonical charter/dependency/ownership/acceptance/risk/compatibility freeze",
+      "DEVICE_PLANE_CROSS_WAVE_OWNERSHIP",
+      "DEVICE_PLANE_DEPENDENCY_MATRIX",
+      "Risk & Architecture Validation Framework v1.0",
+      "TOCA MCP executor/approval/readback/failure-containment patterns as reference-only"
+    ],
+    "readinessPolicy": "READ_ONLY_WHILE_BLOCKED",
+    "handoffFormat": "AURORA_COMPACT_V1",
+    "coordinatorSurfaces": [
+      "root-workspace-config",
+      "lockfiles",
+      "root-build-config",
+      "ci-workflows",
+      "codeowners",
+      "cross-package-publication",
+      "packages/contracts/package.json",
+      "packages/contracts/tsconfig.json",
+      "packages/contracts/src/index.ts",
+      "packages/schemas/package.json",
+      "packages/schemas/tsconfig.json",
+      "packages/schemas/src/index.ts",
+      "services/executors/STATUS.md",
+      "services/executors/package.json",
+      "services/executors/tsconfig.json",
+      "services/executors/src/index.ts",
+      "current-program-status"
     ]
   },
   "tasks": [
     {
       "id": "W07-00",
-      "title": "W07-00 - Executor Plane Coordination & Boundary Freeze",
+      "title": "W07-00 Executor Plane Coordination & Boundary Freeze",
       "dependsOn": ["W04-H"],
       "customAgent": "aurora-coordinator",
       "actions": [
-        "1. Revalidate W01-W04/W02 accepted outputs and W07 prerequisites.",
-        "2. Freeze W07 ownership, package/service paths, shared-surface locks and internal DAG.",
-        "3. Freeze ActionIntent consumption and determine compatibility-safe evolution required for execution-target-neutral receipts/evidence.",
-        "4. Define W07 publication barriers for W08/W09/W14/W15 consumers.",
-        "5. Create initial risk register, premortem, load/failure plans and acceptance matrix."
+        "Revalidate W01-W04/W02 accepted outputs and W07 prerequisites.",
+        "Freeze W07 ownership, package/service paths, shared-surface locks and internal DAG.",
+        "Freeze ActionIntent consumption and compatibility-safe target-neutral Receipt/Evidence evolution.",
+        "Define publication barriers for W08/W09/W14/W15 consumers.",
+        "Create risk register, premortem, load/failure and acceptance plans."
       ],
-      "ownership": "W07 governance, executor-owned contracts/services and coordinator-controlled shared publication surfaces.",
-      "forbidden": "Do not implement provider adapters, Android runtime, n8n workflow runtime or business-domain decisions."
+      "ownership": "W07 governance, executor-owned contracts/services and coordinator-controlled publication surfaces.",
+      "forbidden": "No runtime feature code, provider adapters, Android runtime, n8n runtime or business-domain decisions.",
+      "allowedPaths": [
+        "docs/governance/w07/**",
+        "docs/governance/copilot/tasks/W07.json"
+      ],
+      "laneHint": "PROGRAM-CONTROL",
+      "dispatchPriority": 120,
+      "sharedWriteSurfaces": [
+        "w07:governance-freeze",
+        "w07:ownership-allocation",
+        "w07:execution-target-compatibility",
+        "w07:publication-barriers"
+      ]
     },
     {
       "id": "W07-A",
-      "title": "W07-A - ExecutionTargetReference & Target Kinds",
+      "title": "W07-A ExecutionTargetReference & Target Kinds",
       "dependsOn": ["W07-00"],
       "customAgent": "aurora-contracts",
       "actions": [
-        "1. Define versioned ExecutionTargetReference supporting PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE.",
-        "2. Define target identity/reference semantics without fake provider IDs.",
-        "3. Define target compatibility and minimum resolution metadata.",
-        "4. Evolve ActionIntent/Receipt/Evidence only where compatibility-safe and necessary; preserve W01 canonical contracts.",
-        "5. Add contract/schema/property/consumer tests."
+        "Define versioned ExecutionTargetReference for PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE.",
+        "Define target identity/reference semantics without fake provider IDs or W14 DeviceId ownership leakage.",
+        "Evolve canonical ActionIntent/Receipt/Evidence compatibility-safely with old provider fixtures preserved.",
+        "Add contract/schema/property/consumer tests and fail closed on conflicting legacy/new target references."
       ],
-      "ownership": "Execution-target contracts/schemas allocated by W07 ownership freeze.",
-      "forbidden": "Do not create DeviceId/DeviceRef (W14), provider adapter logic (W08), or device runtime (W15)."
+      "ownership": "execution-target contracts/schemas plus explicitly listed compatibility files in W07 ownership freeze",
+      "forbidden": "No DeviceId/DeviceRef, provider adapter logic, device session/trust or external execution.",
+      "allowedPaths": [
+        "packages/contracts/src/execution-target/**",
+        "packages/schemas/src/execution-target/**",
+        "packages/contracts/src/actions/action-intent.ts",
+        "packages/contracts/src/receipts/receipt.ts",
+        "packages/contracts/src/evidence/evidence.ts",
+        "packages/schemas/src/actions/**",
+        "packages/schemas/src/receipts/**",
+        "packages/schemas/src/evidence/**",
+        "packages/contracts/test/w07a-**",
+        "packages/schemas/test/w07a-**"
+      ],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 110,
+      "sharedWriteSurfaces": [
+        "w07:execution-target-contract",
+        "contracts:action-intent-target-evolution",
+        "contracts:receipt-target-evolution",
+        "contracts:evidence-target-evolution"
+      ]
     },
     {
       "id": "W07-B",
-      "title": "W07-B - Executor SDK & Current Policy/Authority Validation",
+      "title": "W07-B Executor SDK & Current Policy/Authority Validation",
       "dependsOn": ["W07-A"],
       "customAgent": "aurora-integration",
       "actions": [
-        "1. Implement deterministic Executor SDK boundary consuming ActionIntent.",
-        "2. Require current policy and authority validation whenever operation semantics require it.",
-        "3. Fail closed for missing/stale/expired/revoked/wrong-tenant/wrong-subject/wrong-scope/constraint-invalid authority.",
-        "4. Enforce operational readiness as mandatory for side effects where required; do not copy TOCA's optional-off default.",
-        "5. Prove Fast Lane and ExecutionBudget cannot bypass or weaken validation."
+        "Implement deterministic Executor SDK consuming canonical ActionIntent.",
+        "Require current policy/authority validation whenever operation semantics require it and fail closed on invalid authority.",
+        "Prove Fast Lane, confidence, precheck and ExecutionBudget cannot bypass validation."
       ],
-      "ownership": "Executor core and validation integration.",
-      "forbidden": "Do not mint PolicyToken/OwnerDecision, implement a second Policy Engine, or let precheck/confidence authorize execution."
+      "ownership": "services/executors/src/sdk/** plus W07-B tests",
+      "forbidden": "No token issuance, second Policy Engine, provider adapter or confidence/precheck authorization.",
+      "allowedPaths": ["services/executors/src/sdk/**", "services/executors/test/w07b-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": ["w07:executor-sdk-current-validation"]
     },
     {
       "id": "W07-C",
-      "title": "W07-C - Idempotency, Preconditions, Quotas & Deadlines",
+      "title": "W07-C Idempotency, Preconditions, Quotas & Deadlines",
       "dependsOn": ["W07-A"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Implement generic idempotency key/ledger integration using W03 primitives.",
-        "2. Implement explicit preconditions, quotas, deadline/expiry and bounded-attempt semantics.",
-        "3. Define duplicate command handling before any external call.",
-        "4. Ensure replay/reconnect cannot duplicate irreversible side effects.",
-        "5. Add deterministic concurrency and race tests."
+        "Integrate generic idempotency key/ledger behavior with W03 primitives.",
+        "Implement explicit preconditions, quotas, deadline/expiry and bounded-attempt semantics.",
+        "Fence duplicate commands before external call and add deterministic concurrency/race tests."
       ],
-      "ownership": "Generic executor safeguards only.",
-      "forbidden": "Do not embed provider-specific rate-limit policy or domain budget decisions."
+      "ownership": "services/executors/src/safeguards/** plus W07-C tests",
+      "forbidden": "No second W03 ledger and no provider-specific rate-limit or business budget policy.",
+      "allowedPaths": ["services/executors/src/safeguards/**", "services/executors/test/w07c-**"],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": ["w07:executor-safeguards"]
     },
     {
       "id": "W07-D",
-      "title": "W07-D - ExecutionTargetResolver",
+      "title": "W07-D ExecutionTargetResolver",
       "dependsOn": ["W07-A"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Resolve capability/ActionIntent target references to an executable target binding.",
-        "2. Validate target availability/freshness/compatibility and required preconditions.",
-        "3. Keep resolver deterministic and target-neutral.",
-        "4. Return canonical non-execution outcome when binding is stale/unavailable/ambiguous.",
-        "5. Prove target resolution alone never grants authority."
+        "Resolve target references to executable generic target bindings deterministically.",
+        "Validate availability/freshness/compatibility/preconditions and return canonical non-execution outcomes for stale/unavailable/ambiguous bindings.",
+        "Prove target resolution never grants authority."
       ],
-      "ownership": "Generic target-resolution layer.",
-      "forbidden": "Do not execute provider/device/workflow/local side effects in the resolver."
+      "ownership": "services/executors/src/target-resolution/** plus W07-D tests",
+      "forbidden": "No side effect execution, provider adapter or device/workflow session runtime.",
+      "allowedPaths": ["services/executors/src/target-resolution/**", "services/executors/test/w07d-**"],
+      "laneHint": "LANE-3",
+      "dispatchPriority": 95,
+      "sharedWriteSurfaces": ["w07:target-resolution"]
     },
     {
       "id": "W07-E",
-      "title": "W07-E - Receipt, Evidence & Readback Semantics",
+      "title": "W07-E Receipt, Evidence & Readback Semantics",
       "dependsOn": ["W07-A"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Implement generic execution Receipt/Evidence production.",
-        "2. Define provider/device/workflow/local readback interface and correlation propagation.",
-        "3. Capture requested action, actual observed result, timestamps, target reference and uncertainty status without secrets.",
-        "4. Ensure evidence can reconstruct execution without private chain-of-thought.",
-        "5. Add schema parity and readback mismatch tests."
+        "Implement generic target-neutral execution Receipt/Evidence production and readback interface.",
+        "Capture requested action, observed result, timestamps, target reference and uncertainty without secrets.",
+        "Add schema parity/readback mismatch tests; acknowledgement alone never proves verified state."
       ],
-      "ownership": "Generic executor receipt/evidence/readback contracts/runtime.",
-      "forbidden": "Do not create W17 production telemetry stack or store credentials/secrets in evidence."
+      "ownership": "services/executors/src/readback/** plus W07-E tests",
+      "forbidden": "No W17 telemetry platform and no provider/device credential material in evidence.",
+      "allowedPaths": ["services/executors/src/readback/**", "services/executors/test/w07e-**"],
+      "laneHint": "LANE-4",
+      "dispatchPriority": 95,
+      "sharedWriteSurfaces": ["w07:readback-receipt-evidence-runtime"]
     },
     {
       "id": "W07-F",
-      "title": "W07-F - EXECUTION_UNCERTAIN & Reconcile-Before-Retry",
+      "title": "W07-F EXECUTION_UNCERTAIN & Reconcile-Before-Retry",
       "dependsOn": ["W07-B", "W07-C", "W07-D", "W07-E"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Model EXECUTION_UNCERTAIN separately from ordinary failure.",
-        "2. Detect timeout/connection-loss cases where a side effect may have occurred.",
-        "3. Implement reconcile-before-retry and prohibit blind retry.",
-        "4. Define terminal/recoverable/reconcile-required outcomes and bounded retry behavior.",
-        "5. Fault-inject ambiguous external state and prove duplicate prevention."
+        "Model EXECUTION_UNCERTAIN separately from ordinary failure.",
+        "Detect timeout/connection-loss cases where a side effect may have occurred.",
+        "Implement reconcile-before-retry, prohibit blind retry and fault-inject ambiguous state."
       ],
-      "ownership": "Generic uncertainty/reconciliation state machine.",
-      "forbidden": "Do not hide uncertainty by translating it to FAILED or auto-retry."
+      "ownership": "services/executors/src/reconciliation/** plus W07-F tests",
+      "forbidden": "No hiding uncertainty as FAILED and no blind retry.",
+      "allowedPaths": ["services/executors/src/reconciliation/**", "services/executors/test/w07f-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w07:uncertainty-reconciliation"]
     },
     {
       "id": "W07-G",
-      "title": "W07-G - Circuit Breaker, Kill Switch & Failure Containment",
+      "title": "W07-G Circuit Breaker, Kill Switch & Failure Containment",
       "dependsOn": ["W07-B", "W07-C", "W07-D", "W07-E"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Implement bounded failure-containment primitives.",
-        "2. Support circuit breaker, target/provider degradation state, kill switch and safe cancellation semantics.",
-        "3. Define behavior for dependency outage, repeated failures, overload and cascading retries.",
-        "4. Ensure kill switch cannot be overridden by model/router/agent output.",
-        "5. Add recovery and degraded-mode tests."
+        "Implement bounded circuit breaker, degradation, kill switch and safe cancellation primitives.",
+        "Define outage/repeated-failure/overload/cascading-retry behavior and governed recovery.",
+        "Prove kill switch cannot be overridden by model/router/agent output."
       ],
-      "ownership": "Generic executor failure-containment primitives.",
-      "forbidden": "Do not implement W17 SLO platform or W19 final security hardening."
+      "ownership": "services/executors/src/failure-containment/** plus W07-G tests",
+      "forbidden": "No W17 SLO platform and no intelligence override path.",
+      "allowedPaths": ["services/executors/src/failure-containment/**", "services/executors/test/w07g-**"],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w07:failure-containment"]
     },
     {
       "id": "W07-H",
-      "title": "W07-H - Executor Integration, Fault Injection & Consumer Publication",
+      "title": "W07-H Executor Integration, Fault Injection & Consumer Publication",
       "dependsOn": ["W07-F", "W07-G"],
       "customAgent": "aurora-integration",
       "actions": [
-        "1. Integrate A-G with W03 idempotency/event foundations and W04 capabilities.",
-        "2. Run consumer fixtures for W08, W09, W14 and planned W15 target contracts.",
-        "3. Run failure injection: duplicate, timeout, stale authority, stale target, readback mismatch, circuit open, kill switch.",
-        "4. Run four Risk Gates and exact-head Quality/Test Build/Security.",
-        "5. Publish accepted public surfaces and produce handoff for dependent waves."
+        "Integrate A-G with W02 current validation, W03 idempotency/event foundations and W04 capabilities.",
+        "Run W08/W09/W14/W15 mock consumer fixtures without implementing consumer-wave runtime.",
+        "Fault-inject duplicate, timeout, stale authority/target, readback mismatch, circuit open and kill switch.",
+        "Run four Risk Gates and exact-head Quality/Test Build/Security, then publish accepted public surfaces."
       ],
-      "ownership": "W07 integration/tests/publication under coordinator ownership.",
-      "forbidden": "Do not implement consumer-wave features."
+      "ownership": "W07 integration/fault-injection tests, evidence and publication handoff only",
+      "forbidden": "No new semantic runtime and no consumer-wave/provider/device/workflow implementation.",
+      "allowedPaths": ["services/executors/test/w07h-**", "docs/governance/w07/**"],
+      "laneHint": "CONVERGENCE",
+      "dispatchPriority": 60,
+      "sharedWriteSurfaces": ["w07:integration-fault-injection-publication-gate"]
     }
   ]
 }
