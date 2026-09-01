@@ -5,6 +5,7 @@ import type {
   Rfc3339Timestamp,
   TenantContext,
 } from '../context';
+import type { ExecutionTargetReference } from '../execution-target';
 import type { ActionIntentId, DecisionId, PolicyTokenId } from '../ids';
 import type { ContractVersion } from '../versioning';
 import type {
@@ -37,7 +38,10 @@ export interface ActionIntent {
   readonly schemaVersion: ContractVersion;
   readonly actionIntentId: ActionIntentId;
   readonly capability: CapabilityActionReference;
+  /** Legacy provider-only binding retained for compatibility during W07 migration. */
   readonly providerBinding?: ProviderBinding;
+  /** Target identity/binding metadata only. This field never grants authority. */
+  readonly executionTarget?: ExecutionTargetReference;
   readonly tenant: TenantContext;
   readonly actor: ActorRef;
   readonly requestOrigin: ActorRef;
