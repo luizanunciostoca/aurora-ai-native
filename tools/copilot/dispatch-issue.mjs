@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { loadTaskGraph } from './load-task-graph.mjs';
 
 const [owner, repo] = (process.env.GITHUB_REPOSITORY || '').split('/');
 const githubToken = process.env.GITHUB_TOKEN;
@@ -6,7 +7,7 @@ const copilotToken = process.env.AURORA_COPILOT_USER_TOKEN;
 const eventPath = process.env.GITHUB_EVENT_PATH;
 if (!owner || !repo || !githubToken) throw new Error('GITHUB_REPOSITORY and GITHUB_TOKEN are required');
 
-const graph = JSON.parse(await fs.readFile('docs/governance/copilot/AURORA_COPILOT_TASK_GRAPH.json', 'utf8'));
+const graph = await loadTaskGraph();
 const event = eventPath ? JSON.parse(await fs.readFile(eventPath, 'utf8')) : {};
 const issueNumber = Number(process.env.AURORA_ISSUE_NUMBER || event.issue?.number || 0);
 if (!issueNumber) throw new Error('No issue number supplied');
@@ -37,7 +38,8 @@ async function patchIssue(body) {
 
 const issue = await request(`/repos/${owner}/${repo}/issues/${issueNumber}`, githubToken);
 const marker = issue.body?.match(/<!--\s*AURORA_TASK_ID:\s*([^\s]+)\s*-->/i);
-const taskId = marker?.[1];
+const titleMarker = issue.title?.match(/^\[AURORA\]\[TASK\s+([^\]]+)\]/i);
+const taskId = marker?.[1] || titleMarker?.[1];
 const task = graph.tasks.find((t) => t.id === taskId);
 if (!task) throw new Error(`Issue #${issueNumber} is not mapped to an Aurora task`);
 if (!issue.labels?.some((l) => l.name === 'aurora:copilot-ready')) {
@@ -49,7 +51,6 @@ if (issue.labels?.some((l) => l.name === 'aurora:copilot-dispatched')) {
   process.exit(0);
 }
 
-// Defense in depth: all graph dependencies must be initially complete or represented by accepted/closed issues.
 const allIssues = [];
 for (let page = 1; ; page += 1) {
   const batch = await request(`/repos/${owner}/${repo}/issues?state=all&per_page=100&page=${page}`, githubToken);
@@ -88,7 +89,6 @@ try {
         base_branch: 'main',
         custom_instructions: customInstructions,
         custom_agent: task.customAgent || 'aurora-implementation',
-        model: '',
       },
     }),
   });
