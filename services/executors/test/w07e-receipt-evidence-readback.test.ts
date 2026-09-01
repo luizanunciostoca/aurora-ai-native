@@ -16,7 +16,7 @@ const version = '1.0.0' as ContractVersion;
 const timestamp = (value: string) => value as Rfc3339Timestamp;
 
 function intent(
-  executionTarget: ExecutionTargetReference = {
+  executionTarget: ExecutionTargetReference | undefined = {
     schemaVersion: version,
     kind: 'WORKFLOW',
     bindingReference: 'workflow:publish',
@@ -31,7 +31,7 @@ function intent(
     schemaVersion: version,
     actionIntentId: 'action-intent:readback' as ActionIntent['actionIntentId'],
     capability: { capability: 'social.publish', actionType: 'PUBLISH' },
-    executionTarget,
+    ...(executionTarget === undefined ? {} : { executionTarget }),
     tenant: { tenantId: 'tenant:alpha' as ActionIntent['tenant']['tenantId'] },
     actor: { kind: 'HUMAN', identityId: 'identity:operator' as ActionIntent['actor']['identityId'] },
     requestOrigin: {
@@ -55,6 +55,18 @@ function intent(
   };
 }
 
+function legacyProviderIntent(): ActionIntent {
+  const actionIntent = intent(undefined);
+  return {
+    ...actionIntent,
+    providerBinding: {
+      provider: 'meta',
+      targetType: 'instagram_account',
+      targetReference: 'ig:legacy',
+    },
+  };
+}
+
 function createReceipt(actionIntent = intent(), overrides: Record<string, unknown> = {}) {
   return createTargetedExecutionReceipt({
     schemaVersion: version,
@@ -65,7 +77,7 @@ function createReceipt(actionIntent = intent(), overrides: Record<string, unknow
     attemptedAt: timestamp('2026-09-01T17:00:00Z'),
     acknowledgedAt: timestamp('2026-09-01T17:00:01Z'),
     returnedAt: timestamp('2026-09-01T17:00:02Z'),
-    executionOutcome: 'SUCCEEDED',
+    executionOutcome: 'EXECUTED_ACKNOWLEDGED',
     ...overrides,
   });
 }
@@ -81,19 +93,41 @@ function evidenceId(): Evidence['evidenceId'] {
   return 'evidence:readback' as Evidence['evidenceId'];
 }
 
-test('creates a target-neutral receipt while acknowledgement remains unverified state', () => {
+test('creates target-neutral canonical receipt while acknowledgement remains unverified state', () => {
   const result = createReceipt();
   assert.equal(result.status, 'CREATED');
   assert.equal(result.authorizesExecution, false);
   if (result.status !== 'CREATED') return;
   assert.equal(result.acknowledgementIsVerifiedExternalState, false);
+  assert.equal(result.receipt.executionOutcome, 'EXECUTED_ACKNOWLEDGED');
   assert.equal(result.receipt.executionTarget.kind, 'WORKFLOW');
   assert.equal(result.receipt.correlation.correlationId, 'correlation:readback');
   assert.equal('provider' in result.receipt, false);
   assert.equal('metadata' in result.receipt, false);
 });
 
-test('readback MATCH verifies observed external state without granting authority', () => {
+test('receipt API refuses to claim VERIFIED without readback evidence', () => {
+  const result = createReceipt(intent(), { executionOutcome: 'VERIFIED' });
+  assert.deepEqual(result, {
+    status: 'REJECTED',
+    reasons: ['RECEIPT_VERIFIED_REQUIRES_READBACK'],
+    authorizesExecution: false,
+  });
+});
+
+test('acknowledged outcome requires an acknowledgement timestamp', () => {
+  const result = createReceipt(intent(), {
+    acknowledgedAt: undefined,
+    executionOutcome: 'EXECUTED_ACKNOWLEDGED',
+  });
+  assert.deepEqual(result, {
+    status: 'REJECTED',
+    reasons: ['RECEIPT_ACKNOWLEDGEMENT_REQUIRED'],
+    authorizesExecution: false,
+  });
+});
+
+test('verified matching readback proves observed external state without granting authority', () => {
   const actionIntent = intent();
   const receipt = targetedReceipt(actionIntent);
   const result = captureReadbackEvidence({
@@ -105,6 +139,7 @@ test('readback MATCH verifies observed external state without granting authority
       capturedAt: timestamp('2026-09-01T17:00:03Z'),
       reference: { system: 'workflow', reference: 'run:123' },
       observedState: { count: 1, status: 'published' },
+      verification: { state: 'VERIFIED', method: 'authoritative-readback' },
     }),
   });
 
@@ -112,16 +147,44 @@ test('readback MATCH verifies observed external state without granting authority
   if (result.status !== 'CAPTURED') return;
   assert.equal(result.assessment.state, 'MATCH');
   assert.equal(result.assessment.verifiedExternalState, true);
+  assert.equal(result.assessment.derivedExecutionOutcome, 'VERIFIED');
+  assert.equal(result.assessment.requiresReconciliation, false);
   assert.equal(result.assessment.receiptAcknowledged, true);
   assert.equal(result.authorizesExecution, false);
   assert.equal(result.evidence.evidenceType, 'READBACK');
   assert.equal(result.evidence.source.sourceType, 'TARGET_READBACK');
   assert.deepEqual(result.evidence.source.executionTarget, actionIntent.executionTarget);
-  assert.equal(result.evidence.verification.state, 'UNVERIFIED');
+  assert.equal(result.evidence.verification.state, 'VERIFIED');
+  assert.equal(result.evidence.verification.method, 'authoritative-readback');
   assert.equal('metadata' in result.evidence, false);
 });
 
-test('readback mismatch is explicit and acknowledgement cannot hide it', () => {
+test('matching but unverified readback never becomes VERIFIED external state', () => {
+  const actionIntent = intent();
+  const result = captureReadbackEvidence({
+    schemaVersion: version,
+    evidenceId: evidenceId(),
+    actionIntent,
+    receipt: targetedReceipt(actionIntent),
+    readback: () => ({
+      capturedAt: timestamp('2026-09-01T17:00:03Z'),
+      reference: { system: 'workflow', reference: 'run:unverified' },
+      observedState: { status: 'published', count: 1 },
+      verification: { state: 'UNVERIFIED' },
+    }),
+  });
+
+  assert.equal(result.status, 'CAPTURED');
+  if (result.status !== 'CAPTURED') return;
+  assert.equal(result.assessment.state, 'UNKNOWN');
+  assert.deepEqual(result.assessment.reasons, ['READBACK_UNVERIFIED']);
+  assert.equal(result.assessment.verifiedExternalState, false);
+  assert.equal(result.assessment.derivedExecutionOutcome, 'EXECUTED_ACKNOWLEDGED');
+  assert.equal(result.assessment.requiresReconciliation, true);
+  assert.equal(result.evidence.verification.state, 'UNVERIFIED');
+});
+
+test('verified readback mismatch is explicit and requires reconciliation', () => {
   const actionIntent = intent();
   const receipt = targetedReceipt(actionIntent);
   const result = captureReadbackEvidence({
@@ -133,6 +196,7 @@ test('readback mismatch is explicit and acknowledgement cannot hide it', () => {
       capturedAt: timestamp('2026-09-01T17:00:03Z'),
       reference: { system: 'workflow', reference: 'run:124' },
       observedState: { status: 'draft', count: 1 },
+      verification: { state: 'VERIFIED' },
     }),
   });
 
@@ -142,6 +206,8 @@ test('readback mismatch is explicit and acknowledgement cannot hide it', () => {
   assert.deepEqual(result.assessment.reasons, ['READBACK_MISMATCH']);
   assert.equal(result.assessment.receiptAcknowledged, true);
   assert.equal(result.assessment.verifiedExternalState, false);
+  assert.equal(result.assessment.derivedExecutionOutcome, 'EXECUTION_UNCERTAIN');
+  assert.equal(result.assessment.requiresReconciliation, true);
 });
 
 test('missing expected or observed state remains UNKNOWN rather than verified success', () => {
@@ -156,6 +222,7 @@ test('missing expected or observed state remains UNKNOWN rather than verified su
       capturedAt: timestamp('2026-09-01T17:00:03Z'),
       reference: { system: 'workflow', reference: 'run:125' },
       observedState: { status: 'published' },
+      verification: { state: 'VERIFIED' },
     }),
   });
 
@@ -168,6 +235,7 @@ test('missing expected or observed state remains UNKNOWN rather than verified su
     readback: () => ({
       capturedAt: timestamp('2026-09-01T17:00:03Z'),
       reference: { system: 'workflow', reference: 'run:126' },
+      verification: { state: 'VERIFIED' },
     }),
   });
 
@@ -176,10 +244,12 @@ test('missing expected or observed state remains UNKNOWN rather than verified su
   if (unknownExpected.status === 'CAPTURED') {
     assert.equal(unknownExpected.assessment.state, 'UNKNOWN');
     assert.deepEqual(unknownExpected.assessment.reasons, ['EXPECTED_STATE_NOT_DECLARED']);
+    assert.equal(unknownExpected.assessment.requiresReconciliation, true);
   }
   if (unknownObserved.status === 'CAPTURED') {
     assert.equal(unknownObserved.assessment.state, 'UNKNOWN');
     assert.deepEqual(unknownObserved.assessment.reasons, ['OBSERVED_STATE_NOT_RETURNED']);
+    assert.equal(unknownObserved.assessment.requiresReconciliation, true);
   }
 });
 
@@ -200,6 +270,7 @@ test('receipt binding mismatch fails before the readback port is invoked', () =>
       return {
         capturedAt: timestamp('2026-09-01T17:00:03Z'),
         reference: { system: 'workflow', reference: 'run:127' },
+        verification: { state: 'UNVERIFIED' },
       };
     },
   });
@@ -211,7 +282,7 @@ test('receipt binding mismatch fails before the readback port is invoked', () =>
   }
 });
 
-test('sensitive observed fields are rejected before canonical Evidence is emitted', () => {
+test('sensitive observed fields including camelCase token names are rejected', () => {
   const actionIntent = intent();
   const result = captureReadbackEvidence({
     schemaVersion: version,
@@ -221,7 +292,8 @@ test('sensitive observed fields are rejected before canonical Evidence is emitte
     readback: () => ({
       capturedAt: timestamp('2026-09-01T17:00:03Z'),
       reference: { system: 'provider', reference: 'object:128' },
-      observedState: { status: 'published', api_token: 'must-not-enter-evidence' },
+      observedState: { status: 'published', accessToken: 'must-not-enter-evidence' },
+      verification: { state: 'VERIFIED' },
     }),
   });
 
@@ -231,7 +303,7 @@ test('sensitive observed fields are rejected before canonical Evidence is emitte
   }
 });
 
-test('readback failure and invalid timing stay explicit and non-authoritative', () => {
+test('readback failure and timing before receipt completion remain explicit', () => {
   const actionIntent = intent();
   const receipt = targetedReceipt(actionIntent);
   const failed = captureReadbackEvidence({
@@ -249,8 +321,9 @@ test('readback failure and invalid timing stay explicit and non-authoritative', 
     actionIntent,
     receipt,
     readback: () => ({
-      capturedAt: timestamp('2026-09-01T16:59:59Z'),
+      capturedAt: timestamp('2026-09-01T17:00:01Z'),
       reference: { system: 'workflow', reference: 'run:129' },
+      verification: { state: 'VERIFIED' },
     }),
   });
 
@@ -265,10 +338,9 @@ test('readback failure and invalid timing stay explicit and non-authoritative', 
   }
 });
 
-test('receipt creation fails closed for malformed timing and missing target', () => {
+test('receipt creation fails closed for malformed timing and truly missing target', () => {
   const invalidTime = createReceipt(intent(), { attemptedAt: timestamp('not-a-time') });
-  const missingTargetIntent = { ...intent(), executionTarget: undefined } as unknown as ActionIntent;
-  const missingTarget = createReceipt(missingTargetIntent);
+  const missingTarget = createReceipt(intent(undefined));
 
   assert.equal(invalidTime.status, 'REJECTED');
   if (invalidTime.status === 'REJECTED') {
@@ -278,6 +350,20 @@ test('receipt creation fails closed for malformed timing and missing target', ()
   if (missingTarget.status === 'REJECTED') {
     assert.deepEqual(missingTarget.reasons, ['EXECUTION_TARGET_REQUIRED']);
   }
+});
+
+test('legacy provider ActionIntent derives the canonical provider target without fake identity', () => {
+  const result = createReceipt(legacyProviderIntent());
+  assert.equal(result.status, 'CREATED');
+  if (result.status !== 'CREATED') return;
+  assert.deepEqual(result.receipt.executionTarget, {
+    schemaVersion: version,
+    kind: 'PROVIDER',
+    provider: 'meta',
+    targetType: 'instagram_account',
+    targetReference: 'ig:legacy',
+  });
+  assert.equal(result.authorizesExecution, false);
 });
 
 test('PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE receipts preserve exact target identity', () => {
