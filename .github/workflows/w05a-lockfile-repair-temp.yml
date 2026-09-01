@@ -1,0 +1,50 @@
+name: W05-A Lockfile Repair Temporary
+
+on:
+  push:
+    branches:
+      - wave/05a-task-classifier-v2
+
+permissions:
+  contents: write
+
+jobs:
+  repair-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: wave/05a-task-classifier-v2
+          fetch-depth: 0
+
+      - name: Use repository Node version
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+
+      - name: Restore pristine lockfile baseline
+        run: git checkout 3203b2112dd93d84b21c8ff2cf90459623bf9ef3 -- package-lock.json
+
+      - name: Regenerate lockfile deterministically
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Validate lockfile JSON and workspace entry
+        shell: bash
+        run: |
+          node -e "const p=require('./package-lock.json'); if(p.packages?.['packages/intelligence']?.name!=='@aurora/intelligence') process.exit(1); if(p.packages?.['node_modules/@aurora/intelligence']?.resolved!=='packages/intelligence') process.exit(1);"
+          npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Commit repaired lockfile if changed
+        shell: bash
+        run: |
+          if git diff --quiet -- package-lock.json; then
+            echo 'Lockfile already canonical.'
+            exit 0
+          fi
+          git config user.name 'aurora-program-control'
+          git config user.email 'aurora-program-control@users.noreply.github.com'
+          git add package-lock.json
+          git commit -m 'chore(W05-A): regenerate canonical workspace lockfile'
+          git push origin HEAD:wave/05a-task-classifier-v2
