@@ -13,7 +13,7 @@ import {
   readbackReconciliationHint,
   reconcileExecutionUncertainty,
 } from '../src/reconciliation/index.js';
-import type { ExecutionSafeguardResult } from '../src/safeguards/index.js';
+import type { RetrySafeguardEvidence } from '../src/reconciliation/index.js';
 
 const version = '1.0.0' as ContractVersion;
 const at = (value: string) => value as Rfc3339Timestamp;
@@ -64,27 +64,43 @@ function uncertainty(
   return { actionIntent, uncertainty: result.uncertainty };
 }
 
-function safeGuards(actionIntent = intent()): ExecutionSafeguardResult {
+function safeGuards(
+  actionIntent = intent(),
+  attemptNumber = 2,
+  evaluatedAt = at('2026-09-01T18:00:03Z'),
+): RetrySafeguardEvidence {
   return {
-    kind: 'EXECUTION_SAFEGUARD_RESULT',
-    schemaVersion: version,
-    actionIntentId: actionIntent.actionIntentId,
-    safeToInvokeExternal: true,
-    idempotencyReserved: true,
-    reasons: [],
-    authorizesExecution: false,
+    attemptNumber,
+    evaluatedAt,
+    result: {
+      kind: 'EXECUTION_SAFEGUARD_RESULT',
+      schemaVersion: version,
+      actionIntentId: actionIntent.actionIntentId,
+      safeToInvokeExternal: true,
+      idempotencyReserved: true,
+      reasons: [],
+      authorizesExecution: false,
+    },
   };
 }
 
-function blockedGuards(actionIntent = intent()): ExecutionSafeguardResult {
+function blockedGuards(
+  actionIntent = intent(),
+  attemptNumber = 2,
+  evaluatedAt = at('2026-09-01T18:00:03Z'),
+): RetrySafeguardEvidence {
   return {
-    kind: 'EXECUTION_SAFEGUARD_RESULT',
-    schemaVersion: version,
-    actionIntentId: actionIntent.actionIntentId,
-    safeToInvokeExternal: false,
-    idempotencyReserved: false,
-    reasons: ['IDEMPOTENCY_INFLIGHT'],
-    authorizesExecution: false,
+    attemptNumber,
+    evaluatedAt,
+    result: {
+      kind: 'EXECUTION_SAFEGUARD_RESULT',
+      schemaVersion: version,
+      actionIntentId: actionIntent.actionIntentId,
+      safeToInvokeExternal: false,
+      idempotencyReserved: false,
+      reasons: ['IDEMPOTENCY_INFLIGHT'],
+      authorizesExecution: false,
+    },
   };
 }
 
@@ -233,6 +249,45 @@ test('failed fresh guards preserve duplicate fence after no-effect observation',
   assert.equal(result.state, 'NO_EFFECT_CONFIRMED_RETRY_BLOCKED');
   assert.equal(result.retryEligibleAfterFreshGuards, false);
   assert.deepEqual(result.reasons, ['RETRY_GUARDS_BLOCKED']);
+});
+
+test('retry safeguards must be for the next attempt and newer than reconciliation', () => {
+  const fixture = uncertainty();
+  const observation = {
+    state: 'NO_EFFECT_CONFIRMED' as const,
+    observedAt: at('2026-09-01T18:00:02Z'),
+  };
+  const stale = reconcileExecutionUncertainty({
+    schemaVersion: version,
+    actionIntent: fixture.actionIntent,
+    uncertainty: fixture.uncertainty,
+    observation,
+    retrySafeguards: safeGuards(
+      fixture.actionIntent,
+      2,
+      at('2026-09-01T18:00:01Z'),
+    ),
+  });
+  const wrongAttempt = reconcileExecutionUncertainty({
+    schemaVersion: version,
+    actionIntent: fixture.actionIntent,
+    uncertainty: fixture.uncertainty,
+    observation,
+    retrySafeguards: safeGuards(fixture.actionIntent, 3),
+  });
+  const invalidTime = reconcileExecutionUncertainty({
+    schemaVersion: version,
+    actionIntent: fixture.actionIntent,
+    uncertainty: fixture.uncertainty,
+    observation,
+    retrySafeguards: safeGuards(fixture.actionIntent, 2, at('not-a-time')),
+  });
+  assert.deepEqual(stale.reasons, ['RETRY_GUARDS_STALE']);
+  assert.deepEqual(wrongAttempt.reasons, ['RETRY_GUARDS_ATTEMPT_MISMATCH']);
+  assert.deepEqual(invalidTime.reasons, ['RETRY_GUARDS_TIME_INVALID']);
+  assert.equal(stale.retryEligibleAfterFreshGuards, false);
+  assert.equal(wrongAttempt.retryEligibleAfterFreshGuards, false);
+  assert.equal(invalidTime.retryEligibleAfterFreshGuards, false);
 });
 
 test('attempt limit blocks retry even after confirmed no-effect', () => {
