@@ -17,7 +17,9 @@ export function validatePrebuildArtifact(artifact, task) {
     throw new Error('PREBUILD_ARTIFACT_INVALID schemaVersion must be 1');
   }
   if (artifact.taskId !== task.id) {
-    throw new Error(`PREBUILD_ARTIFACT_INVALID taskId ${artifact.taskId} does not match ${task.id}`);
+    throw new Error(
+      `PREBUILD_ARTIFACT_INVALID taskId ${artifact.taskId} does not match ${task.id}`,
+    );
   }
   if (artifact.wave !== task.wave) {
     throw new Error(`PREBUILD_ARTIFACT_INVALID wave ${artifact.wave} does not match ${task.wave}`);

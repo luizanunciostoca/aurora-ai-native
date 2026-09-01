@@ -211,12 +211,14 @@ export function compactPuzzleSummary(result) {
       allowedPaths: task.allowedPaths || [],
       sharedWriteSurfaces: task.sharedWriteSurfaces || [],
     })),
-    buildDeferred: result.buildFrontier.deferred.map(({ candidate, reason, conflictsWith, surface }) => ({
-      taskId: candidate.task.id,
-      reason,
-      conflictsWith: conflictsWith || null,
-      surface: surface || null,
-    })),
+    buildDeferred: result.buildFrontier.deferred.map(
+      ({ candidate, reason, conflictsWith, surface }) => ({
+        taskId: candidate.task.id,
+        reason,
+        conflictsWith: conflictsWith || null,
+        surface: surface || null,
+      }),
+    ),
     logicalFrontier: result.logical.map((entry) => ({
       taskId: entry.task.id,
       wave: entry.task.wave,

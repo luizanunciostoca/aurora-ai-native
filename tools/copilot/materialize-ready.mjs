@@ -62,7 +62,11 @@ async function ensureLabel(name, color, description) {
 
 const labelDefs = [
   ['aurora:task', '1f6feb', 'Aurora governed task-graph node'],
-  ['aurora:copilot-ready', '0e8a16', 'Canonical dependencies accepted; eligible for BUILD dispatch'],
+  [
+    'aurora:copilot-ready',
+    '0e8a16',
+    'Canonical dependencies accepted; eligible for BUILD dispatch',
+  ],
   ['aurora:copilot-gated', 'd29922', 'Not currently in the canonical BUILD frontier'],
   ['aurora:copilot-dispatched', '8250df', 'Delegated to GitHub Copilot cloud agent'],
   [
@@ -74,7 +78,11 @@ const labelDefs = [
   ['aurora:puzzle-build-ready', '0e8a16', 'Puzzle node is canonical BUILD_READY'],
   ['aurora:puzzle-prebuild', 'a371f7', 'Non-authoritative PREBUILD artifact lane'],
   ['aurora:puzzle-readiness', '54aeff', 'Readiness-only logical puzzle lane'],
-  ['aurora:puzzle-integration-ready', 'bf8700', 'Prebuild reconciled and awaiting canonical validation'],
+  [
+    'aurora:puzzle-integration-ready',
+    'bf8700',
+    'Prebuild reconciled and awaiting canonical validation',
+  ],
 ];
 for (const [name, color, description] of labelDefs) await ensureLabel(name, color, description);
 for (const wave of [...new Set(graph.tasks.map((task) => task.wave))]) {
@@ -102,7 +110,9 @@ for (const task of graph.tasks) {
   }
 }
 
-const accepted = new Set(graph.tasks.filter((task) => task.initiallyComplete).map((task) => task.id));
+const accepted = new Set(
+  graph.tasks.filter((task) => task.initiallyComplete).map((task) => task.id),
+);
 for (const [taskId, issue] of issueByTask.entries()) {
   if (issue.state === 'closed' && issue.labels?.some((label) => label.name === 'aurora:accepted')) {
     accepted.add(taskId);

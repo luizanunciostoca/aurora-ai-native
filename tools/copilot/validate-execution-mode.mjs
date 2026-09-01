@@ -44,18 +44,13 @@ if (scheduler.optimizeFor !== 'MINIMUM_SAFE_CRITICAL_PATH') {
 if (scheduler.buildSelection !== 'EXPLICIT_PRIORITY_THEN_LONGEST_REMAINING_PATH') {
   throw new Error('Unsupported Aurora canonical BUILD selection policy');
 }
-if (
-  scheduler.prebuildSelection !==
-  'WAVE_SEEDS_THEN_LOWEST_SPECULATION_DEPTH_THEN_CRITICAL_PATH'
-) {
+if (scheduler.prebuildSelection !== 'WAVE_SEEDS_THEN_LOWEST_SPECULATION_DEPTH_THEN_CRITICAL_PATH') {
   throw new Error('Unsupported Aurora PREBUILD selection policy');
 }
 if (scheduler.canonicalDependencyPolicy !== 'ACCEPTED_ONLY') {
   throw new Error('Canonical BUILD/integration dependencies must be ACCEPTED_ONLY');
 }
-if (
-  scheduler.prebuildPublicationPolicy !== 'ARTIFACT_ONLY_UNTIL_DEPENDENCIES_ACCEPTED'
-) {
+if (scheduler.prebuildPublicationPolicy !== 'ARTIFACT_ONLY_UNTIL_DEPENDENCIES_ACCEPTED') {
   throw new Error('Aurora PREBUILD must remain artifact-only until dependencies are accepted');
 }
 if (scheduler.sharedWriteConflictPolicy !== 'FAIL_CLOSED_DEFER') {

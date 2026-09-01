@@ -165,7 +165,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     (t) => t.sharedWriteSurfaces.length || t.allowedPaths.length || t.laneHint,
   ).length;
   const prebuildEnabledTasks = graph.tasks.filter((t) => t.prebuildPolicy !== 'NONE').length;
-  const patchPrebuildTasks = graph.tasks.filter((t) => t.prebuildPolicy === 'ISOLATED_PATCH').length;
+  const patchPrebuildTasks = graph.tasks.filter(
+    (t) => t.prebuildPolicy === 'ISOLATED_PATCH',
+  ).length;
   console.log(
     JSON.stringify(
       {

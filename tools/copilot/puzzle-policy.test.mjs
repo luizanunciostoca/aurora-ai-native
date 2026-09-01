@@ -43,7 +43,10 @@ test('downstream work can occupy logical lanes while canonical BUILD remains dep
   const result = selectPuzzleFrontiers(tasks, accepted, defaultConfig);
   const summary = compactPuzzleSummary(result);
 
-  assert.deepEqual(summary.buildFrontier.map((entry) => entry.taskId), ['W03-B']);
+  assert.deepEqual(
+    summary.buildFrontier.map((entry) => entry.taskId),
+    ['W03-B'],
+  );
   assert.deepEqual(
     summary.logicalFrontier.map((entry) => entry.taskId),
     ['W03-C', 'W03-D', 'W03-E'],
