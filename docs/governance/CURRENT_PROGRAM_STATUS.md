@@ -1,8 +1,8 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W04_ABF_ACCEPTED`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_W04_ABCEF_ACCEPTED`
 Audit date: 2026-09-01
-Current accepted feature baseline before this governance-status publication: `5fac1a0c317b060f2da11545066f2dfffe3eceb7`
+Current accepted feature baseline before this governance-status publication: `1b3d777b51fac6a281778a9045fd8525b8c79ca0`
 
 ## Authority order
 
@@ -27,10 +27,11 @@ No prompt, task node, PREBUILD artifact, draft PR, agent output or reference sou
 - W04-00: `COMPLETE_ACCEPTED / W04_COORDINATION_FREEZE_VERIFIED`.
 - W04-A: `COMPLETE_ACCEPTED_MERGED`.
 - W04-B: `COMPLETE_ACCEPTED_MERGED`.
+- W04-C: `COMPLETE_ACCEPTED_MERGED`.
+- W04-E: `COMPLETE_ACCEPTED_MERGED`.
 - W04-F: `COMPLETE_ACCEPTED_MERGED`.
-- W04-C, W04-E and W04-G: `DEPENDENCY_READY` because W04-A + W04-B are accepted.
-- W04-D: blocked only on W04-C because W04-F is accepted.
-- W04-H: blocked on W04-D + W04-E + W04-G.
+- W04-D and W04-G: `DEPENDENCY_READY / CANONICAL_CANDIDATE_OPEN`; both have dependency-satisfied isolated PRs under exact-head validation/reconciliation.
+- W04-H: blocked on W04-D + W04-G; W04-E is already accepted.
 - W05-W20: dependency-gated except PREBUILD/readiness explicitly allowed by accepted Puzzle governance.
 
 ## W02 final evidence
@@ -87,6 +88,28 @@ Canonical acceptance evidence:
 - Drive acceptance evidence: `W04_B_ACCEPTANCE_EVIDENCE` / `15-0ZeBNXPtOnFQyqjxrOtn59R_jRthVpe3oYSKh0x4o`.
 - Issue #91: closed with `aurora:accepted`.
 
+## W04-C final evidence
+
+- PR #142 — `feat(w04-c): add deterministic goal graph DAG semantics`.
+- Exact final BUILD HEAD `f37e01e897fc339b55a2595a557652a05288a919`.
+- Candidate Quality `33494595596`, Test Build `33494595609`, Security `33494596214`: SUCCESS.
+- Merge/main `5ce8edf479035d9d0a5ec1ee469ecd1f09e35776`.
+- Post-merge Quality `33495213692`, Test Build `33495213723`, Security `33495214310`: SUCCESS.
+- GoalGraph is bounded, deterministic and non-authoritative; cycle/edge rejection, join semantics and failure/cancellation propagation are accepted without duplicating W03 durability.
+- Drive acceptance evidence: `W04_C_ACCEPTANCE_EVIDENCE` / `18q4-EQ9c9-3nthRuwjf0hGS-Icbf1Y0860-Y3rJKXtM`.
+- Issue #92: closed with `aurora:accepted`.
+
+## W04-E final evidence
+
+- PR #143 — `feat(w04-e): add deterministic fast governed lane resolver`.
+- Exact final BUILD HEAD `7b2c283d36e23054ebdeabbd8a009dd229355277`.
+- Candidate Quality `33493769716`, Test Build `33493769717`, Security `33493770320`: SUCCESS.
+- Merge/main `1b3d777b51fac6a281778a9045fd8525b8c79ca0`.
+- Post-merge Quality `33495229415`, Test Build `33495229356`, Security `33495230035`: SUCCESS.
+- FAST/GOVERNED selection is deterministic planning metadata only; unsafe/high-risk/approval/step-up/unknown states conservatively escalate and current Policy/Authority/Executor validation remains mandatory.
+- Drive acceptance evidence: `W04_E_ACCEPTANCE_EVIDENCE` / `1ANOEKaYQ617umDceEP51eECTBnuuFRTx37ahqNfrWvI`.
+- Issue #94: closed with `aurora:accepted`.
+
 ## W04-F final evidence
 
 - PR #137 — `feat(w04-f): add deterministic execution budget contract`.
@@ -118,11 +141,11 @@ Canonical W04 governance set:
 
 `W04-D + W04-E + W04-G -> W04-H`
 
-Accepted nodes: `{ W04-00, W04-A, W04-B, W04-F }`.
+Accepted nodes: `{ W04-00, W04-A, W04-B, W04-C, W04-E, W04-F }`.
 
-Current dependency-ready frontier: `{ W04-C, W04-E, W04-G }`.
+Current dependency-ready frontier: `{ W04-D, W04-G }`.
 
-With `FREE_ACTIONS_CLI maxParallelTasks=2`, Program Control should prioritize W04-C in one code slot because accepted W04-C + W04-F unlock W04-D. The second code slot may safely use W04-E or W04-G after live branch/PR/ownership revalidation. W04-D remains blocked until W04-C acceptance; W04-H remains blocked until W04-D, W04-E and W04-G acceptance.
+With `FREE_ACTIONS_CLI maxParallelTasks=2`, both dependency-ready code slots are now legitimately occupied by W04-D and W04-G candidate work after live branch/PR/ownership revalidation. W04-H remains blocked until both are accepted and governance is converged.
 
 ## W04 architecture boundaries
 
