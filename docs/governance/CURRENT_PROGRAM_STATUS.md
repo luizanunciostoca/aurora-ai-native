@@ -120,3 +120,19 @@ A disagreement must be reconciled or explicitly recorded before dependent work r
 - `EXECUTION_UNCERTAIN` is not ordinary failure/retry.
 - Canonical runtime may not silently depend on legacy/reference material.
 - Duplicate/replayed events or reconnects must never create duplicate side effects where idempotency/reconciliation is required.
+
+## Current-state addendum — PB4 + Copilot fabric — 2026-09-01
+
+`SUPERSEDES ONLY STALE W02-F/PB4/W02-G/COPILOT-ORCHESTRATION STATUS LINES ABOVE; HISTORICAL EVIDENCE RETAINED.`
+
+Live `main` at reconciliation: `e75526f407480d7fe58891d8746fd2aa2ff9070d`.
+
+- W02-F: `COMPLETE_ACCEPTED_MERGED`; PR #61; exact acceptance HEAD `185f9681bf258d06ff9bb45721c6cde6988b639d`; merge main `0e8fccf51490f1e05fb356bd562a812e4738475b`; Quality `33449520272`, Test Build `33449520312`, Security `33449520715`: SUCCESS.
+- PB4: `COMPLETE_RELEASED_MERGED`; PR #62; exact publication HEAD `c2a9c06e11f0039b4670efdd44c2219931ff593b`; merge main `8ca6d252b75907bb62616a8054f740b8fa5d32c7`; Quality `33450029976`, Test Build `33450029963`, Security `33450030286`: SUCCESS.
+- W02-G: `RELEASED_READY_FOR_INTEGRATION`; governed issue #64 is `aurora:copilot-ready`. No Copilot agent has started because dispatch is fail-closed while repository secret `AURORA_COPILOT_USER_TOKEN` is absent. This operational dispatch blocker does not revoke PB4 and does not release PB5.
+- PB5 / W02 final acceptance: `PENDING`.
+- W03-W20: `PLANNED_DEPENDENCY_GATED` until W02 final acceptance explicitly releases downstream implementation.
+
+Aurora Copilot Multi-Agent Development Fabric v1.0 is active on `main` via PR #66 / merge `e75526f407480d7fe58891d8746fd2aa2ff9070d`, covering the validated 166-task W02-W20 DAG and 9 custom agents. Accepted PR HEAD `5eba12d94096ada2b10f68d842fa0f7faa271ec4` passed Quality `33455513039`, Test Build `33455513016`, Security `33455513475` and Fabric Validation `33455513065`. Post-merge `main` passed Quality `33455604239`, Test Build `33455604227`, Security `33455604556`, Fabric Validation `33455604235` and Orchestrator `33455604234`.
+
+W02-G ownership is now released only for the integration/security/Reality Gate scope defined by the W02 acceptance matrix and issue #64. Shared/root/publication surfaces remain coordinator-controlled unless explicitly transferred. No W03+ runtime work is released by this addendum.
