@@ -266,10 +266,42 @@ export function reconcileExecutionUncertainty(
       false,
     );
   }
+
+  const nextAttemptNumber = request.uncertainty.attemptNumber + 1;
+  const safeguardsEvaluatedAt = timestampMs(request.retrySafeguards.evaluatedAt);
+  if (safeguardsEvaluatedAt === undefined) {
+    return reconciliationResult(
+      request,
+      'NO_EFFECT_CONFIRMED_RETRY_BLOCKED',
+      ['RETRY_GUARDS_TIME_INVALID'],
+      false,
+      false,
+    );
+  }
+  if (safeguardsEvaluatedAt < observedAt) {
+    return reconciliationResult(
+      request,
+      'NO_EFFECT_CONFIRMED_RETRY_BLOCKED',
+      ['RETRY_GUARDS_STALE'],
+      false,
+      false,
+    );
+  }
+  if (request.retrySafeguards.attemptNumber !== nextAttemptNumber) {
+    return reconciliationResult(
+      request,
+      'NO_EFFECT_CONFIRMED_RETRY_BLOCKED',
+      ['RETRY_GUARDS_ATTEMPT_MISMATCH'],
+      false,
+      false,
+    );
+  }
+
+  const safeguardResult = request.retrySafeguards.result;
   if (
-    request.retrySafeguards.schemaVersion !== request.schemaVersion ||
-    request.retrySafeguards.actionIntentId !== request.actionIntent.actionIntentId ||
-    !request.retrySafeguards.safeToInvokeExternal
+    safeguardResult.schemaVersion !== request.schemaVersion ||
+    safeguardResult.actionIntentId !== request.actionIntent.actionIntentId ||
+    !safeguardResult.safeToInvokeExternal
   ) {
     return reconciliationResult(
       request,
@@ -286,7 +318,7 @@ export function reconcileExecutionUncertainty(
     [],
     false,
     true,
-    request.uncertainty.attemptNumber + 1,
+    nextAttemptNumber,
   );
 }
 
