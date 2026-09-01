@@ -55,10 +55,7 @@
       ],
       "ownership": "W05 governance/intelligence shared surfaces",
       "forbidden": "No policy/authority/executor implementation and no runtime feature code.",
-      "allowedPaths": [
-        "docs/governance/w05/**",
-        "docs/governance/copilot/tasks/W05.json"
-      ],
+      "allowedPaths": ["docs/governance/w05/**", "docs/governance/copilot/tasks/W05.json"],
       "laneHint": "PROGRAM-CONTROL",
       "dispatchPriority": 120,
       "sharedWriteSurfaces": [
