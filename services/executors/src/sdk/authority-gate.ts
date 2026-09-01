@@ -21,8 +21,18 @@ function sameActor(
   evaluation: AuthorityEvaluationRequest['policyEvaluation']['actor'],
 ): boolean {
   if (intent.kind !== evaluation.kind || intent.identityId !== evaluation.identityId) return false;
-  if (intent.externalIdentity === undefined && evaluation.externalIdentity === undefined) return true;
-  if (intent.externalIdentity === undefined || evaluation.externalIdentity === undefined) return false;
+  if (
+    intent.externalIdentity === undefined &&
+    evaluation.externalIdentity === undefined
+  ) {
+    return true;
+  }
+  if (
+    intent.externalIdentity === undefined ||
+    evaluation.externalIdentity === undefined
+  ) {
+    return false;
+  }
   return (
     intent.externalIdentity.provider === evaluation.externalIdentity.provider &&
     intent.externalIdentity.externalId === evaluation.externalIdentity.externalId
