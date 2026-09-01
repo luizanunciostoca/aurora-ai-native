@@ -43,24 +43,27 @@ function request(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test('allows downstream external invocation only after generic guards and W03-owned reservation', () => {
-  let reservations = 0;
-  const fence: IdempotencyFencePort = {
-    reserve: (input) => {
-      reservations += 1;
-      assert.equal(input.tenantId, 'tenant:alpha');
-      assert.equal(input.key, 'idem:publish:1');
-      assert.equal(input.operationName, 'social.publish:PUBLISH');
-      return { kind: 'RESERVED' };
-    },
-  };
-  const result = evaluateExecutionSafeguards(request({ idempotencyFence: fence }));
+test(
+  'allows downstream external invocation only after generic guards and W03-owned reservation',
+  () => {
+    let reservations = 0;
+    const fence: IdempotencyFencePort = {
+      reserve: (input) => {
+        reservations += 1;
+        assert.equal(input.tenantId, 'tenant:alpha');
+        assert.equal(input.key, 'idem:publish:1');
+        assert.equal(input.operationName, 'social.publish:PUBLISH');
+        return { kind: 'RESERVED' };
+      },
+    };
+    const result = evaluateExecutionSafeguards(request({ idempotencyFence: fence }));
 
-  assert.equal(reservations, 1);
-  assert.equal(result.safeToInvokeExternal, true);
-  assert.equal(result.idempotencyReserved, true);
-  assert.equal(result.authorizesExecution, false);
-});
+    assert.equal(reservations, 1);
+    assert.equal(result.safeToInvokeExternal, true);
+    assert.equal(result.idempotencyReserved, true);
+    assert.equal(result.authorizesExecution, false);
+  },
+);
 
 test('fences duplicate race deterministically before any external call', () => {
   let reserved = false;
@@ -85,7 +88,11 @@ test('completed replay and conflicts fail closed rather than re-executing', () =
     request({ idempotencyFence: { reserve: () => ({ kind: 'REPLAY_COMPLETED' }) } }),
   );
   const conflict = evaluateExecutionSafeguards(
-    request({ idempotencyFence: { reserve: () => ({ kind: 'CONFLICT', reason: 'PAYLOAD_MISMATCH' }) } }),
+    request({
+      idempotencyFence: {
+        reserve: () => ({ kind: 'CONFLICT', reason: 'PAYLOAD_MISMATCH' }),
+      },
+    }),
   );
 
   assert.deepEqual(replay.reasons, ['IDEMPOTENCY_REPLAY_COMPLETED']);
