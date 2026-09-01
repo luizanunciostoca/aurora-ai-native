@@ -1,0 +1,11 @@
+'use strict';
+Object.defineProperty(exports, '__esModule', { value: true });
+exports.POLICY_QUERY_REASONS = void 0;
+exports.POLICY_QUERY_REASONS = [
+  'POLICY_FOUND',
+  'POLICY_NOT_FOUND',
+  'POLICY_REFERENCE_MISMATCH',
+  'POLICY_VERSION_CHANGED',
+  'PRECHECK_INFORMATIONAL_ONLY',
+  'EXECUTION_VALIDATION_REQUIRED',
+];

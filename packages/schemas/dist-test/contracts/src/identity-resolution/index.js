@@ -1,0 +1,5 @@
+'use strict';
+Object.defineProperty(exports, '__esModule', { value: true });
+exports.IDENTITY_RESOLUTION_METHODS = exports.IDENTITY_RESOLUTION_STATUSES = void 0;
+exports.IDENTITY_RESOLUTION_STATUSES = ['RESOLVED', 'NOT_FOUND', 'AMBIGUOUS', 'CONFLICT'];
+exports.IDENTITY_RESOLUTION_METHODS = ['CANONICAL_ID', 'EXTERNAL_BINDING'];
