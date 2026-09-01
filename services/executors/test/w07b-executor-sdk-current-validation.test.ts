@@ -199,7 +199,7 @@ test('context mismatch fails closed before validator invocation', () => {
 test('request schema mismatch fails closed before validator invocation', () => {
   let calls = 0;
   const gate = validateExecutorAuthority({
-    schemaVersion: '2.0.0',
+    schemaVersion: '2.0.0' as ActionIntent['schemaVersion'],
     actionIntent: intent,
     authorityEvaluation: evaluation(),
     validateCurrentAuthority: (request) => {
