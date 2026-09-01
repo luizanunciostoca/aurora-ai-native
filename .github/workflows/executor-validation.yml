@@ -1,0 +1,41 @@
+name: Aurora Executor Service Validation
+
+on:
+  pull_request:
+    paths:
+      - 'services/executors/**'
+      - 'packages/contracts/**'
+      - '.github/workflows/executor-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'services/executors/**'
+      - 'packages/contracts/**'
+      - '.github/workflows/executor-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  executor-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Compile executor service
+        run: |
+          npx tsc -p services/executors/tsconfig.json --noEmit --pretty false
+          rm -rf services/executors/dist
+          npx tsc -p services/executors/tsconfig.json --pretty false
+      - name: Run executor service tests
+        run: node --test services/executors/dist/services/executors/test/*.test.js
+      - name: Cleanup generated executor output
+        if: always()
+        run: rm -rf services/executors/dist
