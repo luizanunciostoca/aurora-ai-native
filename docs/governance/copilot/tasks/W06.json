@@ -130,10 +130,7 @@
       ],
       "ownership": "packages/context/src/minimal-context/** plus W06-C tests",
       "forbidden": "Do not hide policy/authority requirements or material uncertainty through compression.",
-      "allowedPaths": [
-        "packages/context/src/minimal-context/**",
-        "packages/context/test/w06c-**"
-      ],
+      "allowedPaths": ["packages/context/src/minimal-context/**", "packages/context/test/w06c-**"],
       "laneHint": "LANE-1",
       "dispatchPriority": 80,
       "sharedWriteSurfaces": ["w06:minimal-context"]
@@ -167,10 +164,7 @@
       ],
       "ownership": "packages/context/src/semantic-cache/** plus W06-F tests",
       "forbidden": "No credential/secret/authority-token caching and no permissive stale hit.",
-      "allowedPaths": [
-        "packages/context/src/semantic-cache/**",
-        "packages/context/test/w06f-**"
-      ],
+      "allowedPaths": ["packages/context/src/semantic-cache/**", "packages/context/test/w06f-**"],
       "laneHint": "LANE-2",
       "dispatchPriority": 70,
       "sharedWriteSurfaces": ["w06:semantic-cache"]
