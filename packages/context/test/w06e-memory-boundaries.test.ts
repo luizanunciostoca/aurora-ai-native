@@ -62,7 +62,10 @@ function validate(item: MemoryBoundaryCandidate) {
 }
 
 test('W06-E freezes all eight memory boundaries with explicit ownership and non-authority', () => {
-  assert.deepEqual(Object.keys(MEMORY_BOUNDARY_DESCRIPTORS).sort(), [...MEMORY_BOUNDARY_KINDS].sort());
+  assert.deepEqual(
+    Object.keys(MEMORY_BOUNDARY_DESCRIPTORS).sort(),
+    [...MEMORY_BOUNDARY_KINDS].sort(),
+  );
   for (const boundary of MEMORY_BOUNDARY_KINDS) {
     const descriptor = MEMORY_BOUNDARY_DESCRIPTORS[boundary];
     assert.equal(descriptor.sourceOfTruthOwner, ownerByBoundary[boundary]);
