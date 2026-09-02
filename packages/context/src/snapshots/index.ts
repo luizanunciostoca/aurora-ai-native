@@ -187,6 +187,24 @@ function contentHashFor(
   });
 }
 
+function cursorHashState(state: ContextSnapshotSourceState): object {
+  return {
+    sourceReference: state.sourceReference,
+    ...(state.pendingSourceRevision !== undefined
+      ? { pendingSourceRevision: state.pendingSourceRevision }
+      : {}),
+    ...(state.lastInvalidationStreamKey !== undefined
+      ? { lastInvalidationStreamKey: state.lastInvalidationStreamKey }
+      : {}),
+    ...(state.lastInvalidationSequence !== undefined
+      ? { lastInvalidationSequence: state.lastInvalidationSequence }
+      : {}),
+    ...(state.lastInvalidationEventId !== undefined
+      ? { lastInvalidationEventId: state.lastInvalidationEventId }
+      : {}),
+  };
+}
+
 function snapshotHashFor(snapshot: Omit<ContextSnapshot, 'snapshotHash'>): string | undefined {
   return canonicalHash({
     contentHash: snapshot.contentHash,
@@ -194,13 +212,7 @@ function snapshotHashFor(snapshot: Omit<ContextSnapshot, 'snapshotHash'>): strin
     compiledAt: snapshot.compiledAt,
     status: snapshot.status,
     invalidatedSourceReferences: snapshot.invalidatedSourceReferences,
-    sourceCursors: snapshot.sourceStates.map((state) => ({
-      sourceReference: state.sourceReference,
-      pendingSourceRevision: state.pendingSourceRevision,
-      lastInvalidationStreamKey: state.lastInvalidationStreamKey,
-      lastInvalidationSequence: state.lastInvalidationSequence,
-      lastInvalidationEventId: state.lastInvalidationEventId,
-    })),
+    sourceCursors: snapshot.sourceStates.map(cursorHashState),
   });
 }
 
@@ -215,8 +227,20 @@ function invalidCompileResult(
   };
 }
 
+function packageShapeValid(value: MinimalContextPackage | undefined): value is MinimalContextPackage {
+  return (
+    value?.kind === 'MinimalContextPackage' &&
+    value.authorizesExecution === false &&
+    Array.isArray(value.items) &&
+    Array.isArray(value.includedSourceReferences) &&
+    Array.isArray(value.excludedSources) &&
+    validTimestamp(value.retrievalEvaluatedAt) &&
+    validateContextQuery(value.query).valid
+  );
+}
+
 function validatePackage(
-  packageResult: MinimalContextPackage,
+  packageResult: MinimalContextPackage | undefined,
   compiledAt: unknown,
 ):
   | {
@@ -230,21 +254,14 @@ function validatePackage(
       readonly reasons: readonly ContextSnapshotCompileReason[];
     } {
   const reasons: ContextSnapshotCompileReason[] = [];
-  if (
-    packageResult?.kind !== 'MinimalContextPackage' ||
-    packageResult.authorizesExecution !== false ||
-    !Array.isArray(packageResult.items) ||
-    !Array.isArray(packageResult.includedSourceReferences) ||
-    !Array.isArray(packageResult.excludedSources) ||
-    !validTimestamp(packageResult.retrievalEvaluatedAt) ||
-    !validateContextQuery(packageResult.query).valid
-  ) {
-    reasons.push('INVALID_PACKAGE');
-  }
+  if (!packageShapeValid(packageResult)) reasons.push('INVALID_PACKAGE');
   if (!validTimestamp(compiledAt)) reasons.push('INVALID_COMPILED_AT');
+  if (!packageShapeValid(packageResult)) {
+    return { valid: false, reasons: [...new Set(reasons)] };
+  }
+
   if (
     validTimestamp(compiledAt) &&
-    validTimestamp(packageResult?.retrievalEvaluatedAt) &&
     Date.parse(compiledAt) < Date.parse(packageResult.retrievalEvaluatedAt)
   ) {
     reasons.push('INVALID_COMPILED_AT');
@@ -276,9 +293,10 @@ function validatePackage(
 
   const queryFingerprint = canonicalHash(packageResult.query);
   if (!queryFingerprint) reasons.push('INVALID_PACKAGE');
-  const contentHash = states && queryFingerprint
-    ? contentHashFor(packageResult, queryFingerprint, states)
-    : undefined;
+  const contentHash =
+    states && queryFingerprint
+      ? contentHashFor(packageResult, queryFingerprint, states)
+      : undefined;
   if (!contentHash) reasons.push('INVALID_PACKAGE');
 
   if (reasons.length > 0 || !states || !queryFingerprint || !contentHash) {
