@@ -120,7 +120,10 @@ function validTimestamp(value: string): boolean {
 }
 
 function classificationRank(value: unknown): number | undefined {
-  if (typeof value !== 'string' || !Object.prototype.hasOwnProperty.call(CLASSIFICATION_ORDER, value)) {
+  if (
+    typeof value !== 'string' ||
+    !Object.prototype.hasOwnProperty.call(CLASSIFICATION_ORDER, value)
+  ) {
     return undefined;
   }
   return CLASSIFICATION_ORDER[value as DataClassification];
