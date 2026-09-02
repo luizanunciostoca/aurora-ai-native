@@ -80,7 +80,10 @@ function query(): ContextQuery {
   };
 }
 
-function rankedItem(revision?: string, payload: unknown = { title: 'Policy', body: 'Current' }): RankedContextItem {
+function rankedItem(
+  revision?: string,
+  payload: unknown = { title: 'Policy', body: 'Current' },
+): RankedContextItem {
   return {
     sourceReference: 'fact:company:policy',
     ...(revision ? { sourceRevision: revision } : {}),
