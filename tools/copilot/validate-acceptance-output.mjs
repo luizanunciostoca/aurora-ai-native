@@ -15,9 +15,7 @@ const lines = text
   .split(/\r?\n/)
   .map((line) => line.trim())
   .filter(Boolean);
-const marker = [...lines]
-  .reverse()
-  .find((line) => line.startsWith('AURORA_ACCEPTANCE_RESULT='));
+const marker = [...lines].reverse().find((line) => line.startsWith('AURORA_ACCEPTANCE_RESULT='));
 if (!marker) fail('missing AURORA_ACCEPTANCE_RESULT marker');
 
 let result;
