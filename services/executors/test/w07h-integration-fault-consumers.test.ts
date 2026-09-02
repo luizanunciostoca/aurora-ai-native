@@ -49,8 +49,20 @@ const TARGETS: readonly ExecutionTargetReference[] = [
   { schemaVersion: version, kind: 'LOCAL_SERVICE', bindingReference: 'local:w07h' },
 ];
 
+function targetAt(index: number): ExecutionTargetReference {
+  const target = TARGETS[index];
+  if (!target) throw new Error(`W07-H target fixture missing at index ${index}`);
+  return target;
+}
+
+function targetOf(actionIntent: ActionIntent): ExecutionTargetReference {
+  const target = actionIntent.executionTarget;
+  if (!target) throw new Error('W07-H ActionIntent fixture requires executionTarget');
+  return target;
+}
+
 function intent(
-  target: ExecutionTargetReference = TARGETS[1]!,
+  target: ExecutionTargetReference = targetAt(1),
   overrides: Record<string, unknown> = {},
 ): ActionIntent {
   return {
@@ -170,11 +182,12 @@ function authorityResult(
 }
 
 function binding(actionIntent: ActionIntent, overrides: Partial<ExecutableTargetBinding> = {}) {
+  const target = targetOf(actionIntent);
   return {
     schemaVersion: version,
-    bindingId: `binding:w07h:${actionIntent.executionTarget?.kind}`,
+    bindingId: `binding:w07h:${target.kind}`,
     tenant: actionIntent.tenant,
-    target: actionIntent.executionTarget!,
+    target,
     state: 'AVAILABLE',
     freshUntil: at('2026-09-02T04:30:00Z'),
     compatibleActionIntentSchemaVersions: [version],
@@ -287,7 +300,7 @@ test('W07-H stale authority and stale target both fail closed', () => {
     actionIntentSchemaVersion: version,
     tenant: actionIntent.tenant,
     evaluatedAt: at('2026-09-02T04:30:00Z'),
-    target: actionIntent.executionTarget!,
+    target: targetOf(actionIntent),
     bindings: [binding(actionIntent)],
   });
 
@@ -434,8 +447,9 @@ test('W07-H HALF_OPEN permits one durable probe owner and rejects competing owne
     consecutiveFailures: 2,
     halfOpenProbeInFlight: false,
   };
-  const owner = intent(TARGETS[1]!, { actionIntentId: 'action-intent:w07h:owner' });
-  const contender = intent(TARGETS[1]!, { actionIntentId: 'action-intent:w07h:contender' });
+  const workflowTarget = targetAt(1);
+  const owner = intent(workflowTarget, { actionIntentId: 'action-intent:w07h:owner' });
+  const contender = intent(workflowTarget, { actionIntentId: 'action-intent:w07h:contender' });
   const reserved = transitionCircuit({
     snapshot: initial,
     event: 'HALF_OPEN_PROBE_STARTED',
