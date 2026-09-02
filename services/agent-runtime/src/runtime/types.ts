@@ -35,8 +35,13 @@ export interface AgentWorkerTask {
   readonly justification: AgentWorkJustification;
 }
 
+export interface WorkerOperationContext {
+  readonly tenant: TenantContext;
+  readonly correlation: CorrelationContext;
+}
+
 export interface W03LeaseAcquireInput {
-  readonly tenantId: string;
+  readonly tenantId: TenantContext['tenantId'];
   readonly leaseKey: string;
   readonly ownerToken: string;
   readonly subjectType: 'w05-agent-task';
@@ -46,7 +51,7 @@ export interface W03LeaseAcquireInput {
 }
 
 export interface W03LeaseHeartbeatInput {
-  readonly tenantId: string;
+  readonly tenantId: TenantContext['tenantId'];
   readonly leaseKey: string;
   readonly ownerToken: string;
   readonly nowEpochMs: number;
@@ -54,7 +59,7 @@ export interface W03LeaseHeartbeatInput {
 }
 
 export interface W03LeaseReleaseInput {
-  readonly tenantId: string;
+  readonly tenantId: TenantContext['tenantId'];
   readonly leaseKey: string;
   readonly ownerToken: string;
   readonly nowEpochMs: number;
@@ -62,7 +67,7 @@ export interface W03LeaseReleaseInput {
 
 interface W03LeaseResultBase {
   readonly source: 'W03_DURABLE_LEASE';
-  readonly tenantId: string;
+  readonly tenantId: TenantContext['tenantId'];
   readonly leaseKey: string;
   readonly ownerToken: string;
   readonly authorizesExecution: false;
@@ -116,6 +121,7 @@ export type WorkerDecisionCode =
   | 'CLAIMED'
   | 'RECLAIMED'
   | 'WORKER_CAPACITY_REACHED'
+  | 'CONTEXT_MISMATCH'
   | 'INVALID_STATE'
   | 'OWNER_MISMATCH'
   | 'LEASE_NOT_ACQUIRED'
