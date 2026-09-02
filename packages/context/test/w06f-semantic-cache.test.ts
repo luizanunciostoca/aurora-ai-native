@@ -171,9 +171,7 @@ test('W06-F creates deterministic semantic entries and returns only compatible f
     entry: first.entry,
     evaluatedAt: at('2026-09-02T21:50:00Z'),
     configVersion: 'retrieval:v1',
-    expectedSourceVersions: [
-      { sourceReference: 'fact:company:cache', sourceRevision: 'rev:1' },
-    ],
+    expectedSourceVersions: [{ sourceReference: 'fact:company:cache', sourceRevision: 'rev:1' }],
   });
 
   assert.equal(evaluation.status, 'HIT');
@@ -211,9 +209,7 @@ test('W06-F rejects cross-tenant reuse and stale config/source/TTL state', () =>
     entry: created.entry,
     evaluatedAt: at('2026-09-02T21:50:00Z'),
     configVersion: 'retrieval:v1',
-    expectedSourceVersions: [
-      { sourceReference: 'fact:company:cache', sourceRevision: 'rev:2' },
-    ],
+    expectedSourceVersions: [{ sourceReference: 'fact:company:cache', sourceRevision: 'rev:2' }],
   });
   assert.equal(staleSource.status, 'STALE_REJECTED');
 
@@ -246,6 +242,21 @@ test('W06-F rejects credential/authority-like payload fields and never invokes g
   assert.equal(result.authorizesExecution, false);
 });
 
+test('W06-F rejects malformed package input before scanning or fingerprinting', () => {
+  const result = createSemanticCacheEntry(
+    undefined as unknown as Parameters<typeof createSemanticCacheEntry>[0],
+  );
+  assert.equal(result.valid, false);
+  if (result.valid) return;
+  assert.deepEqual(result.reasons, [
+    'INVALID_PACKAGE',
+    'INVALID_CONFIG_VERSION',
+    'INVALID_CREATED_AT',
+    'INVALID_TTL',
+  ]);
+  assert.equal(result.authorizesExecution, false);
+});
+
 test('W06-F invalidation is replay-safe and stale entries never resurrect', () => {
   const created = createEntry();
   assert.equal(created.valid, true);
@@ -268,9 +279,7 @@ test('W06-F invalidation is replay-safe and stale entries never resurrect', () =
     entry: applied.entry,
     evaluatedAt: at('2026-09-02T21:50:00Z'),
     configVersion: 'retrieval:v1',
-    expectedSourceVersions: [
-      { sourceReference: 'fact:company:cache', sourceRevision: 'rev:2' },
-    ],
+    expectedSourceVersions: [{ sourceReference: 'fact:company:cache', sourceRevision: 'rev:2' }],
   });
   assert.equal(evaluation.status, 'INVALIDATED_REJECTED');
 });
