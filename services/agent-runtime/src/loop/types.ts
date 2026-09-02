@@ -20,12 +20,7 @@ export type AdaptiveLoopPhase = (typeof ADAPTIVE_LOOP_PHASES)[number];
 
 export type AdaptiveLoopTerminalPhase = Extract<
   AdaptiveLoopPhase,
-  | 'COMPLETED'
-  | 'ABSTAINED'
-  | 'ESCALATED'
-  | 'CANCELLED'
-  | 'BUDGET_EXHAUSTED'
-  | 'FAILED'
+  'COMPLETED' | 'ABSTAINED' | 'ESCALATED' | 'CANCELLED' | 'BUDGET_EXHAUSTED' | 'FAILED'
 >;
 
 export interface BoundedAdaptiveLoopConfig {
@@ -46,12 +41,7 @@ export type W05BRouteProjection =
       readonly status: 'SELECTED';
       readonly tenant: TenantContext;
       readonly correlation: CorrelationContext;
-      readonly family:
-        | 'DETERMINISTIC'
-        | 'MODEL'
-        | 'SPECIALIST'
-        | 'COMPUTER_USE_PLANNING'
-        | 'HUMAN';
+      readonly family: 'DETERMINISTIC' | 'MODEL' | 'SPECIALIST' | 'COMPUTER_USE_PLANNING' | 'HUMAN';
       readonly strategyId: string;
       readonly strategyVersion: string;
       readonly authorizesExecution: false;
@@ -188,12 +178,7 @@ export type AdaptiveLoopEvent =
       readonly kind: 'TOOL_PLAN_READY';
       readonly evidenceReference: string;
       readonly plannedActions: readonly PlannedToolAction[];
-      readonly disposition:
-        | 'AWAIT_OBSERVATION'
-        | 'VALIDATE'
-        | 'ABSTAIN'
-        | 'ESCALATE'
-        | 'FAIL';
+      readonly disposition: 'AWAIT_OBSERVATION' | 'VALIDATE' | 'ABSTAIN' | 'ESCALATE' | 'FAIL';
     }
   | {
       readonly kind: 'TOOL_OBSERVATION_READY';
@@ -241,10 +226,6 @@ export type StartAdaptiveLoopResult =
 export interface AdvanceAdaptiveLoopResult {
   readonly status: 'ADVANCED' | 'TERMINATED' | 'REJECTED';
   readonly code:
-    | 'ADVANCED'
-    | 'TERMINATED'
-    | 'ALREADY_TERMINAL'
-    | 'INVALID_CONTROL_FRAME'
-    | 'INVALID_EVENT';
+    'ADVANCED' | 'TERMINATED' | 'ALREADY_TERMINAL' | 'INVALID_CONTROL_FRAME' | 'INVALID_EVENT';
   readonly snapshot: AdaptiveLoopSnapshot;
 }
