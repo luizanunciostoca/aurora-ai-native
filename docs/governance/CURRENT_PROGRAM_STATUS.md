@@ -1,6 +1,6 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W07_COMPLETE_W06_A_ACCEPTED_W06_B_E_ACCEPTANCE_PENDING_W08_00_CANDIDATE`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_W07_COMPLETE_W06_A_ACCEPTED_W06_B_E_ACCEPTANCE_PENDING_W08_00_W09_00_CANDIDATES`
 Audit date: 2026-09-02
 Verified live main for this status candidate: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
 
@@ -39,12 +39,12 @@ Open candidates are not accepted dependencies until independent acceptance and c
 | --- | --- | --- | --- |
 | W06-B | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #235, exact HEAD `dd1661a44c8f783a49bb8a53e1b2ae707a5fbe32`; Quality `33602802668`, Test Build `33602802986`, Security `33602802995`: SUCCESS; technical Risk Gates A-D PASS | W06-C remains blocked until W06-B is independently accepted and merged |
 | W06-E | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #232, exact HEAD `312318b8fd3e80b1e9f911d8bb3c6208d2c6a440`; Quality `33599675274`, Test Build `33599675284`, Security `33599675691`: SUCCESS; technical Risk Gates A-D PASS | contributes with accepted W06-C to release W06-D and W06-F |
-| W08-00 | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #236, base `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`, exact HEAD `1fb765cd82a40f3a07522614b9b60c6be846e4b0`; Quality `33606511193`, Test Build `33606511110`, Security `33606511683`: SUCCESS; PR currently clean/mergeable | acceptance releases W08-A and W08-B only |
-| W09-00 | `DEPENDENCY_READY / PUZZLE_BUILD_READY` | issue #109 | coordinator/freeze can begin independently |
-| W10-00 | `DEPENDENCY_READY / PUZZLE_BUILD_READY` | issue #110 | coordinator/freeze can begin independently |
-| W14-00 | `DEPENDENCY_READY / PUZZLE_BUILD_READY` | issue #114 | coordinator/freeze can begin independently; device ownership locks remain mandatory |
+| W08-00 | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #236, exact HEAD `1fb765cd82a40f3a07522614b9b60c6be846e4b0`; Quality `33606511193`, Test Build `33606511110`, Security `33606511683`: SUCCESS | acceptance releases W08-A and W08-B only |
+| W09-00 | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #238, exact HEAD `6c8c4acd7713ed00ce5300833d82896c3b8804c0`; Quality `33607285467`, Test Build `33607285457`, Security `33607286177`: SUCCESS | acceptance releases W09-A only |
+| W10-00 | `DEPENDENCY_READY / PUZZLE_BUILD_READY` | issue #110 | coordinator/freeze may begin independently in a later isolated batch |
+| W14-00 | `DEPENDENCY_READY / PUZZLE_BUILD_READY` | issue #114 | coordinator/freeze may begin independently in a later isolated batch; device ownership locks remain mandatory |
 
-The connected authoring identity is also the PR author on the open candidates above. Governance prohibits self-accept and self-merge. Therefore #232, #235 and #236 require a distinct authorized acceptance/merge identity even though their exact-head technical gates are green.
+The connected authoring identity is also the PR author on the open candidates above. Governance prohibits self-accept and self-merge. Therefore #232, #235, #236 and #238 require a distinct authorized acceptance/merge identity even though their exact-head technical gates are green.
 
 ## W06 — Context Engine
 
@@ -62,8 +62,8 @@ Current state:
 
 - W06-00 accepted.
 - W06-A accepted on current main.
-- W06-B PR #235 is a final exact-head candidate and is technically gate-complete, but independent acceptance/merge is pending.
-- W06-E PR #232 is a final exact-head candidate and is technically gate-complete, but independent acceptance/merge is pending.
+- W06-B PR #235 is a final exact-head candidate and technically gate-complete, but independent acceptance/merge is pending.
+- W06-E PR #232 is a final exact-head candidate and technically gate-complete, but independent acceptance/merge is pending.
 - W06-C is **not BUILD_READY** until W06-B is accepted on live main.
 - W06-D and W06-F remain blocked until both W06-C and W06-E are accepted.
 - W06-G remains blocked on W06-D + W06-F.
@@ -85,22 +85,9 @@ Accepted architectural boundary remains:
 
 ## W08 — Provider Adapter Foundation
 
-W08-00 was independently BUILD_READY after accepted W07-H and was advanced to a governance-only candidate in PR #236.
+W08-00 was independently BUILD_READY after accepted W07-H and was advanced to governance-only PR #236.
 
-PR #236 freezes:
-
-- provider-specific ownership beneath W07 rather than a second generic executor;
-- W04 as the sole Capability Registry/CapabilityPlan source of truth;
-- explicit tenant/provider/account/target binding;
-- external provider IDs as external references, not Aurora canonical IDs;
-- opaque credential/SecretReference resolution and prohibition on plaintext credential persistence;
-- read-only adapter semantics for reads;
-- W07-only reachability for external writes;
-- provider health/account/authentication as operational/precondition metadata, never Aurora execution authority;
-- normalized provider error/uncertainty semantics;
-- `AMBIGUOUS_WRITE -> readback/reconcile-before-retry`, with blind retry prohibited;
-- Instagram/Meta Social, Meta Ads and Google Ads as required downstream provider families for W11-W13; GCP remains reference/candidate until an explicit owner/consumer releases it;
-- safe mock/sandbox/no-op/paused-first acceptance and no production activation from W08-00.
+PR #236 freezes provider-specific ownership beneath W07, W04 as the sole capability source of truth, explicit tenant/provider/account/target binding, opaque credential references, read-only reads, W07-only external writes, provider health/authentication as non-authority metadata, normalized uncertainty/error semantics, reconcile-before-retry, required downstream provider families for W11-W13 and safe mock/sandbox/no-op/paused-first acceptance.
 
 Internal W08 DAG:
 
@@ -112,6 +99,34 @@ Internal W08 DAG:
 
 W08-A/B are **not BUILD_READY as canonical BUILD dependencies** until PR #236 is independently accepted and merged on live main.
 
+## W09 — Governed n8n Workflow Fabric
+
+W09-00 was independently BUILD_READY after accepted W03-F and W07-H and was advanced to governance-only PR #238.
+
+PR #238 freezes:
+
+- existing `services/n8n-bridge/**` as the canonical W09 integration target; no second n8n bridge;
+- `packages/workflow/**` as W03-owned generic durable workflow truth; W09 must not create a parallel durable workflow/event/idempotency engine;
+- Aurora as source of truth; n8n workflow/run/credential/webhook state never action authority;
+- immutable/versioned workflow binding with tenant scope, external workflow reference, version/hash, provenance, lifecycle and W04 capability binding;
+- opaque credential references with wrong-tenant/workflow/provider fail-closed behavior and no plaintext credential persistence;
+- W03-compatible replay/idempotency/correlation for webhook/event/schedule ingress;
+- W07-only governed side effects and target-owner execution;
+- workflow completion distinct from verified external state;
+- ambiguous external write preserving uncertainty and requiring reconcile-before-retry rather than blind workflow/node rerun;
+- curated re-specification of the governed n8n corpus rather than bulk import;
+- shell/SSH/Execute Command reference patterns remaining high-risk index-only unless a future explicitly governed local-service capability accepts them.
+
+Internal W09 DAG:
+
+`W09-00 -> W09-A`
+
+`W09-A -> (W09-B || W09-C || W09-D)`
+
+`W09-B + W09-C + W09-D -> W09-E -> W09-F`
+
+W09-A is **not BUILD_READY as a canonical BUILD dependency** until PR #238 is independently accepted and merged on live main.
+
 ## Architecture boundaries retained
 
 - W03 owns durable event/outbox/inbox/replay/DLQ/timers/leases/workflow truth.
@@ -120,7 +135,7 @@ W08-A/B are **not BUILD_READY as canonical BUILD dependencies** until PR #236 is
 - W06 owns context retrieval/ranking/trust/freshness/minimization/memory/cache/snapshot/speculation semantics; it does not own authority or execution.
 - W07 owns generic deterministic side-effect safety, current authority-validation integration, target resolution, readback/reconciliation and failure containment.
 - W08 owns provider adapters, credential boundary and provider-specific transport/readback below W07.
-- W09 owns workflow fabric/bindings.
+- W09 owns n8n workflow binding/bridge/credential-reference/evidence-forwarding/migration integration only.
 - W14 owns gateway/realtime/device registration/session/trust/replay/revoke/evidence ingress.
 - W15 owns Android/native capability bridge/app integration/permission broker/Device Executor.
 - W16 owns Workspace/view/control surfaces only.
@@ -129,7 +144,7 @@ W08-A/B are **not BUILD_READY as canonical BUILD dependencies** until PR #236 is
 - W19 owns converged security hardening.
 - W20 owns integrated staging/release acceptance.
 
-Device-plane ownership locks remain active: provider != device; W08 does not own Device Runtime; W14/W15 do not create a provider-side bypass around W07.
+Device-plane ownership locks remain active: provider != device; workflow != device; W08/W09 do not own Device Runtime; W14/W15 do not create provider/workflow-side bypasses around W07.
 
 Core invariants:
 
@@ -137,31 +152,35 @@ Core invariants:
 - Context != Authority.
 - Capability != Authority.
 - Provider/account/credential/health verification != Authority.
+- Workflow/run/webhook/credential state != Authority.
 - Plan/Lane/Budget/Template/Strategy/Confidence/Worker/Loop/Cache/Snapshot != Authority.
 - Fast Lane may optimize strategy but cannot bypass current Policy/Authority/Executor validation.
-- Receipt/transport acknowledgement is not verified external state.
+- Receipt/transport/workflow completion acknowledgement is not verified external state.
 - `EXECUTION_UNCERTAIN` / ambiguous external write requires reconcile-before-retry.
 
 ## Superseded/stale current-state assertions
 
-The following earlier current-state claims are superseded by accepted live Git/evidence and must not be used to release work:
+The following earlier current-state claims/evidence are superseded or historical and must not be used to release work:
 
-- any status claiming W06-A is merely `BUILD_READY` or lacks a canonical candidate/acceptance;
+- any status claiming W06-A is merely `BUILD_READY` or lacks canonical acceptance;
 - any status claiming W07-H is still `BUILD_READY` or unaccepted;
+- any status claiming W09-00 remains only `BUILD_READY` after publication of PR #238;
 - W06-B intermediate heads `f9ebb884...`, `3cb2b3be...` and `bf101ee3...`; only final exact HEAD `dd1661a44c8f783a49bb8a53e1b2ae707a5fbe32` may satisfy candidate evidence;
 - W06-E formatter/intermediate candidate heads; only final exact HEAD `312318b8fd3e80b1e9f911d8bb3c6208d2c6a440` may satisfy candidate evidence;
 - duplicate W07-H PR #229 HEAD `b03450e96455cb19e334b4fefff2d4877d1cd5fe` and duplicate PR #233 HEAD `baf949e9049b0846c6d257f80e12a88ea416451f`; both are non-authoritative/DO NOT MERGE;
+- PR #237's earlier status-candidate HEAD `e50d780a6e3e461934fce5c2b0c208ba3cef95a8` and its Quality/Test Build/Security runs became historical when this status file was updated to include W09-00; final acceptance evidence must attach to the new exact PR #237 HEAD;
 - any PREBUILD/readiness artifact presented as accepted dependency truth.
 
 Candidate evidence becomes stale if its exact HEAD changes. If live main moves before integration, Program Control must revalidate dependency compatibility/mergeability/scope and rerun any gate required by active governance; a green run attached to a different candidate HEAD never transfers automatically.
 
 ## Current safe path
 
-1. Obtain independent acceptance and controlled merge for W06-B PR #235 after immediate live-main revalidation; this releases W06-C.
-2. Obtain independent acceptance and controlled merge for W06-E PR #232 before the W06-C+E join is needed.
-3. Obtain independent acceptance and controlled merge for W08-00 PR #236; this releases W08-A and W08-B.
-4. In parallel, W09-00, W10-00 and W14-00 coordinator/freeze work may proceed in isolated, non-overlapping PRs because their accepted prerequisites are already satisfied.
-5. Do not start W06-C from #235 branch, W08-A/B from #236 branch, or any other descendant from an unmerged candidate; descendants consume accepted live-main truth only.
+1. Obtain independent acceptance and controlled merge for W06-B PR #235 after immediate live-main revalidation; this releases W06-C, which is the W06 critical path.
+2. Obtain independent acceptance and controlled merge for W06-E PR #232 before the W06-C+E join releases W06-D/F.
+3. Independently accept/merge W08-00 PR #236 to release W08-A and W08-B.
+4. Independently accept/merge W09-00 PR #238 to release W09-A.
+5. W10-00 and W14-00 remain independent coordinator/freeze BUILD_READY frontiers for a later isolated batch; do not exceed the active safe parallel-build batch or create shared-surface conflicts.
+6. Do not start W06-C from #235, W08-A/B from #236, W09-A from #238, or any other descendant from an unmerged candidate; descendants consume accepted live-main truth only.
 
 ## Acceptance discipline
 
