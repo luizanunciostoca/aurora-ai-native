@@ -96,6 +96,8 @@ jobs:
     needs: validate-request
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      COPILOT_HOME: ${{ runner.temp }}/aurora-copilot-home
     permissions:
       actions: read
       checks: read
@@ -220,92 +222,189 @@ jobs:
               }' >> /tmp/aurora-required-check-lines.jsonl
           done
 
-          jq -s --arg head "$EXPECTED_HEAD" '{
+          jq -s --arg head "$EXPECTED_HEAD" --arg main "$EXPECTED_MAIN" '{
             schemaVersion: "aurora.required-checks.v1",
             exactHead: $head,
+            exactMain: $main,
             requiredChecks: sort_by(.name)
           }' /tmp/aurora-required-check-lines.jsonl > /tmp/aurora-required-checks.json
 
           required_checks_sha256="$(sha256sum /tmp/aurora-required-checks.json | cut -d' ' -f1)"
           [[ "$required_checks_sha256" =~ ^[0-9a-f]{64}$ ]]
           echo "required_checks_sha256=$required_checks_sha256" >> "$GITHUB_OUTPUT"
+      - name: Build bounded sanitized static-review dossier
+        id: review_bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ needs.validate-request.outputs.expected_head }}
+          EXPECTED_MAIN: ${{ needs.validate-request.outputs.expected_main }}
+          PR_NUMBER: ${{ needs.validate-request.outputs.pr_number }}
+          REVIEW_DOSSIER: ${{ github.workspace }}/governance/.aurora-review-input
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e "$REVIEW_DOSSIER"
+          mkdir -p "$REVIEW_DOSSIER"
+          test -z "$(git -C candidate status --porcelain)"
+          test "$(git -C candidate merge-base "$EXPECTED_MAIN" "$EXPECTED_HEAD")" = "$EXPECTED_MAIN"
+
+          live_main="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          test "$live_main" = "$EXPECTED_MAIN"
+
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" \
+            | jq '{
+                number,
+                state,
+                draft,
+                mergeable,
+                mergeable_state,
+                title,
+                body,
+                base: {ref: .base.ref, sha: .base.sha},
+                head: {ref: .head.ref, sha: .head.sha, repo: .head.repo.full_name},
+                additions,
+                deletions,
+                changed_files,
+                commits,
+                labels: [.labels[].name]
+              }' > "$REVIEW_DOSSIER/pr-metadata.json"
+          test "$(jq -r '.number' "$REVIEW_DOSSIER/pr-metadata.json")" = "$PR_NUMBER"
+          test "$(jq -r '.state' "$REVIEW_DOSSIER/pr-metadata.json")" = 'open'
+          test "$(jq -r '.draft' "$REVIEW_DOSSIER/pr-metadata.json")" = 'false'
+          test "$(jq -r '.mergeable' "$REVIEW_DOSSIER/pr-metadata.json")" = 'true'
+          test "$(jq -r '.base.ref' "$REVIEW_DOSSIER/pr-metadata.json")" = 'main'
+          test "$(jq -r '.head.sha' "$REVIEW_DOSSIER/pr-metadata.json")" = "$EXPECTED_HEAD"
+          test "$(jq -r '.head.repo' "$REVIEW_DOSSIER/pr-metadata.json")" = "$GITHUB_REPOSITORY"
+
+          protected_gate_paths=(
+            '.github/workflows/quality.yml'
+            '.github/workflows/test-build.yml'
+            '.github/workflows/security.yml'
+            '.gitattributes'
+            '.gitleaks.toml'
+            '.npmrc'
+            '.nvmrc'
+            '.prettierignore'
+            '.prettierrc.json'
+            'eslint.config.mjs'
+            'package-lock.json'
+            'package.json'
+            'tsconfig.base.json'
+            'tools/audit/repository-cleanup-audit.mjs'
+            'tools/quality/run.mjs'
+            'tools/security/check-dependency-hygiene.sh'
+            'tools/security/check-sensitive-files.sh'
+            'tools/security/require-env.sh'
+            'tools/test/run-tests.mjs'
+            'tools/workspace/run-task.mjs'
+            'tools/workspace/verify-install.mjs'
+          )
+          for protected_path in "${protected_gate_paths[@]}"; do
+            if ! git -C candidate diff --quiet "$EXPECTED_MAIN...$EXPECTED_HEAD" -- "$protected_path"; then
+              echo "::error::Candidate modifies protected gate infrastructure: $protected_path"
+              exit 1
+            fi
+          done
+
+          changed_files=0
+          while IFS= read -r -d '' changed_path; do
+            if [[ "$changed_path" =~ [[:cntrl:]] ]]; then
+              echo '::error::Candidate contains a control character in a changed path'
+              exit 1
+            fi
+            changed_files=$((changed_files + 1))
+          done < <(
+            git -C candidate diff --name-only -z --no-renames "$EXPECTED_MAIN...$EXPECTED_HEAD" --
+          )
+          test "$changed_files" -gt 0
+          test "$changed_files" -le 300
+
+          commit_count="$(git -C candidate rev-list --count "$EXPECTED_MAIN..$EXPECTED_HEAD")"
+          test "$commit_count" -gt 0
+          test "$commit_count" -le 100
+
+          git -C candidate diff \
+            --no-ext-diff \
+            --no-textconv \
+            --full-index \
+            --binary \
+            --find-renames=50% \
+            --unified=80 \
+            "$EXPECTED_MAIN...$EXPECTED_HEAD" \
+            -- > "$REVIEW_DOSSIER/candidate.patch"
+          patch_bytes="$(wc -c < "$REVIEW_DOSSIER/candidate.patch")"
+          test "$patch_bytes" -gt 0
+          test "$patch_bytes" -le 2000000
+
+          git -C candidate diff --check "$EXPECTED_MAIN...$EXPECTED_HEAD" --
+          git -C candidate diff --name-status --no-renames \
+            "$EXPECTED_MAIN...$EXPECTED_HEAD" -- > "$REVIEW_DOSSIER/changed-files.txt"
+          git -C candidate diff --stat --no-renames \
+            "$EXPECTED_MAIN...$EXPECTED_HEAD" -- > "$REVIEW_DOSSIER/diff-stat.txt"
+          git -C candidate rev-list --reverse \
+            "$EXPECTED_MAIN..$EXPECTED_HEAD" > "$REVIEW_DOSSIER/commits.txt"
+          cp /tmp/aurora-required-checks.json "$REVIEW_DOSSIER/required-checks.json"
+
+          patch_sha256="$(sha256sum "$REVIEW_DOSSIER/candidate.patch" | cut -d' ' -f1)"
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --argjson pr_number "$PR_NUMBER" \
+            --arg exact_head "$EXPECTED_HEAD" \
+            --arg exact_main "$EXPECTED_MAIN" \
+            --argjson changed_files "$changed_files" \
+            --argjson commit_count "$commit_count" \
+            --argjson patch_bytes "$patch_bytes" \
+            --arg patch_sha256 "$patch_sha256" \
+            '{
+              schemaVersion: "aurora.acceptance-dossier.v1",
+              repository: $repository,
+              prNumber: $pr_number,
+              exactHead: $exact_head,
+              exactMain: $exact_main,
+              changedFiles: $changed_files,
+              commitCount: $commit_count,
+              patchBytes: $patch_bytes,
+              patchSha256: $patch_sha256,
+              files: [
+                "candidate.patch",
+                "changed-files.txt",
+                "commits.txt",
+                "diff-stat.txt",
+                "pr-metadata.json",
+                "required-checks.json"
+              ]
+            }' > "$REVIEW_DOSSIER/manifest.json"
+
+          (
+            cd "$REVIEW_DOSSIER"
+            sha256sum \
+              candidate.patch \
+              changed-files.txt \
+              commits.txt \
+              diff-stat.txt \
+              manifest.json \
+              pr-metadata.json \
+              required-checks.json \
+              > SHA256SUMS
+          )
+          manifest_sha256="$(sha256sum "$REVIEW_DOSSIER/SHA256SUMS" | cut -d' ' -f1)"
+          [[ "$manifest_sha256" =~ ^[0-9a-f]{64}$ ]]
+          echo "manifest_sha256=$manifest_sha256" >> "$GITHUB_OUTPUT"
+
+          find "$REVIEW_DOSSIER" -type f -exec chmod 0444 {} +
+          chmod 0555 "$REVIEW_DOSSIER"
+          test -z "$(git -C candidate status --porcelain)"
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.16.0
       - name: Install pinned Copilot CLI without executing candidate package hooks
         run: |
+          mkdir -p "$COPILOT_HOME"
+          printf '%s\n' '{"remote":"off","remoteExport":false,"toolSearch":false,"permissions":{"disableBypassPermissionsMode":"disable"}}' > "$COPILOT_HOME/settings.json"
           npm install --global @github/copilot@1.0.82
           copilot --version > /tmp/aurora-copilot-version.txt
           grep -Fxq 'GitHub Copilot CLI 1.0.82.' /tmp/aurora-copilot-version.txt
-      - name: Build bounded static candidate review bundle
-        id: review_bundle
-        env:
-          EXPECTED_HEAD: ${{ needs.validate-request.outputs.expected_head }}
-          EXPECTED_MAIN: ${{ needs.validate-request.outputs.expected_main }}
-          PR_NUMBER: ${{ needs.validate-request.outputs.pr_number }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          review_dir='governance/.aurora-review-input'
-          mkdir -p "$review_dir"
-
-          test "$(git -C governance rev-parse HEAD)" = "$EXPECTED_MAIN"
-          test "$(git -C candidate rev-parse HEAD)" = "$EXPECTED_HEAD"
-          git -C candidate cat-file -e "${EXPECTED_MAIN}^{commit}"
-          git -C candidate cat-file -e "${EXPECTED_HEAD}^{commit}"
-
-          git -C candidate diff \
-            --no-ext-diff \
-            --no-textconv \
-            --binary \
-            --full-index \
-            "$EXPECTED_MAIN...$EXPECTED_HEAD" \
-            > "$review_dir/candidate.patch"
-
-          changed_paths="$(
-            git -C candidate diff \
-              --no-ext-diff \
-              --no-textconv \
-              --name-only \
-              -z \
-              "$EXPECTED_MAIN...$EXPECTED_HEAD" |
-              jq -Rs 'split("\u0000") | map(select(length > 0))'
-          )"
-          changed_count="$(jq 'length' <<<"$changed_paths")"
-          patch_bytes="$(wc -c < "$review_dir/candidate.patch")"
-          test "$changed_count" -ge 1
-          test "$changed_count" -le 2000
-          test "$patch_bytes" -ge 1
-          test "$patch_bytes" -le 8000000
-
-          jq -n \
-            --arg repository "$GITHUB_REPOSITORY" \
-            --argjson prNumber "$PR_NUMBER" \
-            --arg exactHead "$EXPECTED_HEAD" \
-            --arg exactMain "$EXPECTED_MAIN" \
-            --argjson changedPaths "$changed_paths" \
-            --argjson patchBytes "$patch_bytes" \
-            '{
-              schemaVersion: "aurora.static-review-input.v1",
-              repository: $repository,
-              prNumber: $prNumber,
-              exactHead: $exactHead,
-              exactMain: $exactMain,
-              changedPaths: $changedPaths,
-              patchBytes: $patchBytes
-            }' > "$review_dir/review-metadata.json"
-
-          (
-            cd "$review_dir"
-            sha256sum candidate.patch review-metadata.json > SHA256SUMS
-          )
-          manifest_sha256="$(sha256sum "$review_dir/SHA256SUMS" | cut -d' ' -f1)"
-          [[ "$manifest_sha256" =~ ^[0-9a-f]{64}$ ]]
-          echo "manifest_sha256=$manifest_sha256" >> "$GITHUB_OUTPUT"
-
-          find "$review_dir" -type f -exec chmod 0444 {} +
-          chmod 0555 "$review_dir"
       - name: Render governed independent acceptance prompt from trusted main
         run: >-
           node governance/tools/copilot/acceptance-review-prompt.mjs
@@ -313,13 +412,13 @@ jobs:
           '${{ needs.validate-request.outputs.expected_head }}'
           '${{ needs.validate-request.outputs.expected_main }}'
           '${{ github.repository }}'
+          '${{ github.workspace }}/governance/.aurora-review-input'
           > /tmp/aurora-acceptance-prompt.txt
       - name: Run independent acceptance agent from trusted governance checkout
         id: acceptance
         working-directory: governance
         env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set +e
@@ -334,21 +433,29 @@ jobs:
             --model=auto \
             --mode=autopilot \
             --max-autopilot-continues=8 \
-            --allow-all-tools \
-            --excluded-tools shell task edit create str_replace_editor apply_patch \
-            --deny-tool shell write task \
+            --max-ai-credits=8 \
+            --available-tools='read' \
+            --allow-tool='read' \
+            --disable-builtin-mcps \
             --disallow-temp-dir \
-            --no-bash-env \
-            --no-ask-user \
-            --no-auto-update \
             --no-remote \
             --no-remote-export \
+            --no-auto-update \
+            --no-bash-env \
+            --secret-env-vars='COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN' \
+            --no-ask-user \
+            --no-color \
+            --output-format=text \
             --stream=off \
+            --silent \
             -p "$(cat /tmp/aurora-acceptance-prompt.txt)" \
             > /tmp/aurora-acceptance-output.txt 2>&1
           status=$?
           set -e
-          test "$status" = '0'
+          if test "$status" != '0'; then
+            echo "::error::Independent acceptance agent failed with status $status; raw output withheld"
+            exit 1
+          fi
       - name: Prove reviewer did not mutate exact inputs or either checkout
         env:
           GH_TOKEN: ${{ github.token }}
@@ -420,10 +527,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/aurora-acceptance-artifact
-          cp /tmp/aurora-acceptance-output.txt /tmp/aurora-acceptance-artifact/acceptance-output.txt
           cp /tmp/aurora-acceptance-result.json /tmp/aurora-acceptance-artifact/acceptance-result.json
           cp /tmp/aurora-required-checks.json /tmp/aurora-acceptance-artifact/required-checks.json
           cp /tmp/aurora-copilot-version.txt /tmp/aurora-acceptance-artifact/copilot-version.txt
+          cp governance/.aurora-review-input/manifest.json /tmp/aurora-acceptance-artifact/review-dossier-manifest.json
+          cp governance/.aurora-review-input/SHA256SUMS /tmp/aurora-acceptance-artifact/review-dossier-sha256s.txt
           printf '%s\n' '${{ needs.validate-request.outputs.expected_head }}' > /tmp/aurora-acceptance-artifact/exact-head.txt
           printf '%s\n' '${{ needs.validate-request.outputs.expected_main }}' > /tmp/aurora-acceptance-artifact/exact-main.txt
       - name: Upload independent acceptance evidence

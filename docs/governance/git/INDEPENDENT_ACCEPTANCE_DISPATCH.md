@@ -15,7 +15,7 @@ This design is an equivalent non-deadlocking governance candidate. It is not act
 The acceptance path has three distinct responsibilities:
 
 1. **Request/validation** resolves one open PR, one exact candidate HEAD and one exact canonical main SHA. Any drift fails closed before review.
-2. **Independent acceptance review** runs `aurora-acceptance` using a repository checkout with read-only GitHub permissions. The reviewer may recommend `ACCEPT_RECOMMENDED` or `REWORK_REQUIRED` only.
+2. **Independent acceptance review** runs `aurora-acceptance` from the trusted main checkout with only the CLI `read` tool and a bounded, sanitized static dossier. The reviewer may recommend `ACCEPT_RECOMMENDED` or `REWORK_REQUIRED` only.
 3. **Evidence publication** is performed by `github-actions[bot]` after a second exact HEAD/main revalidation. It publishes the normalized decision and workflow evidence as a PR comment.
 
 The acceptance agent cannot merge. The publisher cannot edit candidate code or mint task acceptance.
@@ -38,23 +38,29 @@ Before review:
 - candidate branch must belong to the canonical repository, not a fork;
 - live PR HEAD must equal the requested/event HEAD;
 - live canonical main must equal the requested/resolved main SHA;
-- the latest exact-head `quality`, `test-build` and `security-gate` checks from GitHub Actions must each be completed successfully.
+- the latest exact-head `quality`, `test-build` and `security-gate` checks from GitHub Actions must each be completed successfully;
+- each required workflow blob must be byte-identical between reviewed main and candidate HEAD;
+- the candidate must not modify protected gate runners/configuration;
+- current main must be an ancestor of the candidate HEAD;
+- the review patch must contain 1-300 changed files, 1-100 commits and at most 2,000,000 bytes.
 
-The minimum CI evidence is resolved deterministically from the GitHub Checks API before the model review and is embedded in the normalized acceptance envelope. Each same-name check is then traced to its GitHub Actions run and must originate from the canonical workflow path and workflow name for Quality, Test Build or Security. The workflow file blob at the candidate HEAD must also be identical to the corresponding exact-main blob. A candidate-created job or a candidate-modified canonical workflow cannot satisfy this preflight. The acceptance agent may require additional scope-specific checks, but it cannot waive these baseline gates.
+The minimum CI evidence is resolved deterministically from the GitHub Checks API before the model review and is embedded in the normalized acceptance envelope. Each same-name check is traced to its GitHub Actions run and must originate from the canonical workflow path and workflow name for Quality, Test Build or Security. The exact workflow blob is also compared with reviewed main. A candidate-created or candidate-modified workflow emitting a same-name check cannot satisfy this preflight. Protected gate runners and root gate configuration require a separate review path instead of trusting checks whose implementation the candidate changed. The acceptance agent may require additional scope-specific checks, but it cannot waive these baseline gates.
 
 Immediately after the model review, the workflow revalidates HEAD, main and the latest exact check runs before it validates or uploads the result. Before publishing the result, HEAD and main are checked again. Any mismatch prevents evidence publication.
 
 A later push or main movement makes the published acceptance evidence stale for merge until re-reconciliation under normal Aurora rules.
 
-## Reviewer permissions
+## Sanitized dossier and reviewer permissions
 
-The review job receives only read permissions for repository/PR/issues/actions/checks/statuses plus `copilot-requests: write`, which is necessary to invoke Copilot CLI. Checkout credentials are not persisted.
+Trusted workflow code constructs a dossier containing the exact diff, changed-file list, commit SHAs, PR metadata and verified check evidence. Diff generation disables external diff and text-conversion drivers, rejects control characters in paths, requires a clean candidate checkout and enforces finite file/commit/byte limits. Candidate files, symlinks, agents, skills, workflows and repository instructions are never added as trusted Copilot configuration.
 
-The untrusted candidate checkout is never added as a Copilot working directory because additional directories can contribute their own agent/skill configuration. Instead, deterministic trusted code renders a bounded exact-main-to-exact-HEAD patch plus binding metadata under `.aurora-review-input/`, hashes both files and makes the bundle non-writable before the model starts. Candidate code, PR bodies, comments, links and instructions are review data, never trusted instructions.
+The untrusted candidate checkout is never added as a Copilot working directory because additional directories can contribute their own agent/skill configuration. Instead, deterministic trusted code renders a bounded exact-main-to-exact-HEAD patch plus binding metadata under `.aurora-review-input/`, hashes every dossier file and makes the bundle non-writable before the model starts. Candidate code, PR bodies, comments, links and instructions are review data, never trusted instructions.
 
-The model cannot access the system temporary directory and cannot use shell, file-write or subagent tools. GitHub runner command-file variables are removed from the Copilot process environment, raw model output is not replayed into the workflow log command channel, and remote session export/control is disabled. The required-check envelope and static-review manifest are SHA-256 bound before review and revalidated immediately afterward.
+The review job receives read-only GitHub permissions plus `copilot-requests: write`, which is necessary only for Copilot CLI authentication. Checkout credentials are not persisted. The model receives only the `read` tool; the GitHub MCP server, temporary-directory access, remote session export/control, shell, write, URL, memory and subagent tools are disabled. GitHub runner command-file variables are removed from the Copilot process environment. The required-check envelope and static-review manifest are SHA-256 bound before review and revalidated immediately afterward.
 
 The prompt explicitly prohibits repository mutation, commits, pushes, issue closure, label mutation, task acceptance and merge. After the agent exits, the workflow requires the exact expected review bundle as the only untracked governance path and a completely clean candidate checkout; any mutation or hash drift fails the review.
+
+Raw model output and Copilot session transcripts remain ephemeral and are neither printed to public Actions logs nor uploaded as artifacts. Only normalized, schema-validated decision evidence and deterministic provenance are retained.
 
 ## Machine decision contract
 
@@ -64,7 +70,7 @@ The final reviewer output must contain one exact machine record:
 
 The validator requires:
 
-- exactly one machine marker in bounded output;
+- exactly one machine marker in bounded output, as the final non-empty line;
 - repository and PR number equal the validated request;
 - decision is `ACCEPT_RECOMMENDED` or `REWORK_REQUIRED`;
 - exact candidate HEAD equals the reviewed HEAD;
@@ -97,7 +103,7 @@ The workflow does **not**:
 
 ## Bootstrap rule
 
-This governance/tooling candidate cannot bootstrap its own authority. PR #241's implementation must itself receive independent review/acceptance under the currently valid governance path before merge. Until then, `.github/workflows/aurora-independent-acceptance.yml` is candidate code only and must not be cited as an active acceptance mechanism.
+This governance/tooling candidate cannot bootstrap its own authority. Issue #241's implementation PR #242 must itself receive independent review/acceptance under the currently valid governance path before merge. Until then, `.github/workflows/aurora-independent-acceptance.yml` is candidate code only and must not be cited as an active acceptance mechanism.
 
 ## Security / failure model
 
@@ -107,6 +113,8 @@ Fail closed on:
 - stale main;
 - closed, draft, forked or non-main PR;
 - missing, duplicated, stale, non-GitHub-Actions, failed, wrong-workflow or candidate-modified-workflow baseline check;
+- candidate-modified protected gate infrastructure;
+- non-descendant candidate, unsafe changed path, empty/oversized diff or excessive file/commit count;
 - repository/PR binding mismatch;
 - Copilot CLI failure;
 - exact input hash drift or repository mutation by reviewer;
@@ -116,4 +124,4 @@ Fail closed on:
 - `ACCEPT_RECOMMENDED` with failed gate or blocker;
 - evidence publication after HEAD/main drift.
 
-Full model output is retained as a workflow artifact for audit after successful validation. It is not replayed raw into the Actions command channel. The PR comment contains only normalized decision evidence and the workflow run reference.
+The retained artifact contains only normalized decision evidence, deterministic check provenance, Copilot version, exact refs and the dossier manifest/hash. The PR comment contains the normalized decision evidence and workflow run reference; raw model/session output is never published.

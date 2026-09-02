@@ -14,6 +14,13 @@ function fail(message) {
   throw new Error(message);
 }
 
+function hasControlCharacter(value) {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint <= 0x1f || codePoint === 0x7f;
+  });
+}
+
 if (!outputPath) fail('output path is required');
 if (!requiredChecksPath) fail('required checks path is required');
 if (!/^[0-9a-f]{40}$/i.test(expectedHead || '')) fail('valid expected HEAD SHA is required');
@@ -35,6 +42,7 @@ const lines = text
 const markers = lines.filter((line) => line.startsWith('AURORA_ACCEPTANCE_RESULT='));
 if (markers.length !== 1) fail('exactly one AURORA_ACCEPTANCE_RESULT marker is required');
 const marker = markers[0];
+if (lines.at(-1) !== marker) fail('AURORA_ACCEPTANCE_RESULT must be the final non-empty line');
 
 let result;
 try {
@@ -46,6 +54,19 @@ try {
 if (!result || typeof result !== 'object' || Array.isArray(result)) {
   fail('result must be an object');
 }
+const expectedResultKeys = [
+  'blockers',
+  'decision',
+  'exactHead',
+  'main',
+  'prNumber',
+  'repository',
+  'riskGates',
+  'summary',
+];
+if (JSON.stringify(Object.keys(result).sort()) !== JSON.stringify(expectedResultKeys)) {
+  fail('acceptance output contains unexpected or missing fields');
+}
 if (result.repository !== expectedRepository) fail('acceptance output repository mismatch');
 if (result.prNumber !== expectedPrNumber) fail('acceptance output PR number mismatch');
 if (!['ACCEPT_RECOMMENDED', 'REWORK_REQUIRED'].includes(result.decision)) {
@@ -55,6 +76,9 @@ if (result.exactHead !== expectedHead) fail('acceptance output exact HEAD mismat
 if (result.main !== expectedMain) fail('acceptance output main mismatch');
 if (!result.riskGates || typeof result.riskGates !== 'object' || Array.isArray(result.riskGates)) {
   fail('riskGates object is required');
+}
+if (JSON.stringify(Object.keys(result.riskGates).sort()) !== JSON.stringify(['A', 'B', 'C', 'D'])) {
+  fail('riskGates must contain exactly A, B, C and D');
 }
 for (const gate of ['A', 'B', 'C', 'D']) {
   if (!['PASS', 'FAIL'].includes(result.riskGates[gate])) fail(`invalid Risk Gate ${gate}`);
@@ -68,12 +92,18 @@ if (
 ) {
   fail('blockers must be at most 100 non-empty strings of at most 1000 characters');
 }
+if (result.blockers.some((item) => hasControlCharacter(item))) {
+  fail('blockers cannot contain control characters');
+}
 if (
   typeof result.summary !== 'string' ||
   result.summary.trim().length === 0 ||
   result.summary.length > 8_000
 ) {
   fail('summary must be non-empty and at most 8000 characters');
+}
+if (hasControlCharacter(result.summary)) {
+  fail('summary cannot contain control characters');
 }
 
 if (result.decision === 'ACCEPT_RECOMMENDED') {
@@ -102,6 +132,7 @@ if (
   Array.isArray(checkEvidence) ||
   checkEvidence.schemaVersion !== 'aurora.required-checks.v1' ||
   checkEvidence.exactHead !== expectedHead ||
+  checkEvidence.exactMain !== expectedMain ||
   !Array.isArray(checkEvidence.requiredChecks)
 ) {
   fail('required check evidence envelope is invalid');
