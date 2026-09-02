@@ -99,30 +99,35 @@ jobs:
       statuses: read
       copilot-requests: write
     steps:
-      - name: Checkout exact candidate HEAD read-only
+      - name: Checkout trusted governance at exact main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.validate-request.outputs.expected_main }}
+          path: governance
+          persist-credentials: false
+      - name: Checkout candidate exact HEAD as untrusted read-only material
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ needs.validate-request.outputs.expected_head }}
+          path: candidate
           fetch-depth: 0
           persist-credentials: false
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.16.0
-          cache: npm
-      - name: Install workspace
-        run: npm ci
-      - name: Install current Copilot CLI
+      - name: Install current Copilot CLI without executing candidate package hooks
         run: npm install --global @github/copilot@latest
-      - name: Render governed independent acceptance prompt
+      - name: Render governed independent acceptance prompt from trusted main
         run: >-
-          node tools/copilot/acceptance-review-prompt.mjs
+          node governance/tools/copilot/acceptance-review-prompt.mjs
           '${{ needs.validate-request.outputs.pr_number }}'
           '${{ needs.validate-request.outputs.expected_head }}'
           '${{ needs.validate-request.outputs.expected_main }}'
           > /tmp/aurora-acceptance-prompt.txt
-      - name: Run independent acceptance agent read-only
+      - name: Run independent acceptance agent from trusted governance checkout
         id: acceptance
+        working-directory: governance
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -146,15 +151,16 @@ jobs:
           set -e
           cat /tmp/aurora-acceptance-output.txt
           test "$status" = '0'
-      - name: Prove reviewer did not mutate repository checkout
+      - name: Prove reviewer did not mutate trusted or candidate checkout
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(git status --porcelain)"
-      - name: Validate machine-readable exact-head decision
+          test -z "$(git -C governance status --porcelain)"
+          test -z "$(git -C candidate status --porcelain)"
+      - name: Validate machine-readable exact-head decision with trusted validator
         shell: bash
         run: >-
-          node tools/copilot/validate-acceptance-output.mjs
+          node governance/tools/copilot/validate-acceptance-output.mjs
           /tmp/aurora-acceptance-output.txt
           '${{ needs.validate-request.outputs.expected_head }}'
           '${{ needs.validate-request.outputs.expected_main }}'
@@ -202,11 +208,13 @@ jobs:
           live_main="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
           test "$live_head" = '${{ needs.validate-request.outputs.expected_head }}'
           test "$live_main" = '${{ needs.validate-request.outputs.expected_main }}'
-      - name: Publish evidence-only independent decision
+      - name: Publish evidence-only independent decision safely
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ needs.validate-request.outputs.pr_number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          EXPECTED_HEAD: ${{ needs.validate-request.outputs.expected_head }}
+          EXPECTED_MAIN: ${{ needs.validate-request.outputs.expected_main }}
         shell: bash
         run: |
           set -euo pipefail
@@ -215,19 +223,16 @@ jobs:
           summary="$(jq -r '.summary' <<<"$result")"
           blockers="$(jq -c '.blockers' <<<"$result")"
           gates="$(jq -c '.riskGates' <<<"$result")"
-          body=$(cat <<EOF
-          AURORA INDEPENDENT ACCEPTANCE EVIDENCE — github-actions[bot]
-
-          Exact candidate HEAD: `${{ needs.validate-request.outputs.expected_head }}`
-          Exact canonical main: `${{ needs.validate-request.outputs.expected_main }}`
-          Independent agent: `aurora-acceptance`
-          Decision: `$decision`
-          Risk Gates: `$gates`
-          Blockers: `$blockers`
-          Summary: $summary
-          Workflow evidence: $RUN_URL
-
-          This is exact-head independent acceptance evidence only. This workflow cannot edit candidate code, apply `aurora:accepted`, close task issues or merge the PR. Any later controlled merge must independently revalidate HEAD/main and follow canonical post-merge/Drive convergence rules.
-          EOF
-          )
-          gh pr comment "$PR_NUMBER" --body "$body"
+          {
+            printf '%s\n\n' 'AURORA INDEPENDENT ACCEPTANCE EVIDENCE — github-actions[bot]'
+            printf 'Exact candidate HEAD: %s\n' "$EXPECTED_HEAD"
+            printf 'Exact canonical main: %s\n' "$EXPECTED_MAIN"
+            printf '%s\n' 'Independent agent: aurora-acceptance'
+            printf 'Decision: %s\n' "$decision"
+            printf 'Risk Gates: %s\n' "$gates"
+            printf 'Blockers: %s\n' "$blockers"
+            printf 'Summary: %s\n' "$summary"
+            printf 'Workflow evidence: %s\n\n' "$RUN_URL"
+            printf '%s\n' 'This is exact-head independent acceptance evidence only. This workflow cannot edit candidate code, apply aurora:accepted, close task issues or merge the PR. Any later controlled merge must independently revalidate HEAD/main and follow canonical post-merge/Drive convergence rules.'
+          } > /tmp/aurora-acceptance-comment.txt
+          gh pr comment "$PR_NUMBER" --body-file /tmp/aurora-acceptance-comment.txt
