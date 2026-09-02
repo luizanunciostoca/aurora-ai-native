@@ -40,7 +40,7 @@ Before review:
 - live canonical main must equal the requested/resolved main SHA;
 - the latest exact-head `quality`, `test-build` and `security-gate` checks from GitHub Actions must each be completed successfully.
 
-The minimum CI evidence is resolved deterministically from the GitHub Checks API before the model review and is embedded in the normalized acceptance envelope. The acceptance agent may require additional scope-specific checks, but it cannot waive these baseline gates.
+The minimum CI evidence is resolved deterministically from the GitHub Checks API before the model review and is embedded in the normalized acceptance envelope. Each same-name check is then traced to its GitHub Actions run and must originate from the canonical workflow path and workflow name for Quality, Test Build or Security. A candidate-created workflow with a spoofed job name cannot satisfy this preflight. The acceptance agent may require additional scope-specific checks, but it cannot waive these baseline gates.
 
 Before publishing the result, HEAD and main are checked again. Any mismatch prevents evidence publication.
 
@@ -69,7 +69,7 @@ The validator requires:
 - blockers are an array of strings;
 - summary is non-empty;
 - `ACCEPT_RECOMMENDED` is valid only when A/B/C/D are all `PASS` and blockers are empty;
-- the normalized `aurora.acceptance.v1` envelope contains the exact repository, PR, HEAD, main and deterministic baseline-check evidence;
+- the normalized `aurora.acceptance.v1` envelope contains the exact repository, PR, HEAD, main and deterministic baseline-check evidence, including canonical workflow ID/path/name/run/event provenance;
 - `REWORK_REQUIRED` must contain a blocker or at least one failed Risk Gate.
 
 The Copilot CLI is installed at the reviewed fixed version `1.0.82`; mutable `latest` resolution is prohibited in this privileged workflow. Artifact actions are pinned to exact commits.
@@ -102,7 +102,7 @@ Fail closed on:
 - stale PR HEAD;
 - stale main;
 - closed, draft, forked or non-main PR;
-- missing, duplicated, stale, non-GitHub-Actions or failed baseline check;
+- missing, duplicated, stale, non-GitHub-Actions, failed or wrong-workflow baseline check;
 - repository/PR binding mismatch;
 - Copilot CLI failure;
 - repository mutation by reviewer;

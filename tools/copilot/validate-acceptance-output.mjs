@@ -106,7 +106,21 @@ if (
 ) {
   fail('required check evidence envelope is invalid');
 }
-const requiredNames = ['quality', 'security-gate', 'test-build'];
+const requiredWorkflows = {
+  quality: {
+    path: '.github/workflows/quality.yml',
+    name: 'Quality',
+  },
+  'security-gate': {
+    path: '.github/workflows/security.yml',
+    name: 'Security',
+  },
+  'test-build': {
+    path: '.github/workflows/test-build.yml',
+    name: 'Test Build',
+  },
+};
+const requiredNames = Object.keys(requiredWorkflows);
 if (checkEvidence.requiredChecks.length !== requiredNames.length) {
   fail('required check evidence must contain exactly the baseline gates');
 }
@@ -114,15 +128,25 @@ for (const name of requiredNames) {
   const matches = checkEvidence.requiredChecks.filter((check) => check?.name === name);
   if (matches.length !== 1) fail(`required check ${name} must appear exactly once`);
   const [check] = matches;
+  const expectedWorkflow = requiredWorkflows[name];
   if (
     check.headSha !== expectedHead ||
     check.app !== 'github-actions' ||
     check.status !== 'completed' ||
     check.conclusion !== 'success' ||
+    check.workflowPath !== expectedWorkflow.path ||
+    check.workflowName !== expectedWorkflow.name ||
+    check.workflowEvent !== 'pull_request' ||
+    !Number.isSafeInteger(check.workflowId) ||
+    check.workflowId <= 0 ||
+    !Number.isSafeInteger(check.workflowRunId) ||
+    check.workflowRunId <= 0 ||
     typeof check.detailsUrl !== 'string' ||
-    !check.detailsUrl.startsWith(`https://github.com/${expectedRepository}/actions/runs/`)
+    !check.detailsUrl.startsWith(
+      `https://github.com/${expectedRepository}/actions/runs/${check.workflowRunId}/`,
+    )
   ) {
-    fail(`required check ${name} is not exact-head successful GitHub Actions evidence`);
+    fail(`required check ${name} is not exact-head successful canonical-workflow evidence`);
   }
 }
 
@@ -148,6 +172,11 @@ const normalized = {
       conclusion: check.conclusion,
       detailsUrl: check.detailsUrl,
       completedAt: typeof check.completedAt === 'string' ? check.completedAt : null,
+      workflowId: check.workflowId,
+      workflowPath: check.workflowPath,
+      workflowName: check.workflowName,
+      workflowRunId: check.workflowRunId,
+      workflowEvent: check.workflowEvent,
     }))
     .sort((left, right) => left.name.localeCompare(right.name)),
   blockers: result.blockers.map((item) => item.trim()),

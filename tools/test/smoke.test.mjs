@@ -121,6 +121,10 @@ test('W00-F independent acceptance worker is exact-head, isolated, read-only and
   assert.match(workflow, /git -C candidate status --porcelain/);
   assert.match(workflow, /check-runs\?filter=latest&per_page=100/);
   assert.match(workflow, /for required in quality test-build security-gate/);
+  assert.match(workflow, /actions\/runs\/\$\{run_id\}/);
+  assert.match(workflow, /expected_workflow_path='\.github\/workflows\/quality\.yml'/);
+  assert.match(workflow, /expected_workflow_path='\.github\/workflows\/test-build\.yml'/);
+  assert.match(workflow, /expected_workflow_path='\.github\/workflows\/security\.yml'/);
   assert.match(workflow, /@github\/copilot@1\.0\.82/);
   assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/);
   assert.match(workflow, /actions\/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093/);
@@ -155,4 +159,7 @@ test('W00-F acceptance output contract cannot recommend acceptance with failed g
   assert.match(validator, /exactly one AURORA_ACCEPTANCE_RESULT marker is required/);
   assert.match(validator, /required check evidence envelope is invalid/);
   assert.match(validator, /required check .* must appear exactly once/);
+  assert.match(validator, /required check .* canonical-workflow evidence/);
+  assert.match(validator, /workflowPath/);
+  assert.match(validator, /workflowRunId/);
 });

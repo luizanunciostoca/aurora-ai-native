@@ -130,6 +130,7 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/commits/${EXPECTED_HEAD}/check-runs?filter=latest&per_page=100" \
             > /tmp/aurora-check-runs.json
 
+          : > /tmp/aurora-required-check-lines.jsonl
           for required in quality test-build security-gate; do
             count="$(jq --arg required "$required" --arg head "$EXPECTED_HEAD" \
               '[.check_runs[] | select(
@@ -140,26 +141,72 @@ jobs:
                 .conclusion == "success"
               )] | length' /tmp/aurora-check-runs.json)"
             test "$count" = '1'
+
+            check="$(jq -c --arg required "$required" --arg head "$EXPECTED_HEAD" \
+              '.check_runs[] | select(
+                .name == $required and
+                .head_sha == $head and
+                .app.slug == "github-actions" and
+                .status == "completed" and
+                .conclusion == "success"
+              )' /tmp/aurora-check-runs.json)"
+            details_url="$(jq -r '.details_url' <<<"$check")"
+            if [[ "$details_url" =~ /actions/runs/([0-9]+)(/job/[0-9]+)?$ ]]; then
+              run_id="${BASH_REMATCH[1]}"
+            else
+              exit 1
+            fi
+
+            case "$required" in
+              quality)
+                expected_workflow_path='.github/workflows/quality.yml'
+                expected_workflow_name='Quality'
+                ;;
+              test-build)
+                expected_workflow_path='.github/workflows/test-build.yml'
+                expected_workflow_name='Test Build'
+                ;;
+              security-gate)
+                expected_workflow_path='.github/workflows/security.yml'
+                expected_workflow_name='Security'
+                ;;
+              *)
+                exit 1
+                ;;
+            esac
+
+            run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+            test "$(jq -r '.head_sha' <<<"$run_json")" = "$EXPECTED_HEAD"
+            test "$(jq -r '.event' <<<"$run_json")" = 'pull_request'
+            test "$(jq -r '.status' <<<"$run_json")" = 'completed'
+            test "$(jq -r '.conclusion' <<<"$run_json")" = 'success'
+            test "$(jq -r '.path' <<<"$run_json")" = "$expected_workflow_path"
+            test "$(jq -r '.name' <<<"$run_json")" = "$expected_workflow_name"
+
+            jq -n \
+              --argjson check "$check" \
+              --argjson run "$run_json" \
+              '{
+                name: $check.name,
+                headSha: $check.head_sha,
+                app: $check.app.slug,
+                status: $check.status,
+                conclusion: $check.conclusion,
+                detailsUrl: $check.details_url,
+                completedAt: $check.completed_at,
+                workflowId: $run.workflow_id,
+                workflowPath: $run.path,
+                workflowName: $run.name,
+                workflowRunId: $run.id,
+                workflowEvent: $run.event
+              }' >> /tmp/aurora-required-check-lines.jsonl
           done
 
-          jq --arg head "$EXPECTED_HEAD" '{
+          jq -s --arg head "$EXPECTED_HEAD" '{
             schemaVersion: "aurora.required-checks.v1",
             exactHead: $head,
-            requiredChecks: [
-              .check_runs[]
-              | select(.name == "quality" or .name == "test-build" or .name == "security-gate")
-              | {
-                  name,
-                  headSha: .head_sha,
-                  app: .app.slug,
-                  status,
-                  conclusion,
-                  detailsUrl: .details_url,
-                  completedAt: .completed_at
-                }
-            ]
-            | sort_by(.name)
-          }' /tmp/aurora-check-runs.json > /tmp/aurora-required-checks.json
+            requiredChecks: sort_by(.name)
+          }' /tmp/aurora-required-check-lines.jsonl > /tmp/aurora-required-checks.json
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
