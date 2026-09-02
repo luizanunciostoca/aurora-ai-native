@@ -97,3 +97,39 @@ test('legacy test/build references are audit-only and never promoted implicitly'
   if (missing.length > 0)
     t.diagnostic(`LEGACY_REFERENCE_DEBT (non-blocking): ${missing.join(', ')}`);
 });
+
+test('W00-F independent acceptance worker is exact-head, read-only and non-merging', () => {
+  const workflow = readFileSync(
+    join(repoRoot, '.github/workflows/aurora-independent-acceptance.yml'),
+    'utf8',
+  );
+
+  assert.match(workflow, /aurora:acceptance-requested/);
+  assert.match(workflow, /--agent='aurora-acceptance'/);
+  assert.match(workflow, /expected_head_sha/);
+  assert.match(workflow, /expected_main_sha/);
+  assert.match(workflow, /test "\$live_head" = "\$expected_head"/);
+  assert.match(workflow, /test "\$live_main" = "\$expected_main"/);
+  assert.match(workflow, /test -z "\$\(git status --porcelain\)"/);
+  assert.doesNotMatch(workflow, /contents:\s*write/);
+  assert.doesNotMatch(workflow, /gh\s+pr\s+merge/);
+  assert.doesNotMatch(workflow, /gh\s+issue\s+close/);
+  assert.doesNotMatch(workflow, /--add-label\s+['"]aurora:accepted['"]/);
+});
+
+test('W00-F acceptance output contract cannot recommend acceptance with failed gates or blockers', () => {
+  const prompt = readFileSync(join(repoRoot, 'tools/copilot/acceptance-review-prompt.mjs'), 'utf8');
+  const validator = readFileSync(
+    join(repoRoot, 'tools/copilot/validate-acceptance-output.mjs'),
+    'utf8',
+  );
+
+  assert.match(prompt, /STALE_HEAD_OR_MAIN/);
+  assert.match(prompt, /Do not push, commit, merge/);
+  assert.match(prompt, /AURORA_ACCEPTANCE_RESULT=/);
+  assert.match(validator, /ACCEPT_RECOMMENDED/);
+  assert.match(validator, /ACCEPT_RECOMMENDED cannot contain blockers/);
+  assert.match(validator, /ACCEPT_RECOMMENDED requires all Risk Gates PASS/);
+  assert.match(validator, /acceptance output exact HEAD mismatch/);
+  assert.match(validator, /acceptance output main mismatch/);
+});
