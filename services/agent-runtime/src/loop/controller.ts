@@ -617,6 +617,7 @@ export function advanceAdaptiveLoop(
             event.evidenceReference,
           );
       }
+      return rejectEvent(snapshot);
     }
     default:
       return rejectEvent(snapshot);
