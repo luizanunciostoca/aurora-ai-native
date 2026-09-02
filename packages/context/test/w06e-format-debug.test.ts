@@ -19,6 +19,5 @@ test('W06-E formatter diagnostic', async () => {
     useTabs: false,
     parser: 'typescript',
   });
-  // @ts-expect-error -- console is provided by Node; no @types/node in this harness.
   console.log(`[w06e:format]${JSON.stringify(formatted)}`);
 });
