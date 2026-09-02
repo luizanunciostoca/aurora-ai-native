@@ -11,6 +11,7 @@ const HARNESS_VERSION = 'w05-h.1';
 const FIXTURE_VERSION = 'w05-h-routing-fixtures.1';
 const BENCHMARK_ITERATIONS = 500;
 const NOT_OBSERVED = 'NOT_OBSERVED';
+const FIXTURE_QUALITY_SCOPE = 'FIXTURE_DEFINED_TEST_ASSERTION_NOT_OBSERVED_MODEL_QUALITY';
 const tenant = { tenantId: 'ten_01K0H0H0H0H0H0H0H0H0H0H0H0H0H0' };
 const correlation = { correlationId: 'cor_01K0H0H0H0H0H0H0H0H0H0H0H0H1' };
 const nowEpochMs = Date.parse('2026-09-01T22:30:00.000Z');
@@ -331,9 +332,10 @@ test('W05-H benchmarks all required route families with exact fixture provenance
       routeFamily: decision.family,
       structuredReasons: decision.reasons,
       selectedVia: decision.selectedVia,
-      qualityScoreBps: fixture.qualityScoreBps,
-      qualityThresholdBps: fixture.qualityThresholdBps,
-      qualityAccepted: fixture.qualityScoreBps >= fixture.qualityThresholdBps,
+      qualityMeasurementScope: FIXTURE_QUALITY_SCOPE,
+      fixtureQualityScoreBps: fixture.qualityScoreBps,
+      fixtureQualityThresholdBps: fixture.qualityThresholdBps,
+      fixtureQualityAccepted: fixture.qualityScoreBps >= fixture.qualityThresholdBps,
       routerLatencyMs: benchmark.latencyMs,
       routingSelectionCalls: strategies.attempts.length,
       routerModelCalls: 0,
@@ -354,21 +356,32 @@ test('W05-H benchmarks all required route families with exact fixture provenance
     };
   });
 
-  assert.deepEqual(new Set(records.map((record) => record.routeFamily)), new Set([
-    'DETERMINISTIC',
-    'MODEL',
-    'SPECIALIST',
-    'COMPUTER_USE_PLANNING',
-    'HUMAN',
-  ]));
-  assert.equal(records.every((record) => record.authorityElevationViolations === 0), true);
-  assert.equal(records.every((record) => record.downstreamCost === NOT_OBSERVED), true);
-  assert.equal(records.every((record) => record.downstreamCompute === NOT_OBSERVED), true);
+  assert.deepEqual(
+    new Set(records.map((record) => record.routeFamily)),
+    new Set(['DETERMINISTIC', 'MODEL', 'SPECIALIST', 'COMPUTER_USE_PLANNING', 'HUMAN']),
+  );
+  assert.equal(
+    records.every((record) => record.qualityMeasurementScope === FIXTURE_QUALITY_SCOPE),
+    true,
+  );
+  assert.equal(
+    records.every((record) => record.authorityElevationViolations === 0),
+    true,
+  );
+  assert.equal(
+    records.every((record) => record.downstreamCost === NOT_OBSERVED),
+    true,
+  );
+  assert.equal(
+    records.every((record) => record.downstreamCompute === NOT_OBSERVED),
+    true,
+  );
 
   console.log(
     `W05H_ROUTING_BENCHMARK ${JSON.stringify({
       schema: 'aurora.w05h.routing_benchmark.v1',
       measurementScope: 'TEST_ONLY_NOT_PRODUCTION_SLO',
+      qualityMeasurementScope: FIXTURE_QUALITY_SCOPE,
       records,
     })}`,
   );
@@ -421,6 +434,7 @@ test('benchmark records never invent provider cost, tokens, compute or productio
   const benchmark = measureRouter(fixture);
   const record = {
     measurementScope: 'TEST_ONLY_NOT_PRODUCTION_SLO',
+    qualityMeasurementScope: FIXTURE_QUALITY_SCOPE,
     routerLatencyMs: benchmark.latencyMs,
     downstreamModelCalls: NOT_OBSERVED,
     downstreamToolCalls: NOT_OBSERVED,
@@ -430,6 +444,7 @@ test('benchmark records never invent provider cost, tokens, compute or productio
   };
 
   assert.equal(record.measurementScope, 'TEST_ONLY_NOT_PRODUCTION_SLO');
+  assert.equal(record.qualityMeasurementScope, FIXTURE_QUALITY_SCOPE);
   assert.equal(record.downstreamModelCalls, NOT_OBSERVED);
   assert.equal(record.downstreamToolCalls, NOT_OBSERVED);
   assert.equal(record.downstreamCompute, NOT_OBSERVED);
