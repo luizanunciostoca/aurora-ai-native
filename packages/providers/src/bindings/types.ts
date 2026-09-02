@@ -6,7 +6,11 @@ import type { ContractVersion } from '@aurora/contracts/versioning';
 export const PROVIDER_BINDING_STATES = ['ACTIVE', 'INACTIVE', 'REVOKED'] as const;
 export type ProviderBindingState = (typeof PROVIDER_BINDING_STATES)[number];
 
-export const PROVIDER_BINDING_VERIFICATION_STATES = ['UNVERIFIED', 'VERIFIED', 'STALE'] as const;
+export const PROVIDER_BINDING_VERIFICATION_STATES = [
+  'UNVERIFIED',
+  'VERIFIED',
+  'STALE',
+] as const;
 export type ProviderBindingVerificationState =
   (typeof PROVIDER_BINDING_VERIFICATION_STATES)[number];
 
