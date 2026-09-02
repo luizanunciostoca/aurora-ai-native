@@ -146,13 +146,25 @@ test('W06-B ranking is deterministic for fixed evidence and trust config', () =>
     observedAt: at('2026-09-02T03:50:00Z'),
   });
 
-  const first = evaluateContextRetrieval({ query: q, acquisition: acquisition([secondary, primary]), policy: policy() });
-  const second = evaluateContextRetrieval({ query: q, acquisition: acquisition([primary, secondary]), policy: policy() });
+  const first = evaluateContextRetrieval({
+    query: q,
+    acquisition: acquisition([secondary, primary]),
+    policy: policy(),
+  });
+  const second = evaluateContextRetrieval({
+    query: q,
+    acquisition: acquisition([primary, secondary]),
+    policy: policy(),
+  });
 
   assert.equal(first.authorizesExecution, false);
   assert.deepEqual(first.rejections, []);
   assert.deepEqual(
-    first.items.map((item) => [item.sourceReference, item.retrieval.rank, item.retrieval.trust.scoreBps]),
+    first.items.map((item) => [
+      item.sourceReference,
+      item.retrieval.rank,
+      item.retrieval.trust.scoreBps,
+    ]),
     [
       ['fact:primary', 1, 9000],
       ['fact:secondary', 2, 8000],
@@ -178,9 +190,10 @@ test('W06-B rejects stale current facts and preserves historical facts explicitl
   });
 
   assert.deepEqual(currentRequired.items, []);
-  assert.deepEqual(currentRequired.rejections.map((entry) => entry.reason), [
-    'STALE_CURRENT_REQUIRED',
-  ]);
+  assert.deepEqual(
+    currentRequired.rejections.map((entry) => entry.reason),
+    ['STALE_CURRENT_REQUIRED'],
+  );
   assert.equal(historicalAllowed.items.length, 1);
   assert.equal(historicalAllowed.items[0]?.retrieval.freshness.state, 'HISTORICAL');
   assert.deepEqual(historicalAllowed.items[0]?.retrieval.uncertainty, ['HISTORICAL_SOURCE']);
@@ -198,9 +211,10 @@ test('W06-B makes unknown freshness explicit and never treats it as current', ()
     policy: policy({ maxAgeMsBySourceClass: {} }),
   });
 
-  assert.deepEqual(currentRequired.rejections.map((entry) => entry.reason), [
-    'FRESHNESS_RULE_MISSING',
-  ]);
+  assert.deepEqual(
+    currentRequired.rejections.map((entry) => entry.reason),
+    ['FRESHNESS_RULE_MISSING'],
+  );
   assert.equal(historicalAllowed.items[0]?.retrieval.freshness.state, 'UNKNOWN');
   assert.deepEqual(historicalAllowed.items[0]?.retrieval.uncertainty, ['FRESHNESS_UNKNOWN']);
 });
@@ -222,8 +236,14 @@ test('W06-B trust basis is explicit and below-threshold or unknown trust fails c
     policy: policy(),
   });
 
-  assert.deepEqual(below.rejections.map((entry) => entry.reason), ['TRUST_BELOW_MINIMUM']);
-  assert.deepEqual(unknown.rejections.map((entry) => entry.reason), ['TRUST_UNKNOWN']);
+  assert.deepEqual(
+    below.rejections.map((entry) => entry.reason),
+    ['TRUST_BELOW_MINIMUM'],
+  );
+  assert.deepEqual(
+    unknown.rejections.map((entry) => entry.reason),
+    ['TRUST_UNKNOWN'],
+  );
   assert.equal(accepted.items[0]?.retrieval.trust.basis, 'ADAPTER_CONFIG');
   assert.equal(accepted.items[0]?.retrieval.trust.scoreBps, 9000);
   assert.equal(accepted.authorizesExecution, false);
@@ -283,12 +303,15 @@ test('W06-B duplicate evidence cannot inflate ranking and conflicting source ide
   });
 
   assert.equal(duplicate.items.length, 1);
-  assert.deepEqual(duplicate.rejections.map((entry) => entry.reason), ['DUPLICATE_SOURCE_ITEM']);
+  assert.deepEqual(
+    duplicate.rejections.map((entry) => entry.reason),
+    ['DUPLICATE_SOURCE_ITEM'],
+  );
   assert.deepEqual(poisoned.items, []);
-  assert.deepEqual(poisoned.rejections.map((entry) => entry.reason), [
-    'SOURCE_IDENTITY_CONFLICT',
-    'SOURCE_IDENTITY_CONFLICT',
-  ]);
+  assert.deepEqual(
+    poisoned.rejections.map((entry) => entry.reason),
+    ['SOURCE_IDENTITY_CONFLICT', 'SOURCE_IDENTITY_CONFLICT'],
+  );
 });
 
 test('W06-B rejects future, unrequested, cross-tenant and runtime-invalid classification evidence', () => {
@@ -313,12 +336,15 @@ test('W06-B rejects future, unrequested, cross-tenant and runtime-invalid classi
   });
 
   assert.deepEqual(result.items, []);
-  assert.deepEqual(result.rejections.map((entry) => entry.reason), [
-    'FUTURE_OBSERVATION',
-    'UNREQUESTED_SOURCE_ITEM',
-    'CROSS_TENANT_ITEM',
-    'CLASSIFICATION_INVALID',
-  ]);
+  assert.deepEqual(
+    result.rejections.map((entry) => entry.reason),
+    [
+      'FUTURE_OBSERVATION',
+      'UNREQUESTED_SOURCE_ITEM',
+      'CROSS_TENANT_ITEM',
+      'CLASSIFICATION_INVALID',
+    ],
+  );
 });
 
 test('W06-B rejects unrankable payloads and preserves upstream acquisition failures', () => {
@@ -335,7 +361,10 @@ test('W06-B rejects unrankable payloads and preserves upstream acquisition failu
   });
 
   assert.deepEqual(result.items, []);
-  assert.deepEqual(result.rejections.map((entry) => entry.reason), ['PAYLOAD_UNRANKABLE']);
+  assert.deepEqual(
+    result.rejections.map((entry) => entry.reason),
+    ['PAYLOAD_UNRANKABLE'],
+  );
   assert.deepEqual(result.upstreamRejections, [upstream]);
   assert.equal(result.authorizesExecution, false);
 });
