@@ -14,12 +14,20 @@ import type {
   W03LeasePort,
   W03LeaseReleaseInput,
   W03LeaseReleaseResult,
+  WorkerOperationContext,
 } from '../src/runtime/index.js';
 
 const tenant = { tenantId: 'ten_01K0M0M0M0M0M0M0M0M0M0M0M0M0M0' as TenantId };
 const correlation = {
   correlationId: 'cor_01K0M0M0M0M0M0M0M0M0M0M0M0M1' as CorrelationId,
 };
+const otherTenant = { tenantId: 'ten_01K0M0M0M0M0M0M0M0M0M0M0M0M2' as TenantId };
+const otherCorrelation = {
+  correlationId: 'cor_01K0M0M0M0M0M0M0M0M0M0M0M0M3' as CorrelationId,
+};
+const context: WorkerOperationContext = { tenant, correlation };
+const wrongTenantContext: WorkerOperationContext = { tenant: otherTenant, correlation };
+const wrongCorrelationContext: WorkerOperationContext = { tenant, correlation: otherCorrelation };
 
 function task(taskId: string): AgentWorkerTask {
   return {
@@ -146,6 +154,41 @@ test('submission requires explicit agent justification and bounded tracking capa
   assert.equal(invalid.code, 'INVALID_TASK');
 });
 
+test('worker operations and snapshots fail closed across tenant or correlation context', async () => {
+  let acquireCalls = 0;
+  const runtime = pool(
+    leasePort({
+      acquire: async (input) => {
+        acquireCalls += 1;
+        return acquired(input);
+      },
+    }),
+  );
+  runtime.submit(task('task:a'), 100);
+
+  assert.equal(runtime.snapshot(wrongTenantContext, 'task:a'), null);
+  assert.equal(runtime.snapshot(wrongCorrelationContext, 'task:a'), null);
+  assert.deepEqual(runtime.snapshots(wrongTenantContext), []);
+  assert.deepEqual(runtime.snapshots(wrongCorrelationContext), []);
+
+  const tenantMismatch = await runtime.claim(wrongTenantContext, 'task:a', 'owner:other', 110);
+  assert.equal(tenantMismatch.code, 'TASK_NOT_FOUND');
+  const correlationMismatch = await runtime.claim(
+    wrongCorrelationContext,
+    'task:a',
+    'owner:other',
+    111,
+  );
+  assert.equal(correlationMismatch.code, 'TASK_NOT_FOUND');
+  assert.equal(acquireCalls, 0);
+
+  const valid = await runtime.claim(context, 'task:a', 'owner:a', 112);
+  assert.equal(valid.code, 'CLAIMED');
+  assert.equal(valid.record?.tenant.tenantId, tenant.tenantId);
+  assert.equal(valid.record?.correlation.correlationId, correlation.correlationId);
+  assert.equal(acquireCalls, 1);
+});
+
 test('claim marks capacity before await so concurrent claims cannot oversubscribe the pool', async () => {
   let resolveFirst: ((result: W03LeaseAcquireResult) => void) | undefined;
   let firstInput: W03LeaseAcquireInput | undefined;
@@ -162,11 +205,11 @@ test('claim marks capacity before await so concurrent claims cannot oversubscrib
   runtime.submit(task('task:a'), 100);
   runtime.submit(task('task:b'), 100);
 
-  const firstClaim = runtime.claim('task:a', 'owner:a', 110);
-  assert.equal(runtime.snapshot('task:a')?.state, 'CLAIMING');
-  const secondClaim = await runtime.claim('task:b', 'owner:b', 111);
+  const firstClaim = runtime.claim(context, 'task:a', 'owner:a', 110);
+  assert.equal(runtime.snapshot(context, 'task:a')?.state, 'CLAIMING');
+  const secondClaim = await runtime.claim(context, 'task:b', 'owner:b', 111);
   assert.equal(secondClaim.code, 'WORKER_CAPACITY_REACHED');
-  assert.equal(runtime.snapshot('task:b')?.state, 'PENDING');
+  assert.equal(runtime.snapshot(context, 'task:b')?.state, 'PENDING');
 
   if (!firstInput || !resolveFirst) throw new Error('deferred acquire was not captured');
   resolveFirst(acquired(firstInput));
@@ -183,7 +226,7 @@ test('W03 NOT_ACQUIRED never creates local ownership', async () => {
     }),
   );
   runtime.submit(task('task:a'), 100);
-  const result = await runtime.claim('task:a', 'owner:a', 110);
+  const result = await runtime.claim(context, 'task:a', 'owner:a', 110);
   assert.equal(result.code, 'LEASE_NOT_ACQUIRED');
   assert.equal(result.record?.state, 'PENDING');
   assert.equal(result.record?.ownerPresent, false);
@@ -201,16 +244,16 @@ test('lost heartbeat releases local ownership and reclaim requires a new W03 acq
     }),
   );
   runtime.submit(task('task:a'), 100);
-  const claimed = await runtime.claim('task:a', 'owner:a', 110);
+  const claimed = await runtime.claim(context, 'task:a', 'owner:a', 110);
   assert.equal(claimed.record?.generation, 1);
 
-  const heartbeat = await runtime.heartbeat('task:a', 'owner:a', 120);
+  const heartbeat = await runtime.heartbeat(context, 'task:a', 'owner:a', 120);
   assert.equal(heartbeat.code, 'LEASE_LOST');
   assert.equal(heartbeat.record?.state, 'LEASE_LOST');
   assert.equal(heartbeat.record?.ownerPresent, false);
   assert.equal(heartbeatCount, 1);
 
-  const reclaimed = await runtime.reclaim('task:a', 'owner:b', 130);
+  const reclaimed = await runtime.reclaim(context, 'task:a', 'owner:b', 130);
   assert.equal(reclaimed.code, 'RECLAIMED');
   assert.equal(reclaimed.record?.state, 'ACTIVE');
   assert.equal(reclaimed.record?.generation, 2);
@@ -225,7 +268,7 @@ test('uncertain or tampered acquire result cannot fall back to PENDING ownership
         if (calls === 1) {
           return {
             ...acquired(input),
-            tenantId: 'tenant:other',
+            tenantId: otherTenant.tenantId,
           } as W03LeaseAcquireResult;
         }
         return acquired(input);
@@ -233,12 +276,12 @@ test('uncertain or tampered acquire result cannot fall back to PENDING ownership
     }),
   );
   runtime.submit(task('task:a'), 100);
-  const invalid = await runtime.claim('task:a', 'owner:a', 110);
+  const invalid = await runtime.claim(context, 'task:a', 'owner:a', 110);
   assert.equal(invalid.code, 'INVALID_LEASE_RESULT');
   assert.equal(invalid.record?.state, 'LEASE_UNCERTAIN');
   assert.equal(invalid.record?.authorizesExecution, false);
 
-  const reclaimed = await runtime.reclaim('task:a', 'owner:b', 120);
+  const reclaimed = await runtime.reclaim(context, 'task:a', 'owner:b', 120);
   assert.equal(reclaimed.code, 'RECLAIMED');
   assert.equal(reclaimed.record?.generation, 1);
 });
@@ -255,13 +298,13 @@ test('acquire port failure becomes LEASE_UNCERTAIN instead of allowing a blind d
     }),
   );
   runtime.submit(task('task:a'), 100);
-  const uncertain = await runtime.claim('task:a', 'owner:a', 110);
+  const uncertain = await runtime.claim(context, 'task:a', 'owner:a', 110);
   assert.equal(uncertain.code, 'LEASE_PORT_ERROR');
   assert.equal(uncertain.record?.state, 'LEASE_UNCERTAIN');
 
-  const blindClaim = await runtime.claim('task:a', 'owner:c', 120);
+  const blindClaim = await runtime.claim(context, 'task:a', 'owner:c', 120);
   assert.equal(blindClaim.code, 'INVALID_STATE');
-  const reconciled = await runtime.reclaim('task:a', 'owner:b', 130);
+  const reconciled = await runtime.reclaim(context, 'task:a', 'owner:b', 130);
   assert.equal(reconciled.code, 'RECLAIMED');
 });
 
@@ -285,11 +328,11 @@ test('LEASE_UNCERTAIN reserves capacity while allowing self-reclaim reconciliati
   runtime.submit(task('task:a'), 100);
   runtime.submit(task('task:b'), 100);
 
-  const claimed = await runtime.claim('task:a', 'owner:a', 110);
+  const claimed = await runtime.claim(context, 'task:a', 'owner:a', 110);
   assert.equal(claimed.code, 'CLAIMED');
   assert.equal(claimed.activeWorkers, 1);
 
-  const uncertain = await runtime.heartbeat('task:a', 'owner:a', 120);
+  const uncertain = await runtime.heartbeat(context, 'task:a', 'owner:a', 120);
   assert.equal(uncertain.code, 'LEASE_PORT_ERROR');
   assert.equal(uncertain.record?.state, 'LEASE_UNCERTAIN');
   assert.equal(uncertain.record?.ownerPresent, true);
@@ -297,22 +340,22 @@ test('LEASE_UNCERTAIN reserves capacity while allowing self-reclaim reconciliati
   assert.equal(runtime.activeWorkerCount(), 1);
   assert.equal(heartbeatCalls, 1);
 
-  const blocked = await runtime.claim('task:b', 'owner:b', 121);
+  const blocked = await runtime.claim(context, 'task:b', 'owner:b', 121);
   assert.equal(blocked.code, 'WORKER_CAPACITY_REACHED');
   assert.equal(blocked.record?.state, 'PENDING');
   assert.equal(blocked.activeWorkers, 1);
 
-  const reconciled = await runtime.reclaim('task:a', 'owner:a-reconciled', 130);
+  const reconciled = await runtime.reclaim(context, 'task:a', 'owner:a-reconciled', 130);
   assert.equal(reconciled.code, 'RECLAIMED');
   assert.equal(reconciled.record?.state, 'ACTIVE');
   assert.equal(reconciled.activeWorkers, 1);
   assert.equal(acquireCalls, 2);
 
-  const completed = await runtime.complete('task:a', 'owner:a-reconciled', 140);
+  const completed = await runtime.complete(context, 'task:a', 'owner:a-reconciled', 140);
   assert.equal(completed.code, 'COMPLETED');
   assert.equal(completed.activeWorkers, 0);
 
-  const secondClaim = await runtime.claim('task:b', 'owner:b', 150);
+  const secondClaim = await runtime.claim(context, 'task:b', 'owner:b', 150);
   assert.equal(secondClaim.code, 'CLAIMED');
   assert.equal(secondClaim.activeWorkers, 1);
 });
@@ -338,8 +381,8 @@ test('cancellation during CLAIMING releases a late acquired lease using cancella
     1,
   );
   runtime.submit(task('task:a'), 100);
-  const claim = runtime.claim('task:a', 'owner:a', 110);
-  const cancellation = await runtime.cancel('task:a', 125);
+  const claim = runtime.claim(context, 'task:a', 'owner:a', 110);
+  const cancellation = await runtime.cancel(context, 'task:a', 125);
   assert.equal(cancellation.code, 'CANCEL_REQUESTED');
   assert.equal(cancellation.record?.state, 'CLAIMING');
 
@@ -361,13 +404,13 @@ test('completion requires exact owner and confirmed W03 release', async () => {
     }),
   );
   runtime.submit(task('task:a'), 100);
-  await runtime.claim('task:a', 'owner:a', 110);
+  await runtime.claim(context, 'task:a', 'owner:a', 110);
 
-  const wrongOwner = await runtime.complete('task:a', 'owner:other', 120);
+  const wrongOwner = await runtime.complete(context, 'task:a', 'owner:other', 120);
   assert.equal(wrongOwner.code, 'OWNER_MISMATCH');
   assert.equal(wrongOwner.record?.state, 'ACTIVE');
 
-  const lostOwnership = await runtime.complete('task:a', 'owner:a', 130);
+  const lostOwnership = await runtime.complete(context, 'task:a', 'owner:a', 130);
   assert.equal(lostOwnership.code, 'LEASE_LOST');
   assert.equal(lostOwnership.record?.state, 'LEASE_LOST');
   assert.equal(lostOwnership.record?.terminalReason, null);
@@ -377,20 +420,20 @@ test('terminal pruning is explicit and snapshots never expose owner tokens or to
   const runtime = pool();
   runtime.submit(task('task:b'), 100);
   runtime.submit(task('task:a'), 100);
-  await runtime.claim('task:a', 'owner:secret', 110);
-  const completed = await runtime.complete('task:a', 'owner:secret', 120);
+  await runtime.claim(context, 'task:a', 'owner:secret', 110);
+  const completed = await runtime.complete(context, 'task:a', 'owner:secret', 120);
   assert.equal(completed.code, 'COMPLETED');
   assert.equal(completed.record?.authorizesExecution, false);
   assert.equal(completed.record?.canInvokeTools, false);
   assert.equal(Object.hasOwn(completed.record ?? {}, 'ownerToken'), false);
 
   assert.deepEqual(
-    runtime.snapshots().map((snapshot) => snapshot.taskId),
+    runtime.snapshots(context).map((snapshot) => snapshot.taskId),
     ['task:a', 'task:b'],
   );
-  const pruned = runtime.forgetTerminal('task:a');
+  const pruned = runtime.forgetTerminal(context, 'task:a');
   assert.equal(pruned.code, 'PRUNED');
-  assert.equal(runtime.snapshot('task:a'), null);
+  assert.equal(runtime.snapshot(context, 'task:a'), null);
   assert.equal('execute' in runtime, false);
   assert.equal('invokeTool' in runtime, false);
   assert.equal('provider' in runtime, false);
