@@ -98,7 +98,7 @@ test('legacy test/build references are audit-only and never promoted implicitly'
     t.diagnostic(`LEGACY_REFERENCE_DEBT (non-blocking): ${missing.join(', ')}`);
 });
 
-test('W00-F independent acceptance worker is exact-head, read-only and non-merging', () => {
+test('W00-F independent acceptance worker is exact-head, isolated, read-only and non-merging', () => {
   const workflow = readFileSync(
     join(repoRoot, '.github/workflows/aurora-independent-acceptance.yml'),
     'utf8',
@@ -108,9 +108,16 @@ test('W00-F independent acceptance worker is exact-head, read-only and non-mergi
   assert.match(workflow, /--agent='aurora-acceptance'/);
   assert.match(workflow, /expected_head_sha/);
   assert.match(workflow, /expected_main_sha/);
+  assert.match(workflow, /path: governance/);
+  assert.match(workflow, /path: candidate/);
+  assert.match(workflow, /node governance\/tools\/copilot\/acceptance-review-prompt\.mjs/);
+  assert.match(workflow, /node governance\/tools\/copilot\/validate-acceptance-output\.mjs/);
+  assert.match(workflow, /working-directory: governance/);
   assert.match(workflow, /test "\$live_head" = "\$expected_head"/);
   assert.match(workflow, /test "\$live_main" = "\$expected_main"/);
-  assert.match(workflow, /test -z "\$\(git status --porcelain\)"/);
+  assert.match(workflow, /git -C governance status --porcelain/);
+  assert.match(workflow, /git -C candidate status --porcelain/);
+  assert.doesNotMatch(workflow, /npm ci/);
   assert.doesNotMatch(workflow, /contents:\s*write/);
   assert.doesNotMatch(workflow, /gh\s+pr\s+merge/);
   assert.doesNotMatch(workflow, /gh\s+issue\s+close/);
@@ -125,6 +132,8 @@ test('W00-F acceptance output contract cannot recommend acceptance with failed g
   );
 
   assert.match(prompt, /STALE_HEAD_OR_MAIN/);
+  assert.match(prompt, /Untrusted candidate checkout: \.\.\/candidate/);
+  assert.match(prompt, /Do not execute candidate-controlled install hooks/);
   assert.match(prompt, /Do not push, commit, merge/);
   assert.match(prompt, /AURORA_ACCEPTANCE_RESULT=/);
   assert.match(validator, /ACCEPT_RECOMMENDED/);
