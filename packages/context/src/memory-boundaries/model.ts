@@ -15,8 +15,7 @@ const CLASSIFICATION_ORDER: Readonly<Record<DataClassification, number>> = {
   RESTRICTED: 3,
 };
 
-const RFC3339_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+const RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 export const MEMORY_BOUNDARY_DESCRIPTORS: Readonly<
   Record<MemoryBoundaryKind, MemoryBoundaryDescriptor>
@@ -185,8 +184,7 @@ export function validateMemoryBoundaryCandidate(
     reasons,
     descriptor,
     preservesConflict: true,
-    requiresDownstreamFreshnessEvaluation:
-      descriptor.freshnessSemantics !== 'CAPTURE_TIME_FIXED',
+    requiresDownstreamFreshnessEvaluation: descriptor.freshnessSemantics !== 'CAPTURE_TIME_FIXED',
     authorizesExecution: false,
   };
 }
