@@ -317,7 +317,9 @@ function evaluateCandidate(
     trustBps,
     freshness,
     payloadKey,
-    conflictKey: nonEmptyString(configuredConflictKey) ? configuredConflictKey : item.sourceReference,
+    conflictKey: nonEmptyString(configuredConflictKey)
+      ? configuredConflictKey
+      : item.sourceReference,
   };
 }
 
