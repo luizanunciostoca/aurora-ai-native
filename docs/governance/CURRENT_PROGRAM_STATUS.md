@@ -1,6 +1,6 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W07_COMPLETE_W06_A_ACCEPTED_W06_B_E_ACCEPTANCE_PENDING_W08_00_W09_00_W10_00_W14_00_CANDIDATES`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_ACCEPTANCE_BOOTSTRAP_PENDING_W07_COMPLETE_W06_A_ACCEPTED_W06_B_E_ACCEPTANCE_PENDING_W08_00_W09_00_W10_00_W14_00_CANDIDATES`
 Audit date: 2026-09-02
 Verified live main for this status candidate: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
 
@@ -35,6 +35,7 @@ Open candidates are not accepted dependencies until independent acceptance and c
 
 ## Current execution frontier
 
+- **Program Control acceptance bootstrap — `TECHNICALLY_ACCEPTABLE / INDEPENDENT_ACCEPTANCE_PENDING`**: issue #241 is implemented by PR #242 at exact HEAD `00e5fced35a3e55baa5b9170e3f8007b70adbee5` against unchanged main `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`. Quality `33663166892`, Test Build `33663166706`, Security `33663167420`, Aurora Puzzle Validation `33663166713` and Aurora Copilot Fabric Validation `33663166770`: SUCCESS. The candidate is 18 commits ahead / 0 behind, mergeable and limited to five governance/tooling/test files. Its reviewer uses a bounded immutable SHA-256-bound static dossier, protected canonical-workflow provenance and a read-only Copilot tool boundary; raw model/session output is not published or retained. This workflow is not active authority until #242 itself is independently accepted and merged.
 - **W06-B — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #235, exact HEAD `1b10bed145813b73a401d6a3c5256c0335ae0d96`; Quality `33648034436`, Test Build `33648034207`, Security `33648036132`: SUCCESS; exact-head Program Control technical re-review records Risk Gates A-D PASS as COMMENT only. The current candidate also fails closed on inherited/accessor-backed retrieval policy records. W06-C remains blocked until W06-B is independently accepted and merged.
 - **W06-E — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #232, exact HEAD `1afd4cbaf4a45425c3a9d15f4ad36f117556fb59`; Quality `33647897538`, Test Build `33647897474`, Security `33647898021`: SUCCESS; exact-head Program Control technical re-review records Risk Gates A-D PASS as COMMENT only. The current candidate fails closed on inherited memory-boundary keys and non-string timestamp coercion. W06-E contributes with accepted W06-C to the later W06-D/F join.
 - **W08-00 — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #236, exact HEAD `1fb765cd82a40f3a07522614b9b60c6be846e4b0`; Quality `33606511193`, Test Build `33606511110`, Security `33606511683`: SUCCESS. Acceptance releases W08-A and W08-B only.
@@ -42,9 +43,22 @@ Open candidates are not accepted dependencies until independent acceptance and c
 - **W10-00 — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #239, exact HEAD `b38e2319ffd0d21aaedc4e7315658d4a26ed22ba`; Quality `33608843176`, Test Build `33608843154`, Security `33608843770`: SUCCESS. Acceptance releases W10-A only.
 - **W14-00 — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #240, exact HEAD `0b2cb9ec7eb13f3e973aee930d50507870dd699e`; Quality `33608863473`, Test Build `33608863487`, Security `33608863938`: SUCCESS. Acceptance releases W14-A and W14-D only; Device Plane DP3 remains closed through W14-H.
 
-The connected authoring identity is also the PR author on the candidates above. Governance prohibits self-accept and self-merge. Therefore #232, #235, #236, #238, #239 and #240 still require a distinct authorized acceptance/merge identity even though their current exact-head technical gates are green.
+The connected authoring identity is also the PR author on the candidates above. Governance prohibits self-accept and self-merge. Therefore #232, #235, #236, #238, #239, #240 and #242 still require a distinct authorized acceptance/merge identity even though their current exact-head technical gates are green.
 
 The live task ledger currently has no open `aurora:puzzle-build-ready` node without `aurora:canonical-pr-open`. Opening another BUILD candidate would create a parallel truth or violate the accepted DAG. Readiness/PREBUILD artifacts remain non-authoritative.
+
+## Acceptance and controlled-integration bootstrap
+
+The current program-wide constraint is operational governance rather than missing candidate code:
+
+- issue #241 records that canonical `main` has no active independent acceptance dispatch for already-built candidates;
+- PR #242 supplies that dispatch but cannot bootstrap its own authority. Its `workflow_dispatch` and `pull_request_target` paths become trusted only after the workflow exists on accepted `main`;
+- #242 currently has no distinct eligible requested reviewer and no independent exact-head acceptance evidence. Program Control COMMENT reviews are technical evidence only;
+- no W00-F acceptance/evidence record has been published to Drive, which is correct while independent acceptance remains pending;
+- issue #243 defines the future controlled non-self merge/finalization contract as `READINESS_ONLY / BLOCKED_ON_#242_ACCEPTED_MAIN`. No #243 implementation branch or merge authority is released yet;
+- generic Copilot code review, author comments, successful CI or a copied machine marker cannot substitute the canonical `aurora-acceptance` evidence contract.
+
+After #242 is independently accepted and merged, #243 may implement the distinct `github-actions[bot]` integration path that consumes machine-verifiable exact-head acceptance evidence, revalidates current HEAD/main/checks, performs the controlled merge and waits for post-merge main gates before lifecycle/Drive convergence.
 
 ## W06 — Context Engine
 
@@ -185,20 +199,20 @@ The following earlier current-state claims/evidence are superseded or historical
 - W06-B intermediate heads `f9ebb884...`, `3cb2b3be...`, `bf101ee3...`, former acceptance candidate `dd1661a44c8f783a49bb8a53e1b2ae707a5fbe32`, hardening intermediate `6c0ce1091e50eccee70d50d79a85690ddbcbbfaf` and all checks/reviews attached to them; only current exact HEAD `1b10bed145813b73a401d6a3c5256c0335ae0d96` may satisfy W06-B candidate evidence now;
 - W06-E former acceptance candidate `312318b8fd3e80b1e9f911d8bb3c6208d2c6a440`, hardening intermediate `f3af2769e2921e3f304a5b2c20dfaeb6e3709cc2` and all checks/reviews attached to them; only current exact HEAD `1afd4cbaf4a45425c3a9d15f4ad36f117556fb59` may satisfy W06-E candidate evidence now;
 - duplicate W07-H PR #229 HEAD `b03450e96455cb19e334b4fefff2d4877d1cd5fe` and duplicate PR #233 HEAD `baf949e9049b0846c6d257f80e12a88ea416451f`; both are non-authoritative/DO NOT MERGE;
-- PR #237 earlier status-candidate heads `e50d780a6e3e461934fce5c2b0c208ba3cef95a8`, `035efa25c722dad5c324276c7f11ece551c33aaf` and `e9d5b6b2817e78c47f9c99ff3e315651dd91789d`; their exact-head gates/reviews are historical after this convergence commit;
+- PR #242 former candidate heads `64e2c31f7ee3ca61e166f155cd39ac39859c5f99`, `685692ccd48239652b1450c3ccf02ba77d553c8a`, `3eaf61d80da5f38aa2979eeb31362e03bc8e6f25`, `0519f8a05f32a11dc1e1f6f3762693a4d934c4d1`, `144291ceb59f17d0b20abe0b7b8182e39c22dfbf`, `eecb6672964e5df809f8206b800ae8807a87b012` and `83689a8bc6463d0cc5065b6456d597e38ba0e5be`; only current exact HEAD `00e5fced35a3e55baa5b9170e3f8007b70adbee5` may satisfy its candidate evidence now;
+- PR #237 earlier status-candidate heads `e50d780a6e3e461934fce5c2b0c208ba3cef95a8`, `035efa25c722dad5c324276c7f11ece551c33aaf`, `e9d5b6b2817e78c47f9c99ff3e315651dd91789d` and `09b63b3ac77c44533dfbbab1a2dac10564e23610`; their exact-head gates/reviews are historical after this convergence commit;
 - any PREBUILD/readiness artifact presented as accepted dependency truth.
 
 Candidate evidence becomes stale if its exact HEAD changes. If live main moves before integration, Program Control must revalidate dependency compatibility/mergeability/scope and rerun any gate required by active governance; a green run attached to a different candidate HEAD never transfers automatically.
 
 ## Current safe path
 
-1. Obtain independent acceptance and controlled merge for W06-B PR #235 after immediate live-main revalidation; this releases W06-C, which is the W06 critical path.
-2. Obtain independent acceptance and controlled merge for W06-E PR #232 before the W06-C+E join releases W06-D/F.
-3. Independently accept/merge W08-00 PR #236 to release W08-A and W08-B.
-4. Independently accept/merge W09-00 PR #238 to release W09-A.
-5. Independently accept/merge W10-00 PR #239 to release W10-A only.
-6. Independently accept/merge W14-00 PR #240 to release W14-A and W14-D only; DP3 remains blocked through W14-H.
-7. Do not start W06-C from #235, W08-A/B from #236, W09-A from #238, W10-A from #239, W14-A/D from #240, or any other descendant from an unmerged candidate; descendants consume accepted live-main truth only.
+1. Obtain independent exact-head acceptance and a currently valid controlled merge for PR #242. Do not use #242 to accept itself.
+2. After #242 is accepted on live main, implement and independently accept issue #243's controlled non-self merge path.
+3. Use the accepted two-stage path to process W06-B PR #235 first after immediate live-main revalidation; its controlled merge releases W06-C, the W06 critical path.
+4. Process W06-E PR #232 before the W06-C+E join releases W06-D/F.
+5. Process W08-00 PR #236 to release W08-A and W08-B, W09-00 PR #238 to release W09-A, W10-00 PR #239 to release W10-A, and W14-00 PR #240 to release W14-A and W14-D; DP3 remains blocked through W14-H.
+6. Do not start W06-C from #235, W08-A/B from #236, W09-A from #238, W10-A from #239, W14-A/D from #240, or any other descendant from an unmerged candidate; descendants consume accepted live-main truth only.
 
 ## Acceptance discipline
 
