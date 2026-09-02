@@ -25,7 +25,6 @@ test('W06-B formatter diagnostic', async () => {
       useTabs: false,
       parser: 'typescript',
     });
-    // @ts-expect-error -- console is provided by Node; no @types/node in this harness.
     console.log(`[w06b:format:${path}]${JSON.stringify(formatted)}`);
   }
 });
