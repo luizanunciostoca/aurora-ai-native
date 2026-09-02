@@ -45,11 +45,31 @@ function fnv1a64(value: string): string {
   return `fnv1a64:${hash.toString(16).padStart(16, '0')}`;
 }
 
+function snapshotShapeValid(snapshot: ContextSnapshot | undefined): snapshot is ContextSnapshot {
+  return (
+    snapshot?.kind === 'ContextSnapshot' &&
+    snapshot.authorizesExecution === false &&
+    Array.isArray(snapshot.invalidatedSourceReferences) &&
+    Array.isArray(snapshot.sourceStates) &&
+    Array.isArray(snapshot.includedSourceReferences) &&
+    Array.isArray(snapshot.excludedSourceReferences) &&
+    Array.isArray(snapshot.provenanceReferences) &&
+    nonEmptyString(snapshot.tenant?.tenantId) &&
+    nonEmptyString(snapshot.queryFingerprint) &&
+    nonEmptyString(snapshot.snapshotHash) &&
+    nonEmptyString(snapshot.contentHash) &&
+    validTimestamp(snapshot.compiledAt) &&
+    validTimestamp(snapshot.retrievalEvaluatedAt)
+  );
+}
+
 function sourceBindingsFor(snapshot: ContextSnapshot): SpeculativeSourceBinding[] | undefined {
+  if (!Array.isArray(snapshot?.sourceStates)) return undefined;
   const seen = new Set<string>();
   const bindings: SpeculativeSourceBinding[] = [];
   for (const state of snapshot.sourceStates) {
     if (
+      !state ||
       !nonEmptyString(state.sourceReference) ||
       !nonEmptyString(state.sourceRevision) ||
       seen.has(state.sourceReference)
@@ -85,6 +105,7 @@ function sameSourceProjection(
   return left.every((state, index) => {
     const peer = right[index];
     return (
+      state !== undefined &&
       peer !== undefined &&
       state.sourceReference === peer.sourceReference &&
       state.sourceRevision === peer.sourceRevision &&
@@ -103,14 +124,11 @@ function snapshotMatchesPackage(
   if (
     packageResult?.kind !== 'MinimalContextPackage' ||
     packageResult.authorizesExecution !== false ||
-    snapshot?.kind !== 'ContextSnapshot' ||
-    snapshot.authorizesExecution !== false ||
+    !snapshotShapeValid(snapshot) ||
     snapshot.status !== 'CURRENT' ||
     snapshot.invalidatedSourceReferences.length !== 0 ||
     !Number.isSafeInteger(snapshot.version) ||
-    snapshot.version < 1 ||
-    !nonEmptyString(snapshot.snapshotHash) ||
-    !nonEmptyString(snapshot.contentHash)
+    snapshot.version < 1
   ) {
     return false;
   }
@@ -145,7 +163,9 @@ function cacheIsCompatible(
   if (
     cacheEntry?.kind !== 'SemanticCacheEntry' ||
     cacheEntry.authorizesExecution !== false ||
-    cacheEntry.tenant.tenantId !== snapshot.tenant.tenantId ||
+    !Array.isArray(cacheEntry.sourceVersions) ||
+    !validTimestamp(cacheEntry.expiresAt) ||
+    cacheEntry.tenant?.tenantId !== snapshot.tenant.tenantId ||
     cacheEntry.queryFingerprint !== snapshot.queryFingerprint
   ) {
     return false;
@@ -230,10 +250,14 @@ export function prepareSpeculativeContext(
   }
 
   if (packageResult && snapshot) {
-    if (snapshot.status !== 'CURRENT' || snapshot.invalidatedSourceReferences.length > 0) {
-      reasons.push('SNAPSHOT_NOT_CURRENT');
+    if (!snapshotShapeValid(snapshot)) {
+      reasons.push('SNAPSHOT_MISMATCH');
+    } else {
+      if (snapshot.status !== 'CURRENT' || snapshot.invalidatedSourceReferences.length > 0) {
+        reasons.push('SNAPSHOT_NOT_CURRENT');
+      }
+      if (!snapshotMatchesPackage(packageResult, snapshot)) reasons.push('SNAPSHOT_MISMATCH');
     }
-    if (!snapshotMatchesPackage(packageResult, snapshot)) reasons.push('SNAPSHOT_MISMATCH');
   }
 
   if (validTimestamp(request?.preparedAt) && validTimestamp(request?.deadlineAt)) {
@@ -249,13 +273,13 @@ export function prepareSpeculativeContext(
     }
   }
 
-  const bindings = snapshot ? sourceBindingsFor(snapshot) : undefined;
+  const bindings = snapshotShapeValid(snapshot) ? sourceBindingsFor(snapshot) : undefined;
   if (snapshot && !bindings) reasons.push('SNAPSHOT_MISMATCH');
 
   if (
     request?.cacheEntry &&
     packageResult &&
-    snapshot &&
+    snapshotShapeValid(snapshot) &&
     validTimestamp(request.preparedAt) &&
     nonEmptyString(request.configVersion) &&
     !cacheIsCompatible(
@@ -269,18 +293,16 @@ export function prepareSpeculativeContext(
     reasons.push('CACHE_INCOMPATIBLE');
   }
 
-  const units = packageResult && bindings ? buildUnits(packageResult, bindings, request.cacheEntry) : [];
-  if (
-    Number.isSafeInteger(request?.limits?.maxUnits) &&
-    units.length > request.limits.maxUnits
-  ) {
+  const units =
+    packageResult && bindings ? buildUnits(packageResult, bindings, request.cacheEntry) : [];
+  if (Number.isSafeInteger(request?.limits?.maxUnits) && units.length > request.limits.maxUnits) {
     reasons.push('SPECULATION_LIMIT_EXCEEDED');
   }
 
   if (
     reasons.length > 0 ||
     !packageResult ||
-    !snapshot ||
+    !snapshotShapeValid(snapshot) ||
     !bindings ||
     !validTimestamp(request.preparedAt) ||
     !validTimestamp(request.deadlineAt)
@@ -355,7 +377,10 @@ export function evaluateSpeculativeReuse(request: SpeculativeReuseRequest): Spec
   if (!preparation || preparation.status === 'CANCELLED') {
     return reuseResult('CANCELLED_REJECTED');
   }
-  if (!validTimestamp(request?.evaluatedAt) || Date.parse(request.evaluatedAt) >= Date.parse(preparation.deadlineAt)) {
+  if (
+    !validTimestamp(request?.evaluatedAt) ||
+    Date.parse(request.evaluatedAt) >= Date.parse(preparation.deadlineAt)
+  ) {
     return reuseResult('DEADLINE_REJECTED');
   }
   if (request.policyCompatibilityVersion !== preparation.policyCompatibilityVersion) {
@@ -364,11 +389,15 @@ export function evaluateSpeculativeReuse(request: SpeculativeReuseRequest): Spec
   if (request.configVersion !== preparation.configVersion) {
     return reuseResult('CONFIG_REJECTED');
   }
+  if (!packageResult || !snapshot) {
+    return reuseResult('TENANT_REJECTED');
+  }
+  if (!snapshotShapeValid(snapshot)) {
+    return reuseResult('SNAPSHOT_REJECTED');
+  }
   if (
-    !packageResult ||
-    !snapshot ||
-    packageResult.query.tenant.tenantId !== preparation.tenant.tenantId ||
-    snapshot.tenant.tenantId !== preparation.tenant.tenantId
+    packageResult.query?.tenant?.tenantId !== preparation.tenant?.tenantId ||
+    snapshot.tenant.tenantId !== preparation.tenant?.tenantId
   ) {
     return reuseResult('TENANT_REJECTED');
   }
