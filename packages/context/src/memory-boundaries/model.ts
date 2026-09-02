@@ -185,7 +185,8 @@ export function validateMemoryBoundaryCandidate(
     reasons,
     descriptor,
     preservesConflict: true,
-    requiresDownstreamFreshnessEvaluation: descriptor.freshnessSemantics !== 'CAPTURE_TIME_FIXED',
+    requiresDownstreamFreshnessEvaluation:
+      descriptor.freshnessSemantics !== 'CAPTURE_TIME_FIXED',
     authorizesExecution: false,
   };
 }
