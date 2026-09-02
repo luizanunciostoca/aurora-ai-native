@@ -20,7 +20,12 @@ export type AdaptiveLoopPhase = (typeof ADAPTIVE_LOOP_PHASES)[number];
 
 export type AdaptiveLoopTerminalPhase = Extract<
   AdaptiveLoopPhase,
-  'COMPLETED' | 'ABSTAINED' | 'ESCALATED' | 'CANCELLED' | 'BUDGET_EXHAUSTED' | 'FAILED'
+  | 'COMPLETED'
+  | 'ABSTAINED'
+  | 'ESCALATED'
+  | 'CANCELLED'
+  | 'BUDGET_EXHAUSTED'
+  | 'FAILED'
 >;
 
 export interface BoundedAdaptiveLoopConfig {
