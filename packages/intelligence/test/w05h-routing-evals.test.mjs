@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
+import console from 'node:console';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { performance } from 'node:perf_hooks';
+import process from 'node:process';
 import test from 'node:test';
 
 const require = createRequire(import.meta.url);
