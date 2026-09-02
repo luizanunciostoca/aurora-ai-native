@@ -1,0 +1,21 @@
+export { BoundedAgentWorkerPool } from './pool.js';
+export {
+  AGENT_WORK_JUSTIFICATIONS,
+  WORKER_STATES,
+  type AgentWorkJustification,
+  type AgentWorkerRuntimeConfig,
+  type AgentWorkerTask,
+  type W03LeaseAcquireInput,
+  type W03LeaseAcquireResult,
+  type W03LeaseHeartbeatInput,
+  type W03LeaseHeartbeatResult,
+  type W03LeasePort,
+  type W03LeaseReleaseInput,
+  type W03LeaseReleaseResult,
+  type WorkerDecisionCode,
+  type WorkerOperationContext,
+  type WorkerRecordSnapshot,
+  type WorkerRuntimeDecision,
+  type WorkerState,
+  type WorkerTerminalReason,
+} from './types.js';
