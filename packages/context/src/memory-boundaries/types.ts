@@ -38,10 +38,7 @@ export type MemoryRetentionMode =
   | 'IMMUTABLE_EVIDENCE_REFERENCE';
 
 export type MemoryFreshnessSemantics =
-  | 'CURRENT_REQUIRED'
-  | 'SOURCE_DEFINED'
-  | 'HISTORICAL_EXPLICIT'
-  | 'CAPTURE_TIME_FIXED';
+  'CURRENT_REQUIRED' | 'SOURCE_DEFINED' | 'HISTORICAL_EXPLICIT' | 'CAPTURE_TIME_FIXED';
 
 export type MemoryConflictSemantics = 'PRESERVE_EXPLICIT_CONFLICT';
 
