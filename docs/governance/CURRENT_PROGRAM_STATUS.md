@@ -1,8 +1,8 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_A_E_ACCEPTED_W05_C_D_F_READY_W07_A_D_ACCEPTED_W07_B_C_E_READY`
-Audit date: 2026-09-01
-Accepted implementation baseline before this status publication: `5318fec80a4e61541cea3690d075d515e5514373`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_G_ACCEPTED_W05_H_BUILD_READY_W07_G_ACCEPTED_W07_H_BUILD_RUNNING`
+Audit date: 2026-09-02
+Accepted implementation baseline before this status publication: `cf293ca103bd1e6adfb250bc5186668aa6870d4a`
 
 ## Authority order
 
@@ -22,20 +22,11 @@ No prompt, task node, PREBUILD artifact, draft PR, agent output, green CI on a s
 - W02: `COMPLETE_ACCEPTED / REALITY_GATE_1_AUTHORITY_VERIFIED`.
 - W03: `COMPLETE_ACCEPTED / REALITY_GATE_DURABLE_EVENT_DELIVERY_VERIFIED`.
 - W04: `COMPLETE_ACCEPTED / W04_CONTROL_CORE_VERIFIED`.
-- W05-00: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W05-A: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W05-E: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W05-C/D/F: `DEPENDENCY_READY`; implementation remains subject to exact ownership/shared-surface controls and the `FREE_ACTIONS_CLI` two-code-task batch ceiling.
-- W05-B: gated on accepted W05-C + W05-D; W05-A and W05-E are already accepted.
-- W05-G: gated on accepted W05-B + W05-F.
-- W05-H: gated on accepted W05-G.
+- W05-00/A/C/D/E/F/B/G: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
+- W05-H: `DEPENDENCY_READY / PUZZLE_BUILD_READY`; it is the only remaining W05 implementation/convergence node.
 - W06: gated on accepted W05-H.
-- W07-00: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W07-A: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W07-D: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W07-B/C/E: `DEPENDENCY_READY`; implementation remains subject to exact ownership/shared-surface controls and the same two-code-task batch ceiling.
-- W07-F/G: gated on accepted W07-B + W07-C + W07-E; W07-D is already accepted.
-- W07-H: gated on accepted W07-F + W07-G.
+- W07-00/A/B/C/D/E/F/G: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
+- W07-H: `DEPENDENCY_READY / PUZZLE_BUILD_READY`; a Copilot Free worker is currently registered as running, so Program Control must not race its owned BUILD leaf.
 - W08-W20 remain dependency-gated except PREBUILD/readiness explicitly allowed by accepted Puzzle governance.
 - W15-00 remains additionally dependent on W02-PB5, W03-F, W07-H and W14-H.
 
@@ -77,6 +68,20 @@ Accepted DAG:
 
 Canonical acceptance evidence: `W05_00_ACCEPTANCE_EVIDENCE_2026-09-01` / `156ni-zWA_ko21_SWFM0KJtYpOaWP-N9TV4am5kPZHzM`.
 
+### W05-A
+
+Accepted candidate HEAD `71d1e2e697c2c6ba5992456afd03dc130e0f6bbd`; controlled merge/main `972c2429de43909ee42c1f77ecc1f4fe1af28faa`; post-merge exact-main Quality `33531398574`, Test Build `33531398619`, Security `33531399282`, Copilot Fabric `33531398888`: SUCCESS.
+
+Drive evidence: `W05_A_ACCEPTANCE_EVIDENCE_2026-09-01` / `1-gcU8ir7_IwZAKS7LdTclgrbfUbDwFhgejUEilB1Odg`.
+
+W05-A remains classifier-only; risk, complexity, modality and classification confidence never create authority.
+
+### W05-C / W05-D
+
+W05-C ReasoningLevel L0-L5 accepted integration is represented in current main by `4bc3759d56a0683acee99821808c50025cf9908a` and its accepted task node. W05-C consumes W04 ExecutionBudget as a non-authoritative projection; reasoning level never elevates permission.
+
+W05-D Confidence Engine accepted integration is represented in current main by `44c064b97f91afdf34c657a629a37f61d2185528` and its accepted task node. Confidence/calibration is decision evidence only and never execution authority.
+
 ### W05-E
 
 PR #169 accepted exact candidate `13d75a7b05d3f6ea7cd9d5f56f669013db44c082`; controlled merge/main `5768f6f77be6695e72c2cf7cae16ae04f12748da`; post-merge Quality `33527659921`, Test Build `33527659888`, Security `33527660602`: SUCCESS.
@@ -85,39 +90,51 @@ Drive evidence: `W05_E_ACCEPTANCE_EVIDENCE_2026-09-01` / `1t6_RcQdJSdOXZQJuMopCZ
 
 W05-E Strategy Registry remains separate from W04 Capability Registry and cannot grant authority.
 
-### W05-A
+### W05-B
 
-Canonical current-main replacement PR #175 superseded stale/held candidates without merging them.
+Accepted router merge/main: `2ef14a35b8fd12e0a75e4f44c144ebebdb6941ad`, after exact accepted-candidate Quality/Test Build/Security and Program Control review.
 
-Accepted candidate base: `edf90ef6974a26179236c4c30cb71f1eda47c72c`.
-Exact accepted candidate HEAD: `71d1e2e697c2c6ba5992456afd03dc130e0f6bbd`.
-Candidate Quality `33531119135`, Test Build `33531119103`, Security `33531119934`, Copilot Fabric `33531119212`: SUCCESS.
+W05-B routes among deterministic/no-AI, model, specialist, computer-use-planning and human strategies using lowest-sufficient reasoning. Route selection, confidence, fallback and model choice never become execution authority.
 
-The candidate Test Build executed the canonical `@aurora/intelligence` workspace typecheck, build and 7/7 W05-A tests. Independent Program Control review recorded `ACCEPT` on the same exact candidate HEAD.
+### W05-F
 
-Controlled merge/main: `972c2429de43909ee42c1f77ecc1f4fe1af28faa`.
-Post-merge exact-main Quality `33531398574`, Test Build `33531398619`, Security `33531399282`, Copilot Fabric `33531398888`: SUCCESS.
+Accepted bounded Agent Runtime merge/main: `ca0dd2053da55a35f151761f0bc474bd07785aba`, after exact-head Quality/Test Build/Security and Program Control risk review.
 
-Drive evidence: `W05_A_ACCEPTANCE_EVIDENCE_2026-09-01` / `1-gcU8ir7_IwZAKS7LdTclgrbfUbDwFhgejUEilB1Odg`.
+W05-F owns bounded worker/pool/lease/heartbeat/reclaim/cancellation semantics and composes W03 durability. Worker ownership, lease state and agent selection are not execution authority.
 
-Accepted W05-A invariants:
+### W05-G
 
-- deterministic task class, modality, bounded complexity, reversibility, risk and classification-confidence evidence;
-- explicit UNKNOWN/insufficient-evidence behavior rather than guessed certainty;
-- tenant/correlation propagation;
-- equivalent normalized inputs converge deterministically;
-- `CLASSIFIER_ONLY_NO_AUTHORITY` is invariant;
-- DECISION_SUPPORT, risk signals, confidence and EXECUTE classification do not mint, widen, validate or replace Policy/Authority/Executor permission;
-- no external side effect or provider/device/workflow runtime is introduced.
+Final outcome: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
 
-Current logical W05 implementation frontier is `{ W05-C, W05-D, W05-F }`. W05-B remains blocked until W05-C and W05-D are also accepted.
+BUILD PR #216; base main `ca0dd2053da55a35f151761f0bc474bd07785aba`; exact final BUILD HEAD `72bee34a338372ecf57853cb29eb4ecba8b13872`; controlled merge/main `cf293ca103bd1e6adfb250bc5186668aa6870d4a`.
+
+Exact BUILD HEAD Quality, Test Build and Security: SUCCESS. Canonical runner executed all 12 targeted W05-G scenarios successfully.
+
+Post-merge exact-main evidence on `cf293ca103bd1e6adfb250bc5186668aa6870d4a`:
+
+- Quality run `33583396659`: SUCCESS.
+- Test Build run `33583396870`: SUCCESS.
+- Security run `33583400102`: SUCCESS.
+
+Accepted W05-G invariants:
+
+- bounded deterministic Observe/Plan/Tool-Plan/Observe/Inspect/Repair/Validate control loop only;
+- no ModelPort, ToolPort, ExecutorPort or provider/device/workflow/local side-effect port;
+- W05-B remains routing source of truth and W05-F remains worker-ownership source of truth;
+- W04 CapabilityPlan and ExecutionBudget are consumed as current non-authoritative projections;
+- planned tool actions are capability-fenced and fixed to `executionBoundary=W07_REQUIRED`;
+- snapshots fix `authorizesExecution=false` and `canInvokeTools=false`;
+- UNKNOWN tool observation escalates; blind repair/retry is forbidden;
+- iteration, elapsed-time, model-call, tool-planning, repair and W04 budget bounds fail closed;
+- tenant/correlation, worker generation, registry, budget, time, cancellation and terminal-state mismatches fail closed;
+- evidence is reference-only and private chain-of-thought is not persisted.
+
+Current logical W05 implementation frontier is `{ W05-H }`. W05-H is BUILD_READY and must benchmark/evaluate accepted W05 behavior without introducing new runtime semantics or W18 adaptive production promotion.
 
 Shared-surface controls remain:
 
 - `packages/intelligence/**` publication/bootstrap surfaces are Program Control-owned;
-- W05-C owns ReasoningLevel L0-L5 and consumes W04 ExecutionBudget rather than redefining it;
-- W05-D owns decomposed confidence/uncertainty/abstention; confidence is never authority;
-- W05-F owns bounded generic worker/agent semantics and composes W03 durability rather than creating a second durability truth;
+- W05-H owns integration/eval/benchmark tests and W05 evidence only;
 - root manifests/barrels/workspace config/lockfiles/CI/CODEOWNERS/cross-package public exports remain Program Control shared surfaces.
 
 ## W07 accepted evidence and frontier
@@ -130,49 +147,29 @@ Accepted DAG:
 
 `W07-F + W07-G -> W07-H`
 
-### W07-00
+### W07-00 / W07-A / W07-D
 
-Final outcome: `COMPLETE_ACCEPTED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-Drive evidence: `W07_00_ACCEPTANCE_EVIDENCE_2026-09-01` / `1vJtJ0BpqH6B1xSodCVZ1MyGvYNiqJYShIs8UMi8d2Xs`.
+W07-00 is `COMPLETE_ACCEPTED / POST_MERGE_EXACT_MAIN_VERIFIED`.
 
-### W07-A
+W07-A PR #170 accepted exact current-main-reconciled candidate `c47ebe44572cc2540c902c43ab252054edb6c726`; controlled merge/main `1bcdb72078dd4d7e89bb92791fb0e14095ffd65b`; post-merge Quality `33528098556`, Test Build `33528098540`, Security `33528099185`: SUCCESS.
 
-PR #170 accepted exact current-main-reconciled candidate `c47ebe44572cc2540c902c43ab252054edb6c726`; controlled merge/main `1bcdb72078dd4d7e89bb92791fb0e14095ffd65b`; post-merge Quality `33528098556`, Test Build `33528098540`, Security `33528099185`: SUCCESS.
+W07-D controlled merge/main: `5318fec80a4e61541cea3690d075d515e5514373`; post-merge exact-main Quality `33534674425`, Test Build `33534674451`, Security `33534675235`: SUCCESS.
 
-Drive evidence: `W07_A_ACCEPTANCE_EVIDENCE_2026-09-01` / `1AOMJlL8q4EIhF6GJcfCn05TGxQIqKZHDA_FllI7N8-M`.
+### W07-B / W07-C / W07-E
 
-Accepted W07-A invariants:
+W07-B accepted current-authority-validation merge/main: `c0ea82a88b1706f87de17884940a3fa246af2ff8`, after exact-head Quality/Test Build/Security and Program Control `ACCEPT_WITH_RECORDED_RISK`. Subsequent hardening `63cb9f17a576e0fa45ea9a4553deb9065714f847` closed fail-closed authority-result binding gaps. The concrete current-authority integration remains an explicit W07-H proof obligation; no alternate Policy Engine or bypass is permitted.
 
-- one canonical target-neutral ActionIntent/Receipt/Evidence family for PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE;
-- old provider compatibility preserved explicitly; conflicting legacy/new representations fail closed;
-- DEVICE/WORKFLOW/LOCAL_SERVICE never fabricate provider identity;
-- target identity/availability is not authority;
-- W14 retains DeviceId/DeviceRef ownership;
-- W08/W09/W14/W15 retain concrete target runtime ownership;
-- receipt/acknowledgement remains distinct from verified external state/readback;
-- no provider/device/workflow runtime or external side effect was introduced by W07-A.
+W07-C accepted execution-safeguards/idempotency-fence merge/main: `6814363507d0199e57e797635b7c2f0c22fc00cb`, after exact-head Quality/Test Build/Security and Program Control review. W03 remains the durability/idempotency source of truth.
 
-### W07-D
+W07-E accepted Receipt/Evidence/readback boundary merge/main: `c0860ac178bc8b34e1f5a34f3d2b9c6c5a138168`, after exact-head Quality/Test Build/Security and Program Control ACCEPT. Receipt/ACK/MATCH remain non-authoritative and cannot self-promote to VERIFIED.
 
-PR #180 accepted exact current-main candidate `2766264c79540dd803d8d7e4ccc9e0ef80e662e4` on accepted executor bootstrap base/main `84a42291dc64d7e0e4d561c18c82420ef5b5111b`.
+### W07-F / W07-G
 
-Candidate Quality `33534237054`, Test Build `33534237072`, Security `33534237900`: SUCCESS. Test Build job `99944482205` compiled the executor leaf and executed 8/8 W07-D tests with zero failures; the cleanup audit reported `canonicalBrokenRelativeRefs=0`.
+W07-F accepted current-main replacement merge: `6383813bfda7cca31440ec3bd529e3e815596e2d`, after fresh Quality/Test Build/Security on the exact semantic HEAD and Program Control ACCEPT. Canonical `EXECUTION_UNCERTAIN` and `RECONCILE_BEFORE_RETRY` semantics are preserved; retry eligibility is not authority.
 
-Controlled merge/main: `5318fec80a4e61541cea3690d075d515e5514373`.
-Post-merge exact-main Quality `33534674425`, Test Build `33534674451`, Security `33534675235`: SUCCESS.
+W07-G accepted current-main replacement merge: `c7a01549abac801915ad161e69a5685a8271f481`, after fresh Quality/Test Build/Security, 69/69 combined Executor tests, cleanup audit and Program Control ACCEPT. Circuit breaker, kill switch and cancellation containment are non-bypassable by model/router/agent output and remain non-authoritative.
 
-Drive evidence: `W07_D_ACCEPTANCE_EVIDENCE_2026-09-01` / `1cr33O-J-FmG7FpEjv5Iptf5uQYKHnv9oE4vmTpDuiLE`.
-
-Accepted W07-D invariants:
-
-- deterministic target-neutral resolution for PROVIDER, DEVICE, WORKFLOW and LOCAL_SERVICE;
-- complete provider identity matching, including optional account reference;
-- tenant mismatch, missing/ambiguous binding, unavailable/degraded/retired state, stale binding, malformed time, incompatible binding/target/ActionIntent and failed generic preconditions all fail closed;
-- target freshness uses an exclusive boundary and malformed/non-RFC3339 time fails as `TARGET_TIME_INVALID`;
-- every success and failure result fixes `authorizesExecution=false`;
-- no PolicyToken/OwnerDecision issuance or widening, provider credential, concrete provider/device/workflow runtime or external side effect is introduced.
-
-Current W07 implementation frontier is `{ W07-B, W07-C, W07-E }`, subject to the global two-code-task ceiling and shared-surface controls. W07-F/G remain gated until W07-B, W07-C and W07-E are accepted in addition to already accepted W07-D; W07-H remains gated on W07-F + W07-G.
+Current logical W07 implementation frontier is `{ W07-H }`. W07-H is BUILD_READY and currently worker-owned/running. It must integrate A-G, bind W03/W04/current-authority foundations, run consumer fixtures and fault injection, execute Risk Gates A-D, and publish dependent-wave surfaces only after exact-head and post-merge verification.
 
 ## Architecture boundaries retained
 
@@ -180,7 +177,7 @@ W03 owns durable event/outbox/inbox/replay/DLQ/timers/leases/workflow truth.
 
 W04 owns Objective/Goal/Task lifecycle, target-neutral Capability Registry/CapabilityPlan, GoalGraph, bounded planner scheduler, Fast/Governed lane planning, ExecutionBudget and curated PlanTemplate/PlanBinding foundations.
 
-W05 owns intelligence classification, reasoning levels, confidence, strategy/routing and bounded agent-worker semantics only. W05 does not own authority, execution, context runtime, concrete provider/device runtime or a second control/durability/capability source of truth.
+W05 owns intelligence classification, reasoning levels, confidence, strategy/routing and bounded agent-worker/inspect-repair semantics only. W05 does not own authority, execution, context runtime, concrete provider/device runtime or a second control/durability/capability source of truth.
 
 W06 owns context runtime.
 
@@ -192,7 +189,7 @@ Core invariants:
 
 - Intelligence != Authority != Execution.
 - Capability != Authority.
-- Plan/Lane/Budget/Template/Strategy/Confidence != Authority.
+- Plan/Lane/Budget/Template/Strategy/Confidence/Worker/Loop != Authority.
 - Fast Lane may optimize strategy but cannot bypass current Policy/Authority/Executor validation.
 - Target availability, model confidence, worker ownership or route selection cannot mint execution permission.
 - Receipt/acknowledgement is not verified external state.
