@@ -6,15 +6,15 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: 'Candidate pull request number'
+        description: "Candidate pull request number"
         required: true
         type: string
       expected_head_sha:
-        description: 'Exact candidate HEAD SHA to review'
+        description: "Exact candidate HEAD SHA to review"
         required: true
         type: string
       expected_main_sha:
-        description: 'Exact canonical main SHA expected during review'
+        description: "Exact canonical main SHA expected during review"
         required: true
         type: string
 
@@ -182,7 +182,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-          COPILOT_SUBAGENT_MAX_CONCURRENT: '2'
+          COPILOT_SUBAGENT_MAX_CONCURRENT: "2"
         shell: bash
         run: |
           set +e
