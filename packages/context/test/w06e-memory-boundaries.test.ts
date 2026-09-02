@@ -97,6 +97,20 @@ test('W06-E fails closed for cross-tenant and over-classified memory candidates'
   assert.deepEqual(overClassified.reasons, ['CLASSIFICATION_EXCEEDED']);
 });
 
+test('W06-E fails closed for runtime-invalid candidate and maximum classifications', () => {
+  const invalidCandidate = validate(candidate('COMPANY', { classification: 'SECRET' as never }));
+  const invalidMaximum = validateMemoryBoundaryCandidate({
+    tenant,
+    maxDataClassification: 'SECRET' as never,
+    candidate: candidate('COMPANY'),
+  });
+
+  assert.equal(invalidCandidate.valid, false);
+  assert.deepEqual(invalidCandidate.reasons, ['CLASSIFICATION_INVALID']);
+  assert.equal(invalidMaximum.valid, false);
+  assert.deepEqual(invalidMaximum.reasons, ['CLASSIFICATION_INVALID']);
+});
+
 test('W06-E prevents one boundary source owner from silently writing another boundary', () => {
   const result = validate(candidate('SEMANTIC', { sourceOwner: 'USER_PROFILE' }));
   assert.equal(result.valid, false);
