@@ -253,6 +253,30 @@ test('W06-G fails closed when speculation would exceed its explicit unit budget'
   assert.equal(result.authorizesExecution, false);
 });
 
+test('W06-G rejects runtime-malformed snapshot shapes without throwing', () => {
+  const packageResult = packageFor();
+  const malformed = {
+    kind: 'ContextSnapshot',
+    authorizesExecution: false,
+    status: 'CURRENT',
+  } as unknown as ContextSnapshot;
+
+  const result = prepareSpeculativeContext({
+    package: packageResult,
+    snapshot: malformed,
+    policyCompatibilityVersion: 'policy-compat:v1',
+    configVersion: 'context:v1',
+    preparedAt: at('2026-09-02T21:41:00Z'),
+    deadlineAt: at('2026-09-02T21:55:00Z'),
+    limits: { maxUnits: 3 },
+  });
+
+  assert.equal(result.valid, false);
+  if (result.valid) return;
+  assert.deepEqual(result.reasons, ['SNAPSHOT_MISMATCH']);
+  assert.equal(result.authorizesExecution, false);
+});
+
 test('W06-G discards prepared work on policy, config, snapshot or cache drift', () => {
   const packageResult = packageFor();
   const snapshot = snapshotFor(packageResult);
@@ -371,7 +395,8 @@ test('W06-G cancellation is replay-safe and cancelled preparation cannot be reus
 
   assert.equal(cancelSpeculativePreparation(cancelled.preparation, signal).status, 'DUPLICATE');
   assert.equal(
-    cancelSpeculativePreparation(cancelled.preparation, cancellation(cancelled.preparation, 9)).status,
+    cancelSpeculativePreparation(cancelled.preparation, cancellation(cancelled.preparation, 9))
+      .status,
     'OUT_OF_ORDER_REJECTED',
   );
   assert.equal(
@@ -390,7 +415,10 @@ test('W06-G cancellation is replay-safe and cancelled preparation cannot be reus
 
 test('W06-G speculation source has no executor/provider/W07 side-effect reachability', async () => {
   const source = await readFile('packages/context/src/speculation/index.ts', 'utf8');
-  assert.doesNotMatch(source, /from ['"][^'"]*(?:executors|providers|workflow|device|w07)[^'"]*['"]/i);
+  assert.doesNotMatch(
+    source,
+    /from ['"][^'"]*(?:executors|providers|workflow|device|w07)[^'"]*['"]/i,
+  );
   assert.doesNotMatch(source, /\b(?:fetch|invoke|execute)\s*\(/i);
   assert.doesNotMatch(source, /authorizesExecution\s*:\s*true/);
 });
