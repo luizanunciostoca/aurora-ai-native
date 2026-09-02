@@ -196,53 +196,50 @@ test('W06-C compiles reproducible ranked context and tracks deterministic exclus
   assert.equal(first.authorizesExecution, false);
 });
 
-test(
-  'W06-C enforces canonical-unit pressure without deleting mandatory package constraints',
-  () => {
-    const adapters = ['source:primary', 'source:secondary'] as const;
-    const q = query(adapters);
-    const result = retrieval(
-      q,
-      [
-        acquiredItem('fact:primary', adapters[0], '2026-09-02T19:55:00Z', {
-          body: 'A'.repeat(256),
-        }),
-        acquiredItem('fact:secondary', adapters[1], '2026-09-02T19:50:00Z', {
-          body: 'B'.repeat(256),
-        }),
-      ],
-      { [adapters[0]]: 9500, [adapters[1]]: 8500 },
-    );
+test('W06-C enforces canonical-unit pressure without deleting mandatory package constraints', () => {
+  const adapters = ['source:primary', 'source:secondary'] as const;
+  const q = query(adapters);
+  const result = retrieval(
+    q,
+    [
+      acquiredItem('fact:primary', adapters[0], '2026-09-02T19:55:00Z', {
+        body: 'A'.repeat(256),
+      }),
+      acquiredItem('fact:secondary', adapters[1], '2026-09-02T19:50:00Z', {
+        body: 'B'.repeat(256),
+      }),
+    ],
+    { [adapters[0]]: 9500, [adapters[1]]: 8500 },
+  );
 
-    const generous = compileMinimalContext({
-      query: q,
-      retrieval: result,
-      limits: { maxItems: 2, maxCanonicalUnits: 100_000 },
-    });
-    assert.equal(generous.valid, true);
-    if (!generous.valid) return;
+  const generous = compileMinimalContext({
+    query: q,
+    retrieval: result,
+    limits: { maxItems: 2, maxCanonicalUnits: 100_000 },
+  });
+  assert.equal(generous.valid, true);
+  if (!generous.valid) return;
 
-    const pressured = compileMinimalContext({
-      query: q,
-      retrieval: result,
-      limits: {
-        maxItems: 2,
-        maxCanonicalUnits: Math.max(1, generous.package.metrics.inputCanonicalUnits - 1),
-      },
-    });
-    assert.equal(pressured.valid, true);
-    if (!pressured.valid) return;
+  const pressured = compileMinimalContext({
+    query: q,
+    retrieval: result,
+    limits: {
+      maxItems: 2,
+      maxCanonicalUnits: Math.max(1, generous.package.metrics.inputCanonicalUnits - 1),
+    },
+  });
+  assert.equal(pressured.valid, true);
+  if (!pressured.valid) return;
 
-    assert.ok(pressured.package.metrics.outputItemCount < 2);
-    assert.ok(
-      pressured.package.excludedSources.some((entry) => entry.reason === 'CANONICAL_UNIT_LIMIT'),
-    );
-    assert.equal(pressured.package.query.purpose.purposeId, 'support.minimal-context');
-    assert.equal(pressured.package.query.jurisdiction.jurisdiction, 'BR');
-    assert.equal(pressured.package.query.consent?.reference, 'consent:subject:w06c');
-    assert.equal(pressured.package.authorizesExecution, false);
-  },
-);
+  assert.ok(pressured.package.metrics.outputItemCount < 2);
+  assert.ok(
+    pressured.package.excludedSources.some((entry) => entry.reason === 'CANONICAL_UNIT_LIMIT'),
+  );
+  assert.equal(pressured.package.query.purpose.purposeId, 'support.minimal-context');
+  assert.equal(pressured.package.query.jurisdiction.jurisdiction, 'BR');
+  assert.equal(pressured.package.query.consent?.reference, 'consent:subject:w06c');
+  assert.equal(pressured.package.authorizesExecution, false);
+});
 
 test('W06-C never partially includes an explicit conflicting fact group', () => {
   const adapters = ['source:conflict-a', 'source:conflict-b', 'source:stable'] as const;
@@ -283,11 +280,9 @@ test('W06-C never partially includes an explicit conflicting fact group', () => 
 test('W06-C rejects ranked evidence that would weaken currentness or subject constraints', () => {
   const adapter = 'source:primary';
   const q = query([adapter]);
-  const base = retrieval(
-    q,
-    [acquiredItem('fact:primary', adapter, '2026-09-02T19:55:00Z')],
-    { [adapter]: 9500 },
-  );
+  const base = retrieval(q, [acquiredItem('fact:primary', adapter, '2026-09-02T19:55:00Z')], {
+    [adapter]: 9500,
+  });
   const item = base.items[0];
   assert.ok(item);
   if (!item) return;
@@ -311,41 +306,36 @@ test('W06-C rejects ranked evidence that would weaken currentness or subject con
   assert.equal(result.authorizesExecution, false);
 });
 
-test(
-  'W06-C canonical measurement rejects accessor-backed payloads without invoking getters',
-  () => {
-    const adapter = 'source:primary';
-    const q = query([adapter]);
-    const base = retrieval(
-      q,
-      [acquiredItem('fact:primary', adapter, '2026-09-02T19:55:00Z')],
-      { [adapter]: 9500 },
-    );
-    const item = base.items[0];
-    assert.ok(item);
-    if (!item) return;
+test('W06-C canonical measurement rejects accessor-backed payloads without invoking getters', () => {
+  const adapter = 'source:primary';
+  const q = query([adapter]);
+  const base = retrieval(q, [acquiredItem('fact:primary', adapter, '2026-09-02T19:55:00Z')], {
+    [adapter]: 9500,
+  });
+  const item = base.items[0];
+  assert.ok(item);
+  if (!item) return;
 
-    let getterCalls = 0;
-    const payload = {} as Record<string, unknown>;
-    Object.defineProperty(payload, 'secret', {
-      enumerable: true,
-      get() {
-        getterCalls += 1;
-        return 'should-not-run';
-      },
-    });
+  let getterCalls = 0;
+  const payload = {} as Record<string, unknown>;
+  Object.defineProperty(payload, 'secret', {
+    enumerable: true,
+    get() {
+      getterCalls += 1;
+      return 'should-not-run';
+    },
+  });
 
-    const result = compileMinimalContext({
-      query: q,
-      retrieval: { ...base, items: [{ ...item, payload }] },
-      limits: { maxItems: 1, maxCanonicalUnits: 100_000 },
-    });
+  const result = compileMinimalContext({
+    query: q,
+    retrieval: { ...base, items: [{ ...item, payload }] },
+    limits: { maxItems: 1, maxCanonicalUnits: 100_000 },
+  });
 
-    assert.equal(result.valid, false);
-    assert.deepEqual(result.reasons, ['INVALID_RANKED_ITEM']);
-    assert.equal(getterCalls, 0);
-  },
-);
+  assert.equal(result.valid, false);
+  assert.deepEqual(result.reasons, ['INVALID_RANKED_ITEM']);
+  assert.equal(getterCalls, 0);
+});
 
 test('W06-C rejects incomplete conflict metadata rather than hiding a peer', () => {
   const adapters = ['source:conflict-a', 'source:conflict-b'] as const;
