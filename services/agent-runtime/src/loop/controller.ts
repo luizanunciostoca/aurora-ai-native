@@ -9,6 +9,7 @@ import type {
   PlannedToolAction,
   StartAdaptiveLoopInput,
   StartAdaptiveLoopResult,
+  W05BRouteProjection,
 } from './types.js';
 
 const TERMINAL_PHASES = new Set<AdaptiveLoopTerminalPhase>([
@@ -21,6 +22,12 @@ const TERMINAL_PHASES = new Set<AdaptiveLoopTerminalPhase>([
 ]);
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9._:-]{1,200}$/;
+
+type SelectedRoute = Extract<W05BRouteProjection, { status: 'SELECTED' }>;
+type AgentRouteFamily = Extract<
+  SelectedRoute['family'],
+  'MODEL' | 'SPECIALIST' | 'COMPUTER_USE_PLANNING'
+>;
 
 function validPositiveSafeInteger(value: number): boolean {
   return Number.isSafeInteger(value) && value > 0;
@@ -47,6 +54,10 @@ function validConfig(config: BoundedAdaptiveLoopConfig): boolean {
     validPositiveSafeInteger(config.maxToolPlanningCalls) &&
     validPositiveSafeInteger(config.maxRepairAttempts)
   );
+}
+
+function isAgentRouteFamily(family: SelectedRoute['family']): family is AgentRouteFamily {
+  return family === 'MODEL' || family === 'SPECIALIST' || family === 'COMPUTER_USE_PLANNING';
 }
 
 function sameContext(
@@ -131,6 +142,16 @@ function copySnapshot(
   };
 }
 
+function transitionTime(snapshot: AdaptiveLoopSnapshot, candidateEpochMs: number): number {
+  if (
+    !validNonNegativeSafeInteger(candidateEpochMs) ||
+    candidateEpochMs < snapshot.lastTransitionEpochMs
+  ) {
+    return snapshot.lastTransitionEpochMs;
+  }
+  return candidateEpochMs;
+}
+
 function terminate(
   snapshot: AdaptiveLoopSnapshot,
   phase: AdaptiveLoopTerminalPhase,
@@ -146,7 +167,7 @@ function terminate(
       phase,
       usage,
       terminalReason: reason,
-      lastTransitionEpochMs: nowEpochMs,
+      lastTransitionEpochMs: transitionTime(snapshot, nowEpochMs),
       lastEvidenceReference: evidenceReference ?? snapshot.lastEvidenceReference,
     }),
   };
@@ -360,7 +381,7 @@ export function startAdaptiveLoop(input: StartAdaptiveLoopInput): StartAdaptiveL
     return { status: 'REJECTED', code: 'INVALID_CONTROL_FRAME' };
   }
   if (
-    !['MODEL', 'SPECIALIST', 'COMPUTER_USE_PLANNING'].includes(route.family) ||
+    !isAgentRouteFamily(route.family) ||
     !validIdentifier(route.strategyId) ||
     !validIdentifier(route.strategyVersion) ||
     !workerUsableForLoop(frame)
