@@ -137,6 +137,8 @@ for (const name of requiredNames) {
     check.workflowPath !== expectedWorkflow.path ||
     check.workflowName !== expectedWorkflow.name ||
     check.workflowEvent !== 'pull_request' ||
+    !/^[0-9a-f]{40}$/.test(check.workflowMainBlobSha || '') ||
+    check.workflowHeadBlobSha !== check.workflowMainBlobSha ||
     !Number.isSafeInteger(check.workflowId) ||
     check.workflowId <= 0 ||
     !Number.isSafeInteger(check.workflowRunId) ||
@@ -177,6 +179,8 @@ const normalized = {
       workflowName: check.workflowName,
       workflowRunId: check.workflowRunId,
       workflowEvent: check.workflowEvent,
+      workflowMainBlobSha: check.workflowMainBlobSha,
+      workflowHeadBlobSha: check.workflowHeadBlobSha,
     }))
     .sort((left, right) => left.name.localeCompare(right.name)),
   blockers: result.blockers.map((item) => item.trim()),

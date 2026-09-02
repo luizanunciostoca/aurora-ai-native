@@ -40,9 +40,9 @@ Before review:
 - live canonical main must equal the requested/resolved main SHA;
 - the latest exact-head `quality`, `test-build` and `security-gate` checks from GitHub Actions must each be completed successfully.
 
-The minimum CI evidence is resolved deterministically from the GitHub Checks API before the model review and is embedded in the normalized acceptance envelope. Each same-name check is then traced to its GitHub Actions run and must originate from the canonical workflow path and workflow name for Quality, Test Build or Security. A candidate-created workflow with a spoofed job name cannot satisfy this preflight. The acceptance agent may require additional scope-specific checks, but it cannot waive these baseline gates.
+The minimum CI evidence is resolved deterministically from the GitHub Checks API before the model review and is embedded in the normalized acceptance envelope. Each same-name check is then traced to its GitHub Actions run and must originate from the canonical workflow path and workflow name for Quality, Test Build or Security. The workflow file blob at the candidate HEAD must also be identical to the corresponding exact-main blob. A candidate-created job or a candidate-modified canonical workflow cannot satisfy this preflight. The acceptance agent may require additional scope-specific checks, but it cannot waive these baseline gates.
 
-Before publishing the result, HEAD and main are checked again. Any mismatch prevents evidence publication.
+Immediately after the model review, the workflow revalidates HEAD, main and the latest exact check runs before it validates or uploads the result. Before publishing the result, HEAD and main are checked again. Any mismatch prevents evidence publication.
 
 A later push or main movement makes the published acceptance evidence stale for merge until re-reconciliation under normal Aurora rules.
 
@@ -50,7 +50,11 @@ A later push or main movement makes the published acceptance evidence stale for 
 
 The review job receives only read permissions for repository/PR/issues/actions/checks/statuses plus `copilot-requests: write`, which is necessary to invoke Copilot CLI. Checkout credentials are not persisted.
 
-The prompt explicitly prohibits repository mutation, commits, pushes, issue closure, label mutation, task acceptance and merge. After the agent exits, the workflow requires a completely clean `git status`; any repository mutation fails the review.
+The untrusted candidate checkout is never added as a Copilot working directory because additional directories can contribute their own agent/skill configuration. Instead, deterministic trusted code renders a bounded exact-main-to-exact-HEAD patch plus binding metadata under `.aurora-review-input/`, hashes both files and makes the bundle non-writable before the model starts. Candidate code, PR bodies, comments, links and instructions are review data, never trusted instructions.
+
+The model cannot access the system temporary directory and cannot use shell, file-write or subagent tools. GitHub runner command-file variables are removed from the Copilot process environment, raw model output is not replayed into the workflow log command channel, and remote session export/control is disabled. The required-check envelope and static-review manifest are SHA-256 bound before review and revalidated immediately afterward.
+
+The prompt explicitly prohibits repository mutation, commits, pushes, issue closure, label mutation, task acceptance and merge. After the agent exits, the workflow requires the exact expected review bundle as the only untracked governance path and a completely clean candidate checkout; any mutation or hash drift fails the review.
 
 ## Machine decision contract
 
@@ -69,10 +73,10 @@ The validator requires:
 - blockers are an array of strings;
 - summary is non-empty;
 - `ACCEPT_RECOMMENDED` is valid only when A/B/C/D are all `PASS` and blockers are empty;
-- the normalized `aurora.acceptance.v1` envelope contains the exact repository, PR, HEAD, main and deterministic baseline-check evidence, including canonical workflow ID/path/name/run/event provenance;
+- the normalized `aurora.acceptance.v1` envelope contains the exact repository, PR, HEAD, main and deterministic baseline-check evidence, including canonical workflow ID/path/name/run/event and equal main/HEAD blob provenance;
 - `REWORK_REQUIRED` must contain a blocker or at least one failed Risk Gate.
 
-The Copilot CLI is installed at the reviewed fixed version `1.0.82`; mutable `latest` resolution is prohibited in this privileged workflow. Artifact actions are pinned to exact commits.
+The Copilot CLI is installed at the reviewed fixed version `1.0.82` and its reported version is checked before use; mutable `latest` resolution is prohibited in this privileged workflow. Artifact actions are pinned to exact commits.
 
 Malformed or inconsistent model output fails closed and produces no acceptance evidence comment.
 
@@ -102,13 +106,14 @@ Fail closed on:
 - stale PR HEAD;
 - stale main;
 - closed, draft, forked or non-main PR;
-- missing, duplicated, stale, non-GitHub-Actions, failed or wrong-workflow baseline check;
+- missing, duplicated, stale, non-GitHub-Actions, failed, wrong-workflow or candidate-modified-workflow baseline check;
 - repository/PR binding mismatch;
 - Copilot CLI failure;
-- repository mutation by reviewer;
+- exact input hash drift or repository mutation by reviewer;
+- any attempt to require shell, write, subagent, temporary-directory or broader filesystem access;
 - missing/malformed decision marker;
 - output HEAD/main mismatch;
 - `ACCEPT_RECOMMENDED` with failed gate or blocker;
 - evidence publication after HEAD/main drift.
 
-Full model/session output is retained as a workflow artifact for audit. The PR comment contains only normalized decision evidence and the workflow run reference.
+Full model output is retained as a workflow artifact for audit after successful validation. It is not replayed raw into the Actions command channel. The PR comment contains only normalized decision evidence and the workflow run reference.

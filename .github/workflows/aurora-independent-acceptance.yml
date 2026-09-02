@@ -119,9 +119,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Require deterministic exact-head baseline gates
+        id: baseline_gates
         env:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_HEAD: ${{ needs.validate-request.outputs.expected_head }}
+          EXPECTED_MAIN: ${{ needs.validate-request.outputs.expected_main }}
         shell: bash
         run: |
           set -euo pipefail
@@ -175,6 +177,18 @@ jobs:
                 ;;
             esac
 
+            workflow_main_blob="$(
+              git -C candidate rev-parse --verify "${EXPECTED_MAIN}:${expected_workflow_path}"
+            )"
+            workflow_head_blob="$(
+              git -C candidate rev-parse --verify "${EXPECTED_HEAD}:${expected_workflow_path}"
+            )"
+            [[ "$workflow_main_blob" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$workflow_head_blob" =~ ^[0-9a-f]{40}$ ]]
+            test "$(git -C candidate cat-file -t "$workflow_main_blob")" = 'blob'
+            test "$(git -C candidate cat-file -t "$workflow_head_blob")" = 'blob'
+            test "$workflow_head_blob" = "$workflow_main_blob"
+
             run_json="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
             test "$(jq -r '.head_sha' <<<"$run_json")" = "$EXPECTED_HEAD"
             test "$(jq -r '.event' <<<"$run_json")" = 'pull_request'
@@ -186,6 +200,8 @@ jobs:
             jq -n \
               --argjson check "$check" \
               --argjson run "$run_json" \
+              --arg workflowMainBlobSha "$workflow_main_blob" \
+              --arg workflowHeadBlobSha "$workflow_head_blob" \
               '{
                 name: $check.name,
                 headSha: $check.head_sha,
@@ -198,7 +214,9 @@ jobs:
                 workflowPath: $run.path,
                 workflowName: $run.name,
                 workflowRunId: $run.id,
-                workflowEvent: $run.event
+                workflowEvent: $run.event,
+                workflowMainBlobSha: $workflowMainBlobSha,
+                workflowHeadBlobSha: $workflowHeadBlobSha
               }' >> /tmp/aurora-required-check-lines.jsonl
           done
 
@@ -207,6 +225,10 @@ jobs:
             exactHead: $head,
             requiredChecks: sort_by(.name)
           }' /tmp/aurora-required-check-lines.jsonl > /tmp/aurora-required-checks.json
+
+          required_checks_sha256="$(sha256sum /tmp/aurora-required-checks.json | cut -d' ' -f1)"
+          [[ "$required_checks_sha256" =~ ^[0-9a-f]{64}$ ]]
+          echo "required_checks_sha256=$required_checks_sha256" >> "$GITHUB_OUTPUT"
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -215,6 +237,75 @@ jobs:
         run: |
           npm install --global @github/copilot@1.0.82
           copilot --version > /tmp/aurora-copilot-version.txt
+          grep -Fxq 'GitHub Copilot CLI 1.0.82.' /tmp/aurora-copilot-version.txt
+      - name: Build bounded static candidate review bundle
+        id: review_bundle
+        env:
+          EXPECTED_HEAD: ${{ needs.validate-request.outputs.expected_head }}
+          EXPECTED_MAIN: ${{ needs.validate-request.outputs.expected_main }}
+          PR_NUMBER: ${{ needs.validate-request.outputs.pr_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          review_dir='governance/.aurora-review-input'
+          mkdir -p "$review_dir"
+
+          test "$(git -C governance rev-parse HEAD)" = "$EXPECTED_MAIN"
+          test "$(git -C candidate rev-parse HEAD)" = "$EXPECTED_HEAD"
+          git -C candidate cat-file -e "${EXPECTED_MAIN}^{commit}"
+          git -C candidate cat-file -e "${EXPECTED_HEAD}^{commit}"
+
+          git -C candidate diff \
+            --no-ext-diff \
+            --no-textconv \
+            --binary \
+            --full-index \
+            "$EXPECTED_MAIN...$EXPECTED_HEAD" \
+            > "$review_dir/candidate.patch"
+
+          changed_paths="$(
+            git -C candidate diff \
+              --no-ext-diff \
+              --no-textconv \
+              --name-only \
+              -z \
+              "$EXPECTED_MAIN...$EXPECTED_HEAD" |
+              jq -Rs 'split("\u0000") | map(select(length > 0))'
+          )"
+          changed_count="$(jq 'length' <<<"$changed_paths")"
+          patch_bytes="$(wc -c < "$review_dir/candidate.patch")"
+          test "$changed_count" -ge 1
+          test "$changed_count" -le 2000
+          test "$patch_bytes" -ge 1
+          test "$patch_bytes" -le 8000000
+
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --argjson prNumber "$PR_NUMBER" \
+            --arg exactHead "$EXPECTED_HEAD" \
+            --arg exactMain "$EXPECTED_MAIN" \
+            --argjson changedPaths "$changed_paths" \
+            --argjson patchBytes "$patch_bytes" \
+            '{
+              schemaVersion: "aurora.static-review-input.v1",
+              repository: $repository,
+              prNumber: $prNumber,
+              exactHead: $exactHead,
+              exactMain: $exactMain,
+              changedPaths: $changedPaths,
+              patchBytes: $patchBytes
+            }' > "$review_dir/review-metadata.json"
+
+          (
+            cd "$review_dir"
+            sha256sum candidate.patch review-metadata.json > SHA256SUMS
+          )
+          manifest_sha256="$(sha256sum "$review_dir/SHA256SUMS" | cut -d' ' -f1)"
+          [[ "$manifest_sha256" =~ ^[0-9a-f]{64}$ ]]
+          echo "manifest_sha256=$manifest_sha256" >> "$GITHUB_OUTPUT"
+
+          find "$review_dir" -type f -exec chmod 0444 {} +
+          chmod 0555 "$review_dir"
       - name: Render governed independent acceptance prompt from trusted main
         run: >-
           node governance/tools/copilot/acceptance-review-prompt.mjs
@@ -229,32 +320,90 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-          COPILOT_SUBAGENT_MAX_CONCURRENT: '2'
         shell: bash
         run: |
           set +e
-          copilot \
+          env \
+            -u GITHUB_ENV \
+            -u GITHUB_OUTPUT \
+            -u GITHUB_PATH \
+            -u GITHUB_STEP_SUMMARY \
+            -u GITHUB_STATE \
+            copilot \
             --agent='aurora-acceptance' \
             --model=auto \
             --mode=autopilot \
             --max-autopilot-continues=8 \
             --allow-all-tools \
-            --allow-all-paths \
+            --excluded-tools shell task edit create str_replace_editor apply_patch \
+            --deny-tool shell write task \
+            --disallow-temp-dir \
+            --no-bash-env \
             --no-ask-user \
+            --no-auto-update \
+            --no-remote \
+            --no-remote-export \
             --stream=off \
-            --share=/tmp/aurora-acceptance-session.md \
             -p "$(cat /tmp/aurora-acceptance-prompt.txt)" \
             > /tmp/aurora-acceptance-output.txt 2>&1
           status=$?
           set -e
-          cat /tmp/aurora-acceptance-output.txt
           test "$status" = '0'
-      - name: Prove reviewer did not mutate trusted or candidate checkout
+      - name: Prove reviewer did not mutate exact inputs or either checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.validate-request.outputs.pr_number }}
+          EXPECTED_HEAD: ${{ needs.validate-request.outputs.expected_head }}
+          EXPECTED_MAIN: ${{ needs.validate-request.outputs.expected_main }}
+          REQUIRED_CHECKS_SHA256: ${{ steps.baseline_gates.outputs.required_checks_sha256 }}
+          REVIEW_MANIFEST_SHA256: ${{ steps.review_bundle.outputs.manifest_sha256 }}
         shell: bash
         run: |
           set -euo pipefail
-          test -z "$(git -C governance status --porcelain)"
-          test -z "$(git -C candidate status --porcelain)"
+          [[ "$REQUIRED_CHECKS_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$REVIEW_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(sha256sum /tmp/aurora-required-checks.json | cut -d' ' -f1)" = "$REQUIRED_CHECKS_SHA256"
+          test "$(sha256sum governance/.aurora-review-input/SHA256SUMS | cut -d' ' -f1)" = "$REVIEW_MANIFEST_SHA256"
+          (
+            cd governance/.aurora-review-input
+            sha256sum --check --strict SHA256SUMS
+          )
+          test "$(git -C governance status --porcelain --untracked-files=normal)" = '?? .aurora-review-input/'
+          test -z "$(git -C candidate status --porcelain --untracked-files=all)"
+
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r '.state' <<<"$pr_json")" = 'open'
+          test "$(jq -r '.base.ref' <<<"$pr_json")" = 'main'
+          test "$(jq -r '.head.repo.full_name // empty' <<<"$pr_json")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r '.draft' <<<"$pr_json")" = 'false'
+          test "$(jq -r '.head.sha' <<<"$pr_json")" = "$EXPECTED_HEAD"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')" = "$EXPECTED_MAIN"
+
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/commits/${EXPECTED_HEAD}/check-runs?filter=latest&per_page=100" \
+            > /tmp/aurora-current-check-runs.json
+          for required in quality test-build security-gate; do
+            evidence_details_url="$(
+              jq -r --arg required "$required" \
+                '.requiredChecks[] | select(.name == $required) | .detailsUrl' \
+                /tmp/aurora-required-checks.json
+            )"
+            current_count="$(
+              jq --arg required "$required" \
+                --arg head "$EXPECTED_HEAD" \
+                --arg details "$evidence_details_url" \
+                '[.check_runs[] | select(
+                  .name == $required and
+                  .head_sha == $head and
+                  .app.slug == "github-actions" and
+                  .status == "completed" and
+                  .conclusion == "success" and
+                  .details_url == $details
+                )] | length' /tmp/aurora-current-check-runs.json
+            )"
+            test "$current_count" = '1'
+          done
       - name: Validate machine-readable exact-head decision with trusted validator
         shell: bash
         run: >-
@@ -275,9 +424,6 @@ jobs:
           cp /tmp/aurora-acceptance-result.json /tmp/aurora-acceptance-artifact/acceptance-result.json
           cp /tmp/aurora-required-checks.json /tmp/aurora-acceptance-artifact/required-checks.json
           cp /tmp/aurora-copilot-version.txt /tmp/aurora-acceptance-artifact/copilot-version.txt
-          if test -f /tmp/aurora-acceptance-session.md; then
-            cp /tmp/aurora-acceptance-session.md /tmp/aurora-acceptance-artifact/acceptance-session.md
-          fi
           printf '%s\n' '${{ needs.validate-request.outputs.expected_head }}' > /tmp/aurora-acceptance-artifact/exact-head.txt
           printf '%s\n' '${{ needs.validate-request.outputs.expected_main }}' > /tmp/aurora-acceptance-artifact/exact-main.txt
       - name: Upload independent acceptance evidence
