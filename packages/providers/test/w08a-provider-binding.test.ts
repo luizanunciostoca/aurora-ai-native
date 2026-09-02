@@ -23,7 +23,9 @@ const TENANT_B = 'ten_01JTESTTENANTB000000000000' as TenantId;
 const ACCOUNT = 'act_123' as ProviderExternalId;
 const TARGET = 'page_456' as ProviderExternalId;
 
-function binding(overrides: Partial<ProviderBindingRecord> = {}): ProviderBindingRecord {
+function binding(
+  overrides: Partial<ProviderBindingRecord> = {},
+): ProviderBindingRecord {
   return {
     kind: 'ProviderBindingRecord',
     schemaVersion: VERSION,
@@ -125,7 +127,11 @@ test('W08-A fails closed on tenant/provider/account/target mismatch without cros
       candidates: [binding()],
     });
     assert.deepEqual(
-      { ok: result.ok, error: result.ok ? null : result.error, authority: result.authorizesExecution },
+      {
+        ok: result.ok,
+        error: result.ok ? null : result.error,
+        authority: result.authorizesExecution,
+      },
       { ok: false, error: 'BINDING_NOT_FOUND', authority: false },
       scenario.name,
     );
@@ -136,7 +142,10 @@ test('W08-A rejects duplicate, inactive, revoked and stale exact bindings', () =
   const duplicate = resolveProviderBinding({
     tenant: { tenantId: TENANT_A },
     executionTarget: providerTarget(),
-    candidates: [binding(), binding({ bindingReference: 'provider-binding-meta-page-2' })],
+    candidates: [
+      binding(),
+      binding({ bindingReference: 'provider-binding-meta-page-2' }),
+    ],
   });
   assert.equal(duplicate.ok, false);
   if (!duplicate.ok) assert.equal(duplicate.error, 'BINDING_AMBIGUOUS');
@@ -173,9 +182,16 @@ test('W08-A requires a PROVIDER target with an explicit account reference', () =
   assert.equal(nonProvider.ok, false);
   if (!nonProvider.ok) assert.equal(nonProvider.error, 'NON_PROVIDER_TARGET');
 
+  const noAccountTarget: ProviderExecutionTargetReference = {
+    schemaVersion: VERSION,
+    kind: 'PROVIDER',
+    provider: 'META',
+    targetType: 'PAGE',
+    targetReference: TARGET,
+  };
   const noAccount = resolveProviderBinding({
     tenant: { tenantId: TENANT_A },
-    executionTarget: providerTarget({ accountReference: undefined }),
+    executionTarget: noAccountTarget,
     candidates: [binding()],
   });
   assert.equal(noAccount.ok, false);
@@ -191,7 +207,10 @@ test('W08-A rejects malformed, accessor, inherited and secret-bearing binding ob
   });
 
   const inherited = Object.assign(Object.create({ injected: true }), binding());
-  const secretBearing = { ...binding(), apiToken: 'must-not-enter-binding-shape' };
+  const secretBearing = {
+    ...binding(),
+    apiToken: 'must-not-enter-binding-shape',
+  };
 
   for (const candidate of [accessor, inherited, secretBearing]) {
     const result = resolveProviderBinding({
@@ -209,10 +228,13 @@ test('W08-A rejects malformed, accessor, inherited and secret-bearing binding ob
 });
 
 test('W08-A preserves provider-owned IDs as opaque external references even when they resemble Aurora IDs', () => {
-  const canonicalLookingExternal = 'ten_01JLOOKSLIKECANONICAL0000000' as ProviderExternalId;
+  const canonicalLookingExternal =
+    'ten_01JLOOKSLIKECANONICAL0000000' as ProviderExternalId;
   const result = resolveProviderBinding({
     tenant: { tenantId: TENANT_A },
-    executionTarget: providerTarget({ targetReference: canonicalLookingExternal }),
+    executionTarget: providerTarget({
+      targetReference: canonicalLookingExternal,
+    }),
     candidates: [binding({ targetReference: canonicalLookingExternal })],
   });
 
