@@ -15,6 +15,9 @@ const CLASSIFICATION_ORDER: Readonly<Record<DataClassification, number>> = {
   RESTRICTED: 3,
 };
 
+const RFC3339_PATTERN =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+
 export const MEMORY_BOUNDARY_DESCRIPTORS: Readonly<
   Record<MemoryBoundaryKind, MemoryBoundaryDescriptor>
 > = Object.freeze({
@@ -113,9 +116,8 @@ function nonEmpty(value: unknown): value is string {
 }
 
 function validTimestamp(value: string): boolean {
-  if (!nonEmpty(value)) return false;
-  const epoch = Date.parse(value);
-  return Number.isFinite(epoch) && value.includes('T');
+  if (!RFC3339_PATTERN.test(value)) return false;
+  return Number.isFinite(Date.parse(value));
 }
 
 function pushUnique(
