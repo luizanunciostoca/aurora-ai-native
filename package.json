@@ -28,7 +28,7 @@
     "quality": "node ./tools/quality/run.mjs all",
     "test": "node ./tools/test/run-tests.mjs && node ./tools/workspace/run-task.mjs test",
     "test:smoke": "node ./tools/test/run-tests.mjs",
-    "build": "node ./tools/workspace/run-task.mjs build && tsc -p services/executors/tsconfig.build.json && tsc -p services/agent-runtime/tsconfig.build.json && tsc -p packages/context/tsconfig.build.json",
+    "build": "node ./tools/workspace/run-task.mjs build && tsc -p services/executors/tsconfig.build.json && tsc -p services/agent-runtime/tsconfig.build.json && tsc -p packages/context/tsconfig.build.json && tsc -p packages/providers/tsconfig.build.json",
     "audit:cleanup": "node ./tools/audit/repository-cleanup-audit.mjs"
   },
   "devDependencies": {
