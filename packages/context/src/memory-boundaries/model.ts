@@ -119,6 +119,13 @@ function validTimestamp(value: string): boolean {
   return Number.isFinite(Date.parse(value));
 }
 
+function classificationRank(value: unknown): number | undefined {
+  if (typeof value !== 'string' || !Object.prototype.hasOwnProperty.call(CLASSIFICATION_ORDER, value)) {
+    return undefined;
+  }
+  return CLASSIFICATION_ORDER[value as DataClassification];
+}
+
 function pushUnique(
   reasons: MemoryBoundaryValidationReason[],
   reason: MemoryBoundaryValidationReason,
@@ -153,12 +160,15 @@ export function validateMemoryBoundaryCandidate(
   if (request.candidate.sourceOwner !== descriptor.sourceOfTruthOwner) {
     pushUnique(reasons, 'SOURCE_OWNER_MISMATCH');
   }
-  if (
-    CLASSIFICATION_ORDER[request.candidate.classification] >
-    CLASSIFICATION_ORDER[request.maxDataClassification]
-  ) {
+
+  const candidateClassificationRank = classificationRank(request.candidate.classification);
+  const maxClassificationRank = classificationRank(request.maxDataClassification);
+  if (candidateClassificationRank === undefined || maxClassificationRank === undefined) {
+    pushUnique(reasons, 'CLASSIFICATION_INVALID');
+  } else if (candidateClassificationRank > maxClassificationRank) {
     pushUnique(reasons, 'CLASSIFICATION_EXCEEDED');
   }
+
   if (!nonEmpty(request.candidate.sourceReference)) {
     pushUnique(reasons, 'SOURCE_REFERENCE_REQUIRED');
   }
