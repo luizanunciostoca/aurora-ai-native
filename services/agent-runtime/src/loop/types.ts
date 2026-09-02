@@ -111,6 +111,7 @@ export type AdaptiveLoopTerminalReason =
   | 'ROUTE_ABSTAINED'
   | 'ROUTE_NOT_AGENT_SUITABLE'
   | 'CONTROL_FRAME_INVALID'
+  | 'WORKER_OWNERSHIP_CHANGED'
   | 'CAPABILITY_PLAN_BLOCKED'
   | 'W04_BUDGET_STOP'
   | 'LOCAL_ITERATION_LIMIT'
@@ -132,6 +133,8 @@ export interface AdaptiveLoopSnapshot {
   readonly loopId: string;
   readonly tenant: TenantContext;
   readonly correlation: CorrelationContext;
+  readonly workerTaskId: string;
+  readonly workerGeneration: number;
   readonly phase: AdaptiveLoopPhase;
   readonly strategy: {
     readonly family: 'MODEL' | 'SPECIALIST' | 'COMPUTER_USE_PLANNING';
