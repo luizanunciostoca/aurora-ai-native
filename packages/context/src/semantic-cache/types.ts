@@ -72,11 +72,7 @@ export type SemanticCacheCreateResult =
     }>;
 
 export type SemanticCacheEvaluationStatus =
-  | 'HIT'
-  | 'MISS'
-  | 'STALE_REJECTED'
-  | 'INVALIDATED_REJECTED'
-  | 'INCOMPATIBLE_REJECTED';
+  'HIT' | 'MISS' | 'STALE_REJECTED' | 'INVALIDATED_REJECTED' | 'INCOMPATIBLE_REJECTED';
 
 export interface SemanticCacheEvaluationRequest {
   readonly query: ContextQuery;
