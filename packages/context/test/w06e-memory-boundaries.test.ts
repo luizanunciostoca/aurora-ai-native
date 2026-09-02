@@ -122,7 +122,8 @@ test('W06-E requires source identity, provenance and valid observed time', () =>
 test('W06-E requires governed retention references only for boundaries that own governed retention', () => {
   for (const boundary of ['EPISODIC', 'SEMANTIC', 'USER'] as const) {
     const base = candidate(boundary);
-    const { retentionPolicyReference: _retention, ...withoutRetention } = base;
+    const { retentionPolicyReference, ...withoutRetention } = base;
+    assert.equal(typeof retentionPolicyReference, 'string');
     const result = validate(withoutRetention as MemoryBoundaryCandidate);
     assert.equal(result.valid, false);
     assert.deepEqual(result.reasons, ['RETENTION_POLICY_REQUIRED']);
