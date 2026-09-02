@@ -16,7 +16,7 @@ import type {
   W03LeaseReleaseResult,
 } from '../src/runtime/index.js';
 
-const tenant = { tenantId: 'ten_01K0M0M0M0M0M0M0M0M0M0M0M0M0' as TenantId };
+const tenant = { tenantId: 'ten_01K0M0M0M0M0M0M0M0M0M0M0M0M0M0' as TenantId };
 const correlation = {
   correlationId: 'cor_01K0M0M0M0M0M0M0M0M0M0M0M0M1' as CorrelationId,
 };
@@ -263,6 +263,58 @@ test('acquire port failure becomes LEASE_UNCERTAIN instead of allowing a blind d
   assert.equal(blindClaim.code, 'INVALID_STATE');
   const reconciled = await runtime.reclaim('task:a', 'owner:b', 130);
   assert.equal(reconciled.code, 'RECLAIMED');
+});
+
+test('LEASE_UNCERTAIN reserves capacity while allowing self-reclaim reconciliation', async () => {
+  let acquireCalls = 0;
+  let heartbeatCalls = 0;
+  const runtime = pool(
+    leasePort({
+      acquire: async (input) => {
+        acquireCalls += 1;
+        return acquired(input);
+      },
+      heartbeat: async () => {
+        heartbeatCalls += 1;
+        throw new Error('heartbeat result unknown after durable boundary');
+      },
+    }),
+    1,
+    4,
+  );
+  runtime.submit(task('task:a'), 100);
+  runtime.submit(task('task:b'), 100);
+
+  const claimed = await runtime.claim('task:a', 'owner:a', 110);
+  assert.equal(claimed.code, 'CLAIMED');
+  assert.equal(claimed.activeWorkers, 1);
+
+  const uncertain = await runtime.heartbeat('task:a', 'owner:a', 120);
+  assert.equal(uncertain.code, 'LEASE_PORT_ERROR');
+  assert.equal(uncertain.record?.state, 'LEASE_UNCERTAIN');
+  assert.equal(uncertain.record?.ownerPresent, true);
+  assert.equal(uncertain.activeWorkers, 1);
+  assert.equal(runtime.activeWorkerCount(), 1);
+  assert.equal(heartbeatCalls, 1);
+
+  const blocked = await runtime.claim('task:b', 'owner:b', 121);
+  assert.equal(blocked.code, 'WORKER_CAPACITY_REACHED');
+  assert.equal(blocked.record?.state, 'PENDING');
+  assert.equal(blocked.activeWorkers, 1);
+
+  const reconciled = await runtime.reclaim('task:a', 'owner:a-reconciled', 130);
+  assert.equal(reconciled.code, 'RECLAIMED');
+  assert.equal(reconciled.record?.state, 'ACTIVE');
+  assert.equal(reconciled.activeWorkers, 1);
+  assert.equal(acquireCalls, 2);
+
+  const completed = await runtime.complete('task:a', 'owner:a-reconciled', 140);
+  assert.equal(completed.code, 'COMPLETED');
+  assert.equal(completed.activeWorkers, 0);
+
+  const secondClaim = await runtime.claim('task:b', 'owner:b', 150);
+  assert.equal(secondClaim.code, 'CLAIMED');
+  assert.equal(secondClaim.activeWorkers, 1);
 });
 
 test('cancellation during CLAIMING releases a late acquired lease using cancellation time', async () => {
