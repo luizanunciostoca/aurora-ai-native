@@ -13,7 +13,7 @@ Verified live main for this status candidate: `5715ffa4e9d4cd628c1f6d4d6e7a3410e
 5. Risk & Architecture Validation Framework v1.0 is mandatory for W03+.
 6. Historical/superseded/salvage material is provenance/reference only.
 
-No prompt, task node, PREBUILD artifact, draft/open PR, agent/model output, green CI on a stale SHA, cache hit or reference source releases a dependency by itself. Historical detail intentionally omitted from this current-state summary remains preserved in Git history, accepted PRs and Drive evidence.
+No prompt, task node, PREBUILD artifact, draft/open PR, agent/model output, green CI on a stale SHA, cache hit or reference source releases a dependency by itself. A candidate HEAD change invalidates the previous candidate's CI/review evidence for acceptance.
 
 ## Current canonical implementation baseline
 
@@ -29,22 +29,22 @@ Accepted baseline:
 - W05: `COMPLETE_ACCEPTED` through W05-H.
 - W06-00: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
 - W06-A: `COMPLETE_ACCEPTED_MERGED`; accepted candidate `d81a345e0d315864a59ae519ad9c599c0e583d87`, controlled merge/current main `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`.
-- W07-00/A/B/C/D/E/F/G/H: `COMPLETE_ACCEPTED`; W07 is complete. W07-H was accepted through canonical PR #228 and the accepted W07 integration main preceding W06-A was `3bf15c8d09e01be68bc5a4de1cd04defcb8b5025`.
+- W07-00/A/B/C/D/E/F/G/H: `COMPLETE_ACCEPTED`; W07 is complete. Canonical W07-H acceptance is PR #228.
 
 Open candidates are not accepted dependencies until independent acceptance and controlled merge.
 
 ## Current execution frontier
 
-| Node | Current state | Exact candidate / evidence | Dependency effect |
-| --- | --- | --- | --- |
-| W06-B | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #235, exact HEAD `dd1661a44c8f783a49bb8a53e1b2ae707a5fbe32`; Quality `33602802668`, Test Build `33602802986`, Security `33602802995`: SUCCESS; technical Risk Gates A-D PASS | W06-C remains blocked until W06-B is independently accepted and merged |
-| W06-E | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #232, exact HEAD `312318b8fd3e80b1e9f911d8bb3c6208d2c6a440`; Quality `33599675274`, Test Build `33599675284`, Security `33599675691`: SUCCESS; technical Risk Gates A-D PASS | contributes with accepted W06-C to release W06-D and W06-F |
-| W08-00 | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #236, exact HEAD `1fb765cd82a40f3a07522614b9b60c6be846e4b0`; Quality `33606511193`, Test Build `33606511110`, Security `33606511683`: SUCCESS | acceptance releases W08-A and W08-B only |
-| W09-00 | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #238, exact HEAD `6c8c4acd7713ed00ce5300833d82896c3b8804c0`; Quality `33607285467`, Test Build `33607285457`, Security `33607286177`: SUCCESS | acceptance releases W09-A only |
-| W10-00 | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #239, exact HEAD `b38e2319ffd0d21aaedc4e7315658d4a26ed22ba`; Quality `33608843176`, Test Build `33608843154`, Security `33608843770`: SUCCESS | acceptance releases W10-A only |
-| W14-00 | `BUILD_COMPLETE / ACCEPTANCE_PENDING` | PR #240, exact HEAD `0b2cb9ec7eb13f3e973aee930d50507870dd699e`; Quality `33608863473`, Test Build `33608863487`, Security `33608863938`: SUCCESS | acceptance releases W14-A and W14-D only; DP3 remains closed through W14-H |
+- **W06-B — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #235, exact HEAD `1b10bed145813b73a401d6a3c5256c0335ae0d96`; Quality `33648034436`, Test Build `33648034207`, Security `33648036132`: SUCCESS; exact-head Program Control technical re-review records Risk Gates A-D PASS as COMMENT only. The current candidate also fails closed on inherited/accessor-backed retrieval policy records. W06-C remains blocked until W06-B is independently accepted and merged.
+- **W06-E — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #232, exact HEAD `1afd4cbaf4a45425c3a9d15f4ad36f117556fb59`; Quality `33647897538`, Test Build `33647897474`, Security `33647898021`: SUCCESS; exact-head Program Control technical re-review records Risk Gates A-D PASS as COMMENT only. The current candidate fails closed on inherited memory-boundary keys and non-string timestamp coercion. W06-E contributes with accepted W06-C to the later W06-D/F join.
+- **W08-00 — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #236, exact HEAD `1fb765cd82a40f3a07522614b9b60c6be846e4b0`; Quality `33606511193`, Test Build `33606511110`, Security `33606511683`: SUCCESS. Acceptance releases W08-A and W08-B only.
+- **W09-00 — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #238, exact HEAD `6c8c4acd7713ed00ce5300833d82896c3b8804c0`; Quality `33607285467`, Test Build `33607285457`, Security `33607286177`: SUCCESS. Acceptance releases W09-A only.
+- **W10-00 — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #239, exact HEAD `b38e2319ffd0d21aaedc4e7315658d4a26ed22ba`; Quality `33608843176`, Test Build `33608843154`, Security `33608843770`: SUCCESS. Acceptance releases W10-A only.
+- **W14-00 — `BUILD_COMPLETE / ACCEPTANCE_PENDING`**: PR #240, exact HEAD `0b2cb9ec7eb13f3e973aee930d50507870dd699e`; Quality `33608863473`, Test Build `33608863487`, Security `33608863938`: SUCCESS. Acceptance releases W14-A and W14-D only; Device Plane DP3 remains closed through W14-H.
 
-The connected authoring identity is also the PR author on the open candidates above. Governance prohibits self-accept and self-merge. Therefore #232, #235, #236, #238, #239 and #240 require a distinct authorized acceptance/merge identity even though their exact-head technical gates are green.
+The connected authoring identity is also the PR author on the candidates above. Governance prohibits self-accept and self-merge. Therefore #232, #235, #236, #238, #239 and #240 still require a distinct authorized acceptance/merge identity even though their current exact-head technical gates are green.
+
+The live task ledger currently has no open `aurora:puzzle-build-ready` node without `aurora:canonical-pr-open`. Opening another BUILD candidate would create a parallel truth or violate the accepted DAG. Readiness/PREBUILD artifacts remain non-authoritative.
 
 ## W06 — Context Engine
 
@@ -62,32 +62,28 @@ Current state:
 
 - W06-00 accepted.
 - W06-A accepted on current main.
-- W06-B PR #235 is a final exact-head candidate and technically gate-complete, but independent acceptance/merge is pending.
-- W06-E PR #232 is a final exact-head candidate and technically gate-complete, but independent acceptance/merge is pending.
+- W06-B PR #235 is exact-head gate-complete at `1b10bed145813b73a401d6a3c5256c0335ae0d96`, but independent acceptance/merge is pending.
+- W06-E PR #232 is exact-head gate-complete at `1afd4cbaf4a45425c3a9d15f4ad36f117556fb59`, but independent acceptance/merge is pending.
 - W06-C is **not BUILD_READY** until W06-B is accepted on live main.
 - W06-D and W06-F remain blocked until both W06-C and W06-E are accepted.
 - W06-G remains blocked on W06-D + W06-F.
 - W06-H remains blocked on W06-G.
 
-The W06 critical path is acceptance of W06-B followed by W06-C. W06-E acceptance is a parallel prerequisite for the later W06-D/F frontier.
+The W06 critical path is independent acceptance/merge of W06-B followed by W06-C. W06-E acceptance is a parallel prerequisite for the later W06-D/F frontier.
 
 ## W07 — Executor Plane
 
-W07 is `COMPLETE_ACCEPTED` through W07-H.
-
-Canonical W07-H acceptance is PR #228. Closed duplicate/non-authoritative W07-H candidates remain historical only and must not be merged or cited as current acceptance truth.
+W07 is `COMPLETE_ACCEPTED` through W07-H. Canonical W07-H acceptance is PR #228. Closed duplicate/non-authoritative W07-H candidates remain historical only and must not be merged or cited as current acceptance truth.
 
 Accepted architectural boundary remains:
 
 - W07 owns the generic deterministic side-effect boundary, current authority-validation integration, target resolution, receipts/evidence, readback/reconciliation and failure containment.
 - `ExecutionTargetReference(kind=PROVIDER)` carries provider target metadata but not credential or authority semantics.
-- provider transport does not replace W07 and device transport remains separately owned by the Device Plane chain.
+- Provider transport does not replace W07 and device transport remains separately owned by the Device Plane chain.
 
 ## W08 — Provider Adapter Foundation
 
 W08-00 was independently BUILD_READY after accepted W07-H and was advanced to governance-only PR #236.
-
-PR #236 freezes provider-specific ownership beneath W07, W04 as the sole capability source of truth, explicit tenant/provider/account/target binding, opaque credential references, read-only reads, W07-only external writes, provider health/authentication as non-authority metadata, normalized uncertainty/error semantics, reconcile-before-retry, required downstream provider families for W11-W13 and safe mock/sandbox/no-op/paused-first acceptance.
 
 Internal W08 DAG:
 
@@ -103,8 +99,6 @@ W08-A/B are **not BUILD_READY as canonical BUILD dependencies** until PR #236 is
 
 W09-00 was independently BUILD_READY after accepted W03-F and W07-H and was advanced to governance-only PR #238.
 
-PR #238 freezes the existing `services/n8n-bridge/**` as the canonical W09 integration target, preserves `packages/workflow/**` as W03-owned durable workflow truth, keeps Aurora as source of truth, keeps workflow/run/credential/webhook state non-authoritative, requires opaque credential references and W03-compatible replay/idempotency, routes governed side effects below W07, preserves uncertainty/reconcile-before-retry, and allows curated re-specification rather than bulk import of the n8n corpus.
-
 Internal W09 DAG:
 
 `W09-00 -> W09-A`
@@ -118,8 +112,6 @@ W09-A is **not BUILD_READY as a canonical BUILD dependency** until PR #238 is in
 ## W10 — Revenue / CRM Domain
 
 W10-00 was independently BUILD_READY after accepted W05-H and W07-H and was advanced to governance-only PR #239.
-
-PR #239 freezes the Revenue/CRM domain boundary, accepted DAG, W01-W09 ownership boundaries, lifecycle/scoring/read-model/NBA/fast-path semantics and formal Risk Gates A-D. It explicitly preserves `Score != Confidence != Authority != Execution`, W03 durability, W04 capability truth, W05 intelligence truth, current W02/W07 validation, conditional accepted W06/W08 dependencies and the W11 publication barrier.
 
 Internal W10 DAG:
 
@@ -136,8 +128,6 @@ W10-A is **not BUILD_READY as a canonical BUILD dependency** until PR #239 is in
 ## W14 — Gateway & Device Session Plane
 
 W14-00 was independently BUILD_READY after accepted W05-H and W07-H and was advanced to governance-only PR #240 under the accepted Device Plane planning/ownership rules.
-
-PR #240 freezes exactly one canonical DeviceId/DeviceRef namespace owned for publication by W14-D, preserves W07 `ExecutionTargetReference(kind=DEVICE)` as target taxonomy, preserves W03 durability/replay truth, separates W14 transport/session/trust from W15 Android/native execution, prohibits session/trust/device-presence authority elevation and preserves `EXECUTION_UNCERTAIN` reconcile-before-retry across reconnect/replay.
 
 Internal W14 DAG:
 
@@ -191,13 +181,11 @@ The following earlier current-state claims/evidence are superseded or historical
 
 - any status claiming W06-A is merely `BUILD_READY` or lacks canonical acceptance;
 - any status claiming W07-H is still `BUILD_READY` or unaccepted;
-- any status claiming W09-00 remains only `BUILD_READY` after publication of PR #238;
-- any status claiming W10-00 remains only `BUILD_READY` after publication of PR #239;
-- any status claiming W14-00 remains only `BUILD_READY` after publication of PR #240;
-- W06-B intermediate heads `f9ebb884...`, `3cb2b3be...` and `bf101ee3...`; only final exact HEAD `dd1661a44c8f783a49bb8a53e1b2ae707a5fbe32` may satisfy candidate evidence;
-- W06-E formatter/intermediate candidate heads; only final exact HEAD `312318b8fd3e80b1e9f911d8bb3c6208d2c6a440` may satisfy candidate evidence;
+- any status claiming W09-00, W10-00 or W14-00 remains only `BUILD_READY` after publication of their canonical coordinator PRs;
+- W06-B intermediate heads `f9ebb884...`, `3cb2b3be...`, `bf101ee3...`, former acceptance candidate `dd1661a44c8f783a49bb8a53e1b2ae707a5fbe32`, hardening intermediate `6c0ce1091e50eccee70d50d79a85690ddbcbbfaf` and all checks/reviews attached to them; only current exact HEAD `1b10bed145813b73a401d6a3c5256c0335ae0d96` may satisfy W06-B candidate evidence now;
+- W06-E former acceptance candidate `312318b8fd3e80b1e9f911d8bb3c6208d2c6a440`, hardening intermediate `f3af2769e2921e3f304a5b2c20dfaeb6e3709cc2` and all checks/reviews attached to them; only current exact HEAD `1afd4cbaf4a45425c3a9d15f4ad36f117556fb59` may satisfy W06-E candidate evidence now;
 - duplicate W07-H PR #229 HEAD `b03450e96455cb19e334b4fefff2d4877d1cd5fe` and duplicate PR #233 HEAD `baf949e9049b0846c6d257f80e12a88ea416451f`; both are non-authoritative/DO NOT MERGE;
-- PR #237 earlier status-candidate heads `e50d780a6e3e461934fce5c2b0c208ba3cef95a8` and `035efa25c722dad5c324276c7f11ece551c33aaf`; their exact-head gates are historical after this status update and final acceptance evidence must attach to the new exact PR #237 HEAD;
+- PR #237 earlier status-candidate heads `e50d780a6e3e461934fce5c2b0c208ba3cef95a8`, `035efa25c722dad5c324276c7f11ece551c33aaf` and `e9d5b6b2817e78c47f9c99ff3e315651dd91789d`; their exact-head gates/reviews are historical after this convergence commit;
 - any PREBUILD/readiness artifact presented as accepted dependency truth.
 
 Candidate evidence becomes stale if its exact HEAD changes. If live main moves before integration, Program Control must revalidate dependency compatibility/mergeability/scope and rerun any gate required by active governance; a green run attached to a different candidate HEAD never transfers automatically.
