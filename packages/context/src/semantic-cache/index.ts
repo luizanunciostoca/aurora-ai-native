@@ -49,11 +49,7 @@ function validTimestamp(value: unknown): value is Rfc3339Timestamp {
   );
 }
 
-function canonicalPart(
-  value: unknown,
-  state: CanonicalState,
-  depth: number,
-): string | undefined {
+function canonicalPart(value: unknown, state: CanonicalState, depth: number): string | undefined {
   if (depth > MAX_CANONICAL_DEPTH || state.nodes >= MAX_CANONICAL_NODES) return undefined;
   state.nodes += 1;
 
@@ -119,7 +115,11 @@ function payloadIsCacheable(value: unknown, seen = new Set<object>(), depth = 0)
   if (value === null || ['string', 'boolean', 'number'].includes(typeof value)) {
     return typeof value !== 'number' || Number.isFinite(value);
   }
-  if (typeof value !== 'object' || seen.has(value) || Object.getOwnPropertySymbols(value).length > 0) {
+  if (
+    typeof value !== 'object' ||
+    seen.has(value) ||
+    Object.getOwnPropertySymbols(value).length > 0
+  ) {
     return false;
   }
 
@@ -128,7 +128,11 @@ function payloadIsCacheable(value: unknown, seen = new Set<object>(), depth = 0)
     if (Array.isArray(value)) {
       for (let index = 0; index < value.length; index += 1) {
         const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
-        if (!descriptor || !('value' in descriptor) || !payloadIsCacheable(descriptor.value, seen, depth + 1)) {
+        if (
+          !descriptor ||
+          !('value' in descriptor) ||
+          !payloadIsCacheable(descriptor.value, seen, depth + 1)
+        ) {
           return false;
         }
       }
@@ -140,7 +144,11 @@ function payloadIsCacheable(value: unknown, seen = new Set<object>(), depth = 0)
     for (const key of Object.keys(value)) {
       if (FORBIDDEN_PAYLOAD_KEYS.has(normalizedKey(key))) return false;
       const descriptor = Object.getOwnPropertyDescriptor(value, key);
-      if (!descriptor || !('value' in descriptor) || !payloadIsCacheable(descriptor.value, seen, depth + 1)) {
+      if (
+        !descriptor ||
+        !('value' in descriptor) ||
+        !payloadIsCacheable(descriptor.value, seen, depth + 1)
+      ) {
         return false;
       }
     }
@@ -152,7 +160,21 @@ function payloadIsCacheable(value: unknown, seen = new Set<object>(), depth = 0)
   }
 }
 
-function sourceVersionsFor(packageResult: MinimalContextPackage): SemanticCacheSourceVersion[] | undefined {
+function packageShapeValid(value: MinimalContextPackage | undefined): value is MinimalContextPackage {
+  return (
+    value?.kind === 'MinimalContextPackage' &&
+    value.authorizesExecution === false &&
+    Array.isArray(value.items) &&
+    Array.isArray(value.includedSourceReferences) &&
+    Array.isArray(value.excludedSources) &&
+    validTimestamp(value.retrievalEvaluatedAt) &&
+    validateContextQuery(value.query).valid
+  );
+}
+
+function sourceVersionsFor(
+  packageResult: MinimalContextPackage,
+): SemanticCacheSourceVersion[] | undefined {
   const versions: SemanticCacheSourceVersion[] = [];
   const seen = new Set<string>();
   for (const item of packageResult.items) {
@@ -176,8 +198,12 @@ function sameSourceVersions(
   right: readonly SemanticCacheSourceVersion[],
 ): boolean {
   if (left.length !== right.length) return false;
-  const normalizedLeft = [...left].sort((a, b) => a.sourceReference.localeCompare(b.sourceReference));
-  const normalizedRight = [...right].sort((a, b) => a.sourceReference.localeCompare(b.sourceReference));
+  const normalizedLeft = [...left].sort((a, b) =>
+    a.sourceReference.localeCompare(b.sourceReference),
+  );
+  const normalizedRight = [...right].sort((a, b) =>
+    a.sourceReference.localeCompare(b.sourceReference),
+  );
   return normalizedLeft.every(
     (value, index) =>
       value.sourceReference === normalizedRight[index]?.sourceReference &&
@@ -210,33 +236,32 @@ export function createSemanticCacheEntry(
 ): SemanticCacheCreateResult {
   const reasons: SemanticCacheCreateReason[] = [];
   const packageResult = request?.package;
-  if (
-    packageResult?.kind !== 'MinimalContextPackage' ||
-    packageResult.authorizesExecution !== false ||
-    !Array.isArray(packageResult.items) ||
-    !validTimestamp(packageResult.retrievalEvaluatedAt) ||
-    !validateContextQuery(packageResult.query).valid
-  ) {
-    reasons.push('INVALID_PACKAGE');
-  }
+  const packageValid = packageShapeValid(packageResult);
+  if (!packageValid) reasons.push('INVALID_PACKAGE');
   if (!nonEmptyString(request?.configVersion)) reasons.push('INVALID_CONFIG_VERSION');
   if (!validTimestamp(request?.createdAt)) reasons.push('INVALID_CREATED_AT');
   if (!Number.isSafeInteger(request?.ttlMs) || request.ttlMs < 1 || request.ttlMs > MAX_TTL_MS) {
     reasons.push('INVALID_TTL');
   }
 
-  const versions = sourceVersionsFor(packageResult);
-  if (!versions) {
+  const versions = packageValid ? sourceVersionsFor(packageResult) : undefined;
+  if (packageValid && !versions) {
     if (packageResult.items.some((item) => !nonEmptyString(item?.sourceRevision))) {
       reasons.push('SOURCE_REVISION_REQUIRED');
     } else {
       reasons.push('SENSITIVE_VALUE_REJECTED');
     }
   }
-  const fingerprint = queryFingerprint(packageResult.query);
-  if (!fingerprint) reasons.push('INVALID_PACKAGE');
+  const fingerprint = packageValid ? queryFingerprint(packageResult.query) : undefined;
+  if (packageValid && !fingerprint) reasons.push('INVALID_PACKAGE');
 
-  if (reasons.length > 0 || !versions || !fingerprint || !validTimestamp(request.createdAt)) {
+  if (
+    reasons.length > 0 ||
+    !packageValid ||
+    !versions ||
+    !fingerprint ||
+    !validTimestamp(request.createdAt)
+  ) {
     return invalidCreateResult(reasons);
   }
 
@@ -282,7 +307,13 @@ function evaluationResult(
 export function evaluateSemanticCache(
   request: SemanticCacheEvaluationRequest,
 ): SemanticCacheEvaluationResult {
-  if (!validTimestamp(request?.evaluatedAt) || !nonEmptyString(request?.configVersion)) {
+  if (
+    !request?.query ||
+    !request.entry ||
+    !Array.isArray(request.expectedSourceVersions) ||
+    !validTimestamp(request.evaluatedAt) ||
+    !nonEmptyString(request.configVersion)
+  ) {
     return evaluationResult('INCOMPATIBLE_REJECTED');
   }
   const fingerprint = queryFingerprint(request.query);
@@ -358,10 +389,7 @@ export function applySemanticCacheInvalidation(
   const currentCursor = entry.invalidationCursors.find(
     (cursor) => cursor.streamKey === signal.streamKey,
   );
-  if (
-    currentCursor?.sequence === signal.sequence &&
-    currentCursor.eventId === signal.eventId
-  ) {
+  if (currentCursor?.sequence === signal.sequence && currentCursor.eventId === signal.eventId) {
     return invalidationResult('DUPLICATE', entry);
   }
   if (currentCursor && signal.sequence <= currentCursor.sequence) {
