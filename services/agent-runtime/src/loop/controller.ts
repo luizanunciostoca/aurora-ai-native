@@ -336,7 +336,10 @@ function frameFailure(
   if (frame.capabilityPlan.status !== 'READY') {
     return terminate(snapshot, 'FAILED', 'CAPABILITY_PLAN_BLOCKED', frame.nowEpochMs);
   }
-  if (frame.nowEpochMs < snapshot.lastTransitionEpochMs || frame.nowEpochMs < snapshot.startedAtEpochMs) {
+  if (
+    frame.nowEpochMs < snapshot.lastTransitionEpochMs ||
+    frame.nowEpochMs < snapshot.startedAtEpochMs
+  ) {
     return terminate(snapshot, 'FAILED', 'CONTROL_FRAME_INVALID', frame.nowEpochMs);
   }
   const elapsed = frame.nowEpochMs - snapshot.startedAtEpochMs;
@@ -540,6 +543,9 @@ export function advanceAdaptiveLoop(
       if (event.kind !== 'INSPECTION_READY') return rejectEvent(snapshot);
       const modelUsage = modelUsageOrLimit(snapshot, frame, event);
       if ('result' in modelUsage) return modelUsage.result;
+      if (event.disposition === 'REPAIR') {
+        return advanced(snapshot, 'REPAIR', event, frame, modelUsage.usage);
+      }
       return dispositionResult(snapshot, frame, event, event.disposition, modelUsage.usage);
     }
     case 'REPAIR': {
