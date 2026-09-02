@@ -6,6 +6,7 @@ import {
   type W03LeaseHeartbeatResult,
   type W03LeasePort,
   type W03LeaseReleaseResult,
+  type WorkerOperationContext,
   type WorkerRecordSnapshot,
   type WorkerRuntimeDecision,
   type WorkerState,
@@ -52,6 +53,10 @@ function leaseKey(taskId: string): string {
   return `w05-agent-task:${taskId}`;
 }
 
+function recordKey(tenantId: AgentWorkerTask['tenant']['tenantId'], taskId: string): string {
+  return `${tenantId}\u0000${taskId}`;
+}
+
 function validTask(task: AgentWorkerTask): boolean {
   return (
     TASK_ID_PATTERN.test(task.taskId) &&
@@ -61,9 +66,22 @@ function validTask(task: AgentWorkerTask): boolean {
   );
 }
 
+function validContext(context: WorkerOperationContext): boolean {
+  return (
+    context.tenant.tenantId.trim().length > 0 && context.correlation.correlationId.trim().length > 0
+  );
+}
+
+function contextMatches(record: MutableWorkerRecord, context: WorkerOperationContext): boolean {
+  return (
+    record.task.tenant.tenantId === context.tenant.tenantId &&
+    record.task.correlation.correlationId === context.correlation.correlationId
+  );
+}
+
 function leaseResultMatches(
   result: W03LeaseAcquireResult | W03LeaseHeartbeatResult | W03LeaseReleaseResult,
-  tenantId: string,
+  tenantId: AgentWorkerTask['tenant']['tenantId'],
   expectedLeaseKey: string,
   ownerToken: string,
 ): boolean {
@@ -104,13 +122,15 @@ export class BoundedAgentWorkerPool {
     return count;
   }
 
-  snapshot(taskId: string): WorkerRecordSnapshot | null {
-    const record = this.#records.get(taskId);
+  snapshot(context: WorkerOperationContext, taskId: string): WorkerRecordSnapshot | null {
+    const record = this.#recordFor(context, taskId);
     return record ? this.#snapshot(record) : null;
   }
 
-  snapshots(): readonly WorkerRecordSnapshot[] {
+  snapshots(context: WorkerOperationContext): readonly WorkerRecordSnapshot[] {
+    if (!validContext(context)) return [];
     return [...this.#records.values()]
+      .filter((record) => contextMatches(record, context))
       .sort((left, right) => left.task.taskId.localeCompare(right.task.taskId))
       .map((record) => this.#snapshot(record));
   }
@@ -119,7 +139,8 @@ export class BoundedAgentWorkerPool {
     if (!validTask(task) || !validEpochMs(nowEpochMs)) {
       return this.#decision('INVALID_TASK', null);
     }
-    const existing = this.#records.get(task.taskId);
+    const key = recordKey(task.tenant.tenantId, task.taskId);
+    const existing = this.#records.get(key);
     if (existing) return this.#decision('DUPLICATE_TASK', existing);
     if (this.#records.size >= this.#config.maxTrackedTasks) {
       return this.#decision('TRACKING_CAPACITY_REACHED', null);
@@ -139,32 +160,35 @@ export class BoundedAgentWorkerPool {
       lastTransitionEpochMs: nowEpochMs,
       lastHeartbeatEpochMs: null,
     };
-    this.#records.set(task.taskId, record);
+    this.#records.set(key, record);
     return this.#decision('SUBMITTED', record);
   }
 
   async claim(
+    context: WorkerOperationContext,
     taskId: string,
     ownerToken: string,
     nowEpochMs: number,
   ): Promise<WorkerRuntimeDecision> {
-    return this.#acquireOwnership(taskId, ownerToken, nowEpochMs, 'CLAIM');
+    return this.#acquireOwnership(context, taskId, ownerToken, nowEpochMs, 'CLAIM');
   }
 
   async reclaim(
+    context: WorkerOperationContext,
     taskId: string,
     ownerToken: string,
     nowEpochMs: number,
   ): Promise<WorkerRuntimeDecision> {
-    return this.#acquireOwnership(taskId, ownerToken, nowEpochMs, 'RECLAIM');
+    return this.#acquireOwnership(context, taskId, ownerToken, nowEpochMs, 'RECLAIM');
   }
 
   async heartbeat(
+    context: WorkerOperationContext,
     taskId: string,
     ownerToken: string,
     nowEpochMs: number,
   ): Promise<WorkerRuntimeDecision> {
-    const record = this.#records.get(taskId);
+    const record = this.#recordFor(context, taskId);
     if (!record) return this.#decision('TASK_NOT_FOUND', null);
     if (record.state !== 'ACTIVE') return this.#decision('INVALID_STATE', record);
     if (record.ownerToken !== ownerToken) return this.#decision('OWNER_MISMATCH', record);
@@ -204,11 +228,13 @@ export class BoundedAgentWorkerPool {
   }
 
   async complete(
+    context: WorkerOperationContext,
     taskId: string,
     ownerToken: string,
     nowEpochMs: number,
   ): Promise<WorkerRuntimeDecision> {
     return this.#terminalRelease(
+      context,
       taskId,
       ownerToken,
       nowEpochMs,
@@ -219,15 +245,28 @@ export class BoundedAgentWorkerPool {
   }
 
   async fail(
+    context: WorkerOperationContext,
     taskId: string,
     ownerToken: string,
     nowEpochMs: number,
   ): Promise<WorkerRuntimeDecision> {
-    return this.#terminalRelease(taskId, ownerToken, nowEpochMs, 'FAILED', 'WORK_FAILED', 'FAILED');
+    return this.#terminalRelease(
+      context,
+      taskId,
+      ownerToken,
+      nowEpochMs,
+      'FAILED',
+      'WORK_FAILED',
+      'FAILED',
+    );
   }
 
-  async cancel(taskId: string, nowEpochMs: number): Promise<WorkerRuntimeDecision> {
-    const record = this.#records.get(taskId);
+  async cancel(
+    context: WorkerOperationContext,
+    taskId: string,
+    nowEpochMs: number,
+  ): Promise<WorkerRuntimeDecision> {
+    const record = this.#recordFor(context, taskId);
     if (!record) return this.#decision('TASK_NOT_FOUND', null);
     if (!this.#validOperationTime(record, nowEpochMs))
       return this.#decision('INVALID_STATE', record);
@@ -249,6 +288,7 @@ export class BoundedAgentWorkerPool {
     if (record.state === 'ACTIVE' || record.state === 'LEASE_UNCERTAIN') {
       if (!record.ownerToken) return this.#decision('INVALID_STATE', record);
       return this.#terminalRelease(
+        context,
         taskId,
         record.ownerToken,
         nowEpochMs,
@@ -260,21 +300,22 @@ export class BoundedAgentWorkerPool {
     return this.#decision('INVALID_STATE', record);
   }
 
-  forgetTerminal(taskId: string): WorkerRuntimeDecision {
-    const record = this.#records.get(taskId);
+  forgetTerminal(context: WorkerOperationContext, taskId: string): WorkerRuntimeDecision {
+    const record = this.#recordFor(context, taskId);
     if (!record) return this.#decision('TASK_NOT_FOUND', null);
     if (!TERMINAL_STATES.has(record.state)) return this.#decision('INVALID_STATE', record);
-    this.#records.delete(taskId);
+    this.#records.delete(recordKey(record.task.tenant.tenantId, record.task.taskId));
     return this.#decision('PRUNED', null);
   }
 
   async #acquireOwnership(
+    context: WorkerOperationContext,
     taskId: string,
     ownerToken: string,
     nowEpochMs: number,
     mode: 'CLAIM' | 'RECLAIM',
   ): Promise<WorkerRuntimeDecision> {
-    const record = this.#records.get(taskId);
+    const record = this.#recordFor(context, taskId);
     if (!record) return this.#decision('TASK_NOT_FOUND', null);
     const allowedState =
       mode === 'CLAIM'
@@ -339,6 +380,7 @@ export class BoundedAgentWorkerPool {
     if (record.cancelRequested) {
       const cancellationEpochMs = record.cancelRequestedAtEpochMs ?? nowEpochMs;
       return this.#terminalRelease(
+        context,
         taskId,
         ownerToken,
         cancellationEpochMs,
@@ -353,6 +395,7 @@ export class BoundedAgentWorkerPool {
   }
 
   async #terminalRelease(
+    context: WorkerOperationContext,
     taskId: string,
     ownerToken: string,
     nowEpochMs: number,
@@ -360,7 +403,7 @@ export class BoundedAgentWorkerPool {
     terminalReason: WorkerTerminalReason,
     successCode: 'COMPLETED' | 'CANCELLED' | 'FAILED',
   ): Promise<WorkerRuntimeDecision> {
-    const record = this.#records.get(taskId);
+    const record = this.#recordFor(context, taskId);
     if (!record) return this.#decision('TASK_NOT_FOUND', null);
     if (
       record.state !== 'ACTIVE' &&
@@ -404,6 +447,12 @@ export class BoundedAgentWorkerPool {
     record.terminalReason = terminalReason;
     record.lastTransitionEpochMs = nowEpochMs;
     return this.#decision(successCode, record);
+  }
+
+  #recordFor(context: WorkerOperationContext, taskId: string): MutableWorkerRecord | null {
+    if (!validContext(context) || !TASK_ID_PATTERN.test(taskId)) return null;
+    const record = this.#records.get(recordKey(context.tenant.tenantId, taskId));
+    return record && contextMatches(record, context) ? record : null;
   }
 
   #validOperationTime(record: MutableWorkerRecord, nowEpochMs: number): boolean {
