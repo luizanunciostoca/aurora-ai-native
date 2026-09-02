@@ -33,10 +33,14 @@ The label is a review request only. It is not approval, authority or acceptance.
 
 Before review:
 
-- PR must still be OPEN;
+- PR must still be OPEN and non-draft;
 - base branch must still be `main`;
+- candidate branch must belong to the canonical repository, not a fork;
 - live PR HEAD must equal the requested/event HEAD;
-- live canonical main must equal the requested/resolved main SHA.
+- live canonical main must equal the requested/resolved main SHA;
+- the latest exact-head `quality`, `test-build` and `security-gate` checks from GitHub Actions must each be completed successfully.
+
+The minimum CI evidence is resolved deterministically from the GitHub Checks API before the model review and is embedded in the normalized acceptance envelope. The acceptance agent may require additional scope-specific checks, but it cannot waive these baseline gates.
 
 Before publishing the result, HEAD and main are checked again. Any mismatch prevents evidence publication.
 
@@ -56,13 +60,19 @@ The final reviewer output must contain one exact machine record:
 
 The validator requires:
 
+- exactly one machine marker in bounded output;
+- repository and PR number equal the validated request;
 - decision is `ACCEPT_RECOMMENDED` or `REWORK_REQUIRED`;
 - exact candidate HEAD equals the reviewed HEAD;
 - main SHA equals the reviewed main;
 - Risk Gates A/B/C/D are each `PASS` or `FAIL`;
 - blockers are an array of strings;
 - summary is non-empty;
-- `ACCEPT_RECOMMENDED` is valid only when A/B/C/D are all `PASS` and blockers are empty.
+- `ACCEPT_RECOMMENDED` is valid only when A/B/C/D are all `PASS` and blockers are empty;
+- the normalized `aurora.acceptance.v1` envelope contains the exact repository, PR, HEAD, main and deterministic baseline-check evidence;
+- `REWORK_REQUIRED` must contain a blocker or at least one failed Risk Gate.
+
+The Copilot CLI is installed at the reviewed fixed version `1.0.82`; mutable `latest` resolution is prohibited in this privileged workflow. Artifact actions are pinned to exact commits.
 
 Malformed or inconsistent model output fails closed and produces no acceptance evidence comment.
 
@@ -91,7 +101,9 @@ Fail closed on:
 
 - stale PR HEAD;
 - stale main;
-- closed/non-main PR;
+- closed, draft, forked or non-main PR;
+- missing, duplicated, stale, non-GitHub-Actions or failed baseline check;
+- repository/PR binding mismatch;
 - Copilot CLI failure;
 - repository mutation by reviewer;
 - missing/malformed decision marker;

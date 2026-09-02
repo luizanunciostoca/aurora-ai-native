@@ -117,6 +117,13 @@ test('W00-F independent acceptance worker is exact-head, isolated, read-only and
   assert.match(workflow, /test "\$live_main" = "\$expected_main"/);
   assert.match(workflow, /git -C governance status --porcelain/);
   assert.match(workflow, /git -C candidate status --porcelain/);
+  assert.match(workflow, /check-runs\?filter=latest&per_page=100/);
+  assert.match(workflow, /for required in quality test-build security-gate/);
+  assert.match(workflow, /@github\/copilot@1\.0\.82/);
+  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/);
+  assert.match(workflow, /actions\/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093/);
+  assert.doesNotMatch(workflow, /@github\/copilot@latest/);
+  assert.doesNotMatch(workflow, /actions\/(?:upload|download)-artifact@v4/);
   assert.doesNotMatch(workflow, /npm ci/);
   assert.doesNotMatch(workflow, /contents:\s*write/);
   assert.doesNotMatch(workflow, /gh\s+pr\s+merge/);
@@ -139,6 +146,11 @@ test('W00-F acceptance output contract cannot recommend acceptance with failed g
   assert.match(validator, /ACCEPT_RECOMMENDED/);
   assert.match(validator, /ACCEPT_RECOMMENDED cannot contain blockers/);
   assert.match(validator, /ACCEPT_RECOMMENDED requires all Risk Gates PASS/);
+  assert.match(validator, /acceptance output repository mismatch/);
+  assert.match(validator, /acceptance output PR number mismatch/);
   assert.match(validator, /acceptance output exact HEAD mismatch/);
   assert.match(validator, /acceptance output main mismatch/);
+  assert.match(validator, /exactly one AURORA_ACCEPTANCE_RESULT marker is required/);
+  assert.match(validator, /required check evidence envelope is invalid/);
+  assert.match(validator, /required check .* must appear exactly once/);
 });

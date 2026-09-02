@@ -32,6 +32,7 @@ jobs:
         github.event.label.name == 'aurora:acceptance-requested'
       }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
@@ -76,10 +77,14 @@ jobs:
           live_state="$(jq -r '.state' <<<"$pr_json")"
           live_base="$(jq -r '.base.ref' <<<"$pr_json")"
           live_head="$(jq -r '.head.sha' <<<"$pr_json")"
+          live_head_repo="$(jq -r '.head.repo.full_name // empty' <<<"$pr_json")"
+          live_draft="$(jq -r '.draft' <<<"$pr_json")"
           live_main="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
 
           test "$live_state" = 'open'
           test "$live_base" = 'main'
+          test "$live_head_repo" = "$GITHUB_REPOSITORY"
+          test "$live_draft" = 'false'
           test "$live_head" = "$expected_head"
           test "$live_main" = "$expected_main"
 
@@ -90,6 +95,7 @@ jobs:
   acceptance-review:
     needs: validate-request
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       actions: read
       checks: read
@@ -112,18 +118,63 @@ jobs:
           path: candidate
           fetch-depth: 0
           persist-credentials: false
+      - name: Require deterministic exact-head baseline gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_HEAD: ${{ needs.validate-request.outputs.expected_head }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/commits/${EXPECTED_HEAD}/check-runs?filter=latest&per_page=100" \
+            > /tmp/aurora-check-runs.json
+
+          for required in quality test-build security-gate; do
+            count="$(jq --arg required "$required" --arg head "$EXPECTED_HEAD" \
+              '[.check_runs[] | select(
+                .name == $required and
+                .head_sha == $head and
+                .app.slug == "github-actions" and
+                .status == "completed" and
+                .conclusion == "success"
+              )] | length' /tmp/aurora-check-runs.json)"
+            test "$count" = '1'
+          done
+
+          jq --arg head "$EXPECTED_HEAD" '{
+            schemaVersion: "aurora.required-checks.v1",
+            exactHead: $head,
+            requiredChecks: [
+              .check_runs[]
+              | select(.name == "quality" or .name == "test-build" or .name == "security-gate")
+              | {
+                  name,
+                  headSha: .head_sha,
+                  app: .app.slug,
+                  status,
+                  conclusion,
+                  detailsUrl: .details_url,
+                  completedAt: .completed_at
+                }
+            ]
+            | sort_by(.name)
+          }' /tmp/aurora-check-runs.json > /tmp/aurora-required-checks.json
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.16.0
-      - name: Install current Copilot CLI without executing candidate package hooks
-        run: npm install --global @github/copilot@latest
+      - name: Install pinned Copilot CLI without executing candidate package hooks
+        run: |
+          npm install --global @github/copilot@1.0.82
+          copilot --version > /tmp/aurora-copilot-version.txt
       - name: Render governed independent acceptance prompt from trusted main
         run: >-
           node governance/tools/copilot/acceptance-review-prompt.mjs
           '${{ needs.validate-request.outputs.pr_number }}'
           '${{ needs.validate-request.outputs.expected_head }}'
           '${{ needs.validate-request.outputs.expected_main }}'
+          '${{ github.repository }}'
           > /tmp/aurora-acceptance-prompt.txt
       - name: Run independent acceptance agent from trusted governance checkout
         id: acceptance
@@ -164,6 +215,9 @@ jobs:
           /tmp/aurora-acceptance-output.txt
           '${{ needs.validate-request.outputs.expected_head }}'
           '${{ needs.validate-request.outputs.expected_main }}'
+          '${{ needs.validate-request.outputs.pr_number }}'
+          '${{ github.repository }}'
+          /tmp/aurora-required-checks.json
           > /tmp/aurora-acceptance-result.json
       - name: Build immutable acceptance evidence artifact
         shell: bash
@@ -172,13 +226,15 @@ jobs:
           mkdir -p /tmp/aurora-acceptance-artifact
           cp /tmp/aurora-acceptance-output.txt /tmp/aurora-acceptance-artifact/acceptance-output.txt
           cp /tmp/aurora-acceptance-result.json /tmp/aurora-acceptance-artifact/acceptance-result.json
+          cp /tmp/aurora-required-checks.json /tmp/aurora-acceptance-artifact/required-checks.json
+          cp /tmp/aurora-copilot-version.txt /tmp/aurora-acceptance-artifact/copilot-version.txt
           if test -f /tmp/aurora-acceptance-session.md; then
             cp /tmp/aurora-acceptance-session.md /tmp/aurora-acceptance-artifact/acceptance-session.md
           fi
           printf '%s\n' '${{ needs.validate-request.outputs.expected_head }}' > /tmp/aurora-acceptance-artifact/exact-head.txt
           printf '%s\n' '${{ needs.validate-request.outputs.expected_main }}' > /tmp/aurora-acceptance-artifact/exact-main.txt
       - name: Upload independent acceptance evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: aurora-acceptance-pr-${{ needs.validate-request.outputs.pr_number }}-${{ github.run_id }}
           path: /tmp/aurora-acceptance-artifact
@@ -188,13 +244,14 @@ jobs:
   publish-evidence:
     needs: [validate-request, acceptance-review]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       actions: read
       contents: read
       pull-requests: write
     steps:
       - name: Download exact acceptance artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: aurora-acceptance-pr-${{ needs.validate-request.outputs.pr_number }}-${{ github.run_id }}
           path: /tmp/aurora-acceptance-artifact
@@ -204,8 +261,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          live_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ needs.validate-request.outputs.pr_number }}" --jq '.head.sha')"
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${{ needs.validate-request.outputs.pr_number }}")"
+          live_state="$(jq -r '.state' <<<"$pr_json")"
+          live_base="$(jq -r '.base.ref' <<<"$pr_json")"
+          live_head="$(jq -r '.head.sha' <<<"$pr_json")"
+          live_head_repo="$(jq -r '.head.repo.full_name // empty' <<<"$pr_json")"
+          live_draft="$(jq -r '.draft' <<<"$pr_json")"
           live_main="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          test "$live_state" = 'open'
+          test "$live_base" = 'main'
+          test "$live_head_repo" = "$GITHUB_REPOSITORY"
+          test "$live_draft" = 'false'
           test "$live_head" = '${{ needs.validate-request.outputs.expected_head }}'
           test "$live_main" = '${{ needs.validate-request.outputs.expected_main }}'
       - name: Publish evidence-only independent decision safely
@@ -219,17 +285,25 @@ jobs:
         run: |
           set -euo pipefail
           result="$(cat /tmp/aurora-acceptance-artifact/acceptance-result.json)"
+          result_repository="$(jq -r '.repository' <<<"$result")"
+          result_pr="$(jq -r '.prNumber' <<<"$result")"
           decision="$(jq -r '.decision' <<<"$result")"
           summary="$(jq -r '.summary' <<<"$result")"
           blockers="$(jq -c '.blockers' <<<"$result")"
           gates="$(jq -c '.riskGates' <<<"$result")"
+          required_checks="$(jq -c '.requiredChecks' <<<"$result")"
+          test "$result_repository" = "$GITHUB_REPOSITORY"
+          test "$result_pr" = "$PR_NUMBER"
           {
             printf '%s\n\n' 'AURORA INDEPENDENT ACCEPTANCE EVIDENCE — github-actions[bot]'
+            printf 'Repository: %s\n' "$result_repository"
+            printf 'Candidate PR: #%s\n' "$result_pr"
             printf 'Exact candidate HEAD: %s\n' "$EXPECTED_HEAD"
             printf 'Exact canonical main: %s\n' "$EXPECTED_MAIN"
             printf '%s\n' 'Independent agent: aurora-acceptance'
             printf 'Decision: %s\n' "$decision"
             printf 'Risk Gates: %s\n' "$gates"
+            printf 'Required exact-head checks: %s\n' "$required_checks"
             printf 'Blockers: %s\n' "$blockers"
             printf 'Summary: %s\n' "$summary"
             printf 'Workflow evidence: %s\n\n' "$RUN_URL"
