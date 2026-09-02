@@ -24,7 +24,12 @@ interface MutableWorkerRecord {
   lastHeartbeatEpochMs: number | null;
 }
 
-const OCCUPIED_STATES = new Set<WorkerState>(['CLAIMING', 'ACTIVE', 'RELEASING']);
+const OCCUPIED_STATES = new Set<WorkerState>([
+  'CLAIMING',
+  'ACTIVE',
+  'RELEASING',
+  'LEASE_UNCERTAIN',
+]);
 const TERMINAL_STATES = new Set<WorkerState>(['COMPLETED', 'CANCELLED', 'FAILED']);
 const TASK_ID_PATTERN = /^[A-Za-z0-9._:-]{1,160}$/;
 
@@ -279,7 +284,8 @@ export class BoundedAgentWorkerPool {
     if (!validOwnerToken(ownerToken) || !this.#validOperationTime(record, nowEpochMs)) {
       return this.#decision('INVALID_STATE', record);
     }
-    if (this.activeWorkerCount() >= this.#config.maxWorkers) {
+    const occupiedByCurrentRecord = OCCUPIED_STATES.has(record.state) ? 1 : 0;
+    if (this.activeWorkerCount() - occupiedByCurrentRecord >= this.#config.maxWorkers) {
       return this.#decision('WORKER_CAPACITY_REACHED', record);
     }
     const expiresAtEpochMs = nowEpochMs + this.#config.leaseTtlMs;
