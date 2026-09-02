@@ -6,7 +6,9 @@ import test from 'node:test';
 import { validateMemoryBoundaryCandidate } from '../src/memory-boundaries/index.js';
 import type { MemoryBoundaryValidationRequest } from '../src/memory-boundaries/index.js';
 
-function requestWithCandidate(candidateOverrides: Record<string, unknown>): MemoryBoundaryValidationRequest {
+function requestWithCandidate(
+  candidateOverrides: Record<string, unknown>,
+): MemoryBoundaryValidationRequest {
   return {
     tenant: { tenantId: 'tenant:alpha' },
     maxDataClassification: 'CONFIDENTIAL',
