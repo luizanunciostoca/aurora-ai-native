@@ -75,8 +75,7 @@ function isRfc3339Like(value: unknown): value is string {
 
 function isState(value: unknown): value is ProviderBindingState {
   return (
-    typeof value === 'string' &&
-    PROVIDER_BINDING_STATES.includes(value as ProviderBindingState)
+    typeof value === 'string' && PROVIDER_BINDING_STATES.includes(value as ProviderBindingState)
   );
 }
 
