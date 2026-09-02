@@ -717,10 +717,7 @@ test('elapsed and retrograde time are bounded without moving snapshot time backw
     at(control, 99),
   );
   assert.equal(retrograde.snapshot.terminalReason, 'CONTROL_FRAME_INVALID');
-  assert.equal(
-    retrograde.snapshot.lastTransitionEpochMs,
-    retrogradeSnapshot.lastTransitionEpochMs,
-  );
+  assert.equal(retrograde.snapshot.lastTransitionEpochMs, retrogradeSnapshot.lastTransitionEpochMs);
 });
 
 test('explicit cancellation is terminal and terminal snapshots cannot be restarted by events', () => {
