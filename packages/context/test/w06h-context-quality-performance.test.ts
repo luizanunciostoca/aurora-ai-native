@@ -29,27 +29,18 @@ import { compileMinimalContext } from '../src/minimal-context/index.js';
 import type { MinimalContextPackage } from '../src/minimal-context/types.js';
 import type { ContextQuery, ContextSourceClass } from '../src/query/types.js';
 import { evaluateContextRetrieval } from '../src/retrieval/index.js';
-import type {
-  ContextRetrievalPolicy,
-  ContextRetrievalResult,
-} from '../src/retrieval/types.js';
+import type { ContextRetrievalPolicy, ContextRetrievalResult } from '../src/retrieval/types.js';
 import {
   applySemanticCacheInvalidation,
   createSemanticCacheEntry,
   evaluateSemanticCache,
 } from '../src/semantic-cache/index.js';
 import type { SemanticCacheEntry } from '../src/semantic-cache/types.js';
-import {
-  evaluateSpeculativeReuse,
-  prepareSpeculativeContext,
-} from '../src/speculation/index.js';
+import { evaluateSpeculativeReuse, prepareSpeculativeContext } from '../src/speculation/index.js';
 import type { SpeculativePreparation } from '../src/speculation/types.js';
 import { compileContextSnapshot } from '../src/snapshots/index.js';
 import type { ContextSnapshot } from '../src/snapshots/types.js';
-import type {
-  AcquiredContextItem,
-  ContextAcquisitionResult,
-} from '../src/sources/types.js';
+import type { AcquiredContextItem, ContextAcquisitionResult } from '../src/sources/types.js';
 
 const HARNESS_VERSION = 'w06-h.1';
 const FIXTURE_VERSION = 'w06-h-context-fixtures.1';
@@ -165,8 +156,7 @@ function item(options: FixtureItemOptions): AcquiredContextItem {
     subject,
     classification: 'INTERNAL',
     observedAt: options.observedAt ?? at('2026-09-02T21:50:00Z'),
-    provenanceReference:
-      options.provenanceReference ?? `evidence:${options.sourceReference}`,
+    provenanceReference: options.provenanceReference ?? `evidence:${options.sourceReference}`,
     payload: options.payload,
     adapterId: options.adapterId,
     sourceClass: options.sourceClass,
@@ -272,7 +262,9 @@ function assemble(fixture: ContextFixture): AssemblyResult {
     compiledAt: SNAPSHOT_AT,
   });
   if (!snapshotResult.valid) {
-    throw new Error(`W06-H fixture failed snapshot compilation: ${snapshotResult.reasons.join(',')}`);
+    throw new Error(
+      `W06-H fixture failed snapshot compilation: ${snapshotResult.reasons.join(',')}`,
+    );
   }
 
   const cacheResult = createSemanticCacheEntry({
@@ -495,7 +487,9 @@ test('W06-H preserves tenant isolation across concurrent fixture assembly', asyn
       assert.equal(compiled.valid, true);
       if (!compiled.valid) throw new Error('concurrent tenant fixture must compile');
       assert.equal(compiled.package.query.tenant.tenantId, ownTenant.tenantId);
-      assert.ok(compiled.package.items.every((entry) => entry.tenant.tenantId === ownTenant.tenantId));
+      assert.ok(
+        compiled.package.items.every((entry) => entry.tenant.tenantId === ownTenant.tenantId),
+      );
       return ownTenant.tenantId;
     }),
   );
