@@ -13,6 +13,7 @@ export {
   type W03LeaseReleaseInput,
   type W03LeaseReleaseResult,
   type WorkerDecisionCode,
+  type WorkerOperationContext,
   type WorkerRecordSnapshot,
   type WorkerRuntimeDecision,
   type WorkerState,
