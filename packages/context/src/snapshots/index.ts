@@ -46,11 +46,7 @@ function validTimestamp(value: unknown): value is Rfc3339Timestamp {
   );
 }
 
-function canonicalPart(
-  value: unknown,
-  state: CanonicalState,
-  depth: number,
-): string | undefined {
+function canonicalPart(value: unknown, state: CanonicalState, depth: number): string | undefined {
   if (depth > MAX_CANONICAL_DEPTH || state.nodes >= MAX_CANONICAL_NODES) return undefined;
   state.nodes += 1;
 
@@ -121,7 +117,9 @@ function boundaryFor(sourceClass: unknown): MemoryBoundaryKind | undefined {
   return SOURCE_BOUNDARY[sourceClass as ContextSourceClass];
 }
 
-function sourceStatesFor(packageResult: MinimalContextPackage): ContextSnapshotSourceState[] | undefined {
+function sourceStatesFor(
+  packageResult: MinimalContextPackage,
+): ContextSnapshotSourceState[] | undefined {
   const seen = new Set<string>();
   const states: ContextSnapshotSourceState[] = [];
 
@@ -227,7 +225,9 @@ function invalidCompileResult(
   };
 }
 
-function packageShapeValid(value: MinimalContextPackage | undefined): value is MinimalContextPackage {
+function packageShapeValid(
+  value: MinimalContextPackage | undefined,
+): value is MinimalContextPackage {
   return (
     value?.kind === 'MinimalContextPackage' &&
     value.authorizesExecution === false &&
@@ -422,10 +422,7 @@ export function applyContextSnapshotInvalidation(
   ) {
     return invalidationResult('DUPLICATE', snapshot);
   }
-  if (
-    current.lastInvalidationStreamKey &&
-    current.lastInvalidationStreamKey !== signal.streamKey
-  ) {
+  if (current.lastInvalidationStreamKey && current.lastInvalidationStreamKey !== signal.streamKey) {
     return invalidationResult('OUT_OF_ORDER_REJECTED', snapshot);
   }
   if (
