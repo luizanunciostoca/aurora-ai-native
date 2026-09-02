@@ -66,11 +66,7 @@ function sameSubject(a: SubjectRef, b: SubjectRef): boolean {
   return false;
 }
 
-function canonicalPart(
-  value: unknown,
-  state: CanonicalState,
-  depth: number,
-): string | undefined {
+function canonicalPart(value: unknown, state: CanonicalState, depth: number): string | undefined {
   if (depth > MAX_CANONICAL_DEPTH || state.nodes >= MAX_CANONICAL_NODES) return undefined;
   state.nodes += 1;
 
@@ -219,7 +215,9 @@ function conflictGroupsValid(items: readonly RankedContextItem[]): boolean {
   return true;
 }
 
-function invalidResult(reasons: readonly MinimalContextCompileReason[]): MinimalContextCompileResult {
+function invalidResult(
+  reasons: readonly MinimalContextCompileReason[],
+): MinimalContextCompileResult {
   return {
     kind: 'MinimalContextCompileResult',
     valid: false,
@@ -314,8 +312,7 @@ export function compileMinimalContext(
 
     const groupUnits = group.reduce((sum, member) => sum + member.units, 0);
     const itemLimitExceeded = included.size + group.length > request.limits.maxItems;
-    const unitLimitExceeded =
-      outputCanonicalUnits + groupUnits > request.limits.maxCanonicalUnits;
+    const unitLimitExceeded = outputCanonicalUnits + groupUnits > request.limits.maxCanonicalUnits;
 
     for (const member of group) processed.add(member.item.sourceReference);
 
