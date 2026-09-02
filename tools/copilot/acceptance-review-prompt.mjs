@@ -1,21 +1,19 @@
-const [prNumberRaw, expectedHead, expectedMain, expectedRepository] =
-  process.argv.slice(2);
+const [prNumberRaw, expectedHead, expectedMain, expectedRepository] = process.argv.slice(2);
 
 function fail(message) {
   throw new Error(message);
 }
 
 const prNumber = Number(prNumberRaw);
-if (!Number.isSafeInteger(prNumber) || prNumber <= 0)
-  fail("valid PR number is required");
-if (!/^[0-9a-f]{40}$/i.test(expectedHead || "")) {
-  fail("40-character expected HEAD SHA is required");
+if (!Number.isSafeInteger(prNumber) || prNumber <= 0) fail('valid PR number is required');
+if (!/^[0-9a-f]{40}$/i.test(expectedHead || '')) {
+  fail('40-character expected HEAD SHA is required');
 }
-if (!/^[0-9a-f]{40}$/i.test(expectedMain || "")) {
-  fail("40-character expected main SHA is required");
+if (!/^[0-9a-f]{40}$/i.test(expectedMain || '')) {
+  fail('40-character expected main SHA is required');
 }
-if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(expectedRepository || "")) {
-  fail("owner/repository binding is required");
+if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(expectedRepository || '')) {
+  fail('owner/repository binding is required');
 }
 
 process.stdout.write(
