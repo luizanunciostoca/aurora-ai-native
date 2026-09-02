@@ -94,8 +94,7 @@ export const CONTEXT_RETRIEVAL_REJECTION_REASONS = [
   'SOURCE_IDENTITY_CONFLICT',
   'DUPLICATE_SOURCE_ITEM',
 ] as const;
-export type ContextRetrievalRejectionReason =
-  (typeof CONTEXT_RETRIEVAL_REJECTION_REASONS)[number];
+export type ContextRetrievalRejectionReason = (typeof CONTEXT_RETRIEVAL_REJECTION_REASONS)[number];
 
 export interface ContextRetrievalRejection {
   readonly sourceReference?: string;
