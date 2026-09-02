@@ -121,7 +121,6 @@ export type WorkerDecisionCode =
   | 'CLAIMED'
   | 'RECLAIMED'
   | 'WORKER_CAPACITY_REACHED'
-  | 'CONTEXT_MISMATCH'
   | 'INVALID_STATE'
   | 'OWNER_MISMATCH'
   | 'LEASE_NOT_ACQUIRED'
