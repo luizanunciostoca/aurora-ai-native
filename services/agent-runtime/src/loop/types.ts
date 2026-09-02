@@ -41,7 +41,12 @@ export type W05BRouteProjection =
       readonly status: 'SELECTED';
       readonly tenant: TenantContext;
       readonly correlation: CorrelationContext;
-      readonly family: 'DETERMINISTIC' | 'MODEL' | 'SPECIALIST' | 'COMPUTER_USE_PLANNING' | 'HUMAN';
+      readonly family:
+        | 'DETERMINISTIC'
+        | 'MODEL'
+        | 'SPECIALIST'
+        | 'COMPUTER_USE_PLANNING'
+        | 'HUMAN';
       readonly strategyId: string;
       readonly strategyVersion: string;
       readonly authorizesExecution: false;
@@ -178,7 +183,12 @@ export type AdaptiveLoopEvent =
       readonly kind: 'TOOL_PLAN_READY';
       readonly evidenceReference: string;
       readonly plannedActions: readonly PlannedToolAction[];
-      readonly disposition: 'AWAIT_OBSERVATION' | 'VALIDATE' | 'ABSTAIN' | 'ESCALATE' | 'FAIL';
+      readonly disposition:
+        | 'AWAIT_OBSERVATION'
+        | 'VALIDATE'
+        | 'ABSTAIN'
+        | 'ESCALATE'
+        | 'FAIL';
     }
   | {
       readonly kind: 'TOOL_OBSERVATION_READY';
