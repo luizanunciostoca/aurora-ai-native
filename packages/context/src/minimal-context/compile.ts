@@ -66,7 +66,11 @@ function sameSubject(a: SubjectRef, b: SubjectRef): boolean {
   return false;
 }
 
-function canonicalPart(value: unknown, state: CanonicalState, depth: number): string | undefined {
+function canonicalPart(
+  value: unknown,
+  state: CanonicalState,
+  depth: number,
+): string | undefined {
   if (depth > MAX_CANONICAL_DEPTH || state.nodes >= MAX_CANONICAL_NODES) return undefined;
   state.nodes += 1;
 
@@ -240,7 +244,9 @@ function exclusionReason(
  * envelope, never partially includes a conflicting fact group and can never
  * authorize execution.
  */
-export function compileMinimalContext(request: MinimalContextCompileRequest): MinimalContextCompileResult {
+export function compileMinimalContext(
+  request: MinimalContextCompileRequest,
+): MinimalContextCompileResult {
   const reasons: MinimalContextCompileReason[] = [];
   const queryValidation = request?.query ? validateContextQuery(request.query) : { valid: false };
   if (!queryValidation.valid) reasons.push('INVALID_QUERY');
@@ -330,7 +336,9 @@ export function compileMinimalContext(request: MinimalContextCompileRequest): Mi
   }
 
   const items = retrieval.items.filter((item) => included.has(item.sourceReference));
-  excludedSources.sort((a, b) => a.rank - b.rank || a.sourceReference.localeCompare(b.sourceReference));
+  excludedSources.sort(
+    (a, b) => a.rank - b.rank || a.sourceReference.localeCompare(b.sourceReference),
+  );
   const inputCanonicalUnits = evaluatedItems.reduce((sum, entry) => sum + entry.units, 0);
   const retainedRatioBps =
     inputCanonicalUnits === 0
