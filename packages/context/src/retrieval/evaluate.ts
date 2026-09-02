@@ -56,6 +56,17 @@ function validAgeLimit(value: unknown): value is number {
   );
 }
 
+function plainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function ownDataProperty(record: object, key: string): unknown {
+  const descriptor = Object.getOwnPropertyDescriptor(record, key);
+  return descriptor && 'value' in descriptor ? descriptor.value : undefined;
+}
+
 function classificationRank(value: unknown): number | undefined {
   if (
     typeof value !== 'string' ||
@@ -93,24 +104,14 @@ function policyValid(policy: ContextRetrievalPolicy): boolean {
   if (!policy || !validTimestamp(policy.evaluatedAt) || !validBps(policy.minimumTrustBps)) {
     return false;
   }
-  if (
-    !policy.trustBpsByAdapter ||
-    typeof policy.trustBpsByAdapter !== 'object' ||
-    Array.isArray(policy.trustBpsByAdapter)
-  ) {
-    return false;
-  }
-  for (const [adapterId, value] of Object.entries(policy.trustBpsByAdapter)) {
+  if (!plainRecord(policy.trustBpsByAdapter)) return false;
+  for (const adapterId of Object.keys(policy.trustBpsByAdapter)) {
+    const value = ownDataProperty(policy.trustBpsByAdapter, adapterId);
     if (!nonEmptyString(adapterId) || !validBps(value)) return false;
   }
-  if (
-    !policy.maxAgeMsBySourceClass ||
-    typeof policy.maxAgeMsBySourceClass !== 'object' ||
-    Array.isArray(policy.maxAgeMsBySourceClass)
-  ) {
-    return false;
-  }
-  for (const [sourceClass, value] of Object.entries(policy.maxAgeMsBySourceClass)) {
+  if (!plainRecord(policy.maxAgeMsBySourceClass)) return false;
+  for (const sourceClass of Object.keys(policy.maxAgeMsBySourceClass)) {
+    const value = ownDataProperty(policy.maxAgeMsBySourceClass, sourceClass);
     if (
       !CONTEXT_SOURCE_CLASSES.includes(sourceClass as ContextSourceClass) ||
       !validAgeLimit(value)
@@ -119,16 +120,9 @@ function policyValid(policy: ContextRetrievalPolicy): boolean {
     }
   }
   if (policy.conflictKeyBySourceReference !== undefined) {
-    if (
-      !policy.conflictKeyBySourceReference ||
-      typeof policy.conflictKeyBySourceReference !== 'object' ||
-      Array.isArray(policy.conflictKeyBySourceReference)
-    ) {
-      return false;
-    }
-    for (const [sourceReference, conflictKey] of Object.entries(
-      policy.conflictKeyBySourceReference,
-    )) {
+    if (!plainRecord(policy.conflictKeyBySourceReference)) return false;
+    for (const sourceReference of Object.keys(policy.conflictKeyBySourceReference)) {
+      const conflictKey = ownDataProperty(policy.conflictKeyBySourceReference, sourceReference);
       if (!nonEmptyString(sourceReference) || !nonEmptyString(conflictKey)) return false;
     }
   }
@@ -193,7 +187,11 @@ function freshnessFor(
   const ageMs = evaluatedMs - observedMs;
   if (ageMs < 0) return 'FUTURE_OBSERVATION';
 
-  const maxAgeMs = request.policy.maxAgeMsBySourceClass[item.sourceClass];
+  const configuredMaxAgeMs = ownDataProperty(
+    request.policy.maxAgeMsBySourceClass,
+    item.sourceClass,
+  );
+  const maxAgeMs = validAgeLimit(configuredMaxAgeMs) ? configuredMaxAgeMs : undefined;
   if (maxAgeMs === undefined) {
     if (request.query.currentness === 'CURRENT_REQUIRED') return 'FRESHNESS_RULE_MISSING';
     return {
@@ -297,8 +295,9 @@ function evaluateCandidate(
   const baseReason = baseItemReason(request, item);
   if (baseReason) return rejection(item, baseReason);
 
-  const trustBps = request.policy.trustBpsByAdapter[item.adapterId];
-  if (trustBps === undefined) return rejection(item, 'TRUST_UNKNOWN');
+  const configuredTrustBps = ownDataProperty(request.policy.trustBpsByAdapter, item.adapterId);
+  if (!validBps(configuredTrustBps)) return rejection(item, 'TRUST_UNKNOWN');
+  const trustBps = configuredTrustBps;
   if (trustBps < request.policy.minimumTrustBps) {
     return rejection(item, 'TRUST_BELOW_MINIMUM');
   }
@@ -309,13 +308,16 @@ function evaluateCandidate(
   const payloadKey = canonicalPayload(item.payload);
   if (payloadKey === undefined) return rejection(item, 'PAYLOAD_UNRANKABLE');
 
+  const configuredConflictKey = request.policy.conflictKeyBySourceReference
+    ? ownDataProperty(request.policy.conflictKeyBySourceReference, item.sourceReference)
+    : undefined;
+
   return {
     item,
     trustBps,
     freshness,
     payloadKey,
-    conflictKey:
-      request.policy.conflictKeyBySourceReference?.[item.sourceReference] ?? item.sourceReference,
+    conflictKey: nonEmptyString(configuredConflictKey) ? configuredConflictKey : item.sourceReference,
   };
 }
 
