@@ -1,8 +1,4 @@
-import type {
-  DataClassification,
-  Rfc3339Timestamp,
-  SubjectRef,
-} from '@aurora/contracts/context';
+import type { DataClassification, Rfc3339Timestamp, SubjectRef } from '@aurora/contracts/context';
 
 import { validateContextQuery } from '../query/validate.js';
 import { CONTEXT_SOURCE_CLASSES } from '../query/types.js';
@@ -25,8 +21,7 @@ const CLASSIFICATION_ORDER: Readonly<Record<DataClassification, number>> = {
   RESTRICTED: 3,
 };
 
-const RFC3339_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+const RFC3339_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 const MAX_CANONICAL_PAYLOAD_DEPTH = 32;
 const MAX_CANONICAL_PAYLOAD_NODES = 10_000;
 
@@ -44,19 +39,12 @@ function nonEmptyString(value: unknown): value is string {
 
 function validTimestamp(value: unknown): value is string {
   return (
-    typeof value === 'string' &&
-    RFC3339_PATTERN.test(value) &&
-    Number.isFinite(Date.parse(value))
+    typeof value === 'string' && RFC3339_PATTERN.test(value) && Number.isFinite(Date.parse(value))
   );
 }
 
 function validBps(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= 0 &&
-    value <= 10_000
-  );
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 10_000;
 }
 
 function validAgeLimit(value: unknown): value is number {
@@ -123,7 +111,10 @@ function policyValid(policy: ContextRetrievalPolicy): boolean {
     return false;
   }
   for (const [sourceClass, value] of Object.entries(policy.maxAgeMsBySourceClass)) {
-    if (!CONTEXT_SOURCE_CLASSES.includes(sourceClass as ContextSourceClass) || !validAgeLimit(value)) {
+    if (
+      !CONTEXT_SOURCE_CLASSES.includes(sourceClass as ContextSourceClass) ||
+      !validAgeLimit(value)
+    ) {
       return false;
     }
   }
@@ -424,7 +415,9 @@ function buildRankedItems(candidates: readonly EvaluatedCandidate[]): RankedCont
     const observedDelta =
       Date.parse(b.candidate.item.observedAt) - Date.parse(a.candidate.item.observedAt);
     if (observedDelta !== 0) return observedDelta;
-    const sourceClassDelta = a.candidate.item.sourceClass.localeCompare(b.candidate.item.sourceClass);
+    const sourceClassDelta = a.candidate.item.sourceClass.localeCompare(
+      b.candidate.item.sourceClass,
+    );
     if (sourceClassDelta !== 0) return sourceClassDelta;
     const adapterDelta = a.candidate.item.adapterId.localeCompare(b.candidate.item.adapterId);
     if (adapterDelta !== 0) return adapterDelta;
@@ -461,9 +454,7 @@ function buildRankedItems(candidates: readonly EvaluatedCandidate[]): RankedCont
  * W06-B evaluates acquired read-only context evidence. Ranking/trust/freshness
  * are informational and this function can never grant execution authority.
  */
-export function evaluateContextRetrieval(
-  request: ContextRetrievalRequest,
-): ContextRetrievalResult {
+export function evaluateContextRetrieval(request: ContextRetrievalRequest): ContextRetrievalResult {
   const evaluatedAt = request?.policy?.evaluatedAt;
   const fallbackEvaluatedAt = validTimestamp(evaluatedAt)
     ? (evaluatedAt as Rfc3339Timestamp)
