@@ -1,8 +1,5 @@
 export { compileMinimalContext } from './compile.js';
-export {
-  MINIMAL_CONTEXT_COMPILE_REASONS,
-  MINIMAL_CONTEXT_EXCLUSION_REASONS,
-} from './types.js';
+export { MINIMAL_CONTEXT_COMPILE_REASONS, MINIMAL_CONTEXT_EXCLUSION_REASONS } from './types.js';
 export type {
   MinimalContextCompileReason,
   MinimalContextCompileRequest,
