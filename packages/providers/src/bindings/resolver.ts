@@ -48,7 +48,10 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return prototype === Object.prototype || prototype === null;
 }
 
-function hasOnlyOwnDataProperties(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
+function hasOnlyOwnDataProperties(
+  value: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+): boolean {
   for (const key of Reflect.ownKeys(value)) {
     if (typeof key !== 'string' || !allowed.has(key)) return false;
     const descriptor = Object.getOwnPropertyDescriptor(value, key);
@@ -71,7 +74,10 @@ function isRfc3339Like(value: unknown): value is string {
 }
 
 function isState(value: unknown): value is ProviderBindingState {
-  return typeof value === 'string' && PROVIDER_BINDING_STATES.includes(value as ProviderBindingState);
+  return (
+    typeof value === 'string' &&
+    PROVIDER_BINDING_STATES.includes(value as ProviderBindingState)
+  );
 }
 
 function isVerificationState(value: unknown): value is ProviderBindingVerificationState {
@@ -161,8 +167,10 @@ export function resolveProviderBinding(
   request: ProviderBindingResolutionRequest,
 ): ProviderBindingResolutionResult {
   if (!requestIsWellFormed(request)) return fail('REQUEST_MALFORMED');
-  if (request.executionTarget.kind !== 'PROVIDER') return fail('NON_PROVIDER_TARGET');
-  if (!isNonEmptyString(request.executionTarget.accountReference)) {
+
+  const executionTarget = request.executionTarget;
+  if (executionTarget.kind !== 'PROVIDER') return fail('NON_PROVIDER_TARGET');
+  if (!isNonEmptyString(executionTarget.accountReference)) {
     return fail('TARGET_ACCOUNT_REQUIRED');
   }
 
@@ -176,10 +184,10 @@ export function resolveProviderBinding(
   const matches = parsed.filter(
     (binding) =>
       binding.tenant.tenantId === request.tenant.tenantId &&
-      binding.provider === request.executionTarget.provider &&
-      binding.accountReference === request.executionTarget.accountReference &&
-      binding.targetType === request.executionTarget.targetType &&
-      binding.targetReference === request.executionTarget.targetReference,
+      binding.provider === executionTarget.provider &&
+      binding.accountReference === executionTarget.accountReference &&
+      binding.targetType === executionTarget.targetType &&
+      binding.targetReference === executionTarget.targetReference,
   );
 
   if (matches.length === 0) return fail('BINDING_NOT_FOUND');
