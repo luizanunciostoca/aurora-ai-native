@@ -574,8 +574,8 @@ test('W06-H cache hit, stale, miss and invalidation outcomes stay explicit and n
 test('W06-H records test-only package, fan-out, cache, invalidation and p50/p95/p99 evidence', () => {
   const fixture = canonicalFixture();
   const benchmark = measureAssemblyLatency(fixture);
-  assert.ok(benchmark.last);
   const assembly = benchmark.last;
+  if (!assembly) throw new Error('W06-H benchmark produced no assembly sample');
   const invalidationObservationLatencyMs = measureInvalidationObservationLatency(assembly);
   assertOrderedPercentiles(benchmark.latencyMs);
   assertOrderedPercentiles(invalidationObservationLatencyMs);
