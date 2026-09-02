@@ -1,17 +1,40 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "authority": "Operational dispatch mirror only; live main/accepted evidence and canonical Drive governance override this file.",
   "wave": "W06",
   "defaults": {
     "mode": "IMPLEMENTATION",
-    "sourceDependencies": "W03-W05 accepted",
-    "mission": "ContextQuery, source adapters, retrieval/ranking/trust/freshness, minimal context, snapshots/invalidation, memory boundaries, semantic cache, safe speculation.",
+    "sourceDependencies": "W02-W05 accepted foundations; W05-H accepted unlocks W06-00",
+    "mission": "ContextQuery, bounded source adapters, retrieval/ranking/trust/freshness, MinimalContextPackage, snapshots/invalidation, explicit memory boundaries, semantic cache and reversible safe speculation with zero authority elevation.",
     "sources": [
-      "- Developer Manual v0.5",
-      "- Action Plan v0.4.1",
-      "- Risk Framework",
-      "- Legacy MemoryManager",
-      "- TOCA CreativeTruth/asset intelligence references"
+      "Developer Manual v0.5",
+      "Action Plan v0.4.1",
+      "Risk Framework v1.0",
+      "W06 canonical charter/dependency/ownership/acceptance/risk/context-pressure freeze",
+      "W01 canonical tenant/correlation/identity/classification context primitives",
+      "W02 accepted tenant/identity/consent/purpose/jurisdiction/policy/authority boundaries",
+      "W03 accepted event/replay/invalidation-capable durability",
+      "W04 accepted ExecutionBudget/control metadata",
+      "W05 accepted intelligence consumer interfaces",
+      "Legacy MemoryManager as CONCEPT_REUSE only",
+      "TOCA audited Asset Intelligence/Creative Truth patterns as semantic reference only"
+    ],
+    "readinessPolicy": "READ_ONLY_WHILE_BLOCKED",
+    "handoffFormat": "AURORA_COMPACT_V1",
+    "coordinatorSurfaces": [
+      "root-workspace-config",
+      "lockfiles",
+      "root-build-config",
+      "ci-workflows",
+      "codeowners",
+      "cross-package-publication",
+      "packages/context/package.json",
+      "packages/context/tsconfig.json",
+      "packages/context/tsconfig.build.json",
+      "packages/context/src/index.ts",
+      "packages/contracts-public-evolution",
+      "packages/schemas-public-evolution",
+      "current-program-status"
     ]
   },
   "tasks": [
@@ -21,12 +44,21 @@
       "dependsOn": ["W05-H"],
       "customAgent": "aurora-coordinator",
       "actions": [
-        "1. Freeze context source, trust, freshness, tenant/classification and provenance boundaries.",
-        "2. Define ContextPack/MinimalContextPackage compatibility and cache authority rules.",
-        "3. Create context pressure/performance budget and poisoning/staleness threat plan."
+        "Freeze source, trust, freshness, tenant/classification, provenance and conflict boundaries.",
+        "Freeze MinimalContextPackage/cache/snapshot non-authority and compatibility rules.",
+        "Freeze context-pressure/performance dimensions plus poisoning/staleness threat plan without invented production SLOs."
       ],
       "ownership": "W06 governance/context shared surfaces",
-      "forbidden": "No W05 routing or W18 learning ownership."
+      "forbidden": "No runtime feature code, W05 routing, W07 execution, W18 learning or authority semantics.",
+      "allowedPaths": ["docs/governance/w06/**", "docs/governance/copilot/tasks/W06.json"],
+      "laneHint": "PROGRAM-CONTROL",
+      "dispatchPriority": 120,
+      "sharedWriteSurfaces": [
+        "w06:governance-freeze",
+        "w06:ownership-allocation",
+        "w06:source-trust-freshness-boundary",
+        "w06:context-pressure-risk-plan"
+      ]
     },
     {
       "id": "W06-A",
@@ -34,51 +66,20 @@
       "dependsOn": ["W06-00"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Define ContextQuery contracts and adapters for approved source classes.",
-        "2. Propagate tenant/identity/classification/purpose constraints.",
-        "3. Do not fetch entire knowledge stores by default."
+        "Define bounded ContextQuery semantics and approved read-only source adapters using W01 context primitives.",
+        "Propagate tenant/identity/classification/purpose/consent/jurisdiction constraints and provenance requirements.",
+        "Retrieve narrowly by default; never fetch an entire knowledge store merely because selectors are absent."
       ],
-      "ownership": "W06 context query/source adapters",
-      "forbidden": "No provider side effects."
-    },
-    {
-      "id": "W06-B",
-      "title": "W06-B Retrieval / Ranking / Trust / Freshness Pipeline",
-      "dependsOn": ["W06-A"],
-      "customAgent": "aurora-implementation",
-      "actions": [
-        "1. Implement retrieval/ranking with provenance and source trust.",
-        "2. Validate freshness, conflicts, jurisdiction/consent constraints where applicable.",
-        "3. Represent uncertainty/conflicting facts explicitly."
+      "ownership": "packages/context/src/query/** + packages/context/src/sources/** plus W06-A tests",
+      "forbidden": "No provider/business write, retrieval ranking implementation or authority semantics.",
+      "allowedPaths": [
+        "packages/context/src/query/**",
+        "packages/context/src/sources/**",
+        "packages/context/test/w06a-**"
       ],
-      "ownership": "W06 retrieval/ranking pipeline",
-      "forbidden": "No stale permissive fallback."
-    },
-    {
-      "id": "W06-C",
-      "title": "W06-C Minimal Context Package + Compression",
-      "dependsOn": ["W06-B"],
-      "customAgent": "aurora-implementation",
-      "actions": [
-        "1. Compile minimal reproducible context for the task.",
-        "2. Track included/excluded sources, compression ratio and provenance.",
-        "3. Preserve critical constraints while reducing token/context pressure."
-      ],
-      "ownership": "W06 context package/compression",
-      "forbidden": "Do not hide policy/authority requirements through compression."
-    },
-    {
-      "id": "W06-D",
-      "title": "W06-D ContextSnapshot Compiler + Incremental Invalidation",
-      "dependsOn": ["W06-C", "W06-E"],
-      "customAgent": "aurora-integration",
-      "actions": [
-        "1. Define snapshot version/hash/freshness/provenance/invalidation triggers.",
-        "2. Support incremental recompilation/invalidation from W03 events.",
-        "3. Snapshot never freezes policy/authority."
-      ],
-      "ownership": "W06 snapshot compiler",
-      "forbidden": "No stale snapshot as authority."
+      "laneHint": "LANE-1",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": ["w06:context-query-sources"]
     },
     {
       "id": "W06-E",
@@ -86,12 +87,70 @@
       "dependsOn": ["W06-00"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Define working, episodic, semantic, company, user, temporal, operational and evidence memory boundaries.",
-        "2. Specify write/read ownership, retention/freshness and conflict semantics.",
-        "3. Use legacy memory taxonomy only as concept source."
+        "Define working, episodic, semantic, company, user, temporal, operational and evidence boundaries.",
+        "Specify read/write ownership, retention/freshness, tenant/classification and conflict semantics.",
+        "Use legacy memory taxonomy only as concept input; no global memory god-store."
       ],
-      "ownership": "W06 memory/context boundaries",
-      "forbidden": "No global memory god-store."
+      "ownership": "packages/context/src/memory-boundaries/** plus W06-E tests",
+      "forbidden": "No global memory source of truth, direct legacy runtime import or authority semantics.",
+      "allowedPaths": [
+        "packages/context/src/memory-boundaries/**",
+        "packages/context/test/w06e-**"
+      ],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 100,
+      "sharedWriteSurfaces": ["w06:memory-boundaries"]
+    },
+    {
+      "id": "W06-B",
+      "title": "W06-B Retrieval / Ranking / Trust / Freshness Pipeline",
+      "dependsOn": ["W06-A"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "Implement bounded retrieval/ranking with explicit provenance, source trust and task-relative freshness.",
+        "Validate conflicts and consent/purpose/jurisdiction constraints where applicable.",
+        "Represent stale, unknown and conflicting facts explicitly; trust/ranking never becomes authority."
+      ],
+      "ownership": "packages/context/src/retrieval/** plus W06-B tests",
+      "forbidden": "No stale permissive fallback, authority inference or semantic-cache ownership.",
+      "allowedPaths": ["packages/context/src/retrieval/**", "packages/context/test/w06b-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 90,
+      "sharedWriteSurfaces": ["w06:retrieval-trust-freshness"]
+    },
+    {
+      "id": "W06-C",
+      "title": "W06-C MinimalContextPackage + Compression",
+      "dependsOn": ["W06-B"],
+      "customAgent": "aurora-implementation",
+      "actions": [
+        "Compile the minimal reproducible context needed by the task from eligible source results.",
+        "Track included/rejected source provenance and compression/context-pressure measurements.",
+        "Preserve tenant/classification/freshness/conflict/provenance and safety-relevant constraints through compression."
+      ],
+      "ownership": "packages/context/src/minimal-context/** plus W06-C tests",
+      "forbidden": "Do not hide policy/authority requirements or material uncertainty through compression.",
+      "allowedPaths": ["packages/context/src/minimal-context/**", "packages/context/test/w06c-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 80,
+      "sharedWriteSurfaces": ["w06:minimal-context"]
+    },
+    {
+      "id": "W06-D",
+      "title": "W06-D ContextSnapshot Compiler + Incremental Invalidation",
+      "dependsOn": ["W06-C", "W06-E"],
+      "customAgent": "aurora-integration",
+      "actions": [
+        "Define snapshot version/hash/freshness/provenance/source-version and invalidation state.",
+        "Support deterministic incremental invalidation/recompilation from W03 events with replay/out-of-order safety.",
+        "Snapshot may carry policy references as information but never freezes current execution authority."
+      ],
+      "ownership": "packages/context/src/snapshots/** plus W06-D tests",
+      "forbidden": "No stale snapshot as authority and no duplicate W03 event/replay engine.",
+      "allowedPaths": ["packages/context/src/snapshots/**", "packages/context/test/w06d-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 70,
+      "sharedWriteSurfaces": ["w06:context-snapshots"]
     },
     {
       "id": "W06-F",
@@ -99,12 +158,16 @@
       "dependsOn": ["W06-C", "W06-E"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Implement cache entries with query/result provenance, TTL, source versions and invalidation.",
-        "2. Define cache hit/miss/stale rejection semantics.",
-        "3. Cache may accelerate retrieval/reasoning only; never authority."
+        "Implement cache entries bound to semantic query, tenant/classification, result provenance, TTL/source/config versions and invalidation.",
+        "Define hit/miss/stale-rejection semantics and cross-tenant isolation.",
+        "Cache accelerates retrieval/reasoning only; never cache credentials, secrets or authority as current permission."
       ],
-      "ownership": "W06 semantic cache",
-      "forbidden": "No credential/secret/authority token caching."
+      "ownership": "packages/context/src/semantic-cache/** plus W06-F tests",
+      "forbidden": "No credential/secret/authority-token caching and no permissive stale hit.",
+      "allowedPaths": ["packages/context/src/semantic-cache/**", "packages/context/test/w06f-**"],
+      "laneHint": "LANE-2",
+      "dispatchPriority": 70,
+      "sharedWriteSurfaces": ["w06:semantic-cache"]
     },
     {
       "id": "W06-G",
@@ -112,12 +175,16 @@
       "dependsOn": ["W06-D", "W06-F"],
       "customAgent": "aurora-implementation",
       "actions": [
-        "1. Implement prefetch/pre-rank/precompute for reversible read-only preparation.",
-        "2. Cancel/discard speculative work when context/policy changes.",
-        "3. Prove speculative path cannot perform external side effects."
+        "Implement bounded reversible read-only prefetch/pre-rank/precompute preparation.",
+        "Cancel/discard speculative work when source/context/policy compatibility changes.",
+        "Prove no W07/provider/device/workflow/local write or authority issuance is reachable."
       ],
-      "ownership": "W06 speculative preparation",
-      "forbidden": "No write/executor calls."
+      "ownership": "packages/context/src/speculation/** plus W06-G tests",
+      "forbidden": "No external write/executor calls or durable business mutation.",
+      "allowedPaths": ["packages/context/src/speculation/**", "packages/context/test/w06g-**"],
+      "laneHint": "LANE-1",
+      "dispatchPriority": 60,
+      "sharedWriteSurfaces": ["w06:safe-speculation"]
     },
     {
       "id": "W06-H",
@@ -125,13 +192,16 @@
       "dependsOn": ["W06-G"],
       "customAgent": "aurora-performance",
       "actions": [
-        "1. Prove same task can obtain minimal reproducible context.",
-        "2. Test stale/poisoned/conflicting sources and cache invalidation.",
-        "3. Measure ContextPack size, retrieval fan-out, cache metrics, invalidation lag, compression and p95/p99 assembly.",
-        "4. Verify tenant isolation under concurrency/cache."
+        "Prove equivalent tasks can obtain minimal reproducible context from versioned fixtures.",
+        "Exercise stale/poisoned/conflicting sources, cache invalidation and tenant isolation under concurrency.",
+        "Measure test-scope package size, retrieval fan-out, cache metrics, invalidation lag, compression and p50/p95/p99 assembly without invented production SLOs."
       ],
-      "ownership": "W06 tests/benchmarks",
-      "forbidden": "No W18 learning promotion."
+      "ownership": "W06 integration/context-quality/performance tests and W06 evidence only",
+      "forbidden": "No W18 learning promotion and no new production semantic runtime.",
+      "allowedPaths": ["packages/context/test/w06h-**", "docs/governance/w06/**"],
+      "laneHint": "CONVERGENCE",
+      "dispatchPriority": 50,
+      "sharedWriteSurfaces": ["w06:context-quality-gate"]
     }
   ]
 }
