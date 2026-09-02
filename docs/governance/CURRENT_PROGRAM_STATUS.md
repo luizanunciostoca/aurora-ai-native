@@ -1,6 +1,6 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_COMPLETE_W06_00_ACCEPTED_W06_A_E_BUILD_READY_W07_H_BUILD_RUNNING`
+Status: `ACTIVE_CURRENT_PROGRAM_STATE_W05_COMPLETE_W06_00_ACCEPTED_W06_A_E_BUILD_READY_W07_H_BUILD_READY`
 Audit date: 2026-09-02
 Canonical implementation baseline at this status candidate: `f2e178a2f889d5490c1509ff97a381abaadaee22`
 
@@ -24,10 +24,10 @@ No prompt, task node, PREBUILD artifact, draft/open PR, agent/model output, gree
 - W04: `COMPLETE_ACCEPTED / W04_CONTROL_CORE_VERIFIED`.
 - W05-00/A/B/C/D/E/F/G/H: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`; W05 is `COMPLETE_ACCEPTED`.
 - W06-00: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W06-A and W06-E: `DEPENDENCY_READY / PUZZLE_BUILD_READY`; both latest Copilot Free attempts failed before publishing a candidate PR, so neither is accepted or currently worker-owned.
+- W06-A and W06-E: `DEPENDENCY_READY / PUZZLE_BUILD_READY / COPILOT_FREE_FAILED`; their latest Copilot Free attempts failed before publishing a candidate PR, so neither is accepted or currently worker-owned.
 - W06-B/C/D/F/G/H remain gated by the accepted W06 DAG.
 - W07-00/A/B/C/D/E/F/G: `COMPLETE_ACCEPTED_MERGED / POST_MERGE_EXACT_MAIN_VERIFIED`.
-- W07-H: `DEPENDENCY_READY / PUZZLE_BUILD_READY / COPILOT_FREE_RUNNING`; no open canonical W07-H PR was found at this status revalidation, so Program Control must not race the worker while its running ownership label remains active.
+- W07-H: `DEPENDENCY_READY / PUZZLE_BUILD_READY / COPILOT_FREE_FAILED`; repeated Copilot Free attempts failed before publishing a candidate PR and the stale `running` label was removed by Program Control reconciliation.
 - W08-W20 remain dependency-gated except PREBUILD/readiness explicitly allowed by accepted Puzzle governance.
 - W15 remains additionally dependent on the accepted Device Plane dependency chain, including W07-H and W14-H.
 
@@ -134,10 +134,10 @@ Accepted W06-00 boundaries:
 
 Current W06 frontier is `{ W06-A, W06-E }`.
 
-- W06-A issue #152: BUILD_READY; latest Copilot Free attempt failed before candidate publication; no acceptance exists.
-- W06-E issue #153: BUILD_READY; latest Copilot Free attempt failed before candidate publication; no acceptance exists.
+- W06-A issue #152: BUILD_READY / COPILOT_FREE_FAILED; no canonical candidate PR exists and no acceptance exists.
+- W06-E issue #153: BUILD_READY / COPILOT_FREE_FAILED; no canonical candidate PR exists and no acceptance exists.
 
-Because W06-A begins the longer critical chain `A -> B -> C`, Program Control should prioritize W06-A for the next direct BUILD slot while W07-H retains its active worker slot. W06-E remains READY for the next safe slot or governed parallel capacity.
+W06-A begins the longer critical chain `A -> B -> C`. W06-E is independent at this frontier and remains ready for the next safe parallel capacity.
 
 ## W07 — Executor Plane — frontier W07-H
 
@@ -159,7 +159,7 @@ Accepted integration anchors include:
 - W07-F uncertainty/reconciliation merge `6383813bfda7cca31440ec3bd529e3e815596e2d`.
 - W07-G failure-containment merge `c7a01549abac801915ad161e69a5685a8271f481`.
 
-W07-H issue #140 is the only remaining W07 node. At this status freeze it is open, `PUZZLE_BUILD_READY`, and carries `aurora:copilot-free-running`. No open W07-H PR was found during revalidation. Do not create a competing BUILD while that running ownership state remains active; audit the worker result when it changes or publishes a candidate.
+W07-H issue #140 is the only remaining W07 node. Program Control revalidated repeated Copilot Free worker failures, no published branch/PR, and removed the stale `running` state. W07-H is now `PUZZLE_BUILD_READY / COPILOT_FREE_FAILED` and remains unaccepted.
 
 W07-H must integrate A-G with W03/W04/current-authority foundations, execute consumer fixtures and fault injection, run Risk Gates A-D, and publish dependent-wave surfaces only after exact-head and post-merge verification.
 
@@ -196,9 +196,9 @@ Puzzle/READY_FRONTIER governance remains active. `FREE_ACTIONS_CLI` permits at m
 
 At this status snapshot:
 
-- W07-H occupies an active Copilot Free worker ownership state.
-- W06-A and W06-E are BUILD_READY but their latest Free worker attempts failed before candidate publication.
-- the safest next direct BUILD is W06-A after this status publication itself is accepted; W06-E remains readiness-ready for the next available safe slot.
+- W07-H is BUILD_READY but its latest Copilot Free attempts failed before candidate publication; no worker currently owns a valid canonical BUILD candidate.
+- W06-A and W06-E are BUILD_READY but their latest Free worker attempts also failed before candidate publication.
+- after this status publication is accepted, the two highest-value disjoint direct BUILD candidates are W07-H and W06-A; W06-E remains READY for the next safe slot.
 
 ## Acceptance discipline
 
