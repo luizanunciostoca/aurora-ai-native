@@ -15,7 +15,9 @@ const lines = text
   .split(/\r?\n/)
   .map((line) => line.trim())
   .filter(Boolean);
-const marker = [...lines].reverse().find((line) => line.startsWith('AURORA_ACCEPTANCE_RESULT='));
+const marker = [...lines]
+  .reverse()
+  .find((line) => line.startsWith('AURORA_ACCEPTANCE_RESULT='));
 if (!marker) fail('missing AURORA_ACCEPTANCE_RESULT marker');
 
 let result;
@@ -25,7 +27,9 @@ try {
   fail('AURORA_ACCEPTANCE_RESULT is not valid JSON');
 }
 
-if (!result || typeof result !== 'object' || Array.isArray(result)) fail('result must be an object');
+if (!result || typeof result !== 'object' || Array.isArray(result)) {
+  fail('result must be an object');
+}
 if (!['ACCEPT_RECOMMENDED', 'REWORK_REQUIRED'].includes(result.decision)) {
   fail('invalid acceptance decision');
 }
@@ -47,7 +51,9 @@ if (typeof result.summary !== 'string' || result.summary.trim().length === 0) {
 if (result.decision === 'ACCEPT_RECOMMENDED') {
   if (result.blockers.length !== 0) fail('ACCEPT_RECOMMENDED cannot contain blockers');
   for (const gate of ['A', 'B', 'C', 'D']) {
-    if (result.riskGates[gate] !== 'PASS') fail('ACCEPT_RECOMMENDED requires all Risk Gates PASS');
+    if (result.riskGates[gate] !== 'PASS') {
+      fail('ACCEPT_RECOMMENDED requires all Risk Gates PASS');
+    }
   }
 }
 
