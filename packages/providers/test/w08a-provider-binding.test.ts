@@ -46,6 +46,7 @@ function providerTarget(
   overrides: Partial<ProviderExecutionTargetReference> = {},
 ): ProviderExecutionTargetReference {
   return {
+    schemaVersion: VERSION,
     kind: 'PROVIDER',
     provider: 'META',
     accountReference: ACCOUNT,
@@ -160,8 +161,9 @@ test('W08-A rejects duplicate, inactive, revoked and stale exact bindings', () =
 
 test('W08-A requires a PROVIDER target with an explicit account reference', () => {
   const localTarget: ExecutionTargetReference = {
+    schemaVersion: VERSION,
     kind: 'LOCAL_SERVICE',
-    service: 'asset-service',
+    bindingReference: 'asset-service',
   };
   const nonProvider = resolveProviderBinding({
     tenant: { tenantId: TENANT_A },
