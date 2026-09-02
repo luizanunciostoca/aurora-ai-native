@@ -85,10 +85,9 @@ function frame(overrides: Partial<AdaptiveLoopControlFrame> = {}): AdaptiveLoopC
   };
 }
 
-function route(overrides: Partial<Extract<W05BRouteProjection, { status: 'SELECTED' }>> = {}): Extract<
-  W05BRouteProjection,
-  { status: 'SELECTED' }
-> {
+function route(
+  overrides: Partial<Extract<W05BRouteProjection, { status: 'SELECTED' }>> = {},
+): Extract<W05BRouteProjection, { status: 'SELECTED' }> {
   return {
     source: 'W05_B_INTELLIGENCE_ROUTE',
     status: 'SELECTED',
@@ -115,7 +114,9 @@ function started(
     frame: startFrame,
   });
   assert.equal(result.status, 'STARTED');
-  if (result.status !== 'STARTED') throw new Error(`unexpected start rejection: ${result.code}`);
+  if (result.status !== 'STARTED') {
+    throw new Error(`unexpected start rejection: ${result.code}`);
+  }
   return result.snapshot;
 }
 
@@ -145,7 +146,12 @@ function advance(
 
 test('W05-G rejects invalid config, abstained routes and non-agent-suitable work', () => {
   assert.deepEqual(
-    startAdaptiveLoop({ loopId: 'loop:w05g', route: route(), config: { ...config, maxIterations: 0 }, frame: frame() }),
+    startAdaptiveLoop({
+      loopId: 'loop:w05g',
+      route: route(),
+      config: { ...config, maxIterations: 0 },
+      frame: frame(),
+    }),
     { status: 'REJECTED', code: 'INVALID_CONFIG' },
   );
 
@@ -158,7 +164,12 @@ test('W05-G rejects invalid config, abstained routes and non-agent-suitable work
     downstreamExecutionStillRequiresCurrentValidation: true,
   };
   assert.equal(
-    startAdaptiveLoop({ loopId: 'loop:w05g', route: abstained, config, frame: frame() }).status,
+    startAdaptiveLoop({
+      loopId: 'loop:w05g',
+      route: abstained,
+      config,
+      frame: frame(),
+    }).status,
     'REJECTED',
   );
 
@@ -168,13 +179,21 @@ test('W05-G rejects invalid config, abstained routes and non-agent-suitable work
     config,
     frame: frame(),
   });
-  assert.deepEqual(deterministic, { status: 'REJECTED', code: 'ROUTE_NOT_AGENT_SUITABLE' });
+  assert.deepEqual(deterministic, {
+    status: 'REJECTED',
+    code: 'ROUTE_NOT_AGENT_SUITABLE',
+  });
 
   const specialistOnlyWorker = frame({
     worker: worker({ justification: 'SPECIALIST_COORDINATION_REQUIRED' }),
   });
   assert.deepEqual(
-    startAdaptiveLoop({ loopId: 'loop:w05g', route: route({ family: 'SPECIALIST' }), config, frame: specialistOnlyWorker }),
+    startAdaptiveLoop({
+      loopId: 'loop:w05g',
+      route: route({ family: 'SPECIALIST' }),
+      config,
+      frame: specialistOnlyWorker,
+    }),
     { status: 'REJECTED', code: 'ROUTE_NOT_AGENT_SUITABLE' },
   );
 });
@@ -258,7 +277,11 @@ test('bounded observe-plan-tool-observe-inspect-validate happy path remains plan
 
   const completed = advanceAdaptiveLoop(
     snapshot,
-    { kind: 'VALIDATION_READY', evidenceReference: 'ev:validate:1', outcome: 'PASS' },
+    {
+      kind: 'VALIDATION_READY',
+      evidenceReference: 'ev:validate:1',
+      outcome: 'PASS',
+    },
     at(control, 106),
   );
   assert.equal(completed.status, 'TERMINATED');
@@ -298,7 +321,12 @@ test('tool planning is fenced by current CapabilityPlan and W07 execution bounda
   );
   snapshot = advance(
     snapshot,
-    { kind: 'PLAN_READY', evidenceReference: 'ev:p', usedModel: false, disposition: 'TOOL_PLAN' },
+    {
+      kind: 'PLAN_READY',
+      evidenceReference: 'ev:p',
+      usedModel: false,
+      disposition: 'TOOL_PLAN',
+    },
     at(control, 102),
   );
 
@@ -315,17 +343,17 @@ test('tool planning is fenced by current CapabilityPlan and W07 execution bounda
   assert.equal(unknownCapability.status, 'REJECTED');
   assert.equal(unknownCapability.snapshot.phase, 'TOOL_PLAN');
 
-  const wrongBoundary = advanceAdaptiveLoop(
+  const invalidPlanReference = advanceAdaptiveLoop(
     snapshot,
     {
       kind: 'TOOL_PLAN_READY',
-      evidenceReference: 'ev:tp:bad-boundary',
-      plannedActions: [{ ...action(), executionBoundary: 'W07_REQUIRED' as const, planReference: '' }],
+      evidenceReference: 'ev:tp:bad-reference',
+      plannedActions: [action({ planReference: '' })],
       disposition: 'AWAIT_OBSERVATION',
     },
     at(control, 103),
   );
-  assert.equal(wrongBoundary.status, 'REJECTED');
+  assert.equal(invalidPlanReference.status, 'REJECTED');
 
   const duplicate = advanceAdaptiveLoop(
     snapshot,
@@ -343,10 +371,19 @@ test('tool planning is fenced by current CapabilityPlan and W07 execution bounda
 test('unknown tool observation escalates and never enters a blind repair/retry path', () => {
   const control = frame();
   let snapshot = started(control);
-  snapshot = advance(snapshot, { kind: 'OBSERVATION_READY', evidenceReference: 'ev:o' }, at(control, 101));
   snapshot = advance(
     snapshot,
-    { kind: 'PLAN_READY', evidenceReference: 'ev:p', usedModel: false, disposition: 'TOOL_PLAN' },
+    { kind: 'OBSERVATION_READY', evidenceReference: 'ev:o' },
+    at(control, 101),
+  );
+  snapshot = advance(
+    snapshot,
+    {
+      kind: 'PLAN_READY',
+      evidenceReference: 'ev:p',
+      usedModel: false,
+      disposition: 'TOOL_PLAN',
+    },
     at(control, 102),
   );
   snapshot = advance(
@@ -384,7 +421,12 @@ test('local model, iteration and repair limits terminate deterministically', () 
   );
   modelLimited = advance(
     modelLimited,
-    { kind: 'PLAN_READY', evidenceReference: 'ev:p', usedModel: true, disposition: 'VALIDATE' },
+    {
+      kind: 'PLAN_READY',
+      evidenceReference: 'ev:p',
+      usedModel: true,
+      disposition: 'VALIDATE',
+    },
     at(control, 102),
   );
   modelLimited = advance(
@@ -394,7 +436,12 @@ test('local model, iteration and repair limits terminate deterministically', () 
   );
   const modelStop = advanceAdaptiveLoop(
     modelLimited,
-    { kind: 'REPAIR_READY', evidenceReference: 'ev:r', usedModel: true, disposition: 'VALIDATE' },
+    {
+      kind: 'REPAIR_READY',
+      evidenceReference: 'ev:r',
+      usedModel: true,
+      disposition: 'VALIDATE',
+    },
     at(control, 104),
   );
   assert.equal(modelStop.snapshot.terminalReason, 'LOCAL_MODEL_CALL_LIMIT');
@@ -407,7 +454,12 @@ test('local model, iteration and repair limits terminate deterministically', () 
   );
   iterationLimited = advance(
     iterationLimited,
-    { kind: 'PLAN_READY', evidenceReference: 'ev:p2', usedModel: false, disposition: 'VALIDATE' },
+    {
+      kind: 'PLAN_READY',
+      evidenceReference: 'ev:p2',
+      usedModel: false,
+      disposition: 'VALIDATE',
+    },
     at(control, 102),
   );
   const iterationStop = advanceAdaptiveLoop(
@@ -417,7 +469,11 @@ test('local model, iteration and repair limits terminate deterministically', () 
   );
   assert.equal(iterationStop.snapshot.terminalReason, 'LOCAL_ITERATION_LIMIT');
 
-  let repairLimited = started(control, { ...config, maxIterations: 3, maxRepairAttempts: 1 });
+  let repairLimited = started(control, {
+    ...config,
+    maxIterations: 3,
+    maxRepairAttempts: 1,
+  });
   repairLimited = advance(
     repairLimited,
     { kind: 'OBSERVATION_READY', evidenceReference: 'ev:o3' },
@@ -425,7 +481,12 @@ test('local model, iteration and repair limits terminate deterministically', () 
   );
   repairLimited = advance(
     repairLimited,
-    { kind: 'PLAN_READY', evidenceReference: 'ev:p3', usedModel: false, disposition: 'VALIDATE' },
+    {
+      kind: 'PLAN_READY',
+      evidenceReference: 'ev:p3',
+      usedModel: false,
+      disposition: 'VALIDATE',
+    },
     at(control, 102),
   );
   repairLimited = advance(
@@ -435,7 +496,12 @@ test('local model, iteration and repair limits terminate deterministically', () 
   );
   repairLimited = advance(
     repairLimited,
-    { kind: 'REPAIR_READY', evidenceReference: 'ev:r3', usedModel: false, disposition: 'VALIDATE' },
+    {
+      kind: 'REPAIR_READY',
+      evidenceReference: 'ev:r3',
+      usedModel: false,
+      disposition: 'VALIDATE',
+    },
     at(control, 104),
   );
   repairLimited = advance(
@@ -445,7 +511,12 @@ test('local model, iteration and repair limits terminate deterministically', () 
   );
   const repairStop = advanceAdaptiveLoop(
     repairLimited,
-    { kind: 'REPAIR_READY', evidenceReference: 'ev:r4', usedModel: false, disposition: 'VALIDATE' },
+    {
+      kind: 'REPAIR_READY',
+      evidenceReference: 'ev:r4',
+      usedModel: false,
+      disposition: 'VALIDATE',
+    },
     at(control, 106),
   );
   assert.equal(repairStop.snapshot.terminalReason, 'LOCAL_REPAIR_LIMIT');
@@ -453,28 +524,61 @@ test('local model, iteration and repair limits terminate deterministically', () 
 
 test('W04 budget projections constrain optional reasoning, tool planning and latency', () => {
   const degradedFrame = frame({
-    budget: { ...frame().budget, state: 'DEGRADED', action: 'DEGRADE_OPTIONAL' },
+    budget: {
+      ...frame().budget,
+      state: 'DEGRADED',
+      action: 'DEGRADE_OPTIONAL',
+    },
   });
-  assert.equal(startAdaptiveLoop({ loopId: 'loop:degraded', route: route(), config, frame: degradedFrame }).status, 'STARTED');
+  assert.equal(
+    startAdaptiveLoop({
+      loopId: 'loop:degraded',
+      route: route(),
+      config,
+      frame: degradedFrame,
+    }).status,
+    'STARTED',
+  );
 
   const control = frame();
   let reasoning = started(control);
-  reasoning = advance(reasoning, { kind: 'OBSERVATION_READY', evidenceReference: 'ev:o' }, at(control, 101));
+  reasoning = advance(
+    reasoning,
+    { kind: 'OBSERVATION_READY', evidenceReference: 'ev:o' },
+    at(control, 101),
+  );
   const noReasoning = advanceAdaptiveLoop(
     reasoning,
-    { kind: 'PLAN_READY', evidenceReference: 'ev:p', usedModel: true, disposition: 'VALIDATE' },
+    {
+      kind: 'PLAN_READY',
+      evidenceReference: 'ev:p',
+      usedModel: true,
+      disposition: 'VALIDATE',
+    },
     {
       ...at(control, 102),
-      budget: { ...control.budget, remaining: { ...control.budget.remaining, reasoningUnits: 0 } },
+      budget: {
+        ...control.budget,
+        remaining: { ...control.budget.remaining, reasoningUnits: 0 },
+      },
     },
   );
   assert.equal(noReasoning.snapshot.terminalReason, 'W04_REASONING_BUDGET_EXHAUSTED');
 
   let tools = started(control);
-  tools = advance(tools, { kind: 'OBSERVATION_READY', evidenceReference: 'ev:o2' }, at(control, 101));
   tools = advance(
     tools,
-    { kind: 'PLAN_READY', evidenceReference: 'ev:p2', usedModel: false, disposition: 'TOOL_PLAN' },
+    { kind: 'OBSERVATION_READY', evidenceReference: 'ev:o2' },
+    at(control, 101),
+  );
+  tools = advance(
+    tools,
+    {
+      kind: 'PLAN_READY',
+      evidenceReference: 'ev:p2',
+      usedModel: false,
+      disposition: 'TOOL_PLAN',
+    },
     at(control, 102),
   );
   const toolStop = advanceAdaptiveLoop(
@@ -482,12 +586,22 @@ test('W04 budget projections constrain optional reasoning, tool planning and lat
     {
       kind: 'TOOL_PLAN_READY',
       evidenceReference: 'ev:tp2',
-      plannedActions: [action(), action({ capabilityId: 'cap.write', actionType: 'write.preview', planReference: 'plan:tool:2' })],
+      plannedActions: [
+        action(),
+        action({
+          capabilityId: 'cap.write',
+          actionType: 'write.preview',
+          planReference: 'plan:tool:2',
+        }),
+      ],
       disposition: 'AWAIT_OBSERVATION',
     },
     {
       ...at(control, 103),
-      budget: { ...control.budget, remaining: { ...control.budget.remaining, toolCalls: 1 } },
+      budget: {
+        ...control.budget,
+        remaining: { ...control.budget.remaining, toolCalls: 1 },
+      },
     },
   );
   assert.equal(toolStop.snapshot.terminalReason, 'W04_TOOL_BUDGET_EXHAUSTED');
@@ -498,7 +612,10 @@ test('W04 budget projections constrain optional reasoning, tool planning and lat
     { kind: 'OBSERVATION_READY', evidenceReference: 'ev:latency' },
     {
       ...at(control, 101),
-      budget: { ...control.budget, remaining: { ...control.budget.remaining, latencyMs: 0 } },
+      budget: {
+        ...control.budget,
+        remaining: { ...control.budget.remaining, latencyMs: 0 },
+      },
     },
   );
   assert.equal(latencyStop.snapshot.terminalReason, 'W04_LATENCY_BUDGET_EXHAUSTED');
@@ -537,7 +654,12 @@ test('tenant/correlation, registry and budget identity mismatches fail closed', 
     worker: worker({ tenant: otherTenant }),
   });
   assert.deepEqual(
-    startAdaptiveLoop({ loopId: 'loop:wrong-context', route: route(), config, frame: wrongStart }),
+    startAdaptiveLoop({
+      loopId: 'loop:wrong-context',
+      route: route(),
+      config,
+      frame: wrongStart,
+    }),
     { status: 'REJECTED', code: 'INVALID_CONTROL_FRAME' },
   );
 
@@ -558,7 +680,10 @@ test('tenant/correlation, registry and budget identity mismatches fail closed', 
     { kind: 'OBSERVATION_READY', evidenceReference: 'ev:wrong-registry' },
     {
       ...at(control, 101),
-      capabilityPlan: { ...control.capabilityPlan, registryVersion: 'cap-reg:2' },
+      capabilityPlan: {
+        ...control.capabilityPlan,
+        registryVersion: 'cap-reg:2',
+      },
     },
   );
   assert.equal(wrongRegistry.snapshot.terminalReason, 'CONTROL_FRAME_INVALID');
@@ -592,7 +717,10 @@ test('elapsed and retrograde time are bounded without moving snapshot time backw
     at(control, 99),
   );
   assert.equal(retrograde.snapshot.terminalReason, 'CONTROL_FRAME_INVALID');
-  assert.equal(retrograde.snapshot.lastTransitionEpochMs, retrogradeSnapshot.lastTransitionEpochMs);
+  assert.equal(
+    retrograde.snapshot.lastTransitionEpochMs,
+    retrogradeSnapshot.lastTransitionEpochMs,
+  );
 });
 
 test('explicit cancellation is terminal and terminal snapshots cannot be restarted by events', () => {
