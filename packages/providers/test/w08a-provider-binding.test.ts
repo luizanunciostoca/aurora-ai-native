@@ -11,10 +11,7 @@ import type {
 import type { ProviderExternalId, TenantId } from '@aurora/contracts/ids';
 import type { ContractVersion } from '@aurora/contracts/versioning';
 
-import {
-  resolveProviderBinding,
-  type ProviderBindingRecord,
-} from '../src/bindings/index.js';
+import { resolveProviderBinding, type ProviderBindingRecord } from '../src/bindings/index.js';
 
 const VERSION = '1.0.0' as ContractVersion;
 const NOW = '2026-09-02T23:00:00Z' as Rfc3339Timestamp;
@@ -23,9 +20,7 @@ const TENANT_B = 'ten_01JTESTTENANTB000000000000' as TenantId;
 const ACCOUNT = 'act_123' as ProviderExternalId;
 const TARGET = 'page_456' as ProviderExternalId;
 
-function binding(
-  overrides: Partial<ProviderBindingRecord> = {},
-): ProviderBindingRecord {
+function binding(overrides: Partial<ProviderBindingRecord> = {}): ProviderBindingRecord {
   return {
     kind: 'ProviderBindingRecord',
     schemaVersion: VERSION,
@@ -142,10 +137,7 @@ test('W08-A rejects duplicate, inactive, revoked and stale exact bindings', () =
   const duplicate = resolveProviderBinding({
     tenant: { tenantId: TENANT_A },
     executionTarget: providerTarget(),
-    candidates: [
-      binding(),
-      binding({ bindingReference: 'provider-binding-meta-page-2' }),
-    ],
+    candidates: [binding(), binding({ bindingReference: 'provider-binding-meta-page-2' })],
   });
   assert.equal(duplicate.ok, false);
   if (!duplicate.ok) assert.equal(duplicate.error, 'BINDING_AMBIGUOUS');
@@ -228,8 +220,7 @@ test('W08-A rejects malformed, accessor, inherited and secret-bearing binding ob
 });
 
 test('W08-A preserves provider-owned IDs as opaque external references even when they resemble Aurora IDs', () => {
-  const canonicalLookingExternal =
-    'ten_01JLOOKSLIKECANONICAL0000000' as ProviderExternalId;
+  const canonicalLookingExternal = 'ten_01JLOOKSLIKECANONICAL0000000' as ProviderExternalId;
   const result = resolveProviderBinding({
     tenant: { tenantId: TENANT_A },
     executionTarget: providerTarget({
