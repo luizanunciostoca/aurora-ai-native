@@ -1,7 +1,7 @@
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { format } from 'prettier';
 
@@ -14,8 +14,8 @@ const prettierOptions = {
 };
 
 test('W05-H diagnostic emits canonical Prettier diff', async () => {
-  const path = 'packages/intelligence/test/w05h-routing-evals.test.mjs';
-  const source = await readFile(path, 'utf8');
+  const sourceUrl = new URL('./w05h-routing-evals.test.mjs', import.meta.url);
+  const source = await readFile(sourceUrl, 'utf8');
   const formatted = await format(source, prettierOptions);
   const directory = await mkdtemp(join(tmpdir(), 'w05h-prettier-'));
   try {
