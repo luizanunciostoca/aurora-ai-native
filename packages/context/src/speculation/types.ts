@@ -9,9 +9,7 @@ export interface SpeculativePreparationLimits {
 }
 
 export type SpeculativePreparationUnitKind =
-  | 'PREFETCH_BINDING'
-  | 'PRE_RANK_PACKAGE'
-  | 'PRECOMPUTE_CACHE_LOOKUP';
+  'PREFETCH_BINDING' | 'PRE_RANK_PACKAGE' | 'PRECOMPUTE_CACHE_LOOKUP';
 
 export interface SpeculativePreparationUnit {
   readonly kind: SpeculativePreparationUnitKind;
