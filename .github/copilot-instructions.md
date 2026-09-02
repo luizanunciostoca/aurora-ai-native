@@ -25,11 +25,15 @@ Before changing code, revalidate the current `main`, `docs/governance/CURRENT_PR
 ## Branch / PR / acceptance
 
 - One task = one isolated branch/workspace = one PR unless the task explicitly says otherwise.
-- Never merge your own PR and never declare your own work accepted.
+- Aurora uses **Single-Owner Governed Acceptance**. A second GitHub identity is optional, not required.
+- An implementation worker must not silently self-accept. Program Control / repository owner may accept and merge a candidate under the same repository identity only when an explicit owner authorization is recorded and a separate acceptance review is performed against one exact HEAD.
 - Record base `main` SHA and final exact HEAD in the PR body.
-- Quality, Test Build and Security must pass on the SAME exact final HEAD.
+- Quality, Test Build and Security must pass on the SAME exact final HEAD, together with any task-specific gates.
+- Correctness, Safety/Authority, Performance/Economics and Failure/Recoverability must be explicitly reviewed as Risk Gates A-D where applicable before owner-authorized acceptance.
+- CI success alone is never acceptance. Stale CI, unresolved P0/P1, authority elevation, ownership/scope violations, duplicate sources of truth, secret leakage or recovery blockers require `REWORK_REQUIRED`.
 - If `main` changes before merge, reconcile and rerun required gates; stale CI is not acceptance evidence.
-- Do not force merge.
+- Same-identity owner merge is allowed only after the recorded owner decision and acceptance evidence above. Do not force merge.
+- After merge, revalidate the exact new `main` with required post-merge gates before labeling/closing the task as accepted or releasing successors.
 
 ## Testing and evidence
 
@@ -44,4 +48,4 @@ Legacy Aurora, Nova Aurora, n8n salvage and TOCA MCP are reference/planning inpu
 
 ## Completion handoff
 
-Every task must end with a structured handoff in the PR body or final comment containing: Task/Wave ID, base SHA, branch, PR, exact HEAD, changed paths, contracts consumed/produced, schemas/migrations/events, tests, negative tests, risks/limitations, cleanup/deprecations, evidence, blockers and downstream consumers.
+Every task must end with a structured handoff in the PR body or final comment containing: Task/Wave ID, base SHA, branch, PR, exact HEAD, changed paths, contracts consumed/produced, schemas/migrations/events, tests, negative tests, risks/limitations, cleanup/deprecations, evidence, blockers and downstream consumers. Owner-authorized same-identity acceptance additionally records the owner decision, acceptance decision, Risk Gates A-D, merge SHA and post-merge verification.
