@@ -114,9 +114,10 @@ function nonEmpty(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function validTimestamp(value: string): boolean {
-  if (!RFC3339_PATTERN.test(value)) return false;
-  return Number.isFinite(Date.parse(value));
+function validTimestamp(value: unknown): boolean {
+  return (
+    typeof value === 'string' && RFC3339_PATTERN.test(value) && Number.isFinite(Date.parse(value))
+  );
 }
 
 function classificationRank(value: unknown): number | undefined {
@@ -136,6 +137,17 @@ function pushUnique(
   if (!reasons.includes(reason)) reasons.push(reason);
 }
 
+function unknownBoundaryResult(): MemoryBoundaryValidationResult {
+  return {
+    kind: 'MEMORY_BOUNDARY_VALIDATION_RESULT',
+    valid: false,
+    reasons: ['BOUNDARY_UNKNOWN'],
+    preservesConflict: true,
+    requiresDownstreamFreshnessEvaluation: true,
+    authorizesExecution: false,
+  };
+}
+
 /**
  * W06-E validates memory-domain ownership and isolation only. Freshness/trust
  * ranking remains W06-B-owned and this result can never authorize execution.
@@ -143,28 +155,34 @@ function pushUnique(
 export function validateMemoryBoundaryCandidate(
   request: MemoryBoundaryValidationRequest,
 ): MemoryBoundaryValidationResult {
-  const reasons: MemoryBoundaryValidationReason[] = [];
-  const descriptor = MEMORY_BOUNDARY_DESCRIPTORS[request.candidate.boundary];
-
-  if (!descriptor) {
-    return {
-      kind: 'MEMORY_BOUNDARY_VALIDATION_RESULT',
-      valid: false,
-      reasons: ['BOUNDARY_UNKNOWN'],
-      preservesConflict: true,
-      requiresDownstreamFreshnessEvaluation: true,
-      authorizesExecution: false,
-    };
+  const candidate = request?.candidate;
+  const boundary = candidate?.boundary as unknown;
+  if (
+    !candidate ||
+    typeof boundary !== 'string' ||
+    !Object.prototype.hasOwnProperty.call(MEMORY_BOUNDARY_DESCRIPTORS, boundary)
+  ) {
+    return unknownBoundaryResult();
   }
 
-  if (request.candidate.tenant.tenantId !== request.tenant.tenantId) {
+  const descriptor = MEMORY_BOUNDARY_DESCRIPTORS[boundary as MemoryBoundaryKind];
+  if (!descriptor) return unknownBoundaryResult();
+
+  const reasons: MemoryBoundaryValidationReason[] = [];
+  if (
+    !candidate.tenant ||
+    !request.tenant ||
+    !nonEmpty(candidate.tenant.tenantId) ||
+    !nonEmpty(request.tenant.tenantId) ||
+    candidate.tenant.tenantId !== request.tenant.tenantId
+  ) {
     pushUnique(reasons, 'TENANT_MISMATCH');
   }
-  if (request.candidate.sourceOwner !== descriptor.sourceOfTruthOwner) {
+  if (candidate.sourceOwner !== descriptor.sourceOfTruthOwner) {
     pushUnique(reasons, 'SOURCE_OWNER_MISMATCH');
   }
 
-  const candidateClassificationRank = classificationRank(request.candidate.classification);
+  const candidateClassificationRank = classificationRank(candidate.classification);
   const maxClassificationRank = classificationRank(request.maxDataClassification);
   if (candidateClassificationRank === undefined || maxClassificationRank === undefined) {
     pushUnique(reasons, 'CLASSIFICATION_INVALID');
@@ -172,22 +190,22 @@ export function validateMemoryBoundaryCandidate(
     pushUnique(reasons, 'CLASSIFICATION_EXCEEDED');
   }
 
-  if (!nonEmpty(request.candidate.sourceReference)) {
+  if (!nonEmpty(candidate.sourceReference)) {
     pushUnique(reasons, 'SOURCE_REFERENCE_REQUIRED');
   }
-  if (!nonEmpty(request.candidate.provenanceReference)) {
+  if (!nonEmpty(candidate.provenanceReference)) {
     pushUnique(reasons, 'PROVENANCE_REQUIRED');
   }
-  if (!validTimestamp(request.candidate.observedAt)) {
+  if (!validTimestamp(candidate.observedAt)) {
     pushUnique(reasons, 'OBSERVED_AT_INVALID');
   }
   if (
     descriptor.retentionMode === 'GOVERNED_RETENTION_REQUIRED' &&
-    !nonEmpty(request.candidate.retentionPolicyReference)
+    !nonEmpty(candidate.retentionPolicyReference)
   ) {
     pushUnique(reasons, 'RETENTION_POLICY_REQUIRED');
   }
-  if (!['NONE', 'CONFLICTING', 'UNRESOLVED'].includes(request.candidate.conflictState)) {
+  if (!['NONE', 'CONFLICTING', 'UNRESOLVED'].includes(candidate.conflictState)) {
     pushUnique(reasons, 'CONFLICT_STATE_INVALID');
   }
 
