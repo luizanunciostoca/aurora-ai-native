@@ -1,9 +1,13 @@
 // @ts-expect-error -- provider harness has no @types/node; Node 22 provides this built-in.
+import { Buffer } from 'node:buffer';
+// @ts-expect-error -- provider harness has no @types/node; Node 22 provides this built-in.
 import { execFileSync } from 'node:child_process';
 // @ts-expect-error -- provider harness has no @types/node; Node 22 provides this built-in.
 import { readFileSync } from 'node:fs';
 // @ts-expect-error -- provider harness has no @types/node; Node 22 provides this built-in.
 import { resolve } from 'node:path';
+// @ts-expect-error -- provider harness has no @types/node; Node 22 provides this built-in.
+import process from 'node:process';
 // @ts-expect-error -- provider harness has no @types/node; Node 22 provides this built-in.
 import test from 'node:test';
 
