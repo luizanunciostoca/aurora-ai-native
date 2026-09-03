@@ -29,9 +29,7 @@ export const CONVERSATION_LIFECYCLE_STATES = ['OPEN', 'PENDING', 'CLOSED', 'MERG
 export type ConversationLifecycleState = (typeof CONVERSATION_LIFECYCLE_STATES)[number];
 
 export type RevenueLifecycleState =
-  | LeadLifecycleState
-  | CustomerLifecycleState
-  | ConversationLifecycleState;
+  LeadLifecycleState | CustomerLifecycleState | ConversationLifecycleState;
 
 /**
  * W10-local opaque entity reference. `entityId` is deliberately not an Aurora
