@@ -9,15 +9,8 @@ import type {
   TenantId,
 } from '@aurora/contracts/ids';
 
-import type {
-  DeviceRef,
-  DeviceResolutionResult,
-  ResolveDeviceRequest,
-} from '../device/types.js';
-import type {
-  GatewayProtocolResult,
-  GatewaySessionSnapshot,
-} from '../gateway-auth/types.js';
+import type { DeviceRef, DeviceResolutionResult, ResolveDeviceRequest } from '../device/types.js';
+import type { GatewayProtocolResult, GatewaySessionSnapshot } from '../gateway-auth/types.js';
 
 export const REALTIME_COMMAND_STATES = [
   'SUBMITTED',
@@ -130,9 +123,7 @@ export interface RealtimeCommandSnapshot {
   readonly terminalAtMs?: number;
   readonly uncertainAtMs?: number;
   readonly redeliveryDisposition:
-    | 'NOT_DECIDED_BY_W14_B'
-    | 'BLOCK_UNCERTAIN'
-    | 'TERMINAL_NO_REDELIVERY';
+    'NOT_DECIDED_BY_W14_B' | 'BLOCK_UNCERTAIN' | 'TERMINAL_NO_REDELIVERY';
   readonly authoritySemantics: 'TRANSPORT_SESSION_ONLY_NO_ACTION_AUTHORITY';
   readonly authorizesExecution: false;
   readonly provesExecutionSuccess: false;
@@ -148,9 +139,7 @@ export interface SubmitRealtimeCommandSuccess {
 }
 
 export type ApplyRealtimeCommandFrameDisposition =
-  | 'APPLIED'
-  | 'DUPLICATE_FRAME'
-  | 'CANCELLATION_PRESERVED';
+  'APPLIED' | 'DUPLICATE_FRAME' | 'CANCELLATION_PRESERVED';
 
 export interface ApplyRealtimeCommandFrameSuccess {
   readonly disposition: ApplyRealtimeCommandFrameDisposition;
@@ -158,9 +147,7 @@ export interface ApplyRealtimeCommandFrameSuccess {
 }
 
 export type RequestRealtimeCancellationDisposition =
-  | 'CANCEL_REQUESTED'
-  | 'ALREADY_REQUESTED'
-  | 'NOOP_TERMINAL_OR_UNCERTAIN';
+  'CANCEL_REQUESTED' | 'ALREADY_REQUESTED' | 'NOOP_TERMINAL_OR_UNCERTAIN';
 
 export interface RequestRealtimeCancellationSuccess {
   readonly disposition: RequestRealtimeCancellationDisposition;

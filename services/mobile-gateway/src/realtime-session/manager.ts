@@ -174,10 +174,7 @@ function isSafeToken(value: unknown, maxLength = 256): value is string {
   );
 }
 
-function parseCanonical<T extends string>(
-  value: unknown,
-  pattern: RegExp,
-): T | null {
+function parseCanonical<T extends string>(value: unknown, pattern: RegExp): T | null {
   return typeof value === 'string' && pattern.test(value) ? (value as T) : null;
 }
 
@@ -325,24 +322,15 @@ function isAllowedTransition(current: RealtimeCommandState, next: RealtimeComman
       );
     case 'RUNNING':
       return (
-        next === 'WAITING' ||
-        next === 'COMPLETED' ||
-        next === 'FAILED' ||
-        next === 'UNCERTAIN'
+        next === 'WAITING' || next === 'COMPLETED' || next === 'FAILED' || next === 'UNCERTAIN'
       );
     case 'WAITING':
       return (
-        next === 'RUNNING' ||
-        next === 'COMPLETED' ||
-        next === 'FAILED' ||
-        next === 'UNCERTAIN'
+        next === 'RUNNING' || next === 'COMPLETED' || next === 'FAILED' || next === 'UNCERTAIN'
       );
     case 'CANCEL_REQUESTED':
       return (
-        next === 'CANCELLED' ||
-        next === 'COMPLETED' ||
-        next === 'FAILED' ||
-        next === 'UNCERTAIN'
+        next === 'CANCELLED' || next === 'COMPLETED' || next === 'FAILED' || next === 'UNCERTAIN'
       );
     case 'UNCERTAIN':
     case 'CANCELLED':
@@ -383,7 +371,9 @@ export class RealtimeCommandSessionManager {
       this.#config.maxRememberedFramesPerCommand <= 0 ||
       this.#config.maxDeadlineHorizonMs <= 0
     ) {
-      throw new Error('Realtime command session limits must be positive and internally consistent.');
+      throw new Error(
+        'Realtime command session limits must be positive and internally consistent.',
+      );
     }
   }
 
@@ -422,7 +412,8 @@ export class RealtimeCommandSessionManager {
     const parsed = this.#parseOpenInput(input, true);
     if (!parsed.ok) return parsed;
     const existing = this.#sessions.get(parsed.value.gatewaySessionId);
-    if (existing === undefined) return failure('SESSION_NOT_FOUND', 'Realtime session does not exist.');
+    if (existing === undefined)
+      return failure('SESSION_NOT_FOUND', 'Realtime session does not exist.');
     if (parsed.value.previousGatewayConnectionId !== existing.gatewayConnectionId) {
       return failure(
         'GATEWAY_CONNECTION_MISMATCH',
@@ -447,7 +438,10 @@ export class RealtimeCommandSessionManager {
       gateway.actorIdentityId !== existing.actorIdentityId ||
       gateway.correlationId !== existing.correlationId
     ) {
-      return failure('GATEWAY_BINDING_MISMATCH', 'Resume cannot change tenant, actor or correlation.');
+      return failure(
+        'GATEWAY_BINDING_MISMATCH',
+        'Resume cannot change tenant, actor or correlation.',
+      );
     }
     existing.gatewayConnectionId = gateway.connectionId;
     existing.gatewayGeneration = gateway.generation;
@@ -467,13 +461,19 @@ export class RealtimeCommandSessionManager {
       return failure('CORRELATION_MISMATCH', 'Command correlation must match the gateway session.');
     }
     if (parsed.value.executionTarget.bindingReference !== record.deviceRef.deviceId) {
-      return failure('TARGET_MISMATCH', 'Execution target does not reference the bound canonical device.');
+      return failure(
+        'TARGET_MISMATCH',
+        'Execution target does not reference the bound canonical device.',
+      );
     }
     if (parsed.value.deadlineMs <= parsed.value.nowMs) {
       return failure('DEADLINE_EXCEEDED', 'Command deadline has already expired.');
     }
     if (parsed.value.deadlineMs - parsed.value.nowMs > this.#config.maxDeadlineHorizonMs) {
-      return failure('DEADLINE_OUT_OF_RANGE', 'Command deadline exceeds the bounded session horizon.');
+      return failure(
+        'DEADLINE_OUT_OF_RANGE',
+        'Command deadline exceeds the bounded session horizon.',
+      );
     }
     if (parsed.value.deadlineMs > bound.value.gateway.authExpiresAtMs) {
       return failure(
@@ -488,7 +488,8 @@ export class RealtimeCommandSessionManager {
         existing.executionId === parsed.value.executionId &&
         existing.executionTarget.schemaVersion === parsed.value.executionTarget.schemaVersion &&
         existing.executionTarget.kind === parsed.value.executionTarget.kind &&
-        existing.executionTarget.bindingReference === parsed.value.executionTarget.bindingReference &&
+        existing.executionTarget.bindingReference ===
+          parsed.value.executionTarget.bindingReference &&
         existing.correlationId === parsed.value.correlationId &&
         existing.causationId === parsed.value.causationId &&
         existing.deadlineMs === parsed.value.deadlineMs
@@ -533,9 +534,7 @@ export class RealtimeCommandSessionManager {
     });
   }
 
-  applyRemoteFrame(
-    input: unknown,
-  ): RealtimeSessionResult<ApplyRealtimeCommandFrameSuccess> {
+  applyRemoteFrame(input: unknown): RealtimeSessionResult<ApplyRealtimeCommandFrameSuccess> {
     const parsed = this.#parseFrameInput(input);
     if (!parsed.ok) return parsed;
     const bound = this.#requireBoundSession(parsed.value);
@@ -548,7 +547,10 @@ export class RealtimeCommandSessionManager {
 
     const remembered = command.frames.get(parsed.value.frameId);
     if (remembered !== undefined) {
-      if (remembered.sequence === parsed.value.sequence && remembered.state === parsed.value.state) {
+      if (
+        remembered.sequence === parsed.value.sequence &&
+        remembered.state === parsed.value.state
+      ) {
         return success({ disposition: 'DUPLICATE_FRAME', command: commandSnapshot(command) });
       }
       return failure('FRAME_CONFLICT', 'Frame identifier was reused with conflicting contents.');
@@ -586,9 +588,7 @@ export class RealtimeCommandSessionManager {
     return success({ disposition, command: commandSnapshot(command) });
   }
 
-  requestCancellation(
-    input: unknown,
-  ): RealtimeSessionResult<RequestRealtimeCancellationSuccess> {
+  requestCancellation(input: unknown): RealtimeSessionResult<RequestRealtimeCancellationSuccess> {
     const parsed = this.#parseCancellationInput(input);
     if (!parsed.ok) return parsed;
     const bound = this.#requireBoundSession(parsed.value);
@@ -618,7 +618,8 @@ export class RealtimeCommandSessionManager {
       return failure('MALFORMED_REQUEST', 'Realtime session lookup is malformed.');
     }
     const record = this.#sessions.get(gatewaySessionId);
-    if (record === undefined) return failure('SESSION_NOT_FOUND', 'Realtime session does not exist.');
+    if (record === undefined)
+      return failure('SESSION_NOT_FOUND', 'Realtime session does not exist.');
     const live = this.#gatewaySessions.getSession(gatewaySessionId, nowMs);
     if (!live.ok || live.value.state !== 'OPEN') {
       this.#closeRecord(record, nowMs);
@@ -680,7 +681,11 @@ export class RealtimeCommandSessionManager {
   }
 
   #parseSubmitInput(input: unknown): RealtimeSessionResult<SubmitRealtimeCommandInput> {
-    if (!isPlainDataRecord(input) || !hasOnlyKeys(input, SUBMIT_KEYS) || !hasAllKeys(input, SUBMIT_KEYS)) {
+    if (
+      !isPlainDataRecord(input) ||
+      !hasOnlyKeys(input, SUBMIT_KEYS) ||
+      !hasAllKeys(input, SUBMIT_KEYS)
+    ) {
       return failure('MALFORMED_REQUEST', 'Command submission shape is invalid.');
     }
     const bound = this.#parseBoundInput({
@@ -716,7 +721,11 @@ export class RealtimeCommandSessionManager {
   }
 
   #parseFrameInput(input: unknown): RealtimeSessionResult<RealtimeCommandFrameInput> {
-    if (!isPlainDataRecord(input) || !hasOnlyKeys(input, FRAME_KEYS) || !hasAllKeys(input, FRAME_KEYS)) {
+    if (
+      !isPlainDataRecord(input) ||
+      !hasOnlyKeys(input, FRAME_KEYS) ||
+      !hasAllKeys(input, FRAME_KEYS)
+    ) {
       return failure('MALFORMED_REQUEST', 'Remote frame shape is invalid.');
     }
     const bound = this.#parseBoundInput({
@@ -734,7 +743,10 @@ export class RealtimeCommandSessionManager {
       typeof input.state !== 'string' ||
       !REMOTE_STATES.has(input.state)
     ) {
-      return failure('MALFORMED_REQUEST', 'Remote frame identifiers, sequence or state are invalid.');
+      return failure(
+        'MALFORMED_REQUEST',
+        'Remote frame identifiers, sequence or state are invalid.',
+      );
     }
     return success({
       ...bound.value,
@@ -748,7 +760,11 @@ export class RealtimeCommandSessionManager {
   #parseCancellationInput(
     input: unknown,
   ): RealtimeSessionResult<RequestRealtimeCommandCancellationInput> {
-    if (!isPlainDataRecord(input) || !hasOnlyKeys(input, CANCEL_KEYS) || !hasAllKeys(input, CANCEL_KEYS)) {
+    if (
+      !isPlainDataRecord(input) ||
+      !hasOnlyKeys(input, CANCEL_KEYS) ||
+      !hasAllKeys(input, CANCEL_KEYS)
+    ) {
       return failure('MALFORMED_REQUEST', 'Cancellation request shape is invalid.');
     }
     const bound = this.#parseBoundInput({
@@ -783,10 +799,14 @@ export class RealtimeCommandSessionManager {
       gateway.generation <= 0 ||
       nowMs >= gateway.authExpiresAtMs ||
       parseCanonical<TenantId>(gateway.tenantId, /^ten_[0-9A-HJKMNP-TV-Z]{26}$/u) === null ||
-      parseCanonical<IdentityId>(gateway.actorIdentityId, /^idn_[0-9A-HJKMNP-TV-Z]{26}$/u) === null ||
+      parseCanonical<IdentityId>(gateway.actorIdentityId, /^idn_[0-9A-HJKMNP-TV-Z]{26}$/u) ===
+        null ||
       parseCanonical<CorrelationId>(gateway.correlationId, CORRELATION_ID) === null
     ) {
-      return failure('GATEWAY_SESSION_INVALID', 'Gateway session is not a valid live W14-A binding.');
+      return failure(
+        'GATEWAY_SESSION_INVALID',
+        'Gateway session is not a valid live W14-A binding.',
+      );
     }
 
     const deviceResult = this.#devices.resolve({
@@ -801,7 +821,10 @@ export class RealtimeCommandSessionManager {
       !sameDeviceRef(deviceResult.record.ref, deviceRef) ||
       deviceResult.record.ref.tenantId !== gateway.tenantId
     ) {
-      return failure('DEVICE_BINDING_MISMATCH', 'Resolved device does not match the gateway binding.');
+      return failure(
+        'DEVICE_BINDING_MISMATCH',
+        'Resolved device does not match the gateway binding.',
+      );
     }
     return success({ gateway, deviceRef: deviceResult.record.ref });
   }
@@ -810,7 +833,8 @@ export class RealtimeCommandSessionManager {
     input: BoundRealtimeSessionInput,
   ): RealtimeSessionResult<BoundSessionContext> {
     const record = this.#sessions.get(input.gatewaySessionId);
-    if (record === undefined) return failure('SESSION_NOT_FOUND', 'Realtime session does not exist.');
+    if (record === undefined)
+      return failure('SESSION_NOT_FOUND', 'Realtime session does not exist.');
     if (record.state !== 'OPEN') return failure('SESSION_CLOSED', 'Realtime session is closed.');
 
     const gatewayResult = this.#gatewaySessions.getSession(input.gatewaySessionId, input.nowMs);
@@ -836,7 +860,10 @@ export class RealtimeCommandSessionManager {
       gateway.authorizesExecution !== false
     ) {
       this.#closeRecord(record, input.nowMs);
-      return failure('GATEWAY_BINDING_MISMATCH', 'Gateway tenant, actor or correlation binding changed.');
+      return failure(
+        'GATEWAY_BINDING_MISMATCH',
+        'Gateway tenant, actor or correlation binding changed.',
+      );
     }
 
     const deviceResult = this.#devices.resolve({
@@ -884,7 +911,9 @@ export class RealtimeCommandSessionManager {
 
   #trimFrameHistory(command: CommandRecord): void {
     if (command.frames.size <= this.#config.maxRememberedFramesPerCommand) return;
-    const oldest = [...command.frames.values()].sort((left, right) => left.sequence - right.sequence)[0];
+    const oldest = [...command.frames.values()].sort(
+      (left, right) => left.sequence - right.sequence,
+    )[0];
     if (oldest !== undefined) command.frames.delete(oldest.frameId);
   }
 
