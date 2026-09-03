@@ -42,7 +42,9 @@ const TRANSPORT_ERRORS = new Set([
 const MAX_JSON_DEPTH = 8;
 const MAX_JSON_NODES = 512;
 
-function fail(error: Extract<ProviderReadbackResult, { ok: false }>['error']): ProviderReadbackResult {
+function fail(
+  error: Extract<ProviderReadbackResult, { ok: false }>['error'],
+): ProviderReadbackResult {
   return {
     ok: false,
     error,
@@ -449,7 +451,9 @@ export async function reconcileProviderWrite(
       result = {
         ...successBase(request, binding),
         observation,
-        ...(transport.observedState === undefined ? {} : { observedState: transport.observedState }),
+        ...(transport.observedState === undefined
+          ? {}
+          : { observedState: transport.observedState }),
         ...(transport.providerRevision === undefined
           ? {}
           : { providerRevision: transport.providerRevision }),
