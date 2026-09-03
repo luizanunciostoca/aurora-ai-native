@@ -42,6 +42,11 @@ jobs:
           if old_chain not in text:
               raise SystemExit('expected chain context block not found')
           text = text.replace(old_chain, new_chain, 1)
+          old_w07 = "  const event: N8nW07EvidenceReferenceForwarding = Object.freeze({\n    ...base,\n    kind,\n    w07State,"
+          new_w07 = "  const event: N8nW07EvidenceReferenceForwarding = Object.freeze({\n    ...base,\n    kind: 'N8N_W07_EVIDENCE_REFERENCE_FORWARDING',\n    w07State,"
+          if old_w07 not in text:
+              raise SystemExit('expected W07 event block not found')
+          text = text.replace(old_w07, new_w07, 1)
           path.write_text(text)
           PY
       - run: npx prettier --write services/n8n-bridge/src/evidence/types.ts services/n8n-bridge/src/evidence/normalizer.ts services/n8n-bridge/src/evidence/index.ts services/n8n-bridge/test/w09d-receipt-evidence-forwarding.test.ts
