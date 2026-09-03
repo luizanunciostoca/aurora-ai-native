@@ -5,7 +5,10 @@ import test from 'node:test';
 
 import type { TenantId } from '@aurora/contracts';
 
-import { planGoogleAdsSearch, type GoogleAdsSearchPlanningInput } from '../src/google-ads/search-planning.js';
+import {
+  planGoogleAdsSearch,
+  type GoogleAdsSearchPlanningInput,
+} from '../src/google-ads/search-planning.js';
 
 const TENANT = 'ten_01JW13CTENANT000000000000' as TenantId;
 const OTHER_TENANT = 'ten_01JW13COTHER00000000000' as TenantId;
@@ -94,10 +97,10 @@ test('W13-C fails closed when verified provider context crosses tenant/account s
 test('W13-C rejects duplicate keywords and positive/negative collisions', () => {
   const positive = fixture().keywords[0];
   if (positive === undefined) throw new Error('fixture positive keyword is missing');
-  assert.deepEqual(
-    planGoogleAdsSearch(fixture({ keywords: [positive, { ...positive }] })),
-    { status: 'BLOCKED', code: 'DUPLICATE_KEYWORD' },
-  );
+  assert.deepEqual(planGoogleAdsSearch(fixture({ keywords: [positive, { ...positive }] })), {
+    status: 'BLOCKED',
+    code: 'DUPLICATE_KEYWORD',
+  });
 
   assert.deepEqual(
     planGoogleAdsSearch(
@@ -203,9 +206,7 @@ test('W13-C enforces bidding/objective compatibility and explicit targets', () =
   );
 
   assert.deepEqual(
-    planGoogleAdsSearch(
-      fixture({ objective: 'CONVERSIONS', biddingStrategy: 'TARGET_CPA' }),
-    ),
+    planGoogleAdsSearch(fixture({ objective: 'CONVERSIONS', biddingStrategy: 'TARGET_CPA' })),
     { status: 'BLOCKED', code: 'INVALID_TARGET' },
   );
 
