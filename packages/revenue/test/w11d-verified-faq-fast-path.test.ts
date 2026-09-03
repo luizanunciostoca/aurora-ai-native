@@ -72,9 +72,9 @@ function input(overrides: Partial<VerifiedFaqLookupInput> = {}): VerifiedFaqLook
 
 test('returns a deterministic answer with evidence and no write authority', () => {
   const result = resolveVerifiedFaqFastPath(input());
-
   assert.equal(result.status, 'ANSWER');
   assert.equal(result.authorizesExecution, false);
+
   if (result.status === 'ANSWER') {
     assert.equal(result.answer, 'Nosso horário hoje é 16:30-22:00.');
     assert.equal(result.factId, 'fact:hours:main');
@@ -92,6 +92,7 @@ test('fails closed when the fact is stale or its source revision changed', () =>
   const stale = resolveVerifiedFaqFastPath(
     input({ facts: [fact({ expiresAt: '2026-09-03T14:59:59Z' })] }),
   );
+
   assert.equal(stale.status, 'ESCALATE');
   if (stale.status === 'ESCALATE') {
     assert.deepEqual(stale.reasons, ['STALE_FACT']);
@@ -100,9 +101,54 @@ test('fails closed when the fact is stale or its source revision changed', () =>
   const changed = resolveVerifiedFaqFastPath(
     input({ facts: [fact({ sourceRevision: 'rev-41' })] }),
   );
+
   assert.equal(changed.status, 'ESCALATE');
   if (changed.status === 'ESCALATE') {
     assert.deepEqual(changed.reasons, ['SOURCE_CHANGED']);
+  }
+});
+
+test('rejects invalid confidence thresholds and impossible fact timing', () => {
+  for (const minimumConfidence of [-0.01, 1.01, Number.NaN]) {
+    const invalidThreshold = resolveVerifiedFaqFastPath(input({ minimumConfidence }));
+    assert.equal(invalidThreshold.status, 'ESCALATE');
+    if (invalidThreshold.status === 'ESCALATE') {
+      assert.deepEqual(invalidThreshold.reasons, ['INVALID_CONFIDENCE_THRESHOLD']);
+    }
+  }
+
+  const futureFact = resolveVerifiedFaqFastPath(
+    input({ facts: [fact({ observedAt: '2026-09-03T15:00:01Z' })] }),
+  );
+  assert.equal(futureFact.status, 'ESCALATE');
+  if (futureFact.status === 'ESCALATE') {
+    assert.deepEqual(futureFact.reasons, ['INVALID_FACT_TIME']);
+  }
+
+  const impossibleWindow = resolveVerifiedFaqFastPath(
+    input({ facts: [fact({ expiresAt: '2026-09-03T13:59:59Z' })] }),
+  );
+  assert.equal(impossibleWindow.status, 'ESCALATE');
+  if (impossibleWindow.status === 'ESCALATE') {
+    assert.deepEqual(impossibleWindow.reasons, ['INVALID_FACT_TIME']);
+  }
+});
+
+test('requires complete provenance for facts and curated templates', () => {
+  const missingFactSource = resolveVerifiedFaqFastPath(
+    input({ facts: [fact({ sourceReference: '' })] }),
+  );
+  assert.equal(missingFactSource.status, 'ESCALATE');
+  if (missingFactSource.status === 'ESCALATE') {
+    assert.deepEqual(missingFactSource.reasons, ['MISSING_PROVENANCE']);
+  }
+
+  const missingTemplateSource = resolveVerifiedFaqFastPath(
+    input({ template: template({ sourceReference: '' }) }),
+  );
+  assert.equal(missingTemplateSource.status, 'ESCALATE');
+  if (missingTemplateSource.status === 'ESCALATE') {
+    assert.deepEqual(missingTemplateSource.reasons, ['TEMPLATE_INVALID']);
   }
 });
 
@@ -120,9 +166,7 @@ test('escalates conflicting values instead of guessing', () => {
 });
 
 test('enforces tenant isolation and validates curated template provenance', () => {
-  const isolated = resolveVerifiedFaqFastPath(
-    input({ facts: [fact({ tenantId: TENANT_B })] }),
-  );
+  const isolated = resolveVerifiedFaqFastPath(input({ facts: [fact({ tenantId: TENANT_B })] }));
   assert.equal(isolated.status, 'ESCALATE');
   if (isolated.status === 'ESCALATE') {
     assert.deepEqual(isolated.reasons, ['NO_VERIFIED_FACT']);
@@ -131,6 +175,7 @@ test('enforces tenant isolation and validates curated template provenance', () =
   const invalidTemplate = resolveVerifiedFaqFastPath(
     input({ template: template({ provenanceReference: '' }) }),
   );
+
   assert.equal(invalidTemplate.status, 'ESCALATE');
   if (invalidTemplate.status === 'ESCALATE') {
     assert.deepEqual(invalidTemplate.reasons, ['TEMPLATE_INVALID']);
@@ -138,12 +183,18 @@ test('enforces tenant isolation and validates curated template provenance', () =
 });
 
 test('requires sufficient confidence and valid evaluation time', () => {
-  const weak = resolveVerifiedFaqFastPath(
-    input({ facts: [fact({ confidence: 0.4 })] }),
-  );
+  const weak = resolveVerifiedFaqFastPath(input({ facts: [fact({ confidence: 0.4 })] }));
   assert.equal(weak.status, 'ESCALATE');
   if (weak.status === 'ESCALATE') {
     assert.deepEqual(weak.reasons, ['LOW_CONFIDENCE']);
+  }
+
+  const invalidFactConfidence = resolveVerifiedFaqFastPath(
+    input({ facts: [fact({ confidence: 1.01 })] }),
+  );
+  assert.equal(invalidFactConfidence.status, 'ESCALATE');
+  if (invalidFactConfidence.status === 'ESCALATE') {
+    assert.deepEqual(invalidFactConfidence.reasons, ['LOW_CONFIDENCE']);
   }
 
   const invalidTime = resolveVerifiedFaqFastPath(input({ evaluatedAt: 'not-a-date' }));
