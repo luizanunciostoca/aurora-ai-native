@@ -59,7 +59,9 @@ const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/u;
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const MAX_TRANSIENT_CREDENTIAL_LENGTH = 64 * 1024;
 
-function fail(error: N8nWorkflowCredentialResolutionFailure['error']): N8nWorkflowCredentialResolutionFailure {
+function fail(
+  error: N8nWorkflowCredentialResolutionFailure['error'],
+): N8nWorkflowCredentialResolutionFailure {
   return { ok: false, error, authorizesExecution: false, canGrantPermission: false };
 }
 

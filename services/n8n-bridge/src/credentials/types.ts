@@ -107,5 +107,4 @@ export interface N8nWorkflowCredentialResolutionFailure {
 }
 
 export type N8nWorkflowCredentialResolutionResult =
-  | N8nWorkflowCredentialResolutionSuccess
-  | N8nWorkflowCredentialResolutionFailure;
+  N8nWorkflowCredentialResolutionSuccess | N8nWorkflowCredentialResolutionFailure;
