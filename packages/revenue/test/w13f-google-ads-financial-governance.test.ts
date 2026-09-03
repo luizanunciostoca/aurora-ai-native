@@ -179,9 +179,7 @@ test('W13-F blocks missing or denied approval even when strategy confidence is m
 test('W13-F fails closed on stale provider precheck and wrong-account evidence', () => {
   const precheck = required(fixture().precheck, 'precheck');
   assert.deepEqual(
-    prepareGoogleAdsFinancialMutation(
-      fixture({ precheck: { ...precheck, validUntilMs: NOW } }),
-    ),
+    prepareGoogleAdsFinancialMutation(fixture({ precheck: { ...precheck, validUntilMs: NOW } })),
     { status: 'BLOCKED', code: 'PRECHECK_STALE' },
   );
 
@@ -277,15 +275,11 @@ test('W13-F fails closed on stale authority/budget, currency drift and bad confi
   const budget = required(fixture().budget, 'budget');
 
   assert.deepEqual(
-    prepareGoogleAdsFinancialMutation(
-      fixture({ authority: { ...authority, validUntilMs: NOW } }),
-    ),
+    prepareGoogleAdsFinancialMutation(fixture({ authority: { ...authority, validUntilMs: NOW } })),
     { status: 'BLOCKED', code: 'AUTHORITY_STALE' },
   );
   assert.deepEqual(
-    prepareGoogleAdsFinancialMutation(
-      fixture({ budget: { ...budget, validUntilMs: NOW } }),
-    ),
+    prepareGoogleAdsFinancialMutation(fixture({ budget: { ...budget, validUntilMs: NOW } })),
     { status: 'BLOCKED', code: 'BUDGET_STALE' },
   );
   assert.deepEqual(
