@@ -78,7 +78,10 @@ function gatewayHandshake(nowMs = NOW) {
   };
 }
 
-function provenance(reference: string, observedAt = '2026-09-03T08:25:00Z'): DeviceRegistrationProvenance {
+function provenance(
+  reference: string,
+  observedAt = '2026-09-03T08:25:00Z',
+): DeviceRegistrationProvenance {
   return { source: 'W14_DEVICE_REGISTRATION', reference, observedAt };
 }
 
@@ -137,7 +140,11 @@ function setup(
 }
 
 function commandInput(
-  session: { gatewaySessionId: string; gatewayConnectionId: string; deviceRef: { deviceId: string } },
+  session: {
+    gatewaySessionId: string;
+    gatewayConnectionId: string;
+    deviceRef: { deviceId: string };
+  },
   overrides: Record<string, unknown> = {},
 ) {
   return {
@@ -331,7 +338,9 @@ test('W14-B preserves UNCERTAIN as a fail-closed unresolved state and blocks lat
   assert.equal(uncertain.value.command.redeliveryDisposition, 'BLOCK_UNCERTAIN');
   assert.equal(uncertain.value.command.provesExecutionSuccess, false);
 
-  const fabricatedResolution = manager.applyRemoteFrame(frameInput(session, 'COMPLETED', 3, EVENT_3));
+  const fabricatedResolution = manager.applyRemoteFrame(
+    frameInput(session, 'COMPLETED', 3, EVENT_3),
+  );
   assert.equal(fabricatedResolution.ok, false);
   if (!fabricatedResolution.ok) assert.equal(fabricatedResolution.error.code, 'INVALID_TRANSITION');
 
@@ -351,7 +360,10 @@ test('W14-B explicit resume binds a newer W14-A connection while preserving outs
 
   const closed = gateway.closeSession(gatewayBoundSession(gatewaySession, NOW + 30));
   assert.equal(closed.ok, true);
-  authenticator.set('credential:w14b', claims({ issuedAtMs: NOW + 20, expiresAtMs: NOW + 120_000 }));
+  authenticator.set(
+    'credential:w14b',
+    claims({ issuedAtMs: NOW + 20, expiresAtMs: NOW + 120_000 }),
+  );
   const reconnected = gateway.reconnectSession({
     ...gatewayHandshake(NOW + 31),
     previousConnectionId: gatewaySession.connectionId,
@@ -395,12 +407,16 @@ test('W14-B explicit resume binds a newer W14-A connection while preserving outs
 test('W14-B fails closed on wrong target, correlation, connection and wrong-tenant device references', () => {
   const { gateway, devices, manager, session, activeDevice } = setup();
   const wrongTarget = manager.submitCommand(
-    commandInput(session, { executionTarget: { schemaVersion: '1.0.0', kind: 'DEVICE', bindingReference: 'dvc_other' } }),
+    commandInput(session, {
+      executionTarget: { schemaVersion: '1.0.0', kind: 'DEVICE', bindingReference: 'dvc_other' },
+    }),
   );
   assert.equal(wrongTarget.ok, false);
   if (!wrongTarget.ok) assert.equal(wrongTarget.error.code, 'TARGET_MISMATCH');
 
-  const wrongCorrelation = manager.submitCommand(commandInput(session, { correlationId: CORRELATION_B }));
+  const wrongCorrelation = manager.submitCommand(
+    commandInput(session, { correlationId: CORRELATION_B }),
+  );
   assert.equal(wrongCorrelation.ok, false);
   if (!wrongCorrelation.ok) assert.equal(wrongCorrelation.error.code, 'CORRELATION_MISMATCH');
 
@@ -465,8 +481,20 @@ test('W14-B rejects accessor/prototype/extra authority-bearing inputs without in
     },
   };
   const open = new RealtimeCommandSessionManager(
-    { getSession: () => ({ ok: false, error: { code: 'SESSION_NOT_FOUND', message: 'x', retryable: false } }) },
-    { resolve: () => ({ ok: false, error: 'DEVICE_NOT_FOUND', authorizesExecution: false, canGrantPermission: false }) },
+    {
+      getSession: () => ({
+        ok: false,
+        error: { code: 'SESSION_NOT_FOUND', message: 'x', retryable: false },
+      }),
+    },
+    {
+      resolve: () => ({
+        ok: false,
+        error: 'DEVICE_NOT_FOUND',
+        authorizesExecution: false,
+        canGrantPermission: false,
+      }),
+    },
   ).openSession(malicious);
   assert.equal(open.ok, false);
   assert.equal(getterReads, 0);
