@@ -131,6 +131,7 @@ export type GoogleAdsPlanBlockCode =
   | 'MISSING_CAPABILITY_REFERENCE'
   | 'INCOMPATIBLE_CAPABILITY'
   | 'MISSING_GOOGLE_EXTERNAL_ID'
+  | 'MANAGER_CUSTOMER_MISMATCH'
   | 'RESOURCE_SURFACE_MISMATCH'
   | 'FINANCIAL_SCOPE_REQUIRED'
   | 'INVALID_FINANCIAL_SCOPE';
@@ -241,6 +242,12 @@ export function planGoogleAdsDomainIntent(input: GoogleAdsDomainIntentInput): Go
       input.target.googleAds.customerId !== input.customerId)
   ) {
     return { status: 'BLOCKED', code: 'MISSING_GOOGLE_EXTERNAL_ID' };
+  }
+  if (
+    needsExistingExternalId(input.operation) &&
+    input.target.googleAds?.managerCustomerId !== input.managerCustomerId
+  ) {
+    return { status: 'BLOCKED', code: 'MANAGER_CUSTOMER_MISMATCH' };
   }
   if (needsFinancialScope(input.operation) && !input.financialScope) {
     return { status: 'BLOCKED', code: 'FINANCIAL_SCOPE_REQUIRED' };
