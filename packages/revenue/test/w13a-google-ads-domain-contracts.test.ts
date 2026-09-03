@@ -139,10 +139,10 @@ test('W13-A models keyword and conversion resources without conflating surfaces'
 });
 
 test('W13-A serving and budget writes fail closed without valid financial scope', () => {
-  assert.deepEqual(
-    planGoogleAdsDomainIntent(fixture({ operation: 'ACTIVATE' })),
-    { status: 'BLOCKED', code: 'FINANCIAL_SCOPE_REQUIRED' },
-  );
+  assert.deepEqual(planGoogleAdsDomainIntent(fixture({ operation: 'ACTIVATE' })), {
+    status: 'BLOCKED',
+    code: 'FINANCIAL_SCOPE_REQUIRED',
+  });
 
   assert.deepEqual(
     planGoogleAdsDomainIntent(
