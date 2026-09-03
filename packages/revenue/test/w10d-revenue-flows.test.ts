@@ -388,3 +388,86 @@ test('W10-D rejects stale/duplicate template inputs and never treats templates a
   assert.equal(result.task?.authorizesExecution, false);
   assert.equal(result.task?.canGrantPermission, false);
 });
+
+test('W10-D rejects forged dispatch observations and cancellation reasons befor state advancement', () => {
+  const created = firstReady();
+  const forgedObservation = planRevenueFlow(
+    fixture({
+      evaluatedAt: '2026-09-03T08:11:00Z',
+      existing: created.record,
+      dispatchObservation: 'FORGED_ACK' as unknown as NonNullable<
+        PlanRevenueFlowInput['dispatchObservation']
+      >,
+    }),
+  );
+  assert.deepEqual(forgedObservation, { ok: false, error: 'DISPATCH_OBSERVATION_INVALID' });
+
+  const forgedCancellation = planRevenueFlow(
+    fixture({
+      existing: created.record,
+      cancellationReason: 'FORGED_CANCEL' as unknown as NonNullable<
+        PlanRevenueFlowInput['cancellationReason']
+      >,
+    }),
+  );
+  assert.deepEqual(forgedCancellation, { ok: false, error: 'REQUEST_MALFORMED' });
+});
+
+test('W10-D requires one non-empty correlation and rejects cross-correlation evidence reuse', () => {
+  const emptyCorrelation = planRevenueFlow(
+    fixture({ correlation: { correlationId: '' as CorrelationId } }),
+  );
+  assert.deepEqual(emptyCorrelation, { ok: false, error: 'REQUEST_MALFORMED' });
+
+  const otherCorrelation = 'cor_01JW10DOTHERCORRELATION000' as CorrelationId;
+  const created = firstReady();
+  const recordMismatch = planRevenueFlow(
+    fixture({
+      existing: { ...created.record, correlation: { correlationId: otherCorrelation } },
+    }),
+  );
+  assert.deepEqual(recordMismatch, { ok: false, error: 'CORRELATION_MISMATCH' });
+
+  const qualificationMismatch = planRevenueFlow(
+    fixture({
+      qualification: {
+        ...requiredQualification(),
+        correlation: { correlationId: otherCorrelation },
+      },
+    }),
+  );
+  assert.deepEqual(qualificationMismatch, { ok: false, error: 'CORRELATION_MISMATCH' });
+});
+
+test('W10-D rejects contradictory CRM currentness and malformed qualification authority evidence', () => {
+  const contradictoryCrm = planRevenueFlow(
+    fixture({
+      crm: {
+        ...fixture().crm,
+        current: true,
+        currentnessReasons: ['MODEL_TOO_OLD'],
+      },
+    }),
+  );
+  assert.deepEqual(contradictoryCrm, { ok: false, error: 'CRM_CURRENTNESS_CONFLICT' });
+
+  const authoritativeQualification = planRevenueFlow(
+    fixture({
+      qualification: {
+        ...requiredQualification(),
+        authorizesExecution: true,
+      } as unknown as NonNullable<PlanRevenueFlowInput['qualification']>,
+    }),
+  );
+  assert.deepEqual(authoritativeQualification, { ok: false, error: 'QUALIFICATION_MALFORMED' });
+
+  const malformedQualification = planRevenueFlow(
+    fixture({
+      qualification: {
+        ...requiredQualification(),
+        stage: 'FORGED_STAGE',
+      } as unknown as NonNullable<PlanRevenueFlowInput['qualification']>,
+    }),
+  );
+  assert.deepEqual(malformedQualification, { ok: false, error: 'QUALIFICATION_MALFORMED' });
+});

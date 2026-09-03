@@ -32,6 +32,87 @@ function isNonNegativeInteger(value: unknown, maximum = Number.MAX_SAFE_INTEGER)
   return Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= maximum;
 }
 
+function correlationId(value: unknown): string | null {
+  if (value === null || typeof value !== 'object') return null;
+  const descriptor = Object.getOwnPropertyDescriptor(value, 'correlationId');
+  if (descriptor === undefined || !('value' in descriptor) || !isNonEmptyString(descriptor.value)) {
+    return null;
+  }
+  return descriptor.value;
+}
+
+function correlationsMatch(left: unknown, right: unknown): boolean {
+  const leftId = correlationId(left);
+  const rightId = correlationId(right);
+  return leftId !== null && rightId !== null && leftId === rightId;
+}
+
+function dispatchObservationValid(value: unknown): value is RevenueDispatchObservation | undefined {
+  return (
+    value === undefined ||
+    value === 'NONE' ||
+    value === 'ACKNOWLEDGED' ||
+    value === 'NO_EFFECT_CONFIRMED' ||
+    value === 'EXECUTION_UNCERTAIN'
+  );
+}
+
+function cancellationReasonValid(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === 'NONE' ||
+    value === 'USER_REQUEST' ||
+    value === 'CONSENT_REVOKED' ||
+    value === 'BUSINESS_CANCELLED'
+  );
+}
+
+function crmCurrentnessValid(input: PlanRevenueFlowInput['crm']): boolean {
+  return (
+    typeof input.current === 'boolean' &&
+    Array.isArray(input.currentnessReasons) &&
+    input.currentnessReasons.every(
+      (reason) =>
+        reason === 'ENTITY_VERSION_BEHIND' ||
+        reason === 'MODEL_TOO_OLD' ||
+        reason === 'MODEL_TIME_UNKNOWN',
+    ) &&
+    !(input.current && input.currentnessReasons.length > 0)
+  );
+}
+
+function qualificationValid(value: QualificationEvaluation): boolean {
+  return (
+    value.kind === 'REVENUE_QUALIFICATION_EVALUATION' &&
+    value.schemaVersion === '1.0.0' &&
+    isNonEmptyString(value.tenantId) &&
+    isEntity(value.entity) &&
+    isNonNegativeInteger(value.entityVersion) &&
+    value.entityVersion >= 1 &&
+    isNonEmptyString(value.featureSetRevision) &&
+    isNonEmptyString(value.ruleSetVersion) &&
+    isNonEmptyString(value.thresholdVersion) &&
+    isTimestamp(value.evaluatedAt) &&
+    correlationId(value.correlation) !== null &&
+    (value.mode === 'DETERMINISTIC' || value.mode === 'MODEL_ASSISTED') &&
+    (value.scoreBps === null || isNonNegativeInteger(value.scoreBps, 10_000)) &&
+    (value.stage === 'QUALIFIED' ||
+      value.stage === 'NURTURE' ||
+      value.stage === 'UNQUALIFIED' ||
+      value.stage === 'INCOMPLETE') &&
+    isNonNegativeInteger(value.coverageBps, 10_000) &&
+    Array.isArray(value.contributions) &&
+    Array.isArray(value.missingCriticalFeatures) &&
+    value.missingCriticalFeatures.every((key) => isNonEmptyString(key)) &&
+    (value.reviewDisposition === 'NONE' ||
+      value.reviewDisposition === 'VERIFY_MODEL_ASSIST' ||
+      value.reviewDisposition === 'ESCALATE_MODEL_ASSIST' ||
+      value.reviewDisposition === 'ABSTAIN_MODEL_ASSIST') &&
+    value.authorizesExecution === false &&
+    value.canGrantPermission === false
+  );
+}
+
 function sameEntity(left: RevenueEntityRef, right: RevenueEntityRef): boolean {
   return left.kind === right.kind && left.entityId === right.entityId;
 }
@@ -128,9 +209,12 @@ function qualificationBoundaryError(
   | 'TENANT_MISMATCH'
   | 'ENTITY_MISMATCH'
   | 'ENTITY_VERSION_CONFLICT'
+  | 'CORRELATION_MISMATCH'
   | 'OUT_OF_ORDER_EVALUATION'
   | null {
   if (qualification.tenantId !== input.tenantId) return 'TENANT_MISMATCH';
+  if (!correlationsMatch(qualification.correlation, input.correlation))
+    return 'CORRELATION_MISMATCH';
   if (!sameEntity(qualification.entity, input.crm.model.entity)) return 'ENTITY_MISMATCH';
   if (qualification.entityVersion !== input.crm.model.entityVersion)
     return 'ENTITY_VERSION_CONFLICT';
@@ -250,6 +334,7 @@ function existingRecordError(
     !isNonNegativeInteger(record.attemptsForStep, MAX_ATTEMPTS_PER_STEP) ||
     !isTimestamp(record.nextEligibleAt) ||
     !isTimestamp(record.updatedAt) ||
+    correlationId(record.correlation) === null ||
     !['ACTIVE', 'PAUSED_POLICY', 'WAITING_RECONCILIATION', 'COMPLETED', 'CANCELLED'].includes(
       record.state,
     ) ||
@@ -265,6 +350,7 @@ function existingRecordError(
     return 'EXISTING_RECORD_MALFORMED';
   }
   if (record.tenantId !== input.tenantId) return 'TENANT_MISMATCH';
+  if (!correlationsMatch(record.correlation, input.correlation)) return 'CORRELATION_MISMATCH';
   if (record.flowId !== input.flowId) return 'FLOW_ID_CONFLICT';
   if (record.flowKind !== input.template.flowKind) return 'FLOW_KIND_CONFLICT';
   if (!sameEntity(record.entity, input.crm.model.entity)) return 'ENTITY_MISMATCH';
@@ -412,8 +498,7 @@ export function planRevenueFlow(input: PlanRevenueFlowInput): PlanRevenueFlowRes
     !isNonEmptyString(input?.tenantId) ||
     !isNonEmptyString(input?.flowId) ||
     !isTimestamp(input?.evaluatedAt) ||
-    input?.correlation === null ||
-    typeof input?.correlation !== 'object' ||
+    correlationId(input?.correlation) === null ||
     input?.crm === undefined ||
     input?.contactPolicy === undefined ||
     input?.template === undefined
@@ -421,7 +506,14 @@ export function planRevenueFlow(input: PlanRevenueFlowInput): PlanRevenueFlowRes
     return { ok: false, error: 'REQUEST_MALFORMED' };
   }
 
+  if (!dispatchObservationValid(input.dispatchObservation)) {
+    return { ok: false, error: 'DISPATCH_OBSERVATION_INVALID' };
+  }
+  if (!cancellationReasonValid(input.cancellationReason)) {
+    return { ok: false, error: 'REQUEST_MALFORMED' };
+  }
   if (!isCrmModelValid(input.crm.model)) return { ok: false, error: 'CRM_RECORD_MALFORMED' };
+  if (!crmCurrentnessValid(input.crm)) return { ok: false, error: 'CRM_CURRENTNESS_CONFLICT' };
   const templateIssue = templateError(input.template);
   if (templateIssue !== null) return { ok: false, error: templateIssue };
   if (!contactPolicyValid(input.contactPolicy)) return { ok: false, error: 'REQUEST_MALFORMED' };
@@ -434,6 +526,9 @@ export function planRevenueFlow(input: PlanRevenueFlowInput): PlanRevenueFlowRes
     return { ok: false, error: 'TENANT_MISMATCH' };
   }
   if (input.qualification !== undefined) {
+    if (!qualificationValid(input.qualification)) {
+      return { ok: false, error: 'QUALIFICATION_MALFORMED' };
+    }
     const boundary = qualificationBoundaryError(input, input.qualification);
     if (boundary !== null) return { ok: false, error: boundary };
   }
