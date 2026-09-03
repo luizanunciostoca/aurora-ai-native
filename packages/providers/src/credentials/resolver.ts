@@ -44,6 +44,8 @@ const BINDING_KEYS = new Set([
   'authorizesExecution',
 ]);
 const CONTRACT_VERSION = /^\d+\.\d+\.\d+$/u;
+const BINDING_STATES = ['ACTIVE', 'INACTIVE', 'REVOKED'] as const;
+const BINDING_VERIFICATION_STATES = ['UNVERIFIED', 'VERIFIED', 'STALE'] as const;
 
 interface BindingIdentity {
   readonly tenantId: string;
@@ -94,6 +96,19 @@ function isSecretState(value: unknown): value is SecretReferenceState {
   );
 }
 
+function isBindingState(value: unknown): value is (typeof BINDING_STATES)[number] {
+  return typeof value === 'string' && BINDING_STATES.includes(value as (typeof BINDING_STATES)[number]);
+}
+
+function isBindingVerificationState(
+  value: unknown,
+): value is (typeof BINDING_VERIFICATION_STATES)[number] {
+  return (
+    typeof value === 'string' &&
+    BINDING_VERIFICATION_STATES.includes(value as (typeof BINDING_VERIFICATION_STATES)[number])
+  );
+}
+
 function parseTenantId(value: unknown): string | null {
   if (!isPlainRecord(value) || !hasOnlyOwnDataProperties(value, TENANT_KEYS)) return null;
   const tenantId = ownValue(value, 'tenantId');
@@ -123,8 +138,8 @@ function parseBindingIdentity(value: unknown): BindingIdentity | null {
     tenantId === null ||
     !isNonEmptyString(provider) ||
     !isNonEmptyString(accountReference) ||
-    !['ACTIVE', 'INACTIVE', 'REVOKED'].includes(String(state)) ||
-    !['UNVERIFIED', 'VERIFIED', 'STALE'].includes(String(verificationState)) ||
+    !isBindingState(state) ||
+    !isBindingVerificationState(verificationState) ||
     !Number.isSafeInteger(bindingVersion) ||
     (bindingVersion as number) < 1 ||
     !isRfc3339Like(updatedAt) ||
@@ -243,11 +258,13 @@ export async function withResolvedCredential(
 
   let callbackCount = 0;
   let consumerFailed = false;
+  let protocolFailed = false;
 
   try {
     await backend.withCredential(lookup, async (credential) => {
       callbackCount += 1;
       if (callbackCount !== 1 || !isNonEmptyString(credential)) {
+        protocolFailed = true;
         throw new Error('CREDENTIAL_BACKEND_PROTOCOL_VIOLATION');
       }
       try {
@@ -259,7 +276,7 @@ export async function withResolvedCredential(
     });
   } catch {
     if (consumerFailed) return fail('CONSUMER_FAILED');
-    if (callbackCount > 1) return fail('BACKEND_PROTOCOL_VIOLATION');
+    if (protocolFailed || callbackCount > 1) return fail('BACKEND_PROTOCOL_VIOLATION');
     return fail('SECRET_UNAVAILABLE');
   }
 
