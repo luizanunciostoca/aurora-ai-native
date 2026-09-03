@@ -42,6 +42,7 @@ export interface ProviderReadRateLimitObservation {
 }
 
 export interface ProviderReadTransportRequest {
+  readonly tenant: TenantContext;
   readonly provider: string;
   readonly accountReference: string;
   readonly bindingReference: string;
@@ -105,6 +106,7 @@ export type ProviderReadError = (typeof PROVIDER_READ_ERRORS)[number];
 
 export interface ProviderReadSuccess {
   readonly ok: true;
+  readonly tenant: TenantContext;
   readonly provider: string;
   readonly accountReference: string;
   readonly bindingReference: string;
