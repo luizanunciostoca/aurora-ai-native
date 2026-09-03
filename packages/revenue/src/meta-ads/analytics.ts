@@ -220,8 +220,7 @@ export function normalizeMetaAdsAnalytics(input: MetaAdsAnalyticsInput): MetaAds
 
   const observationAgeMs = input.nowMs - input.provenance.observedAtMs;
   const freshness = observationAgeMs > input.maxObservationAgeMs ? 'STALE' : 'FRESH';
-  const optimizationCandidateEligible =
-    freshness === 'FRESH' && input.completeness === 'COMPLETE';
+  const optimizationCandidateEligible = freshness === 'FRESH' && input.completeness === 'COMPLETE';
 
   return {
     status: 'READY',
