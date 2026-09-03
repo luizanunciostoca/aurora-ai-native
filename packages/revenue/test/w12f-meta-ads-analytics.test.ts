@@ -181,8 +181,8 @@ test('W12-F rejects impossible observation and attribution timestamps', () => {
     ),
     { status: 'BLOCKED', code: 'INVALID_TIME_BOUNDARY' },
   );
-  assert.deepEqual(
-    normalizeMetaAdsAnalytics(fixture({ dataThroughMs: NOW })),
-    { status: 'BLOCKED', code: 'INVALID_TIME_BOUNDARY' },
-  );
+  assert.deepEqual(normalizeMetaAdsAnalytics(fixture({ dataThroughMs: NOW })), {
+    status: 'BLOCKED',
+    code: 'INVALID_TIME_BOUNDARY',
+  });
 });
