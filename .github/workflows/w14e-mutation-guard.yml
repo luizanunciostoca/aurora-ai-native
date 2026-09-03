@@ -20,109 +20,15 @@ jobs:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
-      - name: Move capacity mutation after trust validation and add regression test
-        shell: bash
+      - name: Apply mutation-order guard
+        env:
+          OLD_B64: ICAgIGNvbnN0IGNhcGFjaXR5ID0gdGhpcy4jcHJlcGFyZVNlc3Npb25TbG90KCk7CiAgICBpZiAoY2FwYWNpdHkgIT09IG51bGwpIHJldHVybiBjYXBhY2l0eTsKICAgIGNvbnN0IGJpbmRpbmdFcnJvciA9IHRoaXMuI3ZhbGlkYXRlR2F0ZXdheURldmljZUJpbmRpbmcoCiAgICAgIHBhcnNlZC52YWx1ZS5nYXRld2F5U2Vzc2lvbiwKICAgICAgcGFyc2VkLnZhbHVlLmRldmljZVJlY29yZCwKICAgICAgcGFyc2VkLnZhbHVlLm5vd01zLAogICAgKTsKICAgIGlmIChiaW5kaW5nRXJyb3IgIT09IG51bGwpIHJldHVybiBiaW5kaW5nRXJyb3I7CiAgICBjb25zdCBhdHRlc3RhdGlvbkVycm9yID0gdGhpcy4jdmFsaWRhdGVBdHRlc3RhdGlvbigKICAgICAgcGFyc2VkLnZhbHVlLmF0dGVzdGF0aW9uLAogICAgICBwYXJzZWQudmFsdWUubm93TXMsCiAgICApOwogICAgaWYgKGF0dGVzdGF0aW9uRXJyb3IgIT09IG51bGwpIHJldHVybiBhdHRlc3RhdGlvbkVycm9yOwo=
+          NEW_B64: ICAgIGNvbnN0IGJpbmRpbmdFcnJvciA9IHRoaXMuI3ZhbGlkYXRlR2F0ZXdheURldmljZUJpbmRpbmcoCiAgICAgIHBhcnNlZC52YWx1ZS5nYXRld2F5U2Vzc2lvbiwKICAgICAgcGFyc2VkLnZhbHVlLmRldmljZVJlY29yZCwKICAgICAgcGFyc2VkLnZhbHVlLm5vd01zLAogICAgKTsKICAgIGlmIChiaW5kaW5nRXJyb3IgIT09IG51bGwpIHJldHVybiBiaW5kaW5nRXJyb3I7CiAgICBjb25zdCBhdHRlc3RhdGlvbkVycm9yID0gdGhpcy4jdmFsaWRhdGVBdHRlc3RhdGlvbigKICAgICAgcGFyc2VkLnZhbHVlLmF0dGVzdGF0aW9uLAogICAgICBwYXJzZWQudmFsdWUubm93TXMsCiAgICApOwogICAgaWYgKGF0dGVzdGF0aW9uRXJyb3IgIT09IG51bGwpIHJldHVybiBhdHRlc3RhdGlvbkVycm9yOwogICAgY29uc3QgY2FwYWNpdHkgPSB0aGlzLiNwcmVwYXJlU2Vzc2lvblNsb3QoKTsKICAgIGlmIChjYXBhY2l0eSAhPT0gbnVsbCkgcmV0dXJuIGNhcGFjaXR5Owo=
+          ADD_B64: Cgp0ZXN0KCdpbnZhbGlkIG9wZW4gcmVxdWVzdCBjYW5ub3QgZXZpY3QgcmVtZW1iZXJlZCByZXZva2VkIHRydXN0IHN0YXRlJywgKCkgPT4gewogIGNvbnN0IHRhcmdldCA9IG1hbmFnZXIoeyBtYXhBY3RpdmVTZXNzaW9uczogMiwgbWF4UmVtZW1iZXJlZFNlc3Npb25zOiAyIH0pOwogIGFzc2VydC5lcXVhbChvcGVuKHRhcmdldCkub2ssIHRydWUpOwogIGFzc2VydC5lcXVhbCgKICAgIHRhcmdldC5yZXZva2VTZXNzaW9uKHsKICAgICAgZGV2aWNlU2Vzc2lvbklkOiAnZGV2aWNlLXNlc3Npb246MScsCiAgICAgIGNvbm5lY3Rpb25JZDogJ2dhdGV3YXk6Y29ubmVjdGlvbjoxJywKICAgICAgcmV2b2tlZEF0TXM6IDEwXzEwMCwKICAgICAgcmVhc29uUmVmZXJlbmNlOiAncmV2b2NhdGlvbjpyZXRlbnRpb24tZ3VhcmQnLAogICAgfSkub2ssCiAgICB0cnVlLAogICk7CiAgYXNzZXJ0LmVxdWFsKAogICAgb3Blbih0YXJnZXQsIHsKICAgICAgZGV2aWNlU2Vzc2lvbklkOiAnZGV2aWNlLXNlc3Npb246MicsCiAgICAgIGdhdGV3YXlTZXNzaW9uOiBnYXRld2F5KHsKICAgICAgICBzZXNzaW9uSWQ6ICdnYXRld2F5OnNlc3Npb246MicsCiAgICAgICAgY29ubmVjdGlvbklkOiAnZ2F0ZXdheTpjb25uZWN0aW9uOjInLAogICAgICB9KSwKICAgIH0pLm9rLAogICAgdHJ1ZSwKICApOwoKICBhc3NlcnQuZXF1YWwoCiAgICBlcnJvckNvZGUoCiAgICAgIG9wZW4odGFyZ2V0LCB7CiAgICAgICAgZGV2aWNlU2Vzc2lvbklkOiAnZGV2aWNlLXNlc3Npb246MycsCiAgICAgICAgZ2F0ZXdheVNlc3Npb246IGdhdGV3YXkoewogICAgICAgICAgc2Vzc2lvbklkOiAnZ2F0ZXdheTpzZXNzaW9uOjMnLAogICAgICAgICAgY29ubmVjdGlvbklkOiAnZ2F0ZXdheTpjb25uZWN0aW9uOjMnLAogICAgICAgICAgdGVuYW50SWQ6IFRFTkFOVF9CLAogICAgICAgIH0pLAogICAgICB9KSwKICAgICksCiAgICAnVEVOQU5UX01JU01BVENIJywKICApOwoKICBhc3NlcnQuZXF1YWwoCiAgICBlcnJvckNvZGUoCiAgICAgIG9wZW4odGFyZ2V0LCB7CiAgICAgICAgZGV2aWNlU2Vzc2lvbklkOiAnZGV2aWNlLXNlc3Npb246MScsCiAgICAgICAgZ2F0ZXdheVNlc3Npb246IGdhdGV3YXkoewogICAgICAgICAgc2Vzc2lvbklkOiAnZ2F0ZXdheTpzZXNzaW9uOjQnLAogICAgICAgICAgY29ubmVjdGlvbklkOiAnZ2F0ZXdheTpjb25uZWN0aW9uOjQnLAogICAgICAgIH0pLAogICAgICB9KSwKICAgICksCiAgICAnU0VTU0lPTl9DT05GTElDVCcsCiAgKTsKfSk7Cg==
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          source = Path('services/mobile-gateway/src/device-session/session-trust.ts')
-          text = source.read_text()
-          old = """    const capacity = this.#prepareSessionSlot();
-    if (capacity !== null) return capacity;
-    const bindingError = this.#validateGatewayDeviceBinding(
-      parsed.value.gatewaySession,
-      parsed.value.deviceRecord,
-      parsed.value.nowMs,
-    );
-    if (bindingError !== null) return bindingError;
-    const attestationError = this.#validateAttestation(
-      parsed.value.attestation,
-      parsed.value.nowMs,
-    );
-    if (attestationError !== null) return attestationError;
-"""
-          new = """    const bindingError = this.#validateGatewayDeviceBinding(
-      parsed.value.gatewaySession,
-      parsed.value.deviceRecord,
-      parsed.value.nowMs,
-    );
-    if (bindingError !== null) return bindingError;
-    const attestationError = this.#validateAttestation(
-      parsed.value.attestation,
-      parsed.value.nowMs,
-    );
-    if (attestationError !== null) return attestationError;
-    const capacity = this.#prepareSessionSlot();
-    if (capacity !== null) return capacity;
-"""
-          if old not in text:
-              raise SystemExit('expected openSession block not found')
-          source.write_text(text.replace(old, new, 1))
-
-          test = Path('services/mobile-gateway/test/w14e-device-session-trust.test.ts')
-          test_text = test.read_text()
-          addition = r'''
-
-test('invalid open request cannot evict remembered revoked trust state', () => {
-  const target = manager({ maxActiveSessions: 2, maxRememberedSessions: 2 });
-  assert.equal(open(target).ok, true);
-  assert.equal(
-    target.revokeSession({
-      deviceSessionId: 'device-session:1',
-      connectionId: 'gateway:connection:1',
-      revokedAtMs: 10_100,
-      reasonReference: 'revocation:retention-guard',
-    }).ok,
-    true,
-  );
-  assert.equal(
-    open(target, {
-      deviceSessionId: 'device-session:2',
-      gatewaySession: gateway({
-        sessionId: 'gateway:session:2',
-        connectionId: 'gateway:connection:2',
-      }),
-    }).ok,
-    true,
-  );
-
-  assert.equal(
-    errorCode(
-      open(target, {
-        deviceSessionId: 'device-session:3',
-        gatewaySession: gateway({
-          sessionId: 'gateway:session:3',
-          connectionId: 'gateway:connection:3',
-          tenantId: TENANT_B,
-        }),
-      }),
-    ),
-    'TENANT_MISMATCH',
-  );
-
-  assert.equal(
-    errorCode(
-      open(target, {
-        deviceSessionId: 'device-session:1',
-        gatewaySession: gateway({
-          sessionId: 'gateway:session:4',
-          connectionId: 'gateway:connection:4',
-        }),
-      }),
-    ),
-    'SESSION_CONFLICT',
-  );
-});
-'''
-          marker = "invalid open request cannot evict remembered revoked trust state"
-          if marker in test_text:
-              raise SystemExit('regression test already present')
-          test.write_text(test_text + addition)
-          PY
+          python3 -c "import base64,os; from pathlib import Path; p=Path('services/mobile-gateway/src/device-session/session-trust.ts'); t=p.read_text(); old=base64.b64decode(os.environ['OLD_B64']).decode(); new=base64.b64decode(os.environ['NEW_B64']).decode(); assert old in t; p.write_text(t.replace(old,new,1)); q=Path('services/mobile-gateway/test/w14e-device-session-trust.test.ts'); s=q.read_text(); a=base64.b64decode(os.environ['ADD_B64']).decode(); assert 'invalid open request cannot evict remembered revoked trust state' not in s; q.write_text(s+a)"
           npx prettier --write services/mobile-gateway/src/device-session/session-trust.ts services/mobile-gateway/test/w14e-device-session-trust.test.ts
       - name: Commit guarded blobs
-        shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
