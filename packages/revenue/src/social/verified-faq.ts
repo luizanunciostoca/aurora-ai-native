@@ -9,8 +9,9 @@ export const VERIFIED_FAQ_REASONS = [
   'CONFLICTING_FACTS',
   'TEMPLATE_INVALID',
   'INVALID_EVALUATION_TIME',
+  'INVALID_CONFIDENCE_THRESHOLD',
+  'INVALID_FACT_TIME',
 ] as const;
-
 export type VerifiedFaqReason = (typeof VERIFIED_FAQ_REASONS)[number];
 
 export type VerifiedFaqKind = 'HOURS' | 'LOCATION' | 'COMMON_FAQ';
@@ -117,6 +118,9 @@ function isTemplateUsable(
     template.kind === input.kind &&
     template.key === input.key &&
     template.active &&
+    template.sourceReference.trim().length > 0 &&
+    template.sourceRevision.trim().length > 0 &&
+    template.expectedSourceRevision.trim().length > 0 &&
     template.sourceRevision === template.expectedSourceRevision &&
     template.provenanceReference.trim().length > 0 &&
     template.authorizesExecution === false
@@ -148,6 +152,20 @@ export function resolveVerifiedFaqFastPath(input: VerifiedFaqLookupInput): Verif
     };
   }
 
+  if (
+    !Number.isFinite(input.minimumConfidence) ||
+    input.minimumConfidence < 0 ||
+    input.minimumConfidence > 1
+  ) {
+    return {
+      kind: 'VerifiedFaqLookupResult',
+      status: 'ESCALATE',
+      correlationId: input.correlationId,
+      reasons: ['INVALID_CONFIDENCE_THRESHOLD'],
+      authorizesExecution: false,
+    };
+  }
+
   const candidates = input.facts.filter(
     (fact) =>
       fact.tenantId === input.tenantId && fact.kind === input.kind && fact.key === input.key,
@@ -167,8 +185,18 @@ export function resolveVerifiedFaqFastPath(input: VerifiedFaqLookupInput): Verif
   const eligible: VerifiedFactProjection[] = [];
 
   for (const fact of candidates) {
+    const observedAt = parseTimestamp(fact.observedAt);
     const expiresAt = parseTimestamp(fact.expiresAt);
-    if (expiresAt === undefined || expiresAt <= evaluatedAt) {
+    if (
+      observedAt === undefined ||
+      expiresAt === undefined ||
+      observedAt > evaluatedAt ||
+      expiresAt <= observedAt
+    ) {
+      reasons.push('INVALID_FACT_TIME');
+      continue;
+    }
+    if (expiresAt <= evaluatedAt) {
       reasons.push('STALE_FACT');
       continue;
     }
@@ -178,12 +206,22 @@ export function resolveVerifiedFaqFastPath(input: VerifiedFaqLookupInput): Verif
       continue;
     }
 
-    if (fact.provenanceReference.trim().length === 0) {
+    if (
+      fact.sourceReference.trim().length === 0 ||
+      fact.sourceRevision.trim().length === 0 ||
+      fact.expectedSourceRevision.trim().length === 0 ||
+      fact.provenanceReference.trim().length === 0
+    ) {
       reasons.push('MISSING_PROVENANCE');
       continue;
     }
 
-    if (!Number.isFinite(fact.confidence) || fact.confidence < input.minimumConfidence) {
+    if (
+      !Number.isFinite(fact.confidence) ||
+      fact.confidence < 0 ||
+      fact.confidence > 1 ||
+      fact.confidence < input.minimumConfidence
+    ) {
       reasons.push('LOW_CONFIDENCE');
       continue;
     }
@@ -292,10 +330,7 @@ export function summarizeVerifiedFaqBenchmark(
     sampleCount: sanitized.length,
     averageBaselineLatencyMs,
     averageFastPathLatencyMs,
-    latencyReductionPercent: reductionPercent(
-      averageBaselineLatencyMs,
-      averageFastPathLatencyMs,
-    ),
+    latencyReductionPercent: reductionPercent(averageBaselineLatencyMs, averageFastPathLatencyMs),
     averageBaselineCostMicros,
     averageFastPathCostMicros,
     costReductionPercent: reductionPercent(averageBaselineCostMicros, averageFastPathCostMicros),
