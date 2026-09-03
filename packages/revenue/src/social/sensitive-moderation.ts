@@ -336,10 +336,10 @@ export function planSensitiveModeration(input: Readonly<{
     : undefined;
 
   const requestedModerationAction = moderationAction(category);
-  const action =
-    context.allowModerationCandidate && consentAllowsAutomation
-      ? requestedModerationAction
-      : 'NONE';
+  let action: W11ModerationAction = 'NONE';
+  if (context.allowModerationCandidate && consentAllowsAutomation) {
+    action = requestedModerationAction;
+  }
   const moderationIntent: W11ModerationIntentCandidate = {
     kind: 'W11_MODERATION_INTENT_CANDIDATE',
     action,
