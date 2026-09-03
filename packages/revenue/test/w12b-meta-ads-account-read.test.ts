@@ -125,7 +125,9 @@ test('W12-B treats account verification as a current precondition, not authority
 
 test('W12-B blocks revoked bindings and unavailable or stale provider health', () => {
   assert.deepEqual(
-    prepareMetaAdsAccountRead(fixture({ binding: { ...fixture().binding, state: 'REVOKED' } })),
+    prepareMetaAdsAccountRead(
+      fixture({ binding: { ...fixture().binding, state: 'REVOKED' } }),
+    ),
     { status: 'BLOCKED', code: 'BINDING_REVOKED' },
   );
 
