@@ -96,12 +96,14 @@ test('W11-B blocks missing media and mismatched W07 account binding', () => {
   );
 
   const record = publication();
+  const request = record.w07ExecutionRequest;
+  if (request === undefined) throw new Error('fixture W07 execution request is missing');
   assert.deepEqual(
     planPublicationProviderExecution({
       record: {
         ...record,
         w07ExecutionRequest: {
-          ...record.w07ExecutionRequest!,
+          ...request,
           accountReference: 'account:wrong',
         },
       },
