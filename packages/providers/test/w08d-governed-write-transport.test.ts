@@ -23,21 +23,26 @@ const FUTURE = '2026-09-03T02:30:00Z' as Rfc3339Timestamp;
 const TRANSIENT_FIXTURE_VALUE = ['fixture', 'provider', 'credential'].join('-');
 
 function binding(overrides: Partial<ProviderBindingRecord> = {}): ProviderBindingRecord {
+  const { targetType, targetReference, ...rest } = overrides;
   return {
     kind: 'ProviderBindingRecord',
     schemaVersion: VERSION,
     bindingReference: 'provider-binding-meta-act-123',
-    tenant: { tenantId: 'ten_01JTESTTENANTA000000000000' as ProviderBindingRecord['tenant']['tenantId'] },
+    tenant: {
+      tenantId: 'ten_01JTESTTENANTA000000000000' as ProviderBindingRecord['tenant']['tenantId'],
+    },
     provider: 'META',
     accountReference: 'act_123' as ProviderBindingRecord['accountReference'],
-    targetType: 'AD',
-    targetReference: 'ad_456' as ProviderBindingRecord['targetReference'],
+    targetType: targetType ?? 'AD',
+    targetReference:
+      targetReference ??
+      ('ad_456' as NonNullable<ProviderBindingRecord['targetReference']>),
     state: 'ACTIVE',
     verificationState: 'VERIFIED',
     bindingVersion: 4,
     updatedAt: NOW,
     authorizesExecution: false,
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -46,7 +51,9 @@ function secretReference(overrides: Partial<SecretReferenceRecord> = {}): Secret
     kind: 'SecretReferenceRecord',
     schemaVersion: VERSION,
     secretReference: 'secretref/meta/act-123',
-    tenant: { tenantId: 'ten_01JTESTTENANTA000000000000' as SecretReferenceRecord['tenant']['tenantId'] },
+    tenant: {
+      tenantId: 'ten_01JTESTTENANTA000000000000' as SecretReferenceRecord['tenant']['tenantId'],
+    },
     provider: 'META',
     accountReference: 'act_123' as SecretReferenceRecord['accountReference'],
     bindingReference: 'provider-binding-meta-act-123',
@@ -88,7 +95,10 @@ function intent(overrides: Record<string, unknown> = {}): ActionIntent {
   } as unknown as ActionIntent;
 }
 
-function proof(actionIntent: ActionIntent, overrides: Partial<W07ProviderExecutionProof> = {}): W07ProviderExecutionProof {
+function proof(
+  actionIntent: ActionIntent,
+  overrides: Partial<W07ProviderExecutionProof> = {},
+): W07ProviderExecutionProof {
   return {
     kind: 'W07_PROVIDER_EXECUTION_PROOF',
     actionIntentId: actionIntent.actionIntentId,
@@ -223,7 +233,9 @@ test('W08-D requires exact binding and explicit REQUIRED idempotency before disp
   const actionIntent = intent();
   const wrongBinding = await executeGovernedProviderWrite(
     request(actionIntent, {
-      binding: binding({ accountReference: 'act_999' as ProviderBindingRecord['accountReference'] }),
+      binding: binding({
+        accountReference: 'act_999' as ProviderBindingRecord['accountReference'],
+      }),
     }),
     { credentials: credentials(), adapter },
   );
