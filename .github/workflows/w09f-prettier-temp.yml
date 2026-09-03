@@ -14,6 +14,7 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - run: npm install --global npm@10.9.2
       - run: npm ci
       - name: Canonical Prettier
         run: npx prettier --write services/n8n-bridge/test/w09f-governance-replay-failure-integration.test.ts docs/governance/w09/W09_FABRIC_HANDOFF.md
