@@ -41,6 +41,7 @@ interface EngagementFeatureOptions {
   readonly tenantId?: TenantId;
   readonly key?: string;
   readonly weightBps?: number;
+  readonly observedAt?: string;
 }
 
 function engagementFeature(options: EngagementFeatureOptions = {}): QualificationFeature {
@@ -53,7 +54,7 @@ function engagementFeature(options: EngagementFeatureOptions = {}): Qualificatio
       tenantId: options.tenantId ?? TENANT_A,
       sourceSystem: 'conversation-analytics',
       sourceRevision: 'conv-r7',
-      observedAt: '2026-09-03T06:10:30Z',
+      observedAt: options.observedAt ?? '2026-09-03T06:10:30Z',
     },
   };
 }
@@ -211,6 +212,17 @@ test('W10-B rejects stale entity versions and out-of-order evaluation time', () 
   assert.deepEqual(evaluateQualification(leadRecord(), oldTime), {
     ok: false,
     error: 'OUT_OF_ORDER_EVALUATION',
+  });
+});
+
+test('W10-B rejects feature observations from after the evaluation time', () => {
+  const futureEvidence = [
+    engagementFeature({ observedAt: '2026-09-03T06:11:01Z' }),
+    fitFeature(),
+  ];
+  assert.deepEqual(evaluateQualification(leadRecord(), deterministicInput(futureEvidence)), {
+    ok: false,
+    error: 'FEATURE_FUTURE_OBSERVATION',
   });
 });
 
