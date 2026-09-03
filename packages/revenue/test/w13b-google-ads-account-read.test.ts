@@ -108,7 +108,19 @@ test('W13-B fails closed on MCC hierarchy mismatch or missing manager binding', 
     { status: 'BLOCKED', code: 'MANAGER_HIERARCHY_MISMATCH' },
   );
 
-  const { managerCustomerId: _manager, ...withoutManager } = fixture().binding;
+  const binding = fixture().binding;
+  const withoutManager = {
+    source: binding.source,
+    tenantId: binding.tenantId,
+    provider: binding.provider,
+    bindingReference: binding.bindingReference,
+    customerId: binding.customerId,
+    state: binding.state,
+    verificationState: binding.verificationState,
+    bindingVersion: binding.bindingVersion,
+    verifiedAtMs: binding.verifiedAtMs,
+    authorizesExecution: binding.authorizesExecution,
+  };
   assert.deepEqual(prepareGoogleAdsAccountRead(fixture({ binding: withoutManager })), {
     status: 'BLOCKED',
     code: 'MANAGER_HIERARCHY_MISMATCH',
