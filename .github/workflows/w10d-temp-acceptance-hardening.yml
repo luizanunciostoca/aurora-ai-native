@@ -1,0 +1,205 @@
+name: W10-D Temporary Acceptance Hardening
+
+on:
+  push:
+    branches:
+      - wave/10d-nurture-sales-customer-success
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/10d-nurture-sales-customer-success
+      - name: Apply exact fail-closed hardening
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              if old not in text:
+                  raise SystemExit(f'missing expected snippet: {label}')
+              return text.replace(old, new, 1)
+
+          # Explicit domain-local error vocabulary for acceptance blockers.
+          types_path = Path('packages/revenue/src/flows/types.ts')
+          types = types_path.read_text()
+          types = replace_once(
+              types,
+              "  'CRM_RECORD_MALFORMED',\n  'TENANT_MISMATCH',",
+              "  'CRM_RECORD_MALFORMED',\n  'CRM_CURRENTNESS_CONFLICT',\n  'QUALIFICATION_MALFORMED',\n  'CORRELATION_MISMATCH',\n  'TENANT_MISMATCH',",
+              'flow errors',
+          )
+          types_path.write_text(types)
+
+          controller_path = Path('packages/revenue/src/flows/controller.ts')
+          controller = controller_path.read_text()
+
+          helper_anchor = """function isNonNegativeInteger(value: unknown, maximum = Number.MAX_SAFE_INTEGER): value is number {\n  return Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) <= maximum;\n}\n\n"""
+          helpers = helper_anchor + """function correlationId(value: unknown): string | null {\n  if (value === null || typeof value !== 'object') return null;\n  const descriptor = Object.getOwnPropertyDescriptor(value, 'correlationId');\n  if (descriptor === undefined || !('value' in descriptor) || !isNonEmptyString(descriptor.value)) {\n    return null;\n  }\n  return descriptor.value;\n}\n\nfunction correlationsMatch(left: unknown, right: unknown): boolean {\n  const leftId = correlationId(left);\n  const rightId = correlationId(right);\n  return leftId !== null && rightId !== null && leftId === rightId;\n}\n\nfunction dispatchObservationValid(value: unknown): value is RevenueDispatchObservation | undefined {\n  return (\n    value === undefined ||\n    value === 'NONE' ||\n    value === 'ACKNOWLEDGED' ||\n    value === 'NO_EFFECT_CONFIRMED' ||\n    value === 'EXECUTION_UNCERTAIN'\n  );\n}\n\nfunction cancellationReasonValid(value: unknown): boolean {\n  return (\n    value === undefined ||\n    value === 'NONE' ||\n    value === 'USER_REQUEST' ||\n    value === 'CONSENT_REVOKED' ||\n    value === 'BUSINESS_CANCELLED'\n  );\n}\n\nfunction crmCurrentnessValid(input: PlanRevenueFlowInput['crm']): boolean {\n  return (\n    typeof input.current === 'boolean' &&\n    Array.isArray(input.currentnessReasons) &&\n    input.currentnessReasons.every(\n      (reason) =>\n        reason === 'ENTITY_VERSION_BEHIND' ||\n        reason === 'MODEL_TOO_OLD' ||\n        reason === 'MODEL_TIME_UNKNOWN',\n    ) &&\n    !(input.current && input.currentnessReasons.length > 0)\n  );\n}\n\nfunction qualificationValid(value: QualificationEvaluation): boolean {\n  return (\n    value.kind === 'REVENUE_QUALIFICATION_EVALUATION' &&\n    value.schemaVersion === '1.0.0' &&\n    isNonEmptyString(value.tenantId) &&\n    isEntity(value.entity) &&\n    isNonNegativeInteger(value.entityVersion) &&\n    value.entityVersion >= 1 &&\n    isNonEmptyString(value.featureSetRevision) &&\n    isNonEmptyString(value.ruleSetVersion) &&\n    isNonEmptyString(value.thresholdVersion) &&\n    isTimestamp(value.evaluatedAt) &&\n    correlationId(value.correlation) !== null &&\n    (value.mode === 'DETERMINISTIC' || value.mode === 'MODEL_ASSISTED') &&\n    (value.scoreBps === null ||\n      (isNonNegativeInteger(value.scoreBps, 10_000) && value.scoreBps <= 10_000)) &&\n    (value.stage === 'QUALIFIED' ||\n      value.stage === 'NURTURE' ||\n      value.stage === 'UNQUALIFIED' ||\n      value.stage === 'INCOMPLETE') &&\n    isNonNegativeInteger(value.coverageBps, 10_000) &&\n    Array.isArray(value.contributions) &&\n    Array.isArray(value.missingCriticalFeatures) &&\n    value.missingCriticalFeatures.every((key) => isNonEmptyString(key)) &&\n    (value.reviewDisposition === 'NONE' ||\n      value.reviewDisposition === 'VERIFY_MODEL_ASSIST' ||\n      value.reviewDisposition === 'ESCALATE_MODEL_ASSIST' ||\n      value.reviewDisposition === 'ABSTAIN_MODEL_ASSIST') &&\n    value.authorizesExecution === false &&\n    value.canGrantPermission === false\n  );\n}\n\n"""
+          controller = replace_once(controller, helper_anchor, helpers, 'runtime validation helpers')
+
+          controller = replace_once(
+              controller,
+              """  if (qualification.tenantId !== input.tenantId) return 'TENANT_MISMATCH';\n  if (!sameEntity(qualification.entity, input.crm.model.entity)) return 'ENTITY_MISMATCH';\n""",
+              """  if (qualification.tenantId !== input.tenantId) return 'TENANT_MISMATCH';\n  if (!correlationsMatch(qualification.correlation, input.correlation)) return 'CORRELATION_MISMATCH';\n  if (!sameEntity(qualification.entity, input.crm.model.entity)) return 'ENTITY_MISMATCH';\n""",
+              'qualification correlation fence',
+          )
+          controller = replace_once(
+              controller,
+              """  | 'ENTITY_VERSION_CONFLICT'\n  | 'OUT_OF_ORDER_EVALUATION'\n""",
+              """  | 'ENTITY_VERSION_CONFLICT'\n  | 'CORRELATION_MISMATCH'\n  | 'OUT_OF_ORDER_EVALUATION'\n""",
+              'qualification error union',
+          )
+
+          controller = replace_once(
+              controller,
+              """    !isTimestamp(record.updatedAt) ||\n    !['ACTIVE', 'PAUSED_POLICY', 'WAITING_RECONCILIATION', 'COMPLETED', 'CANCELLED'].includes(\n""",
+              """    !isTimestamp(record.updatedAt) ||\n    correlationId(record.correlation) === null ||\n    !['ACTIVE', 'PAUSED_POLICY', 'WAITING_RECONCILIATION', 'COMPLETED', 'CANCELLED'].includes(\n""",
+              'existing record correlation shape',
+          )
+          controller = replace_once(
+              controller,
+              """  if (record.tenantId !== input.tenantId) return 'TENANT_MISMATCH';\n  if (record.flowId !== input.flowId) return 'FLOW_ID_CONFLICT';\n""",
+              """  if (record.tenantId !== input.tenantId) return 'TENANT_MISMATCH';\n  if (!correlationsMatch(record.correlation, input.correlation)) return 'CORRELATION_MISMATCH';\n  if (record.flowId !== input.flowId) return 'FLOW_ID_CONFLICT';\n""",
+              'existing record correlation fence',
+          )
+
+          controller = replace_once(
+              controller,
+              """    !isTimestamp(input?.evaluatedAt) ||\n    input?.correlation === null ||\n    typeof input?.correlation !== 'object' ||\n""",
+              """    !isTimestamp(input?.evaluatedAt) ||\n    correlationId(input?.correlation) === null ||\n""",
+              'request correlation validation',
+          )
+          controller = replace_once(
+              controller,
+              """  if (!isCrmModelValid(input.crm.model)) return { ok: false, error: 'CRM_RECORD_MALFORMED' };\n  const templateIssue = templateError(input.template);\n""",
+              """  if (!dispatchObservationValid(input.dispatchObservation)) {\n    return { ok: false, error: 'DISPATCH_OBSERVATION_INVALID' };\n  }\n  if (!cancellationReasonValid(input.cancellationReason)) {\n    return { ok: false, error: 'REQUEST_MALFORMED' };\n  }\n  if (!isCrmModelValid(input.crm.model)) return { ok: false, error: 'CRM_RECORD_MALFORMED' };\n  if (!crmCurrentnessValid(input.crm)) return { ok: false, error: 'CRM_CURRENTNESS_CONFLICT' };\n  const templateIssue = templateError(input.template);\n""",
+              'runtime enums and CRM currentness',
+          )
+          controller = replace_once(
+              controller,
+              """  if (input.qualification !== undefined) {\n    const boundary = qualificationBoundaryError(input, input.qualification);\n""",
+              """  if (input.qualification !== undefined) {\n    if (!qualificationValid(input.qualification)) {\n      return { ok: false, error: 'QUALIFICATION_MALFORMED' };\n    }\n    const boundary = qualificationBoundaryError(input, input.qualification);\n""",
+              'qualification shape validation',
+          )
+          controller_path.write_text(controller)
+
+          test_path = Path('packages/revenue/test/w10d-revenue-flows.test.ts')
+          tests = test_path.read_text()
+          extra = r'''
+
+test('W10-D rejects forged dispatch observations and cancellation reasons before state advancement', () => {
+  const created = firstReady();
+  const forgedObservation = planRevenueFlow(
+    fixture({
+      evaluatedAt: '2026-09-03T08:11:00Z',
+      existing: created.record,
+      dispatchObservation: 'FORGED_ACK' as unknown as PlanRevenueFlowInput['dispatchObservation'],
+    }),
+  );
+  assert.deepEqual(forgedObservation, { ok: false, error: 'DISPATCH_OBSERVATION_INVALID' });
+
+  const forgedCancellation = planRevenueFlow(
+    fixture({
+      existing: created.record,
+      cancellationReason: 'FORGED_CANCEL' as unknown as PlanRevenueFlowInput['cancellationReason'],
+    }),
+  );
+  assert.deepEqual(forgedCancellation, { ok: false, error: 'REQUEST_MALFORMED' });
+});
+
+test('W10-D requires one non-empty correlation and rejects cross-correlation evidence reuse', () => {
+  const emptyCorrelation = planRevenueFlow(
+    fixture({ correlation: { correlationId: '' as CorrelationId } }),
+  );
+  assert.deepEqual(emptyCorrelation, { ok: false, error: 'REQUEST_MALFORMED' });
+
+  const otherCorrelation = 'cor_01JW10DOTHERCORRELATION000' as CorrelationId;
+  const created = firstReady();
+  const recordMismatch = planRevenueFlow(
+    fixture({
+      existing: { ...created.record, correlation: { correlationId: otherCorrelation } },
+    }),
+  );
+  assert.deepEqual(recordMismatch, { ok: false, error: 'CORRELATION_MISMATCH' });
+
+  const qualificationMismatch = planRevenueFlow(
+    fixture({
+      qualification: {
+        ...requiredQualification(),
+        correlation: { correlationId: otherCorrelation },
+      },
+    }),
+  );
+  assert.deepEqual(qualificationMismatch, { ok: false, error: 'CORRELATION_MISMATCH' });
+});
+
+test('W10-D rejects contradictory CRM currentness and malformed qualification authority evidence', () => {
+  const contradictoryCrm = planRevenueFlow(
+    fixture({
+      crm: {
+        ...fixture().crm,
+        current: true,
+        currentnessReasons: ['MODEL_TOO_OLD'],
+      },
+    }),
+  );
+  assert.deepEqual(contradictoryCrm, { ok: false, error: 'CRM_CURRENTNESS_CONFLICT' });
+
+  const authoritativeQualification = planRevenueFlow(
+    fixture({
+      qualification: {
+        ...requiredQualification(),
+        authorizesExecution: true,
+      } as unknown as PlanRevenueFlowInput['qualification'],
+    }),
+  );
+  assert.deepEqual(authoritativeQualification, { ok: false, error: 'QUALIFICATION_MALFORMED' });
+
+  const malformedQualification = planRevenueFlow(
+    fixture({
+      qualification: {
+        ...requiredQualification(),
+        stage: 'FORGED_STAGE',
+      } as unknown as PlanRevenueFlowInput['qualification'],
+    }),
+  );
+  assert.deepEqual(malformedQualification, { ok: false, error: 'QUALIFICATION_MALFORMED' });
+});
+'''
+          marker = "test('W10-D rejects forged dispatch observations and cancellation reasons before state advancement'"
+          if marker in tests:
+              raise SystemExit('acceptance hardening tests already present')
+          test_path.write_text(tests.rstrip() + extra + '\n')
+          PY
+      - name: Setup canonical Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install exact lockfile
+        run: npm ci
+      - name: Canonical format targeted W10-D files
+        run: |
+          ./node_modules/.bin/prettier --write \
+            packages/revenue/src/flows/types.ts \
+            packages/revenue/src/flows/controller.ts \
+            packages/revenue/test/w10d-revenue-flows.test.ts
+      - name: Validate canonical quality and tests before commit
+        run: npm run lint && npm run typecheck && npm test && npm run build && npm run audit:cleanup
+      - name: Commit acceptance hardening
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            packages/revenue/src/flows/types.ts \
+            packages/revenue/src/flows/controller.ts \
+            packages/revenue/test/w10d-revenue-flows.test.ts
+          git commit -m "security(W10-D): fail closed on forged flow evidence"
+          git push origin HEAD:wave/10d-nurture-sales-customer-success
