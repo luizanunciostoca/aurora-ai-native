@@ -342,7 +342,10 @@ test('W09-A candidate activation performs explicit expected-version supersession
 
 test('W09-A registry snapshots are stable and tenant scoped', () => {
   const registry = new N8nWorkflowBindingRegistry();
-  const tenantB = binding({ tenantId: 'ten_01JW09TENANTB00000000000', bindingId: 'w09.workflow.zeta' });
+  const tenantB = binding({
+    tenantId: 'ten_01JW09TENANTB00000000000',
+    bindingId: 'w09.workflow.zeta',
+  });
   const tenantA = binding({ bindingId: 'w09.workflow.alpha' });
   assert.equal(registry.register(tenantB).ok, true);
   assert.equal(registry.register(tenantA).ok, true);
@@ -353,9 +356,6 @@ test('W09-A registry snapshots are stable and tenant scoped', () => {
   assert.equal(first.canGrantPermission, false);
   assert.deepEqual(
     first.bindings.map((item) => `${item.tenantId}:${item.bindingId}`),
-    [
-      `${tenantA.tenantId}:${tenantA.bindingId}`,
-      `${tenantB.tenantId}:${tenantB.bindingId}`,
-    ],
+    [`${tenantA.tenantId}:${tenantA.bindingId}`, `${tenantB.tenantId}:${tenantB.bindingId}`],
   );
 });
