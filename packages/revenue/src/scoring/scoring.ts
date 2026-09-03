@@ -141,8 +141,11 @@ function stageFor(scoreBps: number, input: QualificationEvaluationInput): Qualif
   return 'UNQUALIFIED';
 }
 
-function reviewDisposition(model: QualificationModelAssist | undefined): QualificationReviewDisposition {
-  if (model === undefined || model.confidence.disposition === 'PROCEED_WITH_EVIDENCE') return 'NONE';
+function reviewDisposition(
+  model: QualificationModelAssist | undefined,
+): QualificationReviewDisposition {
+  if (model === undefined || model.confidence.disposition === 'PROCEED_WITH_EVIDENCE')
+    return 'NONE';
   if (model.confidence.disposition === 'VERIFY') return 'VERIFY_MODEL_ASSIST';
   if (model.confidence.disposition === 'ESCALATE') return 'ESCALATE_MODEL_ASSIST';
   return 'ABSTAIN_MODEL_ASSIST';
@@ -178,6 +181,9 @@ export function evaluateQualification(
     if (!featureIsValid(feature)) return { ok: false, error: 'REQUEST_MALFORMED' };
     if (feature.provenance.tenantId !== input.tenantId) {
       return { ok: false, error: 'FEATURE_TENANT_MISMATCH' };
+    }
+    if (Date.parse(feature.provenance.observedAt) > Date.parse(input.evaluatedAt)) {
+      return { ok: false, error: 'FEATURE_FUTURE_OBSERVATION' };
     }
     if (seen.has(feature.key)) return { ok: false, error: 'FEATURE_DUPLICATE' };
     seen.add(feature.key);
