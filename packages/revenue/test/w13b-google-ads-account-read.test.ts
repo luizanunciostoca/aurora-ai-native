@@ -101,16 +101,18 @@ test('W13-B fails closed on cross-tenant and wrong-customer bindings', () => {
 test('W13-B fails closed on MCC hierarchy mismatch or missing manager binding', () => {
   assert.deepEqual(
     prepareGoogleAdsAccountRead(
-      fixture({ binding: { ...fixture().binding, managerCustomerId: '1111222233' } }),
+      fixture({
+        binding: { ...fixture().binding, managerCustomerId: '1111222233' },
+      }),
     ),
     { status: 'BLOCKED', code: 'MANAGER_HIERARCHY_MISMATCH' },
   );
 
   const { managerCustomerId: _manager, ...withoutManager } = fixture().binding;
-  assert.deepEqual(
-    prepareGoogleAdsAccountRead(fixture({ binding: withoutManager })),
-    { status: 'BLOCKED', code: 'MANAGER_HIERARCHY_MISMATCH' },
-  );
+  assert.deepEqual(prepareGoogleAdsAccountRead(fixture({ binding: withoutManager })), {
+    status: 'BLOCKED',
+    code: 'MANAGER_HIERARCHY_MISMATCH',
+  });
 });
 
 test('W13-B treats verification as a current precondition, not cached authority', () => {
@@ -144,7 +146,9 @@ test('W13-B blocks unavailable or stale provider health before composing a read'
 
   assert.deepEqual(
     prepareGoogleAdsAccountRead(
-      fixture({ health: { ...fixture().health, observedAtMs: NOW - 30_001 } }),
+      fixture({
+        health: { ...fixture().health, observedAtMs: NOW - 30_001 },
+      }),
     ),
     { status: 'BLOCKED', code: 'HEALTH_STALE' },
   );
