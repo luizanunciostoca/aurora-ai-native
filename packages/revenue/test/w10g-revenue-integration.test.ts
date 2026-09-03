@@ -5,7 +5,10 @@ import test from 'node:test';
 
 import type { CorrelationId, TenantId } from '@aurora/contracts';
 
-import { selectRevenueFastPath, type RevenueFastPathSelectionInput } from '../src/fast-path/index.js';
+import {
+  selectRevenueFastPath,
+  type RevenueFastPathSelectionInput,
+} from '../src/fast-path/index.js';
 import { planRevenueFlow, type PlanRevenueFlowInput } from '../src/flows/index.js';
 import {
   evaluateRevenueIntegration,
@@ -15,10 +18,7 @@ import {
   type RevenueIntegrationEvaluationInput,
   type RevenueProviderReadbackProjection,
 } from '../src/integration/index.js';
-import {
-  planNextBestActions,
-  type NextBestActionPlanningInput,
-} from '../src/nba/index.js';
+import { planNextBestActions, type NextBestActionPlanningInput } from '../src/nba/index.js';
 
 const TENANT_A = 'ten_01JW10GTENANTA00000000000' as TenantId;
 const TENANT_B = 'ten_01JW10GTENANTB00000000000' as TenantId;
@@ -286,9 +286,7 @@ function businessOutcome(
   };
 }
 
-function humanCorrection(
-  overrides: Partial<RevenueHumanCorrection> = {},
-): RevenueHumanCorrection {
+function humanCorrection(overrides: Partial<RevenueHumanCorrection> = {}): RevenueHumanCorrection {
   return {
     kind: 'REVENUE_HUMAN_CORRECTION',
     schemaVersion: '1.0.0',
