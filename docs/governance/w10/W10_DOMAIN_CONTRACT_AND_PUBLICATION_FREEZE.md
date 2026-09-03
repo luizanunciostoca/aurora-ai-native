@@ -1,6 +1,6 @@
 # W10 — Domain Contract & Publication Freeze
 
-Status: `CANDIDATE_FREEZE_W10_00`
+Status: `RECONCILED_CANDIDATE_FREEZE_W10_00`
 
 This document freezes semantics only. It does not publish runtime contracts or schemas.
 
@@ -35,13 +35,13 @@ A CRM read model may summarize accepted domain state; it must not freeze current
 
 ## Nurture/sales/customer-success freeze
 
-W10-D owns business flow state machines and domain task generation. Known-safe planning steps may use deterministic templates/workflows. Any external message/action remains a governed execution request requiring current W02/W07 validation and, when provider-specific, an accepted W08 adapter.
+W10-D owns business flow state machines and domain task generation. Known-safe planning steps may use deterministic templates/workflows. Any external message/action remains a governed execution request requiring current W02/W07 validation and, when provider-specific, an accepted applicable W08 adapter/transport.
 
 Cadence, retries and contact deduplication must be bounded. Opt-out/consent changes must invalidate pending outreach as appropriate. Ambiguous dispatch outcomes preserve `EXECUTION_UNCERTAIN` and require reconciliation before retry.
 
 ## Next-best-action freeze
 
-W10-E may produce ranked/categorized candidate actions from verified CRM/context facts using accepted W04/W05 and, where required, accepted W06 surfaces. Every result must carry enough provenance/reasons to audit why it was proposed and must remain non-authoritative.
+W10-E may produce ranked/categorized candidate actions from verified CRM/context facts using accepted W04/W05/W06 surfaces. Every result must carry enough provenance/reasons to audit why it was proposed and must remain non-authoritative.
 
 An NBA candidate is not an `ActionIntent`, not an approval, and not permission. Insufficient/conflicting/stale evidence must permit abstain/escalate.
 
@@ -53,11 +53,12 @@ W10-F may compose deterministic/cache/template fast paths only over accepted ups
 
 No W11 consumer may treat W10 governance, open PRs, PREBUILD artifacts or intermediate W10 nodes as a stable public domain surface.
 
-The W10 -> W11 barrier opens only after W10-G is independently accepted and merged with:
+The W10 -> W11 barrier opens only after W10-G is accepted through the governed lifecycle with:
 
 1. lifecycle + persistence/read-model compatibility evidence;
 2. qualification/NBA invariants proving zero authority elevation;
 3. governed-execution integration scenarios including consent changes, duplicates and provider uncertainty;
 4. business-outcome evidence definitions suitable for W17/W18 without claiming production SLOs or adaptive promotion;
 5. exact-head Quality/Test Build/Security and Risk Gates A-D;
-6. controlled publication of any shared contracts required by W11.
+6. expected-head merge plus post-merge exact-main Quality/Test Build/Security;
+7. controlled publication of any shared contracts required by W11.

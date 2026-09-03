@@ -1,19 +1,21 @@
 # W10 — Revenue / CRM Domain Wave Charter
 
-Status: `CANDIDATE_COORDINATION_FREEZE_W10_00`
+Status: `CANDIDATE_COORDINATION_FREEZE_W10_00_RECONCILED`
 Task: `W10-00`
 Issue: `#110`
-Exact BUILD base: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
+Reconciled main snapshot: `76aaa67a1f4f8f74b53c3340638c3b579a6c86e3`
+Historical candidate base: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
 
 ## Authority and dependency proof
 
 W10-00 is a governance-only coordination node. Live `main`, accepted exact-SHA/PR evidence, `CURRENT_PROGRAM_STATUS.md`, Developer Manual v0.5, accepted ADRs and canonical Drive governance remain superior authority.
 
-The graph prerequisites for W10-00 are satisfied on the exact base used here:
+The graph prerequisites for W10-00 remain satisfied on the reconciled main snapshot:
 
 - W05-H is accepted and W05 is complete; accepted merge anchor `8deb67875ba6f3fecd7494f7cc955d5965543e3a`.
 - W07-H is accepted and W07 is complete; accepted merge anchor `3bf15c8d09e01be68bc5a4de1cd04defcb8b5025`.
-- W08 is not a graph prerequisite for this coordination freeze. Any descendant that actually needs provider-specific transport or credentials must wait for the required accepted W08 provider surface; an open W08 PR is not dependency truth.
+- W06 dependencies are consumed only from exact accepted surfaces present on canonical main; no open PR or readiness artifact is authority.
+- W08-A/W08-B acceptance establishes provider foundation and credential-reference boundaries, but descendant provider-specific writes still wait for the exact required accepted W08 target adapter and remain below W07.
 
 ## Mission
 
@@ -31,7 +33,7 @@ The wave must maximize useful automation without allowing domain scores, AI reas
 
 `W10-D + W10-E + W10-F -> W10-G`
 
-No descendant is released by this candidate PR. W10-00 must first be independently accepted and merged.
+No descendant is released by this candidate PR. W10-00 must first satisfy the current Single-Owner Governed Acceptance lifecycle and post-merge verification.
 
 ## Cross-wave boundaries
 
@@ -40,7 +42,7 @@ No descendant is released by this candidate PR. W10-00 must first be independent
 - W03 owns durable events, idempotency, replay and generic workflow/persistence foundations. W10 may own domain persistence/read models, not a second durability framework.
 - W04 owns Objective/Goal/Task lifecycle, Capability Registry, CapabilityPlan, lanes, budgets and curated templates.
 - W05 owns intelligence classification, reasoning, confidence, strategy and routing. W10 may consume them for domain decisions but cannot reinterpret confidence as authority.
-- W06 owns context retrieval/trust/freshness/cache/snapshot semantics. Any W10 node depending on a W06 surface must require that exact surface to be accepted first.
+- W06 owns context retrieval/trust/freshness/minimization/cache/snapshot semantics. W10 descendants consume only exact accepted W06 surfaces.
 - W07 owns generic deterministic side-effect safety and current-authority validation.
 - W08 owns provider-specific adapters, credentials and transport. W10 owns business intent, never provider transport.
 - W09 owns governed n8n workflow bindings/bridge; n8n state is never CRM or action authority.
@@ -63,4 +65,4 @@ No descendant is released by this candidate PR. W10-00 must first be independent
 
 This node may create governance only under `docs/governance/w10/**`. It must not create runtime contracts, schemas, services, provider bindings, secrets, external writes, W11 logic or authority semantics.
 
-Acceptance requires same-exact-HEAD Quality, Test Build and Security; cleanup/source-of-truth/scope audit; Risk Gates A-D; independent Program Control acceptance; live-main revalidation immediately before merge; controlled merge; and post-merge exact-main verification.
+Acceptance follows the current Single-Owner Governed Acceptance lifecycle: same-exact-HEAD Quality, Test Build and Security; cleanup/source-of-truth/scope audit; Risk Gates A-D; exact live-main revalidation immediately before protected expected-head merge; then post-merge exact-main Quality/Test Build/Security before `aurora:accepted` and descendant release.
