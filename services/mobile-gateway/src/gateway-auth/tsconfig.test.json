@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": ".",
+    "outDir": "dist-test",
+    "paths": {}
+  },
+  "include": ["*.ts", "test/**/*.ts"],
+  "exclude": ["dist", "dist-test", "node_modules"]
+}
