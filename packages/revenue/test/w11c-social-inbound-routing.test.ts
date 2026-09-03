@@ -95,15 +95,17 @@ test('W11-C deduplicates an exact replay and rejects conflicting revision reuse'
 test('W11-C rejects out-of-order and gapped revisions before routing', () => {
   const previous = applied(fixture({ revision: 2 }));
 
-  assert.deepEqual(
-    ingestAndRouteSocialInbound(fixture({ previous, revision: 1 })),
-    { ok: false, error: 'OUT_OF_ORDER_REVISION', authorizesExecution: false },
-  );
+  assert.deepEqual(ingestAndRouteSocialInbound(fixture({ previous, revision: 1 })), {
+    ok: false,
+    error: 'OUT_OF_ORDER_REVISION',
+    authorizesExecution: false,
+  });
 
-  assert.deepEqual(
-    ingestAndRouteSocialInbound(fixture({ previous, revision: 4 })),
-    { ok: false, error: 'REVISION_GAP', authorizesExecution: false },
-  );
+  assert.deepEqual(ingestAndRouteSocialInbound(fixture({ previous, revision: 4 })), {
+    ok: false,
+    error: 'REVISION_GAP',
+    authorizesExecution: false,
+  });
 });
 
 test('W11-C applies edits and makes delete terminal with no response route', () => {
@@ -170,10 +172,11 @@ test('W11-C isolates prior records and reconnect checkpoints by tenant/account',
     connectionGeneration: 1,
     cursor: 'cursor-1',
   };
-  assert.deepEqual(
-    ingestAndRouteSocialInbound(fixture({ checkpoint })),
-    { ok: false, error: 'SCOPE_MISMATCH', authorizesExecution: false },
-  );
+  assert.deepEqual(ingestAndRouteSocialInbound(fixture({ checkpoint })), {
+    ok: false,
+    error: 'SCOPE_MISMATCH',
+    authorizesExecution: false,
+  });
 });
 
 test('W11-C requires exact reconnect generation and cursor continuity', () => {
@@ -255,10 +258,11 @@ test('W11-C classifies sales, sensitive and untrusted inbound content without si
 });
 
 test('W11-C rejects malformed content and impossible provider timestamps', () => {
-  assert.deepEqual(
-    ingestAndRouteSocialInbound(fixture({ content: '   ' })),
-    { ok: false, error: 'REQUEST_MALFORMED', authorizesExecution: false },
-  );
+  assert.deepEqual(ingestAndRouteSocialInbound(fixture({ content: '   ' })), {
+    ok: false,
+    error: 'REQUEST_MALFORMED',
+    authorizesExecution: false,
+  });
 
   assert.deepEqual(
     ingestAndRouteSocialInbound(
