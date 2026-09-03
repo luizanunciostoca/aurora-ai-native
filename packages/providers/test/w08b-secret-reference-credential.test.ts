@@ -60,7 +60,9 @@ function secretReference(overrides: Partial<SecretReferenceRecord> = {}): Secret
   };
 }
 
-function successfulBackend(onLookup?: (lookup: CredentialBackendLookup) => void): CredentialBackend {
+function successfulBackend(
+  onLookup?: (lookup: CredentialBackendLookup) => void,
+): CredentialBackend {
   return {
     async withCredential(lookup, consume) {
       onLookup?.(lookup);
