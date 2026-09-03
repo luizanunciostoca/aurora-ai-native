@@ -59,8 +59,7 @@ export interface DeviceRegistrationRequest {
 }
 
 export type DeviceReregistrationPolicy =
-  | 'DENY_AFTER_REVOCATION'
-  | 'ALLOW_SAME_BINDING_AFTER_REVOCATION';
+  'DENY_AFTER_REVOCATION' | 'ALLOW_SAME_BINDING_AFTER_REVOCATION';
 
 export type DeviceRegistrationError =
   | 'REQUEST_MALFORMED'
