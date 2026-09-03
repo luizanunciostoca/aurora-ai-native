@@ -1,0 +1,36 @@
+name: W14-B Exact-Head Focused Validation DEC9
+
+on:
+  push:
+    branches:
+      - scratch/w14b-final-dec9
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: dec9e8a36fe8ce4a0c111b0bbf4b8a970430746e
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Build canonical contracts
+        run: npm run build --workspace @aurora/contracts
+      - name: Build W14-B source
+        run: ./node_modules/.bin/tsc --project services/mobile-gateway/src/realtime-session/tsconfig.build.json --pretty false
+      - name: Compile W14-B focused tests
+        run: ./node_modules/.bin/tsc --project services/mobile-gateway/src/realtime-session/tsconfig.test.json --pretty false
+      - name: Execute W14-B focused tests
+        run: node --test services/mobile-gateway/src/realtime-session/dist-test/realtime-session/test/w14b-realtime-command-session.test.js
+      - name: Cleanup generated output
+        if: always()
+        run: rm -rf services/mobile-gateway/src/realtime-session/dist services/mobile-gateway/src/realtime-session/dist-test packages/contracts/dist
+      - name: Confirm exact candidate files remained unchanged
+        run: git diff --exit-code -- services/mobile-gateway/src/realtime-session
