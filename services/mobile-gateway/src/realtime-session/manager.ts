@@ -447,7 +447,7 @@ export class RealtimeCommandSessionManager {
     existing.gatewayGeneration = gateway.generation;
     existing.state = 'OPEN';
     existing.resumedAtMs = parsed.value.nowMs;
-    existing.closedAtMs = undefined;
+    delete existing.closedAtMs;
     return success(sessionSnapshot(existing));
   }
 
