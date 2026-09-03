@@ -291,3 +291,29 @@ test('W13-F fails closed on stale authority/budget, currency drift and bad confi
     { status: 'BLOCKED', code: 'INVALID_STRATEGY_EVIDENCE' },
   );
 });
+
+const TEMP_PRETTIER_DIAGNOSTIC_MARKER = true;
+test('TEMP W13-F canonical format diagnostic', async () => {
+  assert.equal(TEMP_PRETTIER_DIAGNOSTIC_MARKER, true);
+  // @ts-expect-error -- revenue harness has no @types/node; diagnostic is removed before acceptance.
+  const { readFile } = await import('node:fs/promises');
+  const { format } = await import('prettier');
+  const raw = await readFile(
+    'packages/revenue/test/w13f-google-ads-financial-governance.test.ts',
+    'utf8',
+  );
+  const marker = raw.indexOf('\nconst TEMP_PRETTIER_DIAGNOSTIC_MARKER');
+  const candidate = `${raw.slice(0, marker)}\n`;
+  const formatted = await format(candidate, {
+    parser: 'typescript',
+    arrowParens: 'always',
+    endOfLine: 'lf',
+    printWidth: 100,
+    semi: true,
+    singleQuote: true,
+    tabWidth: 2,
+    trailingComma: 'all',
+    useTabs: false,
+  });
+  console.log('W13F_PRETTIER_OUTPUT_START\n' + formatted + 'W13F_PRETTIER_OUTPUT_END');
+});
