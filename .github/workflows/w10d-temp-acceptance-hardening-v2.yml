@@ -1,0 +1,72 @@
+name: W10-D Temporary Acceptance Hardening V2
+
+on:
+  push:
+    branches:
+      - wave/10d-nurture-sales-customer-success
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/10d-nurture-sales-customer-success
+      - name: Apply reviewed hardening and exact optional-type corrections
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          import subprocess
+
+          workflow = Path('.github/workflows/w10d-temp-acceptance-hardening.yml').read_text()
+          encoded_line = next(
+              line.strip() for line in workflow.splitlines() if line.strip().startswith('PATCH_B64: ')
+          )
+          payload = encoded_line.split(':', 1)[1].strip()
+          patch_path = Path('/tmp/w10d_harden.py')
+          patch_path.write_bytes(base64.b64decode(payload))
+          subprocess.run(['python', str(patch_path)], check=True)
+
+          test_path = Path('packages/revenue/test/w10d-revenue-flows.test.ts')
+          tests = test_path.read_text()
+          replacements = {
+              "as unknown as PlanRevenueFlowInput['dispatchObservation']": "as unknown as NonNullable<PlanRevenueFlowInput['dispatchObservation']>",
+              "as unknown as PlanRevenueFlowInput['cancellationReason']": "as unknown as NonNullable<PlanRevenueFlowInput['cancellationReason']>",
+              "as unknown as PlanRevenueFlowInput['qualification']": "as unknown as NonNullable<PlanRevenueFlowInput['qualification']>",
+          }
+          for old, new in replacements.items():
+              if old not in tests:
+                  raise SystemExit(f'missing expected negative-test cast: {old}')
+              tests = tests.replace(old, new)
+          test_path.write_text(tests)
+          PY
+      - name: Setup canonical Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install exact lockfile
+        run: npm ci
+      - name: Canonical format targeted W10-D files
+        run: |
+          ./node_modules/.bin/prettier --write \
+            packages/revenue/src/flows/types.ts \
+            packages/revenue/src/flows/controller.ts \
+            packages/revenue/test/w10d-revenue-flows.test.ts
+      - name: Validate full canonical chain before commit
+        run: npm run lint && npm run typecheck && npm test && npm run build && npm run audit:cleanup
+      - name: Commit validated acceptance hardening
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            packages/revenue/src/flows/types.ts \
+            packages/revenue/src/flows/controller.ts \
+            packages/revenue/test/w10d-revenue-flows.test.ts
+          git commit -m "security(W10-D): fail closed on forged flow evidence"
+          git push origin HEAD:wave/10d-nurture-sales-customer-success
