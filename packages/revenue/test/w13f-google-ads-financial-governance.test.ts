@@ -2,9 +2,7 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error -- revenue harness has no @types/node; Node 22 provides this built-in.
 import test from 'node:test';
-
 import type { CorrelationId, TenantId } from '@aurora/contracts';
-
 import {
   planGoogleAdsDomainIntent,
   type GoogleAdsCapabilityPlan,
@@ -13,12 +11,10 @@ import {
   prepareGoogleAdsFinancialMutation,
   type GoogleAdsFinancialGovernanceInput,
 } from '../src/google-ads/financial-governance.js';
-
 const TENANT = 'ten_01JW13FTENANT000000000000' as TenantId;
 const OTHER_TENANT = 'ten_01JW13FOTHER00000000000' as TenantId;
 const CORRELATION = 'cor_01JW13FCORRELATION0000000' as CorrelationId;
 const NOW = 1_800_000_000_000;
-
 function domainPlan(): GoogleAdsCapabilityPlan {
   const result = planGoogleAdsDomainIntent({
     tenantId: TENANT,
@@ -57,7 +53,6 @@ function domainPlan(): GoogleAdsCapabilityPlan {
   if (result.status !== 'READY') throw new Error('fixture must produce a W13-A plan');
   return result.plan;
 }
-
 function fixture(
   overrides: Partial<GoogleAdsFinancialGovernanceInput> = {},
 ): GoogleAdsFinancialGovernanceInput {
@@ -131,17 +126,14 @@ function fixture(
     ...overrides,
   };
 }
-
 function required<T>(value: T | null, label: string): T {
   if (value === null) throw new Error(`${label} fixture must be present`);
   return value;
 }
-
 test('W13-F composes bounded financial governance without granting execution', () => {
   const result = prepareGoogleAdsFinancialMutation(fixture());
   assert.equal(result.status, 'READY');
   if (result.status !== 'READY') return;
-
   assert.equal(result.plan.executionPath, 'W07_EXECUTOR_TO_W08_GOOGLE_ADS_ADAPTER');
   assert.equal(result.plan.approvalReference, 'approval:w13f:1');
   assert.equal(result.plan.budgetCeilingMicros, 30_000_000);
@@ -152,13 +144,11 @@ test('W13-F composes bounded financial governance without granting execution', (
   assert.equal(result.plan.authorizesExecution, false);
   assert.equal(result.plan.canGrantPermission, false);
 });
-
 test('W13-F blocks missing or denied approval even when strategy confidence is maximal', () => {
   assert.deepEqual(prepareGoogleAdsFinancialMutation(fixture({ authority: null })), {
     status: 'BLOCKED',
     code: 'MISSING_APPROVAL',
   });
-
   const authority = required(fixture().authority, 'authority');
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
@@ -175,14 +165,12 @@ test('W13-F blocks missing or denied approval even when strategy confidence is m
     { status: 'BLOCKED', code: 'AUTHORITY_DENIED' },
   );
 });
-
 test('W13-F fails closed on stale provider precheck and wrong-account evidence', () => {
   const precheck = required(fixture().precheck, 'precheck');
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(fixture({ precheck: { ...precheck, validUntilMs: NOW } })),
     { status: 'BLOCKED', code: 'PRECHECK_STALE' },
   );
-
   const authority = required(fixture().authority, 'authority');
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
@@ -190,7 +178,6 @@ test('W13-F fails closed on stale provider precheck and wrong-account evidence',
     ),
     { status: 'BLOCKED', code: 'WRONG_ACCOUNT' },
   );
-
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
       fixture({ precheck: { ...precheck, tenantId: OTHER_TENANT } }),
@@ -198,15 +185,13 @@ test('W13-F fails closed on stale provider precheck and wrong-account evidence',
     { status: 'BLOCKED', code: 'WRONG_ACCOUNT' },
   );
 });
-
 test('W13-F enforces the narrowest W13, W02 and W04 financial ceiling', () => {
   const authority = required(fixture().authority, 'authority');
   const budget = required(fixture().budget, 'budget');
-
-  assert.deepEqual(
-    prepareGoogleAdsFinancialMutation(fixture({ proposedMicros: 50_000_001 })),
-    { status: 'BLOCKED', code: 'BUDGET_CEILING_EXCEEDED' },
-  );
+  assert.deepEqual(prepareGoogleAdsFinancialMutation(fixture({ proposedMicros: 50_000_001 })), {
+    status: 'BLOCKED',
+    code: 'BUDGET_CEILING_EXCEEDED',
+  });
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
       fixture({
@@ -232,10 +217,8 @@ test('W13-F enforces the narrowest W13, W02 and W04 financial ceiling', () => {
     { status: 'BLOCKED', code: 'BUDGET_CEILING_EXCEEDED' },
   );
 });
-
 test('W13-F bounds repeated optimization mutations and requires fresh bound evidence', () => {
   const mutationWindow = required(fixture().mutationWindow, 'mutationWindow');
-
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
       fixture({ mutationWindow: { ...mutationWindow, committedMutations: 3 } }),
@@ -249,10 +232,8 @@ test('W13-F bounds repeated optimization mutations and requires fresh bound evid
     { status: 'BLOCKED', code: 'MUTATION_BOUND_STALE' },
   );
 });
-
 test('W13-F rejects MCC drift in mutation-bound evidence', () => {
   const mutationWindow = required(fixture().mutationWindow, 'mutationWindow');
-
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
       fixture({ mutationWindow: { ...mutationWindow, managerCustomerId: '1111222233' } }),
@@ -260,11 +241,9 @@ test('W13-F rejects MCC drift in mutation-bound evidence', () => {
     { status: 'BLOCKED', code: 'MUTATION_BOUND_INVALID' },
   );
 });
-
 test('W13-F fails closed on stale authority/budget, currency drift and bad confidence', () => {
   const authority = required(fixture().authority, 'authority');
   const budget = required(fixture().budget, 'budget');
-
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(fixture({ authority: { ...authority, validUntilMs: NOW } })),
     { status: 'BLOCKED', code: 'AUTHORITY_STALE' },
@@ -290,30 +269,4 @@ test('W13-F fails closed on stale authority/budget, currency drift and bad confi
     ),
     { status: 'BLOCKED', code: 'INVALID_STRATEGY_EVIDENCE' },
   );
-});
-
-const TEMP_PRETTIER_DIAGNOSTIC_MARKER = true;
-test('TEMP W13-F canonical format diagnostic', async () => {
-  assert.equal(TEMP_PRETTIER_DIAGNOSTIC_MARKER, true);
-  // @ts-expect-error -- revenue harness has no @types/node; diagnostic is removed before acceptance.
-  const { readFile } = await import('node:fs/promises');
-  const { format } = await import('prettier');
-  const raw = await readFile(
-    'packages/revenue/test/w13f-google-ads-financial-governance.test.ts',
-    'utf8',
-  );
-  const marker = raw.indexOf('\nconst TEMP_PRETTIER_DIAGNOSTIC_MARKER');
-  const candidate = `${raw.slice(0, marker)}\n`;
-  const formatted = await format(candidate, {
-    parser: 'typescript',
-    arrowParens: 'always',
-    endOfLine: 'lf',
-    printWidth: 100,
-    semi: true,
-    singleQuote: true,
-    tabWidth: 2,
-    trailingComma: 'all',
-    useTabs: false,
-  });
-  console.log('W13F_PRETTIER_OUTPUT_START\n' + formatted + 'W13F_PRETTIER_OUTPUT_END');
 });
