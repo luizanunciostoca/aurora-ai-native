@@ -44,27 +44,19 @@ function ownValue(value: Record<string, unknown>, key: string): unknown {
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
 }
 
-function ownDataKeys(value: Record<string, unknown>): readonly string[] | null {
-  const keys: string[] = [];
-  for (const key of Reflect.ownKeys(value)) {
-    if (typeof key !== 'string') return null;
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    if (!descriptor || !('value' in descriptor)) return null;
-    keys.push(key);
-  }
-  return keys;
-}
-
 function keyValidation(
   value: Record<string, unknown>,
   allowed: ReadonlySet<string>,
 ): 'VALID' | 'UNKNOWN' | 'SENSITIVE' {
-  const keys = ownDataKeys(value);
-  if (keys === null) return 'UNKNOWN';
-  for (const key of keys) {
-    if (allowed.has(key)) continue;
-    if (SENSITIVE_KEY.test(key)) return 'SENSITIVE';
-    return 'UNKNOWN';
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== 'string') return 'UNKNOWN';
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor) return 'UNKNOWN';
+    if (!allowed.has(key)) {
+      if (SENSITIVE_KEY.test(key)) return 'SENSITIVE';
+      return 'UNKNOWN';
+    }
+    if (!('value' in descriptor)) return 'UNKNOWN';
   }
   return 'VALID';
 }
@@ -143,7 +135,8 @@ function parseQuota(value: unknown): ProviderQuotaMetadata | null | 'SENSITIVE_M
 }
 
 function state(value: unknown): ProviderOperationalState | null {
-  return typeof value === 'string' && PROVIDER_OPERATIONAL_STATES.includes(value as ProviderOperationalState)
+  return typeof value === 'string' &&
+    PROVIDER_OPERATIONAL_STATES.includes(value as ProviderOperationalState)
     ? (value as ProviderOperationalState)
     : null;
 }
@@ -176,7 +169,9 @@ export function normalizeProviderOperationalObservation(
 
   const tenantId = ownValue(tenant, 'tenantId');
   const bindingTenant = ownValue(binding, 'tenant');
-  if (!isNonEmptyString(tenantId) || !isPlainRecord(bindingTenant)) return fail('REQUEST_MALFORMED');
+  if (!isNonEmptyString(tenantId) || !isPlainRecord(bindingTenant)) {
+    return fail('REQUEST_MALFORMED');
+  }
   const bindingTenantId = ownValue(bindingTenant, 'tenantId');
   const bindingProvider = ownValue(binding, 'provider');
   const bindingAccount = ownValue(binding, 'accountReference');
@@ -226,15 +221,14 @@ export function normalizeProviderOperationalObservation(
   const observedAtMs = Date.parse(observedAt);
   if (observedAtMs > nowMs) return fail('OBSERVATION_MALFORMED');
 
-  const rateLimit = parseRateLimit(ownValue(raw, 'rateLimit'));
-  const quota = parseQuota(ownValue(raw, 'quota'));
+  const rateLimitValue = ownValue(raw, 'rateLimit');
+  const quotaValue = ownValue(raw, 'quota');
+  const rateLimit = parseRateLimit(rateLimitValue);
+  const quota = parseQuota(quotaValue);
   if (rateLimit === 'SENSITIVE_METADATA_REJECTED' || quota === 'SENSITIVE_METADATA_REJECTED') {
     return fail('SENSITIVE_METADATA_REJECTED');
   }
-  if (
-    (ownValue(raw, 'rateLimit') !== undefined && rateLimit === null) ||
-    (ownValue(raw, 'quota') !== undefined && quota === null)
-  ) {
+  if ((rateLimitValue !== undefined && rateLimit === null) || (quotaValue !== undefined && quota === null)) {
     return fail('OBSERVATION_MALFORMED');
   }
 
