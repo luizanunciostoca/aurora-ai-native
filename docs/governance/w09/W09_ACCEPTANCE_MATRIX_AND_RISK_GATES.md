@@ -1,8 +1,8 @@
 # W09 — Acceptance Matrix & Risk Gates
 
 Status: `W09_00_BUILD_CANDIDATE / ACCEPTANCE_FROZEN`
-Date: 2026-09-02
-Base exact main at branch creation: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
+Date: 2026-09-03
+Reconciled exact base: `3ed51de66f3925c41c3a02a83de58b956e1cd1a9`
 
 ## Global Definition of Done
 
@@ -18,8 +18,8 @@ Every W09 BUILD candidate must satisfy all applicable items on the same exact fi
 - Test Build `SUCCESS`;
 - Security `SUCCESS`;
 - Risk Gates A-D recorded for exact final candidate HEAD;
-- independent Program Control acceptance; no self-accept/self-merge;
-- controlled merge after immediate live-main revalidation;
+- current Single-Owner Governed Acceptance lifecycle completed without stale evidence;
+- controlled merge after immediate live-main revalidation using the exact validated candidate HEAD;
 - post-merge exact-main verification before downstream release.
 
 ## W09-00 — Coordination / Governance Freeze
@@ -118,4 +118,4 @@ Reject/return candidate to BUILD if any of these is found:
 - W09 reimplements W03 workflow durability or W07 execution semantics;
 - raw corpus bulk import or activation of shell/SSH high-risk patterns;
 - stale exact-head CI used as final acceptance evidence;
-- self-accept/self-merge where independent review is required.
+- Single-Owner Governed Acceptance lifecycle bypasses exact-head validation, blockers, expected-head merge protection or post-merge verification.
