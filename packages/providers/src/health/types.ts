@@ -72,5 +72,4 @@ export interface ProviderOperationalObservationFailure {
 }
 
 export type ProviderOperationalObservationResult =
-  | ProviderOperationalObservation
-  | ProviderOperationalObservationFailure;
+  ProviderOperationalObservation | ProviderOperationalObservationFailure;
