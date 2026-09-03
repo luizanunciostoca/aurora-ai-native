@@ -107,6 +107,7 @@ test('W13-A models keyword and conversion resources without conflating surfaces'
           provider: 'GOOGLE_ADS',
           resourceKind: 'KEYWORD',
           customerId: '1234567890',
+          managerCustomerId: '9988776655',
           resourceName: 'customers/1234567890/adGroupCriteria/1~2',
         },
       },
@@ -125,6 +126,7 @@ test('W13-A models keyword and conversion resources without conflating surfaces'
           provider: 'GOOGLE_ADS',
           resourceKind: 'CONVERSION_ACTION',
           customerId: '1234567890',
+          managerCustomerId: '9988776655',
           resourceName: 'customers/1234567890/conversionActions/33',
         },
       },
@@ -167,7 +169,7 @@ test('W13-A serving and budget writes fail closed without valid financial scope'
   assert.equal(budget.plan.authorizesExecution, false);
 });
 
-test('W13-A rejects cross-customer external references and makes destructive writes explicit', () => {
+test('W13-A rejects cross-customer and cross-manager external references', () => {
   const crossCustomer = planGoogleAdsDomainIntent(
     fixture({
       target: {
@@ -175,6 +177,7 @@ test('W13-A rejects cross-customer external references and makes destructive wri
           provider: 'GOOGLE_ADS',
           resourceKind: 'CAMPAIGN',
           customerId: '0000000000',
+          managerCustomerId: '9988776655',
           resourceName: 'customers/0000000000/campaigns/111222333',
         },
       },
@@ -182,6 +185,37 @@ test('W13-A rejects cross-customer external references and makes destructive wri
   );
   assert.deepEqual(crossCustomer, { status: 'BLOCKED', code: 'MISSING_GOOGLE_EXTERNAL_ID' });
 
+  const crossManager = planGoogleAdsDomainIntent(
+    fixture({
+      target: {
+        googleAds: {
+          provider: 'GOOGLE_ADS',
+          resourceKind: 'CAMPAIGN',
+          customerId: '1234567890',
+          managerCustomerId: '1122334455',
+          resourceName: 'customers/1234567890/campaigns/111222333',
+        },
+      },
+    }),
+  );
+  assert.deepEqual(crossManager, { status: 'BLOCKED', code: 'MANAGER_CUSTOMER_MISMATCH' });
+
+  const missingManager = planGoogleAdsDomainIntent(
+    fixture({
+      target: {
+        googleAds: {
+          provider: 'GOOGLE_ADS',
+          resourceKind: 'CAMPAIGN',
+          customerId: '1234567890',
+          resourceName: 'customers/1234567890/campaigns/111222333',
+        },
+      },
+    }),
+  );
+  assert.deepEqual(missingManager, { status: 'BLOCKED', code: 'MANAGER_CUSTOMER_MISMATCH' });
+});
+
+test('W13-A makes destructive writes explicit', () => {
   const deletion = planGoogleAdsDomainIntent(fixture({ operation: 'DELETE' }));
   assert.equal(deletion.status, 'READY');
   if (deletion.status !== 'READY') return;
