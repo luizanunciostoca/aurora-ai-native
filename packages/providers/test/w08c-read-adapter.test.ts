@@ -139,6 +139,7 @@ test('W08-C reads bounded pages with transient credentials and normalized observ
   assert.equal(result.ok, true);
   assert.equal(result.authorizesExecution, false);
   if (!result.ok) return;
+  assert.equal(result.tenant.tenantId, TENANT_A);
   assert.equal(result.pagesRead, 2);
   assert.equal(result.items.length, 2);
   assert.equal(result.provider, 'META');
@@ -146,6 +147,7 @@ test('W08-C reads bounded pages with transient credentials and normalized observ
   assert.equal(result.bindingReference, 'provider-binding-meta-account-1');
   assert.equal(result.providerRevision, 'rev-11');
   assert.equal(result.continuationCursor, undefined);
+  assert.equal(calls[0]?.tenant.tenantId, TENANT_A);
   assert.equal(calls[0]?.cursorToken, undefined);
   assert.equal(calls[1]?.cursorToken, 'cursor-2');
   assert.equal(
@@ -197,6 +199,51 @@ test('W08-C stops at page budget and scopes continuation cursor to the exact req
   );
   assert.equal(resumed.ok, true);
   assert.equal(resumedCursor, 'cursor-next');
+});
+
+test('W08-C binds continuation cursors to tenant identity before credential/provider access', async () => {
+  const seed = await executeProviderRead(request({ limits: { maxPages: 1, maxItems: 10 } }), {
+    credentials: credentialBackend(),
+    adapter: {
+      async readPage() {
+        return {
+          ok: true,
+          page: { items: [], observedAt: OBSERVED, nextCursorToken: 'cursor-tenant' },
+        };
+      },
+    },
+  });
+  assert.equal(seed.ok, true);
+  if (!seed.ok || seed.continuationCursor === undefined) return;
+
+  let backendCalls = 0;
+  let adapterCalls = 0;
+  const result = await executeProviderRead(
+    request({
+      tenant: { tenantId: TENANT_B },
+      binding: binding({ tenant: { tenantId: TENANT_B } }),
+      cursor: seed.continuationCursor,
+    }),
+    {
+      credentials: credentialBackend(() => {
+        backendCalls += 1;
+      }),
+      adapter: {
+        async readPage() {
+          adapterCalls += 1;
+          return { ok: true, page: { items: [], observedAt: OBSERVED } };
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'CURSOR_SCOPE_MISMATCH',
+    authorizesExecution: false,
+  });
+  assert.equal(backendCalls, 0);
+  assert.equal(adapterCalls, 0);
 });
 
 test('W08-C rejects cursor scope reuse across a different query before credential/provider access', async () => {
