@@ -280,8 +280,11 @@ test('W13-D rejects logo dimensions that match neither supported Google Ads logo
 });
 
 test('W13-D fails closed on provenance, duplicate assets, malformed costs and incompatible capability', () => {
+  const [firstPmaxAsset] = pmaxAssets();
+  if (!firstPmaxAsset) throw new Error('PMax fixture unexpectedly empty');
+
   const invalidProvenance: GoogleAdsPlanningAsset = {
-    ...pmaxAssets()[0]!,
+    ...firstPmaxAsset,
     provenance: {
       sourceReference: 'evidence:w13d:invalid',
       sourceHash: 'not-a-hash',
@@ -293,7 +296,7 @@ test('W13-D fails closed on provenance, duplicate assets, malformed costs and in
     { status: 'BLOCKED', code: 'INVALID_PROVENANCE' },
   );
 
-  assert.deepEqual(planGoogleAdsAssets(fixture({ assets: [...pmaxAssets(), pmaxAssets()[0]!] })), {
+  assert.deepEqual(planGoogleAdsAssets(fixture({ assets: [...pmaxAssets(), firstPmaxAsset] })), {
     status: 'BLOCKED',
     code: 'DUPLICATE_ASSET',
   });
