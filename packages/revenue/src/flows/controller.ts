@@ -198,8 +198,9 @@ function dedupeKey(
   ].join(':');
 }
 
-function baseRecord(input: PlanRevenueFlowInput): RevenueFlowRecord {
-  const firstStep = input.template.steps[0]!;
+function baseRecord(input: PlanRevenueFlowInput): RevenueFlowRecord | null {
+  const firstStep = input.template.steps[0];
+  if (firstStep === undefined) return null;
   return {
     kind: 'REVENUE_DOMAIN_FLOW',
     schemaVersion: '1.0.0',
@@ -230,7 +231,8 @@ function recordWith(
 ): RevenueFlowRecord {
   const merged = { ...record, ...changes };
   if (includeLastTask && merged.lastTaskDedupeKey !== undefined) return merged;
-  const { lastTaskDedupeKey: _ignored, ...withoutLastTask } = merged;
+  const { lastTaskDedupeKey, ...withoutLastTask } = merged;
+  void lastTaskDedupeKey;
   return withoutLastTask;
 }
 
@@ -349,7 +351,10 @@ function applyObservation(
     return plan('ESCALATE', 'RECONCILIATION_REQUIRED', uncertain, false);
   }
 
-  const currentStep = input.template.steps[record.stepIndex]!;
+  const currentStep = input.template.steps[record.stepIndex];
+  if (currentStep === undefined) {
+    return { ok: false, error: 'EXISTING_RECORD_MALFORMED' };
+  }
   if (observation === 'NO_EFFECT_CONFIRMED') {
     const retry = recordWith(
       record,
@@ -384,7 +389,10 @@ function applyObservation(
     return plan('TERMINAL', 'FLOW_COMPLETED', completed, false);
   }
 
-  const nextStep = input.template.steps[nextIndex]!;
+  const nextStep = input.template.steps[nextIndex];
+  if (nextStep === undefined) {
+    return { ok: false, error: 'EXISTING_RECORD_MALFORMED' };
+  }
   return recordWith(
     record,
     {
@@ -443,7 +451,11 @@ export function planRevenueFlow(input: PlanRevenueFlowInput): PlanRevenueFlowRes
     if (issue !== null) return { ok: false, error: issue };
   }
 
-  let record = input.existing ?? baseRecord(input);
+  let record = input.existing;
+  if (record === undefined) {
+    record = baseRecord(input);
+    if (record === null) return { ok: false, error: 'TEMPLATE_MALFORMED' };
+  }
   if (record.state === 'COMPLETED') return plan('TERMINAL', 'FLOW_COMPLETED', record, false);
   if (record.state === 'CANCELLED') return plan('TERMINAL', 'FLOW_CANCELLED', record, false);
 
@@ -472,8 +484,11 @@ export function planRevenueFlow(input: PlanRevenueFlowInput): PlanRevenueFlowRes
   }
 
   const observation = input.dispatchObservation ?? 'NONE';
-  const pendingStep = input.template.steps[record.stepIndex]!;
   if (observation === 'NONE' && record.lastTaskDedupeKey !== undefined) {
+    const pendingStep = input.template.steps[record.stepIndex];
+    if (pendingStep === undefined) {
+      return { ok: false, error: 'EXISTING_RECORD_MALFORMED' };
+    }
     const pendingPolicyBlock = policyBlockReason(input.contactPolicy, pendingStep);
     if (pendingPolicyBlock !== null) return pauseForPolicy(input, record, pendingPolicyBlock);
   }
@@ -482,7 +497,8 @@ export function planRevenueFlow(input: PlanRevenueFlowInput): PlanRevenueFlowRes
   if ('ok' in observationResult) return observationResult;
   record = observationResult;
 
-  const step = input.template.steps[record.stepIndex]!;
+  const step = input.template.steps[record.stepIndex];
+  if (step === undefined) return { ok: false, error: 'EXISTING_RECORD_MALFORMED' };
   const policyBlock = policyBlockReason(input.contactPolicy, step);
   if (policyBlock !== null) return pauseForPolicy(input, record, policyBlock);
 

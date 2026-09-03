@@ -110,6 +110,22 @@ function fixture(overrides: Partial<PlanRevenueFlowInput> = {}): PlanRevenueFlow
   };
 }
 
+function requiredQualification() {
+  const qualification = fixture().qualification;
+  if (qualification === undefined) {
+    throw new Error('expected W10-D fixture qualification');
+  }
+  return qualification;
+}
+
+function requiredTemplateStep(template: RevenueFlowTemplateProjection, index = 0) {
+  const step = template.steps[index];
+  if (step === undefined) {
+    throw new Error(`expected W10-D template step ${index}`);
+  }
+  return step;
+}
+
 function firstReady() {
   const result = planRevenueFlow(fixture());
   assert.equal(result.ok, true);
@@ -203,14 +219,18 @@ test('W10-D retries only after confirmed no-effect and never blind-retries uncer
 test('W10-D bounds retries and escalates after the configured attempt budget', () => {
   const created = planRevenueFlow(
     fixture({
-      template: nurtureTemplate({ steps: [{ ...nurtureTemplate().steps[0]!, maxAttempts: 1 }] }),
+      template: nurtureTemplate({
+        steps: [{ ...requiredTemplateStep(nurtureTemplate()), maxAttempts: 1 }],
+      }),
     }),
   );
   assert.equal(created.ok, true);
   if (!created.ok) return;
   const exhausted = planRevenueFlow(
     fixture({
-      template: nurtureTemplate({ steps: [{ ...nurtureTemplate().steps[0]!, maxAttempts: 1 }] }),
+      template: nurtureTemplate({
+        steps: [{ ...requiredTemplateStep(nurtureTemplate()), maxAttempts: 1 }],
+      }),
       evaluatedAt: '2026-09-03T08:12:00Z',
       existing: created.plan.record,
       dispatchObservation: 'NO_EFFECT_CONFIRMED',
@@ -274,7 +294,7 @@ test('W10-D fails closed across tenant, entity and entity-version boundaries', (
   const entityMismatch = planRevenueFlow(
     fixture({
       qualification: {
-        ...fixture().qualification!,
+        ...requiredQualification(),
         entity: { kind: 'LEAD', entityId: 'lead-other' },
       },
     }),
@@ -282,7 +302,7 @@ test('W10-D fails closed across tenant, entity and entity-version boundaries', (
   assert.deepEqual(entityMismatch, { ok: false, error: 'ENTITY_MISMATCH' });
 
   const versionMismatch = planRevenueFlow(
-    fixture({ qualification: { ...fixture().qualification!, entityVersion: 3 } }),
+    fixture({ qualification: { ...requiredQualification(), entityVersion: 3 } }),
   );
   assert.deepEqual(versionMismatch, { ok: false, error: 'ENTITY_VERSION_CONFLICT' });
 });
@@ -290,15 +310,15 @@ test('W10-D fails closed across tenant, entity and entity-version boundaries', (
 test('W10-D abstains or escalates on incomplete, mismatched or review-required qualification', () => {
   const incomplete = planRevenueFlow(
     fixture({
-      qualification: { ...fixture().qualification!, stage: 'INCOMPLETE', scoreBps: null },
+      qualification: { ...requiredQualification(), stage: 'INCOMPLETE', scoreBps: null },
     }),
   );
   const wrongStage = planRevenueFlow(
-    fixture({ qualification: { ...fixture().qualification!, stage: 'QUALIFIED' } }),
+    fixture({ qualification: { ...requiredQualification(), stage: 'QUALIFIED' } }),
   );
   const review = planRevenueFlow(
     fixture({
-      qualification: { ...fixture().qualification!, reviewDisposition: 'VERIFY_MODEL_ASSIST' },
+      qualification: { ...requiredQualification(), reviewDisposition: 'VERIFY_MODEL_ASSIST' },
     }),
   );
   assert.equal(incomplete.ok && incomplete.plan.reason, 'QUALIFICATION_INCOMPLETE');
@@ -309,7 +329,8 @@ test('W10-D abstains or escalates on incomplete, mismatched or review-required q
 
 test('W10-D supports customer-success planning without inventing qualification authority', () => {
   const base = fixture();
-  const { qualification: _qualification, ...withoutQualification } = base;
+  const { qualification, ...withoutQualification } = base;
+  void qualification;
   const customerInput: PlanRevenueFlowInput = {
     ...withoutQualification,
     flowId: 'flow-customer-001-success',
@@ -354,7 +375,10 @@ test('W10-D rejects stale/duplicate template inputs and never treats templates a
   const duplicateStep = nurtureTemplate();
   const duplicate = planRevenueFlow(
     fixture({
-      template: { ...duplicateStep, steps: [duplicateStep.steps[0]!, duplicateStep.steps[0]!] },
+      template: {
+        ...duplicateStep,
+        steps: [requiredTemplateStep(duplicateStep), requiredTemplateStep(duplicateStep)],
+      },
     }),
   );
   assert.deepEqual(duplicate, { ok: false, error: 'TEMPLATE_STEP_DUPLICATE' });
