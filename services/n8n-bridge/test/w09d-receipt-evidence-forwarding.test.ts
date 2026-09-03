@@ -119,12 +119,16 @@ function w07Event(
     kind: 'N8N_W07_EVIDENCE_REFERENCE_FORWARDING',
     w07State,
     receiptReference: 'receipt:w07:001',
-    evidenceReference: w07State === 'ACKNOWLEDGED' ? null : `evidence:w07:${w07State.toLowerCase()}`,
+    evidenceReference:
+      w07State === 'ACKNOWLEDGED' ? null : `evidence:w07:${w07State.toLowerCase()}`,
     ...overrides,
   };
 }
 
-function request(event: unknown, bindingValue: N8nWorkflowBinding = binding()): Record<string, unknown> {
+function request(
+  event: unknown,
+  bindingValue: N8nWorkflowBinding = binding(),
+): Record<string, unknown> {
   return { binding: bindingValue, event };
 }
 
@@ -302,7 +306,10 @@ test('W09-D requires one workflow-run/correlation/causation chain for reconstruc
     w07Event(2, 'ACKNOWLEDGED', { correlationId: 'cor.w09d.other' }),
     w07Event(2, 'ACKNOWLEDGED', { causationId: 'fwd.w09d.wrong-parent' }),
   ]) {
-    const result = reconstructN8nWorkflowEvidenceChain(binding(), [statusEvent(1, 'STARTED'), event]);
+    const result = reconstructN8nWorkflowEvidenceChain(binding(), [
+      statusEvent(1, 'STARTED'),
+      event,
+    ]);
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.error, 'CHAIN_CONTEXT_MISMATCH');
   }

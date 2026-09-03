@@ -1,4 +1,7 @@
-export { normalizeN8nWorkflowForwarding, reconstructN8nWorkflowEvidenceChain } from './normalizer.js';
+export {
+  normalizeN8nWorkflowForwarding,
+  reconstructN8nWorkflowEvidenceChain,
+} from './normalizer.js';
 export {
   N8N_W07_FORWARDING_STATES,
   N8N_WORKFLOW_FORWARDING_ERRORS,

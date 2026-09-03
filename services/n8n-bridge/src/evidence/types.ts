@@ -62,8 +62,7 @@ export interface N8nW07EvidenceReferenceForwarding extends N8nWorkflowForwarding
 }
 
 export type N8nWorkflowForwardingEvent =
-  | N8nWorkflowStatusForwarding
-  | N8nW07EvidenceReferenceForwarding;
+  N8nWorkflowStatusForwarding | N8nW07EvidenceReferenceForwarding;
 
 export interface N8nWorkflowForwardingRequest {
   readonly binding: N8nWorkflowBinding;

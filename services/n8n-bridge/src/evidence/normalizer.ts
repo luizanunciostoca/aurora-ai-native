@@ -1,4 +1,4 @@
-import { validateN8nWorkflowBinding } from '../bindings/index.js';
+import { validateN8nWorkflowBinding, type N8nWorkflowBinding } from '../bindings/index.js';
 import {
   N8N_W07_FORWARDING_STATES,
   N8N_WORKFLOW_RUN_STATES,
@@ -33,8 +33,20 @@ const BASE_KEYS = [
   'verifiedExternalState',
   'canGrantRetry',
 ] as const;
-const STATUS_KEYS = new Set([...BASE_KEYS, 'kind', 'workflowState', 'safeOutputReferences', 'errorReference']);
-const W07_KEYS = new Set([...BASE_KEYS, 'kind', 'w07State', 'receiptReference', 'evidenceReference']);
+const STATUS_KEYS = new Set([
+  ...BASE_KEYS,
+  'kind',
+  'workflowState',
+  'safeOutputReferences',
+  'errorReference',
+]);
+const W07_KEYS = new Set([
+  ...BASE_KEYS,
+  'kind',
+  'w07State',
+  'receiptReference',
+  'evidenceReference',
+]);
 const PROVENANCE_KEYS = new Set([
   'bindingSourceKind',
   'bindingSourceReference',
@@ -72,7 +84,9 @@ const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 const MAX_SAFE_REFERENCES = 32;
 const MAX_CHAIN_EVENTS = 1024;
 
-function fail(error: N8nWorkflowForwardingError): Extract<N8nWorkflowForwardingResult, { ok: false }> {
+function fail(
+  error: N8nWorkflowForwardingError,
+): Extract<N8nWorkflowForwardingResult, { ok: false }> {
   return {
     ok: false,
     error,
@@ -82,7 +96,9 @@ function fail(error: N8nWorkflowForwardingError): Extract<N8nWorkflowForwardingR
   };
 }
 
-function chainFail(error: N8nWorkflowForwardingError): Extract<N8nWorkflowEvidenceChainResult, { ok: false }> {
+function chainFail(
+  error: N8nWorkflowForwardingError,
+): Extract<N8nWorkflowEvidenceChainResult, { ok: false }> {
   return {
     ok: false,
     error,
@@ -102,7 +118,10 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   }
 }
 
-function hasOnlyOwnDataProperties(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
+function hasOnlyOwnDataProperties(
+  value: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+): boolean {
   try {
     for (const key of Reflect.ownKeys(value)) {
       if (typeof key !== 'string' || !allowed.has(key)) return false;
@@ -187,11 +206,15 @@ function isTimestamp(value: unknown): value is string {
 }
 
 function isRunState(value: unknown): value is N8nWorkflowRunState {
-  return typeof value === 'string' && N8N_WORKFLOW_RUN_STATES.includes(value as N8nWorkflowRunState);
+  return (
+    typeof value === 'string' && N8N_WORKFLOW_RUN_STATES.includes(value as N8nWorkflowRunState)
+  );
 }
 
 function isW07State(value: unknown): value is N8nW07ForwardingState {
-  return typeof value === 'string' && N8N_W07_FORWARDING_STATES.includes(value as N8nW07ForwardingState);
+  return (
+    typeof value === 'string' && N8N_W07_FORWARDING_STATES.includes(value as N8nW07ForwardingState)
+  );
 }
 
 function validReferenceArray(value: unknown): value is readonly string[] {
@@ -232,13 +255,18 @@ function parseProvenance(value: unknown): N8nWorkflowEvidenceProvenance | null {
   });
 }
 
-function normalizeEvent(binding: ReturnType<typeof validateN8nWorkflowBinding> extends { ok: true; value: infer T } ? T : never, input: unknown): N8nWorkflowForwardingResult {
+function normalizeEvent(binding: N8nWorkflowBinding, input: unknown): N8nWorkflowForwardingResult {
   if (!isPlainDataTree(input)) return fail('EVENT_MALFORMED');
   if (hasSensitiveMaterial(input)) return fail('SENSITIVE_MATERIAL_PROHIBITED');
   if (!isPlainRecord(input)) return fail('EVENT_MALFORMED');
 
   const kind = ownValue(input, 'kind');
-  const allowed = kind === 'N8N_WORKFLOW_STATUS_FORWARDING' ? STATUS_KEYS : kind === 'N8N_W07_EVIDENCE_REFERENCE_FORWARDING' ? W07_KEYS : null;
+  const allowed =
+    kind === 'N8N_WORKFLOW_STATUS_FORWARDING'
+      ? STATUS_KEYS
+      : kind === 'N8N_W07_EVIDENCE_REFERENCE_FORWARDING'
+        ? W07_KEYS
+        : null;
   if (allowed === null || !hasOnlyOwnDataProperties(input, allowed)) return fail('EVENT_MALFORMED');
 
   const schemaVersion = ownValue(input, 'schemaVersion');
@@ -341,7 +369,10 @@ function normalizeEvent(binding: ReturnType<typeof validateN8nWorkflowBinding> e
       return fail('EVENT_MALFORMED');
     }
     if (workflowState === 'COMPLETED' && errorReference !== null) return fail('EVENT_MALFORMED');
-    if ((workflowState === 'FAILED' || workflowState === 'EXECUTION_UNCERTAIN') && errorReference === null) {
+    if (
+      (workflowState === 'FAILED' || workflowState === 'EXECUTION_UNCERTAIN') &&
+      errorReference === null
+    ) {
       return fail('EVENT_MALFORMED');
     }
 
@@ -380,7 +411,7 @@ function normalizeEvent(binding: ReturnType<typeof validateN8nWorkflowBinding> e
 
   const event: N8nW07EvidenceReferenceForwarding = Object.freeze({
     ...base,
-    kind,
+    kind: 'N8N_W07_EVIDENCE_REFERENCE_FORWARDING',
     w07State,
     receiptReference,
     evidenceReference,
@@ -411,7 +442,10 @@ function eventFingerprint(event: N8nWorkflowForwardingEvent): string {
   return JSON.stringify(event);
 }
 
-function sameChainContext(left: N8nWorkflowForwardingEvent, right: N8nWorkflowForwardingEvent): boolean {
+function sameChainContext(
+  left: N8nWorkflowForwardingEvent,
+  right: N8nWorkflowForwardingEvent,
+): boolean {
   return (
     left.tenantId === right.tenantId &&
     left.bindingId === right.bindingId &&
@@ -467,6 +501,17 @@ export function reconstructN8nWorkflowEvidenceChain(
   if (first === undefined) return chainFail('EMPTY_CHAIN');
   for (const event of ordered) {
     if (!sameChainContext(first, event)) return chainFail('CHAIN_CONTEXT_MISMATCH');
+  }
+  for (let index = 1; index < ordered.length; index += 1) {
+    const previous = ordered[index - 1];
+    const event = ordered[index];
+    if (
+      previous === undefined ||
+      event === undefined ||
+      event.causationId !== previous.forwardingId
+    ) {
+      return chainFail('CHAIN_CONTEXT_MISMATCH');
+    }
   }
 
   let currentWorkflowState: N8nWorkflowRunState | null = null;
