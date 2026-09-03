@@ -49,6 +49,7 @@ export interface GoogleAdsMutationWindowProjection extends BoundedEvidence {
   readonly tenantId: string;
   readonly providerBindingReference: string;
   readonly customerId: string;
+  readonly managerCustomerId?: string;
   readonly operation: GoogleAdsFinancialOperation;
   readonly windowReference: string;
   readonly committedMutations: number;
@@ -135,7 +136,9 @@ function nonEmpty(value: string): boolean {
   return value.trim().length > 0;
 }
 
-function isFinancialOperation(operation: GoogleAdsOperation): operation is GoogleAdsFinancialOperation {
+function isFinancialOperation(
+  operation: GoogleAdsOperation,
+): operation is GoogleAdsFinancialOperation {
   return GOOGLE_ADS_FINANCIAL_OPERATIONS.includes(operation as GoogleAdsFinancialOperation);
 }
 
@@ -143,6 +146,7 @@ function validBoundedEvidence(evidence: BoundedEvidence, nowMs: number): boolean
   return (
     Number.isSafeInteger(nowMs) &&
     nowMs >= 0 &&
+    evidence.authorizesExecution === false &&
     Number.isSafeInteger(evidence.observedAtMs) &&
     evidence.observedAtMs >= 0 &&
     Number.isSafeInteger(evidence.validUntilMs) &&
@@ -153,7 +157,10 @@ function validBoundedEvidence(evidence: BoundedEvidence, nowMs: number): boolean
 }
 
 function sameAccount(
-  expected: Pick<GoogleAdsCapabilityPlan, 'tenantId' | 'providerBindingReference' | 'customerId' | 'managerCustomerId'>,
+  expected: Pick<
+    GoogleAdsCapabilityPlan,
+    'tenantId' | 'providerBindingReference' | 'customerId' | 'managerCustomerId'
+  >,
   actual: {
     readonly tenantId: string;
     readonly providerBindingReference: string;
@@ -271,12 +278,7 @@ export function prepareGoogleAdsFinancialMutation(
   if (!validBoundedEvidence(mutationWindow, input.nowMs)) {
     return { status: 'BLOCKED', code: 'MUTATION_BOUND_STALE' };
   }
-  if (
-    mutationWindow.tenantId !== plan.tenantId ||
-    mutationWindow.providerBindingReference !== plan.providerBindingReference ||
-    mutationWindow.customerId !== plan.customerId ||
-    mutationWindow.operation !== plan.operation
-  ) {
+  if (!sameAccount(plan, mutationWindow) || mutationWindow.operation !== plan.operation) {
     return { status: 'BLOCKED', code: 'MUTATION_BOUND_INVALID' };
   }
   if (
