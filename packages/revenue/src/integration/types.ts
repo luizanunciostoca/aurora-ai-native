@@ -3,10 +3,7 @@ import type { ExecutionOutcome } from '@aurora/contracts/results';
 
 import type { RevenueCrmQueryItem } from '../crm/types.js';
 import type { RevenueFastPathSelection } from '../fast-path/types.js';
-import type {
-  RevenueContactPolicyProjection,
-  RevenueFlowPlan,
-} from '../flows/types.js';
+import type { RevenueContactPolicyProjection, RevenueFlowPlan } from '../flows/types.js';
 import type { RevenueEntityRef } from '../lifecycle/types.js';
 import type { NextBestActionPlan } from '../nba/types.js';
 import type { QualificationEvaluation } from '../scoring/types.js';
