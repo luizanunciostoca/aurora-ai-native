@@ -6,7 +6,7 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   prettier-diff:
@@ -15,16 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          persist-credentials: false
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
-      - name: Emit canonical formatting diff
+      - name: Format and commit scratch-only output
         shell: bash
         run: |
           npx prettier --write packages/providers/src/read/reader.ts packages/providers/test/w08c-read-adapter.test.ts
-          echo '---BEGIN_PRETTIER_DIFF---'
-          git diff -- packages/providers/src/read/reader.ts packages/providers/test/w08c-read-adapter.test.ts
-          echo '---END_PRETTIER_DIFF---'
+          if git diff --quiet -- packages/providers/src/read/reader.ts packages/providers/test/w08c-read-adapter.test.ts; then
+            echo 'already formatted'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/providers/src/read/reader.ts packages/providers/test/w08c-read-adapter.test.ts
+          git commit -m 'chore(scratch): apply canonical W08-C formatting'
+          git push origin HEAD:${{ github.head_ref }}
