@@ -4,10 +4,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import type { N8nWorkflowBinding } from '../src/bindings/types.js';
-import {
-  N8nTriggerBridge,
-  type N8nTriggerEnvelope,
-} from '../src/triggers/bridge.js';
+import { N8nTriggerBridge, type N8nTriggerEnvelope } from '../src/triggers/bridge.js';
 
 const HASH_A = `sha256:${'a'.repeat(64)}`;
 const HASH_B = `sha256:${'b'.repeat(64)}`;
@@ -169,14 +166,14 @@ test('W09-B maps schedules to governed requests and never direct side effects', 
 test('W09-B rejects cross-tenant, wrong-binding and inactive-binding ingress', () => {
   const bridge = new N8nTriggerBridge();
 
-  assert.deepEqual(
-    bridge.ingest(binding(), trigger({ tenantId: 'ten_other' })),
-    { status: 'BLOCKED', code: 'CROSS_TENANT_BINDING' },
-  );
-  assert.deepEqual(
-    bridge.ingest(binding(), trigger({ bindingVersion: '2.0.0' })),
-    { status: 'BLOCKED', code: 'WRONG_BINDING' },
-  );
+  assert.deepEqual(bridge.ingest(binding(), trigger({ tenantId: 'ten_other' })), {
+    status: 'BLOCKED',
+    code: 'CROSS_TENANT_BINDING',
+  });
+  assert.deepEqual(bridge.ingest(binding(), trigger({ bindingVersion: '2.0.0' })), {
+    status: 'BLOCKED',
+    code: 'WRONG_BINDING',
+  });
   assert.deepEqual(bridge.ingest(binding({ status: 'DISABLED' }), trigger()), {
     status: 'BLOCKED',
     code: 'BINDING_NOT_ACTIVE',
