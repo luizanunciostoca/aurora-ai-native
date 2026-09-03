@@ -118,6 +118,14 @@ function input(
   };
 }
 
+function inputWithoutTemplate(
+  overrides: Omit<Partial<W12CreativeAudiencePlanningInput>, 'template'> = {},
+): W12CreativeAudiencePlanningInput {
+  const { template: removedTemplate, ...withoutTemplate } = input(overrides);
+  void removedTemplate;
+  return withoutTemplate;
+}
+
 test('uses deterministic L0 planning only for a current curated safe template', () => {
   const result = planCreativeAndAudience(input());
 
@@ -138,7 +146,7 @@ test('uses deterministic L0 planning only for a current curated safe template', 
 });
 
 test('uses structured L2 reasoning for bounded planning without a deterministic template', () => {
-  const result = planCreativeAndAudience(input({ template: undefined, uncertainty: 'MEDIUM' }));
+  const result = planCreativeAndAudience(inputWithoutTemplate({ uncertainty: 'MEDIUM' }));
 
   assert.equal(result.status, 'READY');
   if (result.status === 'READY') {
@@ -210,7 +218,7 @@ test('escalates policy review, stale facts, conflicts and high uncertainty', () 
   assert.equal(conflict.status, 'ESCALATE');
   if (conflict.status === 'ESCALATE') assert.equal(conflict.code, 'FACT_CONFLICT');
 
-  const high = planCreativeAndAudience(input({ uncertainty: 'HIGH', template: undefined }));
+  const high = planCreativeAndAudience(inputWithoutTemplate({ uncertainty: 'HIGH' }));
   assert.deepEqual(high, {
     status: 'ESCALATE',
     code: 'HIGH_UNCERTAINTY',
