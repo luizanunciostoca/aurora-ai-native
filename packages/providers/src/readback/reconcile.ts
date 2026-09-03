@@ -120,13 +120,16 @@ function stableJson(value: JsonObject): string {
   const canonicalize = (candidate: JsonValue): JsonValue => {
     if (Array.isArray(candidate)) return candidate.map((entry) => canonicalize(entry));
     if (candidate === null || typeof candidate !== 'object') return candidate;
+
+    const record = candidate as JsonObject;
     const sorted: Record<string, JsonValue> = Object.create(null) as Record<string, JsonValue>;
-    for (const key of Object.keys(candidate).sort()) {
-      const child = candidate[key];
+    for (const key of Object.keys(record).sort()) {
+      const child = record[key];
       if (child !== undefined) sorted[key] = canonicalize(child);
     }
     return sorted;
   };
+
   return JSON.stringify(canonicalize(value));
 }
 
@@ -150,6 +153,7 @@ function indeterminate(
 function parseTransportResult(value: unknown): ProviderReadbackTransportResult | null {
   if (!isPlainRecord(value)) return null;
   const ok = ownValue(value, 'ok');
+
   if (ok === true) {
     if (!hasOnlyOwnDataProperties(value, TRANSPORT_SUCCESS_KEYS)) return null;
     const status = ownValue(value, 'status');
@@ -157,6 +161,7 @@ function parseTransportResult(value: unknown): ProviderReadbackTransportResult |
     const providerReference = ownValue(value, 'providerReference');
     const providerRevision = ownValue(value, 'providerRevision');
     const observedStateValue = ownValue(value, 'observedState');
+
     if (
       typeof status !== 'string' ||
       !READBACK_STATUSES.has(status) ||
@@ -166,9 +171,14 @@ function parseTransportResult(value: unknown): ProviderReadbackTransportResult |
     ) {
       return null;
     }
-    const observedState =
-      observedStateValue === undefined ? undefined : jsonObject(observedStateValue);
-    if (observedStateValue !== undefined && observedState === null) return null;
+
+    let observedState: JsonObject | undefined;
+    if (observedStateValue !== undefined) {
+      const parsedObservedState = jsonObject(observedStateValue);
+      if (parsedObservedState === null) return null;
+      observedState = parsedObservedState;
+    }
+
     return {
       ok: true,
       status: status as Extract<ProviderReadbackTransportResult, { ok: true }>['status'],
@@ -178,6 +188,7 @@ function parseTransportResult(value: unknown): ProviderReadbackTransportResult |
       ...(observedState === undefined ? {} : { observedState }),
     };
   }
+
   if (ok === false) {
     if (!hasOnlyOwnDataProperties(value, TRANSPORT_FAILURE_KEYS)) return null;
     const error = ownValue(value, 'error');
@@ -195,6 +206,7 @@ function parseTransportResult(value: unknown): ProviderReadbackTransportResult |
       ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
     };
   }
+
   return null;
 }
 
@@ -223,6 +235,32 @@ function eligibleWriteOutcome(request: ProviderReadbackRequest): boolean {
   return request.writeResult.mutationPossible === true;
 }
 
+function successBase(
+  request: ProviderReadbackRequest,
+  binding: ProviderReadbackRequest['binding'],
+): Pick<
+  Extract<ProviderReadbackResult, { ok: true }>,
+  | 'ok'
+  | 'provider'
+  | 'accountReference'
+  | 'bindingReference'
+  | 'bindingVersion'
+  | 'actionIntentId'
+  | 'retryAuthorized'
+  | 'authorizesExecution'
+> {
+  return {
+    ok: true,
+    provider: binding.provider,
+    accountReference: binding.accountReference,
+    bindingReference: binding.bindingReference,
+    bindingVersion: binding.bindingVersion,
+    actionIntentId: request.actionIntent.actionIntentId,
+    retryAuthorized: false,
+    authorizesExecution: false,
+  };
+}
+
 /**
  * Performs one read-only provider observation after a write or ambiguous write.
  * The output is reconciliation evidence for W07 only; W08-F never authorizes a
@@ -245,25 +283,21 @@ export async function reconcileProviderWrite(
 
   if (!eligibleWriteOutcome(request)) return fail('WRITE_OUTCOME_INELIGIBLE');
 
+  const executionTarget = request.actionIntent.executionTarget;
+  if (executionTarget === undefined) return fail('REQUEST_MALFORMED');
+
   const resolution = resolveProviderBinding({
     tenant: request.actionIntent.tenant,
-    executionTarget: request.actionIntent.executionTarget,
+    executionTarget,
     candidates: [request.binding],
   });
   if (!resolution.ok) return fail('TARGET_BINDING_UNAVAILABLE');
 
   if (!request.health.ok) {
     return {
-      ok: true,
-      provider: request.binding.provider,
-      accountReference: request.binding.accountReference,
-      bindingReference: request.binding.bindingReference,
-      bindingVersion: request.binding.bindingVersion,
-      actionIntentId: request.actionIntent.actionIntentId,
+      ...successBase(request, request.binding),
       observation: indeterminate(request.now, 'PROVIDER_HEALTH_UNAVAILABLE'),
       requiresFurtherReadback: true,
-      retryAuthorized: false,
-      authorizesExecution: false,
     };
   }
   if (!healthMatchesBinding(request.health, request.binding)) {
@@ -271,19 +305,12 @@ export async function reconcileProviderWrite(
   }
   if (request.health.currentness !== 'CURRENT') {
     return {
-      ok: true,
-      provider: request.binding.provider,
-      accountReference: request.binding.accountReference,
-      bindingReference: request.binding.bindingReference,
-      bindingVersion: request.binding.bindingVersion,
-      actionIntentId: request.actionIntent.actionIntentId,
+      ...successBase(request, request.binding),
       observation: indeterminate(request.health.observedAt, 'PROVIDER_HEALTH_STALE'),
       ...(request.health.advisoryRetryAfterMs === undefined
         ? {}
         : { advisoryRetryAfterMs: request.health.advisoryRetryAfterMs }),
       requiresFurtherReadback: true,
-      retryAuthorized: false,
-      authorizesExecution: false,
     };
   }
 
@@ -323,16 +350,9 @@ export async function reconcileProviderWrite(
         );
       } catch {
         result = {
-          ok: true,
-          provider: binding.provider,
-          accountReference: binding.accountReference,
-          bindingReference: binding.bindingReference,
-          bindingVersion: binding.bindingVersion,
-          actionIntentId: request.actionIntent.actionIntentId,
+          ...successBase(request, binding),
           observation: indeterminate(request.now, 'READBACK_TRANSPORT_EXCEPTION'),
           requiresFurtherReadback: true,
-          retryAuthorized: false,
-          authorizesExecution: false,
         };
         return;
       }
@@ -344,19 +364,12 @@ export async function reconcileProviderWrite(
       }
       if (!transport.ok) {
         result = {
-          ok: true,
-          provider: binding.provider,
-          accountReference: binding.accountReference,
-          bindingReference: binding.bindingReference,
-          bindingVersion: binding.bindingVersion,
-          actionIntentId: request.actionIntent.actionIntentId,
+          ...successBase(request, binding),
           observation: indeterminate(request.now, `READBACK_${transport.error}`),
           ...(transport.retryAfterMs === undefined
             ? {}
             : { advisoryRetryAfterMs: transport.retryAfterMs }),
           requiresFurtherReadback: true,
-          retryAuthorized: false,
-          authorizesExecution: false,
         };
         return;
       }
@@ -434,20 +447,13 @@ export async function reconcileProviderWrite(
       }
 
       result = {
-        ok: true,
-        provider: binding.provider,
-        accountReference: binding.accountReference,
-        bindingReference: binding.bindingReference,
-        bindingVersion: binding.bindingVersion,
-        actionIntentId: request.actionIntent.actionIntentId,
+        ...successBase(request, binding),
         observation,
         ...(transport.observedState === undefined ? {} : { observedState: transport.observedState }),
         ...(transport.providerRevision === undefined
           ? {}
           : { providerRevision: transport.providerRevision }),
         requiresFurtherReadback,
-        retryAuthorized: false,
-        authorizesExecution: false,
       };
     },
   );
