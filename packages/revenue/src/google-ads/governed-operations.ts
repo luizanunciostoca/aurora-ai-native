@@ -1,7 +1,10 @@
 import type { GoogleAdsCapabilityPlan, GoogleAdsOperation } from './contracts.js';
 import type { GoogleAdsGovernedFinancialMutationPlan } from './financial-governance.js';
 
-export type GoogleAdsExecutableOperation = Exclude<GoogleAdsOperation, 'OBSERVE' | 'ACTIVATE' | 'DELETE'>;
+export type GoogleAdsExecutableOperation = Exclude<
+  GoogleAdsOperation,
+  'OBSERVE' | 'ACTIVATE' | 'DELETE'
+>;
 
 export interface GoogleAdsW07ExecutionProofProjection {
   readonly source: 'W07_PROVIDER_EXECUTION_PROOF';
@@ -123,7 +126,9 @@ export type GoogleAdsGovernedOperationResult =
     }>
   | Readonly<{
       status: 'EXECUTION_UNCERTAIN';
-      error: Extract<GoogleAdsW08WriteResult, { readonly ok: false }>['error'] | 'READBACK_PROTOCOL_VIOLATION';
+      error:
+        | Extract<GoogleAdsW08WriteResult, { readonly ok: false }>['error']
+        | 'READBACK_PROTOCOL_VIOLATION';
       providerReference?: string;
       requiresReconciliation: true;
       retryBoundary: 'W07_RECONCILE_BEFORE_RETRY';
@@ -157,7 +162,9 @@ function sameAccount(
   );
 }
 
-function executableOperation(operation: GoogleAdsOperation): operation is GoogleAdsExecutableOperation {
+function executableOperation(
+  operation: GoogleAdsOperation,
+): operation is GoogleAdsExecutableOperation {
   return operation !== 'OBSERVE' && operation !== 'ACTIVATE' && operation !== 'DELETE';
 }
 
@@ -236,16 +243,10 @@ export async function executeGoogleAdsGovernedOperation(
     return block('PRECHECK_STALE');
   }
   if (!sameAccount(plan, input.precheck)) return block('ACCOUNT_SCOPE_MISMATCH');
-  if (
-    input.precheck.bindingState !== 'ACTIVE' ||
-    input.precheck.verificationState !== 'VERIFIED'
-  ) {
+  if (input.precheck.bindingState !== 'ACTIVE' || input.precheck.verificationState !== 'VERIFIED') {
     return block('PRECHECK_NOT_VERIFIED');
   }
-  if (
-    plan.operation !== 'CREATE_PAUSED' &&
-    input.precheck.expectedResourceState !== 'PAUSED'
-  ) {
+  if (plan.operation !== 'CREATE_PAUSED' && input.precheck.expectedResourceState !== 'PAUSED') {
     return block('PAUSED_STATE_REQUIRED');
   }
   if (FINANCIAL_OPERATIONS.includes(plan.operation) && !input.financialMutation) {

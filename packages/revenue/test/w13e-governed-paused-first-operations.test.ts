@@ -94,7 +94,7 @@ function input(
       tenantId: TENANT,
       providerBindingReference: plan.providerBindingReference,
       customerId: plan.customerId,
-      managerCustomerId: plan.managerCustomerId,
+      ...(plan.managerCustomerId ? { managerCustomerId: plan.managerCustomerId } : {}),
       bindingState: 'ACTIVE',
       verificationState: 'VERIFIED',
       observedAtMs: NOW - 1_000,
