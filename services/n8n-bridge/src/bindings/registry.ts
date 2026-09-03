@@ -373,10 +373,7 @@ export class N8nWorkflowBindingRegistry {
     if (record === undefined) return this.missingResult(tenantId, bindingId, bindingVersion);
     if (record.status !== 'CANDIDATE') return { ok: false, error: 'INVALID_LIFECYCLE_TRANSITION' };
     if (!promotable(record.binding)) return { ok: false, error: 'INVALID_PROVENANCE' };
-    if (
-      record.binding.supersedesVersion !== null &&
-      record.binding.supersedesVersion !== expectedPreviousVersion
-    ) {
+    if (record.binding.supersedesVersion !== expectedPreviousVersion) {
       return { ok: false, error: 'INVALID_SUPERSESSION' };
     }
 

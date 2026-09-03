@@ -359,3 +359,31 @@ test('W09-A registry snapshots are stable and tenant scoped', () => {
     [`${tenantA.tenantId}:${tenantA.bindingId}`, `${tenantB.tenantId}:${tenantB.bindingId}`],
   );
 });
+
+test('W09-A rejects implicit supersession acquired after immutable candidate registration', () => {
+  const registry = new N8nWorkflowBindingRegistry();
+  const candidate = binding({
+    bindingVersion: '2.0.0',
+    status: 'CANDIDATE',
+    workflow: { ...binding().workflow, workflowHash: HASH_C },
+    registeredAt: '2026-09-03T07:48:00.000Z',
+    supersedesVersion: null,
+  });
+  assert.equal(registry.register(candidate).ok, true);
+
+  const laterActive = binding({
+    registeredAt: '2026-09-03T07:49:00.000Z',
+  });
+  assert.equal(registry.register(laterActive).ok, true);
+
+  assert.deepEqual(
+    registry.activate(
+      candidate.tenantId,
+      candidate.bindingId,
+      candidate.bindingVersion,
+      '2026-09-03T07:50:00.000Z',
+      laterActive.bindingVersion,
+    ),
+    { ok: false, error: 'INVALID_SUPERSESSION' },
+  );
+});
