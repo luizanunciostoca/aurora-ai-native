@@ -86,7 +86,7 @@ function trigger(
     sourceStream: 'stream.w09f.acceptance',
     correlationId: `cor.w09f.${sequence}`,
     causationId: null,
-    idempotencyKey: `idem-w09f-${sequence}`,
+    idempotencyKey: `key-${sequence}`,
     sequence,
     observedAt: `2026-09-03T21:${String(sequence % 60).padStart(2, '0')}:00.000Z`,
     scheduledFor: null,
@@ -297,7 +297,7 @@ test('W09-F preserves replay and ordering fences under bounded trigger load', ()
     { status: 'BLOCKED', code: 'STALE_OR_REORDERED_SEQUENCE' },
   );
   const conflict = trigger(bindingValue, 130, {
-    idempotencyKey: 'idem-w09f-128',
+    idempotencyKey: 'key-128',
     payloadHash: `sha256:${'e'.repeat(64)}`,
   });
   assert.deepEqual(bridge.ingest(bindingValue, conflict), {
