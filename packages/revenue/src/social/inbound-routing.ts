@@ -235,14 +235,7 @@ function classify(content: string): Readonly<{
     return { intent: 'FAQ', risk: 'NORMAL', route: 'VERIFIED_FAQ_FAST_PATH' };
   }
 
-  const support = includesAny(content, [
-    'problema',
-    'erro',
-    'ajuda',
-    'suporte',
-    'help',
-    'support',
-  ]);
+  const support = includesAny(content, ['problema', 'erro', 'ajuda', 'suporte', 'help', 'support']);
   if (support) {
     return { intent: 'SUPPORT', risk: 'NORMAL', route: 'GOVERNED_REASONING' };
   }
@@ -262,6 +255,9 @@ function checkpointFor(input: SocialInboundInput): SocialStreamCheckpoint {
 
 export function ingestAndRouteSocialInbound(input: SocialInboundInput): SocialInboundResult {
   if (
+    !SOCIAL_INBOUND_PROVIDERS.includes(input.provider) ||
+    !SOCIAL_INBOUND_CHANNELS.includes(input.channel) ||
+    !SOCIAL_INBOUND_CHANGES.includes(input.change) ||
     !nonEmpty(input.accountExternalId) ||
     !nonEmpty(input.providerEventId) ||
     !nonEmpty(input.conversationExternalId) ||
@@ -310,8 +306,13 @@ export function ingestAndRouteSocialInbound(input: SocialInboundInput): SocialIn
     } else if (input.resumedFromCursor !== undefined) {
       return { ok: false, error: 'RECONNECT_CURSOR_MISMATCH', authorizesExecution: false };
     }
-  } else if (input.resumedFromCursor !== undefined) {
-    return { ok: false, error: 'RECONNECT_CURSOR_MISMATCH', authorizesExecution: false };
+  } else {
+    if (input.connectionGeneration !== 1) {
+      return { ok: false, error: 'CONNECTION_GENERATION_GAP', authorizesExecution: false };
+    }
+    if (input.resumedFromCursor !== undefined) {
+      return { ok: false, error: 'RECONNECT_CURSOR_MISMATCH', authorizesExecution: false };
+    }
   }
 
   if (input.previous !== undefined) {
@@ -338,6 +339,13 @@ export function ingestAndRouteSocialInbound(input: SocialInboundInput): SocialIn
     }
     if (input.revision > input.previous.revision + 1) {
       return { ok: false, error: 'REVISION_GAP', authorizesExecution: false };
+    }
+  } else {
+    if (input.revision !== 1) {
+      return { ok: false, error: 'REVISION_GAP', authorizesExecution: false };
+    }
+    if (input.change !== 'CREATED') {
+      return { ok: false, error: 'REQUEST_MALFORMED', authorizesExecution: false };
     }
   }
 
