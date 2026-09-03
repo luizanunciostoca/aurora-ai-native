@@ -1,7 +1,4 @@
-import {
-  EVENT_ENVELOPE_KIND,
-  type EventType,
-} from '@aurora/contracts';
+import { EVENT_ENVELOPE_KIND, type EventType } from '@aurora/contracts';
 
 import type {
   ApplyRevenueLifecycleTransitionInput,
