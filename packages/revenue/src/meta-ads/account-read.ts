@@ -120,7 +120,9 @@ function validLimits(limits: Readonly<{ maxPages: number; maxItems: number }>): 
   );
 }
 
-export function prepareMetaAdsAccountRead(input: MetaAdsAccountReadInput): MetaAdsAccountReadResult {
+export function prepareMetaAdsAccountRead(
+  input: MetaAdsAccountReadInput,
+): MetaAdsAccountReadResult {
   if (
     !nonEmpty(input.providerBindingReference) ||
     !nonEmpty(input.businessAccountExternalId) ||
