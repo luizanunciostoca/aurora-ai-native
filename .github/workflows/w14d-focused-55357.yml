@@ -1,0 +1,36 @@
+name: W14-D Candidate Focused Scratch
+
+on:
+  push:
+    branches: [scratch/w14d-focused-55357]
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout scratch branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build canonical contracts dependency
+        run: npm run build --workspace @aurora/contracts
+      - name: Build W14-D source with committed config
+        run: ./node_modules/.bin/tsc --project services/mobile-gateway/src/device/tsconfig.build.json --pretty false
+      - name: Compile W14-D focused test with committed config
+        run: ./node_modules/.bin/tsc --project services/mobile-gateway/src/device/tsconfig.test.json --pretty false
+      - name: Execute W14-D focused tests
+        run: node --test services/mobile-gateway/src/device/dist-test/test/w14d-device-registration.test.js
+      - name: Cleanup generated output
+        run: rm -rf services/mobile-gateway/src/device/dist services/mobile-gateway/src/device/dist-test
+      - name: Confirm candidate files remained unchanged
+        run: git diff --exit-code -- services/mobile-gateway/src/device services/mobile-gateway/test/w14d-device-registration.test.ts
