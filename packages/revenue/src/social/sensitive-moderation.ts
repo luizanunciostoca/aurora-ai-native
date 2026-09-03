@@ -246,7 +246,7 @@ function classify(record: SocialInboundRecord): W11ModerationCategory {
     return 'COMPLAINT';
   }
 
-  return record.risk === 'SENSITIVE' ? 'SENSITIVE' : 'GENERAL';
+  return 'GENERAL';
 }
 
 function requiresImmediateHuman(category: W11ModerationCategory): boolean {
@@ -337,7 +337,9 @@ export function planSensitiveModeration(input: Readonly<{
 
   const requestedModerationAction = moderationAction(category);
   const action =
-    context.allowModerationCandidate && consentAllowsAutomation ? requestedModerationAction : 'NONE';
+    context.allowModerationCandidate && consentAllowsAutomation
+      ? requestedModerationAction
+      : 'NONE';
   const moderationIntent: W11ModerationIntentCandidate = {
     kind: 'W11_MODERATION_INTENT_CANDIDATE',
     action,
