@@ -1,0 +1,48 @@
+name: W10-D Temporary Type Fix
+
+on:
+  push:
+    branches:
+      - wave/10d-nurture-sales-customer-success
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/10d-nurture-sales-customer-success
+      - name: Apply exact narrowing correction
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('packages/revenue/src/flows/controller.ts')
+          text = path.read_text()
+          old = """  let record = input.existing;\n  if (record === undefined) {\n    record = baseRecord(input);\n    if (record === null) return { ok: false, error: 'TEMPLATE_MALFORMED' };\n  }\n"""
+          new = """  let record: RevenueFlowRecord;\n  if (input.existing !== undefined) {\n    record = input.existing;\n  } else {\n    const createdRecord = baseRecord(input);\n    if (createdRecord === null) return { ok: false, error: 'TEMPLATE_MALFORMED' };\n    record = createdRecord;\n  }\n"""
+          if old not in text:
+              raise SystemExit('expected W10-D record narrowing snippet not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Setup canonical Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install exact lockfile
+        run: npm ci
+      - name: Canonical format
+        run: ./node_modules/.bin/prettier --write packages/revenue/src/flows/controller.ts
+      - name: Verify lint and typecheck
+        run: npm run lint && npm run typecheck
+      - name: Commit type-safe guard
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/revenue/src/flows/controller.ts
+          git commit -m "fix(W10-D): narrow guarded flow record safely"
+          git push origin HEAD:wave/10d-nurture-sales-customer-success
