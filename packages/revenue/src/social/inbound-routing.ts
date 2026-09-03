@@ -145,7 +145,10 @@ function sameScope(previous: SocialInboundRecord, input: SocialInboundInput): bo
   );
 }
 
-function sameCheckpointScope(checkpoint: SocialStreamCheckpoint, input: SocialInboundInput): boolean {
+function sameCheckpointScope(
+  checkpoint: SocialStreamCheckpoint,
+  input: SocialInboundInput,
+): boolean {
   return (
     checkpoint.tenantId === input.tenantId &&
     checkpoint.provider === input.provider &&
@@ -232,7 +235,14 @@ function classify(content: string): Readonly<{
     return { intent: 'FAQ', risk: 'NORMAL', route: 'VERIFIED_FAQ_FAST_PATH' };
   }
 
-  const support = includesAny(content, ['problema', 'erro', 'ajuda', 'suporte', 'help', 'support']);
+  const support = includesAny(content, [
+    'problema',
+    'erro',
+    'ajuda',
+    'suporte',
+    'help',
+    'support',
+  ]);
   if (support) {
     return { intent: 'SUPPORT', risk: 'NORMAL', route: 'GOVERNED_REASONING' };
   }
