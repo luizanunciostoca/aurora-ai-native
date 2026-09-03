@@ -27,10 +27,7 @@ export interface SocialProviderObservation {
 }
 
 export type SocialBusinessOutcomeKind =
-  | 'LEAD_HANDOFF'
-  | 'QUALIFIED_LEAD'
-  | 'CONVERSION'
-  | 'COMMUNITY_RESOLUTION';
+  'LEAD_HANDOFF' | 'QUALIFIED_LEAD' | 'CONVERSION' | 'COMMUNITY_RESOLUTION';
 
 /** Canonical Aurora/W10 outcome projection, kept separate from provider counters. */
 export interface SocialBusinessOutcome {
@@ -113,10 +110,7 @@ function timestamp(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function isStale(
-  observation: SocialProviderObservation,
-  evaluatedAt: number | undefined,
-): boolean {
+function isStale(observation: SocialProviderObservation, evaluatedAt: number | undefined): boolean {
   const observedAt = timestamp(observation.observedAt);
   if (
     evaluatedAt === undefined ||
