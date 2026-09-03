@@ -50,14 +50,14 @@ function imageAsset(
   };
 }
 
-function videoAsset(assetId = 'video-1'): GoogleAdsPlanningAsset {
+function videoAsset(assetId = 'video-1', durationSeconds = 30): GoogleAdsPlanningAsset {
   return {
     assetId,
     kind: 'YOUTUBE_VIDEO',
     media: {
       mediaReference: `youtube:${assetId}`,
       mimeType: 'video/mp4',
-      durationSeconds: 30,
+      durationSeconds,
     },
     provenance: provenance(assetId),
   };
@@ -211,6 +211,72 @@ test('W13-D requires an explicit YouTube video for YouTube-only planning', () =>
   if (result.status !== 'READY') return;
   assert.equal(result.plan.constraints.providerAutomationExpected, false);
   assert.equal(result.plan.providerMutation, false);
+});
+
+test('W13-D enforces current PMax provider maxima and minimum supplied-video duration', () => {
+  const tooManyHeadlines = [
+    ...pmaxAssets(),
+    ...Array.from({ length: 13 }, (_, index) =>
+      textAsset(`extra-headline-${index}`, 'HEADLINE', `Extra headline ${index}`),
+    ),
+  ];
+  assert.deepEqual(planGoogleAdsAssets(fixture({ assets: tooManyHeadlines })), {
+    status: 'BLOCKED',
+    code: 'MISSING_REQUIRED_ASSET',
+  });
+
+  assert.deepEqual(
+    planGoogleAdsAssets(fixture({ assets: [...pmaxAssets(), videoAsset('short-video', 9.9)] })),
+    { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' },
+  );
+
+  const validVideo = planGoogleAdsAssets(
+    fixture({ assets: [...pmaxAssets(), videoAsset('valid-video', 10)] }),
+  );
+  assert.equal(validVideo.status, 'READY');
+});
+
+test('W13-D enforces responsive Display combined-media and video maxima', () => {
+  const baseDisplay: readonly GoogleAdsPlanningAsset[] = [
+    textAsset('display-headline-max', 'HEADLINE', 'Conheça a experiência'),
+    textAsset(
+      'display-long-max',
+      'LONG_HEADLINE',
+      'Descubra uma experiência criada para momentos especiais',
+    ),
+    textAsset('display-description-max', 'DESCRIPTION', 'Veja detalhes e planeje sua visita.'),
+    imageAsset('display-landscape-max', 'MARKETING_IMAGE', 1200, 628),
+    imageAsset('display-square-max', 'SQUARE_MARKETING_IMAGE', 600, 600),
+  ];
+
+  const tooManyImages = [
+    ...baseDisplay,
+    ...Array.from({ length: 14 }, (_, index) =>
+      imageAsset(`display-extra-${index}`, 'MARKETING_IMAGE', 1200, 628),
+    ),
+  ];
+  assert.deepEqual(planGoogleAdsAssets(fixture({ surface: 'DISPLAY', assets: tooManyImages })), {
+    status: 'BLOCKED',
+    code: 'MISSING_REQUIRED_ASSET',
+  });
+
+  const tooManyVideos = [
+    ...baseDisplay,
+    ...Array.from({ length: 6 }, (_, index) => videoAsset(`display-video-${index}`)),
+  ];
+  assert.deepEqual(planGoogleAdsAssets(fixture({ surface: 'DISPLAY', assets: tooManyVideos })), {
+    status: 'BLOCKED',
+    code: 'MISSING_REQUIRED_ASSET',
+  });
+});
+
+test('W13-D rejects logo dimensions that match neither supported Google Ads logo ratio', () => {
+  assert.deepEqual(
+    planGoogleAdsAssets(
+      fixture({ assets: [...pmaxAssets(), imageAsset('invalid-logo', 'LOGO_IMAGE', 400, 300)] }),
+    ),
+    { status: 'BLOCKED', code: 'ASSET_CONSTRAINT_VIOLATION' },
+  );
 });
 
 test('W13-D fails closed on provenance, duplicate assets, malformed costs and incompatible capability', () => {

@@ -192,7 +192,15 @@ function validImageMedia(
       imageRatioWithin(media.width, media.height, 1, 0.01)
     );
   }
-  return media.width >= 128 && media.height >= 128;
+  const squareLogo =
+    media.width >= 128 &&
+    media.height >= 128 &&
+    imageRatioWithin(media.width, media.height, 1, 0.01);
+  const landscapeLogo =
+    media.width >= 512 &&
+    media.height >= 128 &&
+    imageRatioWithin(media.width, media.height, 4, 0.01);
+  return squareLogo || landscapeLogo;
 }
 
 function validVideoMedia(media: GoogleAdsPlanningMedia | undefined): boolean {
@@ -257,30 +265,52 @@ function satisfiesSurfaceRequirements(
   surface: GoogleAdsAssetPlanningSurface,
   assets: readonly GoogleAdsPlanningAsset[],
 ): boolean {
+  const headlines = countKind(assets, 'HEADLINE');
+  const longHeadlines = countKind(assets, 'LONG_HEADLINE');
+  const descriptions = countKind(assets, 'DESCRIPTION');
+  const marketingImages = countKind(assets, 'MARKETING_IMAGE');
+  const squareMarketingImages = countKind(assets, 'SQUARE_MARKETING_IMAGE');
+  const logos = countKind(assets, 'LOGO_IMAGE');
+  const videos = assets.filter((asset) => asset.kind === 'YOUTUBE_VIDEO');
+
   if (surface === 'PERFORMANCE_MAX') {
+    const videosMeetPmaxDuration = videos.every(
+      (asset) => asset.media?.durationSeconds !== undefined && asset.media.durationSeconds >= 10,
+    );
     return (
-      countKind(assets, 'HEADLINE') >= 3 &&
-      countKind(assets, 'LONG_HEADLINE') >= 1 &&
-      countKind(assets, 'DESCRIPTION') >= 2 &&
+      headlines >= 3 &&
+      headlines <= 15 &&
+      longHeadlines >= 1 &&
+      longHeadlines <= 5 &&
+      descriptions >= 2 &&
+      descriptions <= 5 &&
       hasShortDescription(assets) &&
-      countKind(assets, 'MARKETING_IMAGE') >= 1 &&
-      countKind(assets, 'SQUARE_MARKETING_IMAGE') >= 1
+      marketingImages >= 1 &&
+      marketingImages <= 20 &&
+      squareMarketingImages >= 1 &&
+      squareMarketingImages <= 20 &&
+      logos <= 5 &&
+      videos.length <= 15 &&
+      videosMeetPmaxDuration
     );
   }
 
   if (surface === 'DISPLAY') {
     return (
-      countKind(assets, 'HEADLINE') >= 1 &&
-      countKind(assets, 'HEADLINE') <= 5 &&
-      countKind(assets, 'LONG_HEADLINE') === 1 &&
-      countKind(assets, 'DESCRIPTION') >= 1 &&
-      countKind(assets, 'DESCRIPTION') <= 5 &&
-      countKind(assets, 'MARKETING_IMAGE') >= 1 &&
-      countKind(assets, 'SQUARE_MARKETING_IMAGE') >= 1
+      headlines >= 1 &&
+      headlines <= 5 &&
+      longHeadlines === 1 &&
+      descriptions >= 1 &&
+      descriptions <= 5 &&
+      marketingImages >= 1 &&
+      squareMarketingImages >= 1 &&
+      marketingImages + squareMarketingImages <= 15 &&
+      logos <= 5 &&
+      videos.length <= 5
     );
   }
 
-  return countKind(assets, 'YOUTUBE_VIDEO') >= 1;
+  return videos.length === 1;
 }
 
 function freezeAssets(
