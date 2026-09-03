@@ -124,10 +124,16 @@ function contactPolicyValid(policy: RevenueContactPolicyProjection): boolean {
 function qualificationBoundaryError(
   input: PlanRevenueFlowInput,
   qualification: QualificationEvaluation,
-): 'TENANT_MISMATCH' | 'ENTITY_MISMATCH' | 'ENTITY_VERSION_CONFLICT' | 'OUT_OF_ORDER_EVALUATION' | null {
+):
+  | 'TENANT_MISMATCH'
+  | 'ENTITY_MISMATCH'
+  | 'ENTITY_VERSION_CONFLICT'
+  | 'OUT_OF_ORDER_EVALUATION'
+  | null {
   if (qualification.tenantId !== input.tenantId) return 'TENANT_MISMATCH';
   if (!sameEntity(qualification.entity, input.crm.model.entity)) return 'ENTITY_MISMATCH';
-  if (qualification.entityVersion !== input.crm.model.entityVersion) return 'ENTITY_VERSION_CONFLICT';
+  if (qualification.entityVersion !== input.crm.model.entityVersion)
+    return 'ENTITY_VERSION_CONFLICT';
   if (
     !isTimestamp(qualification.evaluatedAt) ||
     Date.parse(qualification.evaluatedAt) > Date.parse(input.evaluatedAt)
@@ -267,7 +273,8 @@ function existingRecordError(
   ) {
     return 'TEMPLATE_VERSION_CONFLICT';
   }
-  if (Date.parse(record.updatedAt) > Date.parse(input.evaluatedAt)) return 'OUT_OF_ORDER_EVALUATION';
+  if (Date.parse(record.updatedAt) > Date.parse(input.evaluatedAt))
+    return 'OUT_OF_ORDER_EVALUATION';
   if (record.state !== 'COMPLETED' && record.stepIndex >= input.template.steps.length) {
     return 'EXISTING_RECORD_MALFORMED';
   }

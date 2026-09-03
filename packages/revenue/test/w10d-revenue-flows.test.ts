@@ -202,7 +202,9 @@ test('W10-D retries only after confirmed no-effect and never blind-retries uncer
 
 test('W10-D bounds retries and escalates after the configured attempt budget', () => {
   const created = planRevenueFlow(
-    fixture({ template: nurtureTemplate({ steps: [{ ...nurtureTemplate().steps[0]!, maxAttempts: 1 }] }) }),
+    fixture({
+      template: nurtureTemplate({ steps: [{ ...nurtureTemplate().steps[0]!, maxAttempts: 1 }] }),
+    }),
   );
   assert.equal(created.ok, true);
   if (!created.ok) return;
@@ -287,7 +289,9 @@ test('W10-D fails closed across tenant, entity and entity-version boundaries', (
 
 test('W10-D abstains or escalates on incomplete, mismatched or review-required qualification', () => {
   const incomplete = planRevenueFlow(
-    fixture({ qualification: { ...fixture().qualification!, stage: 'INCOMPLETE', scoreBps: null } }),
+    fixture({
+      qualification: { ...fixture().qualification!, stage: 'INCOMPLETE', scoreBps: null },
+    }),
   );
   const wrongStage = planRevenueFlow(
     fixture({ qualification: { ...fixture().qualification!, stage: 'QUALIFIED' } }),
@@ -349,7 +353,9 @@ test('W10-D rejects stale/duplicate template inputs and never treats templates a
 
   const duplicateStep = nurtureTemplate();
   const duplicate = planRevenueFlow(
-    fixture({ template: { ...duplicateStep, steps: [duplicateStep.steps[0]!, duplicateStep.steps[0]!] } }),
+    fixture({
+      template: { ...duplicateStep, steps: [duplicateStep.steps[0]!, duplicateStep.steps[0]!] },
+    }),
   );
   assert.deepEqual(duplicate, { ok: false, error: 'TEMPLATE_STEP_DUPLICATE' });
 

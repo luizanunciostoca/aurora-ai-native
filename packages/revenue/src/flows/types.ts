@@ -22,21 +22,13 @@ export type RevenueContactPurpose = (typeof REVENUE_CONTACT_PURPOSES)[number];
 export type RevenueConsentStatus = 'ALLOWED' | 'OPTED_OUT' | 'UNKNOWN';
 
 export type RevenueDispatchObservation =
-  | 'NONE'
-  | 'ACKNOWLEDGED'
-  | 'NO_EFFECT_CONFIRMED'
-  | 'EXECUTION_UNCERTAIN';
+  'NONE' | 'ACKNOWLEDGED' | 'NO_EFFECT_CONFIRMED' | 'EXECUTION_UNCERTAIN';
 
 export type RevenueFlowCancellationReason =
-  | 'NONE'
-  | 'USER_REQUEST'
-  | 'CONSENT_REVOKED'
-  | 'BUSINESS_CANCELLED';
+  'NONE' | 'USER_REQUEST' | 'CONSENT_REVOKED' | 'BUSINESS_CANCELLED';
 
 export type RevenueDomainTaskKind =
-  | 'PREPARE_NURTURE_TOUCH'
-  | 'PREPARE_SALES_HANDOFF'
-  | 'PREPARE_CUSTOMER_SUCCESS_CHECKIN';
+  'PREPARE_NURTURE_TOUCH' | 'PREPARE_SALES_HANDOFF' | 'PREPARE_CUSTOMER_SUCCESS_CHECKIN';
 
 /** Projection of current W02 consent/purpose evaluation. It is evidence, never authority. */
 export interface RevenueContactPolicyProjection {
@@ -197,8 +189,7 @@ export const REVENUE_FLOW_ERRORS = [
 export type RevenueFlowError = (typeof REVENUE_FLOW_ERRORS)[number];
 
 export type PlanRevenueFlowResult =
-  | Readonly<{ ok: true; plan: RevenueFlowPlan }>
-  | Readonly<{ ok: false; error: RevenueFlowError }>;
+  Readonly<{ ok: true; plan: RevenueFlowPlan }> | Readonly<{ ok: false; error: RevenueFlowError }>;
 
 export interface RevenueFlowApplicability {
   readonly flowKind: RevenueFlowKind;
