@@ -35,8 +35,7 @@ function binding(overrides: Partial<ProviderBindingRecord> = {}): ProviderBindin
     accountReference: 'act_123' as ProviderBindingRecord['accountReference'],
     targetType: targetType ?? 'AD',
     targetReference:
-      targetReference ??
-      ('ad_456' as NonNullable<ProviderBindingRecord['targetReference']>),
+      targetReference ?? ('ad_456' as NonNullable<ProviderBindingRecord['targetReference']>),
     state: 'ACTIVE',
     verificationState: 'VERIFIED',
     bindingVersion: 4,
