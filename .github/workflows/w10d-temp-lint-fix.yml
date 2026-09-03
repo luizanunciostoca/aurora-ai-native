@@ -1,0 +1,125 @@
+name: W10-D Temporary Lint Fix
+
+on:
+  push:
+    branches:
+      - wave/10d-nurture-sales-customer-success
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/10d-nurture-sales-customer-success
+      - name: Apply exact lint-safe guards
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(text: str, old: str, new: str, label: str) -> str:
+              if old not in text:
+                  raise SystemExit(f"missing expected snippet: {label}")
+              return text.replace(old, new)
+
+          controller_path = Path('packages/revenue/src/flows/controller.ts')
+          controller = controller_path.read_text()
+          controller = replace_exact(
+              controller,
+              "function baseRecord(input: PlanRevenueFlowInput): RevenueFlowRecord {\n  const firstStep = input.template.steps[0]!;",
+              "function baseRecord(input: PlanRevenueFlowInput): RevenueFlowRecord | null {\n  const firstStep = input.template.steps[0];\n  if (firstStep === undefined) return null;",
+              'baseRecord first step guard',
+          )
+          controller = replace_exact(
+              controller,
+              "  const { lastTaskDedupeKey: _ignored, ...withoutLastTask } = merged;\n  return withoutLastTask;",
+              "  const { lastTaskDedupeKey, ...withoutLastTask } = merged;\n  void lastTaskDedupeKey;\n  return withoutLastTask;",
+              'recordWith unused destructure',
+          )
+          controller = replace_exact(
+              controller,
+              "  const currentStep = input.template.steps[record.stepIndex]!;\n  if (observation === 'NO_EFFECT_CONFIRMED') {",
+              "  const currentStep = input.template.steps[record.stepIndex];\n  if (currentStep === undefined) {\n    return { ok: false, error: 'EXISTING_RECORD_MALFORMED' };\n  }\n  if (observation === 'NO_EFFECT_CONFIRMED') {",
+              'current step guard',
+          )
+          controller = replace_exact(
+              controller,
+              "  const nextStep = input.template.steps[nextIndex]!;\n  return recordWith(",
+              "  const nextStep = input.template.steps[nextIndex];\n  if (nextStep === undefined) {\n    return { ok: false, error: 'EXISTING_RECORD_MALFORMED' };\n  }\n  return recordWith(",
+              'next step guard',
+          )
+          controller = replace_exact(
+              controller,
+              "  let record = input.existing ?? baseRecord(input);\n  if (record.state === 'COMPLETED')",
+              "  let record = input.existing;\n  if (record === undefined) {\n    record = baseRecord(input);\n    if (record === null) return { ok: false, error: 'TEMPLATE_MALFORMED' };\n  }\n  if (record.state === 'COMPLETED')",
+              'base record null guard',
+          )
+          controller = replace_exact(
+              controller,
+              "  const observation = input.dispatchObservation ?? 'NONE';\n  const pendingStep = input.template.steps[record.stepIndex]!;\n  if (observation === 'NONE' && record.lastTaskDedupeKey !== undefined) {\n    const pendingPolicyBlock = policyBlockReason(input.contactPolicy, pendingStep);",
+              "  const observation = input.dispatchObservation ?? 'NONE';\n  if (observation === 'NONE' && record.lastTaskDedupeKey !== undefined) {\n    const pendingStep = input.template.steps[record.stepIndex];\n    if (pendingStep === undefined) {\n      return { ok: false, error: 'EXISTING_RECORD_MALFORMED' };\n    }\n    const pendingPolicyBlock = policyBlockReason(input.contactPolicy, pendingStep);",
+              'pending step guard',
+          )
+          controller = replace_exact(
+              controller,
+              "  const step = input.template.steps[record.stepIndex]!;\n  const policyBlock = policyBlockReason(input.contactPolicy, step);",
+              "  const step = input.template.steps[record.stepIndex];\n  if (step === undefined) return { ok: false, error: 'EXISTING_RECORD_MALFORMED' };\n  const policyBlock = policyBlockReason(input.contactPolicy, step);",
+              'active step guard',
+          )
+          controller_path.write_text(controller)
+
+          test_path = Path('packages/revenue/test/w10d-revenue-flows.test.ts')
+          tests = test_path.read_text()
+          helper_anchor = "function firstReady() {"
+          helper = """function requiredQualification() {\n  const qualification = fixture().qualification;\n  if (qualification === undefined) {\n    throw new Error('expected W10-D fixture qualification');\n  }\n  return qualification;\n}\n\nfunction requiredTemplateStep(template: RevenueFlowTemplateProjection, index = 0) {\n  const step = template.steps[index];\n  if (step === undefined) {\n    throw new Error(`expected W10-D template step ${index}`);\n  }\n  return step;\n}\n\n"""
+          if helper_anchor not in tests:
+              raise SystemExit('missing firstReady helper anchor')
+          tests = tests.replace(helper_anchor, helper + helper_anchor, 1)
+          tests = tests.replace("nurtureTemplate().steps[0]!", "requiredTemplateStep(nurtureTemplate())")
+          tests = tests.replace("fixture().qualification!", "requiredQualification()")
+          tests = replace_exact(
+              tests,
+              "  const { qualification: _qualification, ...withoutQualification } = base;",
+              "  const { qualification, ...withoutQualification } = base;\n  void qualification;",
+              'customer success qualification destructure',
+          )
+          tests = replace_exact(
+              tests,
+              "      template: { ...duplicateStep, steps: [duplicateStep.steps[0]!, duplicateStep.steps[0]!] },",
+              "      template: {\n        ...duplicateStep,\n        steps: [requiredTemplateStep(duplicateStep), requiredTemplateStep(duplicateStep)],\n      },",
+              'duplicate template step guards',
+          )
+          if '!' in '\n'.join(line for line in tests.splitlines() if 'assert.' not in line):
+              # This is intentionally only a coarse signal; canonical lint below is authoritative.
+              pass
+          test_path.write_text(tests)
+          PY
+      - name: Setup canonical Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install exact lockfile
+        run: npm ci
+      - name: Canonical format targeted files
+        run: |
+          ./node_modules/.bin/prettier --write \
+            packages/revenue/src/flows/controller.ts \
+            packages/revenue/test/w10d-revenue-flows.test.ts
+      - name: Verify lint before commit
+        run: npm run lint
+      - name: Commit corrected W10-D files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/revenue/src/flows/controller.ts packages/revenue/test/w10d-revenue-flows.test.ts
+          if git diff --cached --quiet; then
+            echo "No corrections required."
+            exit 0
+          fi
+          git commit -m "fix(W10-D): replace lint assertions with fail-closed guards"
+          git push origin HEAD:wave/10d-nurture-sales-customer-success
