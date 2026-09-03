@@ -93,7 +93,19 @@ test('W11-C deduplicates an exact replay and rejects conflicting revision reuse'
 });
 
 test('W11-C rejects out-of-order and gapped revisions before routing', () => {
-  const previous = applied(fixture({ revision: 2 }));
+  const created = applied(fixture());
+  const previous = applied(
+    fixture({
+      previous: created,
+      revision: 2,
+      change: 'EDITED',
+      content: 'Qual é o horário atualizado?',
+      occurredAt: '2026-09-03T15:01:00Z',
+      observedAt: '2026-09-03T15:01:01Z',
+      evaluatedAt: '2026-09-03T15:01:02Z',
+      deliveryCursor: 'cursor-2',
+    }),
+  );
 
   assert.deepEqual(ingestAndRouteSocialInbound(fixture({ previous, revision: 1 })), {
     ok: false,
@@ -284,4 +296,45 @@ test('W11-C rejects malformed content and impossible provider timestamps', () =>
     ),
     { ok: false, error: 'INVALID_TIME_BOUNDARY', authorizesExecution: false },
   );
+});
+
+test('W11-C fails closed on malformed enums, missing initial state and unproven reconnects', () => {
+  assert.deepEqual(
+    ingestAndRouteSocialInbound(
+      fixture({ provider: 'TIKTOK' as unknown as SocialInboundInput['provider'] }),
+    ),
+    { ok: false, error: 'REQUEST_MALFORMED', authorizesExecution: false },
+  );
+
+  assert.deepEqual(
+    ingestAndRouteSocialInbound(
+      fixture({ channel: 'EMAIL' as unknown as SocialInboundInput['channel'] }),
+    ),
+    { ok: false, error: 'REQUEST_MALFORMED', authorizesExecution: false },
+  );
+
+  assert.deepEqual(
+    ingestAndRouteSocialInbound(
+      fixture({ change: 'UPSERTED' as unknown as SocialInboundInput['change'] }),
+    ),
+    { ok: false, error: 'REQUEST_MALFORMED', authorizesExecution: false },
+  );
+
+  assert.deepEqual(ingestAndRouteSocialInbound(fixture({ revision: 2 })), {
+    ok: false,
+    error: 'REVISION_GAP',
+    authorizesExecution: false,
+  });
+
+  assert.deepEqual(ingestAndRouteSocialInbound(fixture({ change: 'EDITED' })), {
+    ok: false,
+    error: 'REQUEST_MALFORMED',
+    authorizesExecution: false,
+  });
+
+  assert.deepEqual(ingestAndRouteSocialInbound(fixture({ connectionGeneration: 2 })), {
+    ok: false,
+    error: 'CONNECTION_GENERATION_GAP',
+    authorizesExecution: false,
+  });
 });
