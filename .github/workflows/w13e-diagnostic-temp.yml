@@ -5,8 +5,11 @@ on:
     branches:
       - wave/13e-governed-paused-first-operations
 
+permissions:
+  contents: write
+
 jobs:
-  diagnose:
+  repair:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -15,25 +18,35 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - name: Fix exact optional fixture
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('packages/revenue/test/w13e-governed-paused-first-operations.test.ts')
+          text = path.read_text()
+          old = '      managerCustomerId: plan.managerCustomerId,\n'
+          new = '      ...(plan.managerCustomerId ? { managerCustomerId: plan.managerCustomerId } : {}),\n'
+          if old in text:
+              text = text.replace(old, new, 1)
+              path.write_text(text)
+          PY
       - name: Canonical prettier output
         run: >-
           npx prettier --write
           packages/revenue/src/google-ads/governed-operations.ts
           packages/revenue/test/w13e-governed-paused-first-operations.test.ts
-      - name: Capture tests
+      - name: Validate test suite before publishing repair
+        run: npm test
+      - name: Publish only repaired W13-E files
         shell: bash
         run: |
-          set +e
-          npm test > w13e-test.log 2>&1
-          status=$?
-          echo "$status" > w13e-test-exit.txt
-          exit 0
-      - uses: actions/upload-artifact@v4
-        with:
-          name: w13e-diagnostic
-          path: |
-            packages/revenue/src/google-ads/governed-operations.ts
-            packages/revenue/test/w13e-governed-paused-first-operations.test.ts
-            w13e-test.log
-            w13e-test-exit.txt
-          if-no-files-found: error
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/revenue/src/google-ads/governed-operations.ts packages/revenue/test/w13e-governed-paused-first-operations.test.ts
+          if git diff --cached --quiet; then
+            echo 'No W13-E repair changes to publish.'
+            exit 0
+          fi
+          git commit -m 'fix(w13): format governed operations and omit absent optional MCC'
+          git push origin HEAD:wave/13e-governed-paused-first-operations
