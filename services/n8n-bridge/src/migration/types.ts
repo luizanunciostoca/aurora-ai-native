@@ -28,10 +28,7 @@ export const W09_SANITIZED_NODE_KINDS = [
 export type W09SanitizedNodeKind = (typeof W09_SANITIZED_NODE_KINDS)[number];
 
 export type W09WorkflowLicenseStatus =
-  | 'AURORA_OWNED'
-  | 'REFERENCE_ONLY'
-  | 'PROVENANCE_ACCEPTED'
-  | 'PROVENANCE_HOLD';
+  'AURORA_OWNED' | 'REFERENCE_ONLY' | 'PROVENANCE_ACCEPTED' | 'PROVENANCE_HOLD';
 
 export interface W09SanitizedTopologyNode {
   readonly nodeReference: string;

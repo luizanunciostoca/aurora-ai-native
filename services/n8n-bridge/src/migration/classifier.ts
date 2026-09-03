@@ -14,7 +14,10 @@ function nonEmpty(value: string): boolean {
   return value.trim().length > 0;
 }
 
-function hasNodeKind(candidate: W09SanitizedWorkflowCandidate, kind: W09SanitizedNodeKind): boolean {
+function hasNodeKind(
+  candidate: W09SanitizedWorkflowCandidate,
+  kind: W09SanitizedNodeKind,
+): boolean {
   return candidate.topology.some((node) => node.kind === kind);
 }
 
@@ -84,7 +87,9 @@ export function classifyW09WorkflowCandidate(
 
   if (
     candidate.licenseStatus === 'PROVENANCE_HOLD' ||
-    (candidate.verbatimReuseRequested && candidate.licenseStatus !== 'AURORA_OWNED' && candidate.licenseStatus !== 'PROVENANCE_ACCEPTED')
+    (candidate.verbatimReuseRequested &&
+      candidate.licenseStatus !== 'AURORA_OWNED' &&
+      candidate.licenseStatus !== 'PROVENANCE_ACCEPTED')
   ) {
     return classification(candidate, 'LICENSE_PROVENANCE_HOLD', [
       'Verbatim reuse is not permitted until provenance and license acceptance are explicit.',
@@ -109,7 +114,11 @@ export function classifyW09WorkflowCandidate(
     ]);
   }
 
-  if (candidate.sideEffecting && !hasNodeKind(candidate, 'AURORA_ACTION_REQUEST') && !hasNodeKind(candidate, 'W07_GOVERNED_EXECUTION')) {
+  if (
+    candidate.sideEffecting &&
+    !hasNodeKind(candidate, 'AURORA_ACTION_REQUEST') &&
+    !hasNodeKind(candidate, 'W07_GOVERNED_EXECUTION')
+  ) {
     return classification(candidate, 'REFERENCE_ONLY_PROVIDER_PATTERN', [
       'Side-effecting topology lacks an Aurora governed action/execution boundary and cannot be promoted as-is.',
     ]);
@@ -126,9 +135,10 @@ export function prepareW09CuratedMigration(
   const result = classifyW09WorkflowCandidate(candidate);
 
   if (result.category !== 'RE_SPECIFY_SAFE_CANDIDATE') {
-    const status = result.category.startsWith('REFERENCE_ONLY') || result.category === 'HIGH_RISK_INDEX_ONLY'
-      ? 'REFERENCE_ONLY'
-      : 'BLOCKED';
+    const status =
+      result.category.startsWith('REFERENCE_ONLY') || result.category === 'HIGH_RISK_INDEX_ONLY'
+        ? 'REFERENCE_ONLY'
+        : 'BLOCKED';
     return { status, classification: result };
   }
 

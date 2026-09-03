@@ -11,7 +11,9 @@ import {
 
 const SOURCE_HASH = `sha256:${'a'.repeat(64)}`;
 
-function candidate(overrides: Partial<W09SanitizedWorkflowCandidate> = {}): W09SanitizedWorkflowCandidate {
+function candidate(
+  overrides: Partial<W09SanitizedWorkflowCandidate> = {},
+): W09SanitizedWorkflowCandidate {
   return {
     candidateId: 'w09e.candidate.lead-sync',
     tenantId: 'ten_01JW09ETENANTA000000000',
