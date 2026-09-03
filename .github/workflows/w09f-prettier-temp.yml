@@ -13,18 +13,15 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22'
-          cache: npm
-      - run: npm install --global npm@10.9.2
-      - run: npm ci
-      - name: Canonical Prettier
-        run: npx prettier --write services/n8n-bridge/test/w09f-governance-replay-failure-integration.test.ts docs/governance/w09/W09_FABRIC_HANDOFF.md
-      - name: Publish formatted permanent files only
+      - name: Canonical Prettier 3.9.6
+        run: npx --yes prettier@3.9.6 --write services/n8n-bridge/test/w09f-governance-replay-failure-integration.test.ts
+      - name: Publish formatted permanent file only
         run: |
-          if git diff --quiet -- services/n8n-bridge/test/w09f-governance-replay-failure-integration.test.ts docs/governance/w09/W09_FABRIC_HANDOFF.md; then
+          if git diff --quiet -- services/n8n-bridge/test/w09f-governance-replay-failure-integration.test.ts; then
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add services/n8n-bridge/test/w09f-governance-replay-failure-integration.test.ts docs/governance/w09/W09_FABRIC_HANDOFF.md
-          git commit -m "chore(w09): canonical prettier output"
+          git add services/n8n-bridge/test/w09f-governance-replay-failure-integration.test.ts
+          git commit -m "chore(w09): canonical prettier 3.9.6 output"
           git push
