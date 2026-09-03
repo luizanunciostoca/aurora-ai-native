@@ -146,7 +146,10 @@ function inboundFixture(
   };
 }
 
-function appliedInbound(content: string, overrides: Partial<SocialInboundInput> = {}): SocialInboundRecord {
+function appliedInbound(
+  content: string,
+  overrides: Partial<SocialInboundInput> = {},
+): SocialInboundRecord {
   const result = ingestAndRouteSocialInbound(inboundFixture(content, overrides));
   assert.equal(result.ok, true);
   assert.equal(result.ok && result.status, 'APPLIED');
@@ -525,7 +528,8 @@ test('W11-H keeps provider analytics separate from Aurora business outcomes and 
       analyticsSeparation: 'PASS',
     },
     riskGates: {
-      A_AUTHORITY: publication.w07ExecutionRequest?.requiresCurrentAuthority === true ? 'PASS' : 'FAIL',
+      A_AUTHORITY:
+        publication.w07ExecutionRequest?.requiresCurrentAuthority === true ? 'PASS' : 'FAIL',
       B_PROVIDER_RECONCILIATION: ambiguous.record.state === 'READBACK_REQUIRED' ? 'PASS' : 'FAIL',
       C_REPLAY_IDEMPOTENCY: replay.ok && replay.status === 'DUPLICATE' ? 'PASS' : 'FAIL',
       D_EVIDENCE_OBSERVABILITY: model.eval.hasProviderBusinessOutcomeSeparation ? 'PASS' : 'FAIL',
