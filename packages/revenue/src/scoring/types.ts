@@ -9,16 +9,10 @@ export const QUALIFICATION_MODES = ['DETERMINISTIC', 'MODEL_ASSISTED'] as const;
 export type QualificationMode = (typeof QUALIFICATION_MODES)[number];
 
 export type QualificationReviewDisposition =
-  | 'NONE'
-  | 'VERIFY_MODEL_ASSIST'
-  | 'ESCALATE_MODEL_ASSIST'
-  | 'ABSTAIN_MODEL_ASSIST';
+  'NONE' | 'VERIFY_MODEL_ASSIST' | 'ESCALATE_MODEL_ASSIST' | 'ABSTAIN_MODEL_ASSIST';
 
 export type ProjectedConfidenceDisposition =
-  | 'PROCEED_WITH_EVIDENCE'
-  | 'VERIFY'
-  | 'ESCALATE'
-  | 'ABSTAIN';
+  'PROCEED_WITH_EVIDENCE' | 'VERIFY' | 'ESCALATE' | 'ABSTAIN';
 
 export interface QualificationFeatureProvenance {
   readonly tenantId: TenantId;
@@ -127,6 +121,7 @@ export const QUALIFICATION_ERRORS = [
   'ENTITY_NOT_SCORABLE',
   'OUT_OF_ORDER_EVALUATION',
   'FEATURE_TENANT_MISMATCH',
+  'FEATURE_FUTURE_OBSERVATION',
   'FEATURE_DUPLICATE',
   'WEIGHT_TOTAL_INVALID',
   'MODEL_ASSIST_INVALID',
