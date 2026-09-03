@@ -22,9 +22,7 @@ const IDENTITY_B = 'idn_01JW14DABCDE00000000000000' as IdentityId;
 const CORRELATION = 'correlation:w14e' as CorrelationId;
 const NOW = 10_000;
 
-function gateway(
-  overrides: Partial<GatewaySessionSnapshot> = {},
-): GatewaySessionSnapshot {
+function gateway(overrides: Partial<GatewaySessionSnapshot> = {}): GatewaySessionSnapshot {
   return {
     protocolVersion: '1.0',
     sessionId: 'gateway:session:1',
@@ -54,9 +52,7 @@ function deviceRef(overrides: Partial<DeviceRef> = {}): DeviceRef {
   };
 }
 
-function device(
-  overrides: Partial<DeviceRegistrationRecord> = {},
-): DeviceRegistrationRecord {
+function device(overrides: Partial<DeviceRegistrationRecord> = {}): DeviceRegistrationRecord {
   return {
     kind: 'DeviceRegistrationRecord',
     schemaVersion: '1.0.0',
@@ -295,7 +291,9 @@ test('resume rejects stale ownership and accepts only a newer bound gateway gene
 });
 
 test('resume detects actor, correlation, device and attestation-provider hijack attempts', () => {
-  const cases: Array<[string, GatewaySessionSnapshot, DeviceRegistrationRecord, DeviceAttestationReference]> = [
+  const cases: Array<
+    [string, GatewaySessionSnapshot, DeviceRegistrationRecord, DeviceAttestationReference]
+  > = [
     [
       'RESUME_HIJACK_DETECTED',
       gateway({ connectionId: 'gateway:connection:2', generation: 2, actorIdentityId: IDENTITY_B }),
