@@ -3,26 +3,18 @@ import assert from 'node:assert/strict';
 // @ts-expect-error -- W09 harness intentionally has no @types/node; Node 22 provides this built-in.
 import test from 'node:test';
 
-import {
-  N8nWorkflowBindingRegistry,
-  type N8nWorkflowBinding,
-} from '../src/bindings/index.js';
+import { N8nWorkflowBindingRegistry, type N8nWorkflowBinding } from '../src/bindings/index.js';
 import {
   withResolvedN8nWorkflowCredential,
   type N8nWorkflowCredentialBackend,
   type N8nWorkflowCredentialReference,
 } from '../src/credentials/index.js';
-import {
-  reconstructN8nWorkflowEvidenceChain,
-} from '../src/evidence/index.js';
+import { reconstructN8nWorkflowEvidenceChain } from '../src/evidence/index.js';
 import {
   prepareW09CuratedMigration,
   type W09SanitizedWorkflowCandidate,
 } from '../src/migration/index.js';
-import {
-  N8nTriggerBridge,
-  type N8nTriggerEnvelope,
-} from '../src/triggers/bridge.js';
+import { N8nTriggerBridge, type N8nTriggerEnvelope } from '../src/triggers/bridge.js';
 
 const TENANT = 'ten_01JW09FTENANTA000000000';
 const WORKFLOW_HASH_V1 = `sha256:${'a'.repeat(64)}`;
@@ -54,9 +46,7 @@ function binding(overrides: Partial<N8nWorkflowBinding> = {}): N8nWorkflowBindin
       licenseStatus: 'AURORA_OWNED',
       sanitizedLineage: null,
     },
-    credentialRequirements: [
-      { credentialReference: 'credref.w09f.crm', integration: 'crm' },
-    ],
+    credentialRequirements: [{ credentialReference: 'credref.w09f.crm', integration: 'crm' }],
     compatibility: {
       contractVersion: '1.0.0',
       requiredTargetClasses: ['WORKFLOW_BRIDGE', 'PROVIDER'],
@@ -141,7 +131,12 @@ function statusEvent(
 function w07Event(
   bindingValue: N8nWorkflowBinding,
   sequence: number,
-  state: 'ACKNOWLEDGED' | 'READBACK_MATCH' | 'READBACK_MISMATCH' | 'READBACK_UNKNOWN' | 'EXECUTION_UNCERTAIN',
+  state:
+    | 'ACKNOWLEDGED'
+    | 'READBACK_MATCH'
+    | 'READBACK_MISMATCH'
+    | 'READBACK_UNKNOWN'
+    | 'EXECUTION_UNCERTAIN',
 ): Record<string, unknown> {
   return {
     schemaVersion: '1.0.0',
@@ -164,8 +159,7 @@ function w07Event(
     kind: 'N8N_W07_EVIDENCE_REFERENCE_FORWARDING',
     w07State: state,
     receiptReference: 'receipt:w07:w09f',
-    evidenceReference:
-      state === 'ACKNOWLEDGED' ? null : `evidence:w07:${state.toLowerCase()}`,
+    evidenceReference: state === 'ACKNOWLEDGED' ? null : `evidence:w07:${state.toLowerCase()}`,
   };
 }
 
@@ -287,15 +281,18 @@ test('W09-F preserves replay and ordering fences under bounded trigger load', ()
     const replay = bridge.ingest(bindingValue, { ...input });
     assert.equal(replay.status, 'DUPLICATE');
     if (replay.status === 'DUPLICATE') {
-      assert.equal(replay.request.requestReference, first.status === 'ACCEPTED' ? first.request.requestReference : '');
+      assert.equal(
+        replay.request.requestReference,
+        first.status === 'ACCEPTED' ? first.request.requestReference : '',
+      );
     }
   }
 
   assert.equal(acceptedRequests.length, 128);
-  assert.deepEqual(
-    bridge.ingest(bindingValue, trigger(bindingValue, 129, { sequence: 64 })),
-    { status: 'BLOCKED', code: 'STALE_OR_REORDERED_SEQUENCE' },
-  );
+  assert.deepEqual(bridge.ingest(bindingValue, trigger(bindingValue, 129, { sequence: 64 })), {
+    status: 'BLOCKED',
+    code: 'STALE_OR_REORDERED_SEQUENCE',
+  });
   const conflict = trigger(bindingValue, 130, {
     idempotencyKey: 'key-128',
     payloadHash: `sha256:${'e'.repeat(64)}`,
