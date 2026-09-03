@@ -460,3 +460,54 @@ test('gateway auth expiry and bounded session lifetime fail closed independently
     'SESSION_EXPIRED',
   );
 });
+
+test('invalid open request cannot evict remembered revoked trust state', () => {
+  const target = manager({ maxActiveSessions: 2, maxRememberedSessions: 2 });
+  assert.equal(open(target).ok, true);
+  assert.equal(
+    target.revokeSession({
+      deviceSessionId: 'device-session:1',
+      connectionId: 'gateway:connection:1',
+      revokedAtMs: 10_100,
+      reasonReference: 'revocation:retention-guard',
+    }).ok,
+    true,
+  );
+  assert.equal(
+    open(target, {
+      deviceSessionId: 'device-session:2',
+      gatewaySession: gateway({
+        sessionId: 'gateway:session:2',
+        connectionId: 'gateway:connection:2',
+      }),
+    }).ok,
+    true,
+  );
+
+  assert.equal(
+    errorCode(
+      open(target, {
+        deviceSessionId: 'device-session:3',
+        gatewaySession: gateway({
+          sessionId: 'gateway:session:3',
+          connectionId: 'gateway:connection:3',
+          tenantId: TENANT_B,
+        }),
+      }),
+    ),
+    'TENANT_MISMATCH',
+  );
+
+  assert.equal(
+    errorCode(
+      open(target, {
+        deviceSessionId: 'device-session:1',
+        gatewaySession: gateway({
+          sessionId: 'gateway:session:4',
+          connectionId: 'gateway:connection:4',
+        }),
+      }),
+    ),
+    'SESSION_CONFLICT',
+  );
+});
