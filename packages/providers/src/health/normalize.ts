@@ -228,7 +228,10 @@ export function normalizeProviderOperationalObservation(
   if (rateLimit === 'SENSITIVE_METADATA_REJECTED' || quota === 'SENSITIVE_METADATA_REJECTED') {
     return fail('SENSITIVE_METADATA_REJECTED');
   }
-  if ((rateLimitValue !== undefined && rateLimit === null) || (quotaValue !== undefined && quota === null)) {
+  if (
+    (rateLimitValue !== undefined && rateLimit === null) ||
+    (quotaValue !== undefined && quota === null)
+  ) {
     return fail('OBSERVATION_MALFORMED');
   }
 
@@ -240,8 +243,7 @@ export function normalizeProviderOperationalObservation(
   ) {
     return fail('OBSERVATION_MALFORMED');
   }
-  const advisoryRetryAfterMs =
-    typeof retryAfterMs === 'number' ? retryAfterMs : nestedRetryAfterMs;
+  const advisoryRetryAfterMs = typeof retryAfterMs === 'number' ? retryAfterMs : nestedRetryAfterMs;
 
   return {
     ok: true,
