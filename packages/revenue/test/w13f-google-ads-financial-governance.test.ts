@@ -227,10 +227,7 @@ test('W13-F enforces the narrowest W13, W02 and W04 financial ceiling', () => {
   );
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
-      fixture({
-        proposedMicros: 25_000_000,
-        budget: { ...budget, remainingMicros: 24_999_999 },
-      }),
+      fixture({ proposedMicros: 25_000_000, budget: { ...budget, remainingMicros: 24_999_999 } }),
     ),
     { status: 'BLOCKED', code: 'BUDGET_CEILING_EXCEEDED' },
   );
@@ -241,17 +238,13 @@ test('W13-F bounds repeated optimization mutations and requires fresh bound evid
 
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
-      fixture({
-        mutationWindow: { ...mutationWindow, committedMutations: 3 },
-      }),
+      fixture({ mutationWindow: { ...mutationWindow, committedMutations: 3 } }),
     ),
     { status: 'BLOCKED', code: 'MUTATION_LIMIT_EXCEEDED' },
   );
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
-      fixture({
-        mutationWindow: { ...mutationWindow, validUntilMs: NOW },
-      }),
+      fixture({ mutationWindow: { ...mutationWindow, validUntilMs: NOW } }),
     ),
     { status: 'BLOCKED', code: 'MUTATION_BOUND_STALE' },
   );
@@ -262,9 +255,7 @@ test('W13-F rejects MCC drift in mutation-bound evidence', () => {
 
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
-      fixture({
-        mutationWindow: { ...mutationWindow, managerCustomerId: '1111222233' },
-      }),
+      fixture({ mutationWindow: { ...mutationWindow, managerCustomerId: '1111222233' } }),
     ),
     { status: 'BLOCKED', code: 'MUTATION_BOUND_INVALID' },
   );
