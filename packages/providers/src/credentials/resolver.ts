@@ -97,7 +97,9 @@ function isSecretState(value: unknown): value is SecretReferenceState {
 }
 
 function isBindingState(value: unknown): value is (typeof BINDING_STATES)[number] {
-  return typeof value === 'string' && BINDING_STATES.includes(value as (typeof BINDING_STATES)[number]);
+  return (
+    typeof value === 'string' && BINDING_STATES.includes(value as (typeof BINDING_STATES)[number])
+  );
 }
 
 function isBindingVerificationState(
