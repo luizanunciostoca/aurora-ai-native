@@ -133,7 +133,10 @@ function hasDuplicateMedia(mediaReferences: readonly string[]): boolean {
   return new Set(normalized).size !== normalized.length;
 }
 
-function validateMedia(mediaReferences: readonly string[], required: boolean): OrganicPublicationBlockCode | undefined {
+function validateMedia(
+  mediaReferences: readonly string[],
+  required: boolean,
+): OrganicPublicationBlockCode | undefined {
   if (required && mediaReferences.length === 0) return 'MISSING_MEDIA';
   if (mediaReferences.some((reference) => !nonEmpty(reference))) return 'MISSING_MEDIA';
   if (hasDuplicateMedia(mediaReferences)) return 'DUPLICATE_MEDIA_REFERENCE';
@@ -197,7 +200,9 @@ function validateSchedule(
 }
 
 /** Create a non-authoritative organic publication record. No provider call is reachable here. */
-export function createOrganicPublication(input: OrganicPublicationCreateInput): OrganicPublicationResult {
+export function createOrganicPublication(
+  input: OrganicPublicationCreateInput,
+): OrganicPublicationResult {
   if (
     !nonEmpty(input.publicationId) ||
     !nonEmpty(input.operationId) ||
@@ -224,7 +229,13 @@ export function createOrganicPublication(input: OrganicPublicationCreateInput): 
   const revision = 1;
   const timer =
     state === 'SCHEDULED' && input.scheduledAt !== undefined
-      ? createTimer(input.tenantId, input.correlationId, input.publicationId, revision, input.scheduledAt)
+      ? createTimer(
+          input.tenantId,
+          input.correlationId,
+          input.publicationId,
+          revision,
+          input.scheduledAt,
+        )
       : undefined;
 
   return {
@@ -323,7 +334,13 @@ export function transitionOrganicPublication(
         idempotencyKey: input.idempotencyKey,
         lastOperationId: input.operationId,
         lastOperationSignature: signature,
-        timer: createTimer(record.tenantId, record.correlationId, record.publicationId, revision, scheduledAt),
+        timer: createTimer(
+          record.tenantId,
+          record.correlationId,
+          record.publicationId,
+          revision,
+          scheduledAt,
+        ),
         pausedSafe: true,
         authorizesExecution: false,
       },
@@ -334,20 +351,27 @@ export function transitionOrganicPublication(
     if (record.state === 'DISPATCH_REQUESTED') {
       return { status: 'BLOCKED', code: 'ILLEGAL_TRANSITION' };
     }
+
     return {
       status: 'APPLIED',
       record: {
-        ...record,
+        kind: record.kind,
+        tenantId: record.tenantId,
+        correlationId: record.correlationId,
+        publicationId: record.publicationId,
+        publicationKind: record.publicationKind,
+        accountReference: record.accountReference,
+        providerBindingReference: record.providerBindingReference,
+        mediaReferences: [...record.mediaReferences],
+        ...(record.caption !== undefined ? { caption: record.caption } : {}),
         state: 'CANCELLED',
         revision: record.revision + 1,
         idempotencyKey: input.idempotencyKey,
         lastOperationId: input.operationId,
         lastOperationSignature: signature,
-        timer: undefined,
-        scheduledAt: undefined,
         pausedSafe: true,
         authorizesExecution: false,
-      } as OrganicPublicationRecord,
+      },
     };
   }
 
@@ -355,7 +379,8 @@ export function transitionOrganicPublication(
     return { status: 'BLOCKED', code: 'ILLEGAL_TRANSITION' };
   }
   if (record.state === 'SCHEDULED') {
-    const scheduledAt = record.scheduledAt === undefined ? undefined : parseTimestamp(record.scheduledAt);
+    const scheduledAt =
+      record.scheduledAt === undefined ? undefined : parseTimestamp(record.scheduledAt);
     if (scheduledAt === undefined || evaluatedAt < scheduledAt) {
       return { status: 'BLOCKED', code: 'NOT_DUE' };
     }
@@ -363,17 +388,25 @@ export function transitionOrganicPublication(
 
   const revision = record.revision + 1;
   const next: OrganicPublicationRecord = {
-    ...record,
+    kind: record.kind,
+    tenantId: record.tenantId,
+    correlationId: record.correlationId,
+    publicationId: record.publicationId,
+    publicationKind: record.publicationKind,
+    accountReference: record.accountReference,
+    providerBindingReference: record.providerBindingReference,
+    mediaReferences: [...record.mediaReferences],
+    ...(record.caption !== undefined ? { caption: record.caption } : {}),
     state: 'DISPATCH_REQUESTED',
     revision,
+    ...(record.scheduledAt !== undefined ? { scheduledAt: record.scheduledAt } : {}),
     idempotencyKey: input.idempotencyKey,
     lastOperationId: input.operationId,
     lastOperationSignature: signature,
-    timer: undefined,
     w07ExecutionRequest: createW07Request(record, input.idempotencyKey),
     pausedSafe: false,
     authorizesExecution: false,
-  } as OrganicPublicationRecord;
+  };
 
   return { status: 'APPLIED', record: next };
 }
