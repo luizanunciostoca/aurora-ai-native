@@ -129,7 +129,9 @@ function parseQuery(value: unknown): Readonly<Record<string, ProviderReadQueryVa
   return parsed;
 }
 
-function parseLimits(value: unknown): { readonly maxPages: number; readonly maxItems: number } | null {
+function parseLimits(
+  value: unknown,
+): { readonly maxPages: number; readonly maxItems: number } | null {
   if (!isPlainRecord(value) || !hasOnlyOwnDataProperties(value, LIMIT_KEYS)) return null;
   const maxPages = ownValue(value, 'maxPages');
   const maxItems = ownValue(value, 'maxItems');
@@ -196,11 +198,7 @@ function parseRateLimit(value: unknown): ProviderReadRateLimitObservation | null
   ) {
     return null;
   }
-  if (
-    typeof remaining === 'number' &&
-    typeof limit === 'number' &&
-    remaining > limit
-  ) {
+  if (typeof remaining === 'number' && typeof limit === 'number' && remaining > limit) {
     return null;
   }
   return {
@@ -222,8 +220,13 @@ function parsePage(value: unknown, itemBudget: number): ProviderReadTransportPag
   if (!Array.isArray(items) || items.length > itemBudget || !isTimestamp(observedAt)) return null;
   if (nextCursorToken !== undefined && !isNonEmptyString(nextCursorToken, 4_096)) return null;
   if (providerRevision !== undefined && !isNonEmptyString(providerRevision, 512)) return null;
-  const rateLimit = rateLimitValue === undefined ? undefined : parseRateLimit(rateLimitValue);
-  if (rateLimitValue !== undefined && rateLimit === null) return null;
+
+  let rateLimit: ProviderReadRateLimitObservation | undefined;
+  if (rateLimitValue !== undefined) {
+    const parsedRateLimit = parseRateLimit(rateLimitValue);
+    if (parsedRateLimit === null) return null;
+    rateLimit = parsedRateLimit;
+  }
 
   return {
     items,
