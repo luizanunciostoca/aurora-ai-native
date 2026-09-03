@@ -146,7 +146,7 @@ function aggregateProvider(
 function aggregateBusinessOutcomes(
   outcomes: readonly SocialBusinessOutcome[],
 ): SocialBusinessOutcomeAggregate {
-  const aggregate: SocialBusinessOutcomeAggregate = {
+  const aggregate = {
     leadHandoffs: 0,
     qualifiedLeads: 0,
     conversions: 0,
