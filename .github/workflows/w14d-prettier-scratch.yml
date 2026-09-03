@@ -1,0 +1,44 @@
+name: W14-D Prettier Scratch
+
+on:
+  push:
+    branches:
+      - scratch/w14d-prettier-ac3317
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout scratch branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: scratch/w14d-prettier-ac3317
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Format W14-D candidate paths only
+        run: >-
+          ./node_modules/.bin/prettier --write
+          services/mobile-gateway/src/device/index.ts
+          services/mobile-gateway/src/device/registry.ts
+          services/mobile-gateway/src/device/types.ts
+          services/mobile-gateway/test/w14d-device-registration.test.ts
+      - name: Commit exact formatter output to scratch only
+        shell: bash
+        run: |
+          if git diff --quiet -- services/mobile-gateway/src/device services/mobile-gateway/test/w14d-device-registration.test.ts; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add services/mobile-gateway/src/device services/mobile-gateway/test/w14d-device-registration.test.ts
+          git commit -m "chore(W14-D): apply canonical prettier output"
+          git push origin HEAD:scratch/w14d-prettier-ac3317
