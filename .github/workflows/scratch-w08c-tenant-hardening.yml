@@ -1,0 +1,148 @@
+name: Scratch W08-C Tenant Hardening
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.head_ref == 'scratch/w08c-tenant-propagation'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Apply tenant propagation hardening
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f'{path}: expected exactly one match for {old!r}, found {text.count(old)}')
+              p.write_text(text.replace(old, new, 1))
+
+          types = 'packages/providers/src/read/types.ts'
+          replace_once(
+              types,
+              "export interface ProviderReadTransportRequest {\n  readonly provider: string;",
+              "export interface ProviderReadTransportRequest {\n  readonly tenant: TenantContext;\n  readonly provider: string;",
+          )
+          replace_once(
+              types,
+              "export interface ProviderReadSuccess {\n  readonly ok: true;\n  readonly provider: string;",
+              "export interface ProviderReadSuccess {\n  readonly ok: true;\n  readonly tenant: TenantContext;\n  readonly provider: string;",
+          )
+
+          reader = 'packages/providers/src/read/reader.ts'
+          replace_once(
+              reader,
+              "function scopeKey(\n  bindingReference: string,",
+              "function scopeKey(\n  tenantId: string,\n  bindingReference: string,",
+          )
+          replace_once(
+              reader,
+              "return JSON.stringify([\n    bindingReference,",
+              "return JSON.stringify([\n    tenantId,\n    bindingReference,",
+          )
+          replace_once(
+              reader,
+              "const expectedScope = scopeKey(\n    binding.bindingReference,",
+              "const expectedScope = scopeKey(\n    request.tenant.tenantId,\n    binding.bindingReference,",
+          )
+          replace_once(
+              reader,
+              "            {\n              provider: binding.provider,",
+              "            {\n              tenant: request.tenant,\n              provider: binding.provider,",
+          )
+          replace_once(
+              reader,
+              "      readOutcome = {\n        ok: true,\n        provider: binding.provider,",
+              "      readOutcome = {\n        ok: true,\n        tenant: request.tenant,\n        provider: binding.provider,",
+          )
+
+          test = 'packages/providers/test/w08c-read-adapter.test.ts'
+          replace_once(
+              test,
+              "    if (!result.ok) return;\n    assert.equal(result.pagesRead, 2);",
+              "    if (!result.ok) return;\n    assert.equal(result.tenant.tenantId, TENANT_A);\n    assert.equal(result.pagesRead, 2);",
+          )
+          replace_once(
+              test,
+              "    assert.equal(calls[0]?.cursorToken, undefined);",
+              "    assert.equal(calls[0]?.tenant.tenantId, TENANT_A);\n    assert.equal(calls[0]?.cursorToken, undefined);",
+          )
+          marker = "test(\n  'W08-C rejects cursor scope reuse across a different query before credential/provider access',"
+          insertion = """test('W08-C binds continuation cursors to tenant identity before credential/provider access', async () => {
+  const seed = await executeProviderRead(request({ limits: { maxPages: 1, maxItems: 10 } }), {
+    credentials: credentialBackend(),
+    adapter: {
+      async readPage() {
+        return {
+          ok: true,
+          page: { items: [], observedAt: OBSERVED, nextCursorToken: 'cursor-tenant' },
+        };
+      },
+    },
+  });
+  assert.equal(seed.ok, true);
+  if (!seed.ok || seed.continuationCursor === undefined) return;
+
+  let backendCalls = 0;
+  let adapterCalls = 0;
+  const result = await executeProviderRead(
+    request({
+      tenant: { tenantId: TENANT_B },
+      binding: binding({ tenant: { tenantId: TENANT_B } }),
+      cursor: seed.continuationCursor,
+    }),
+    {
+      credentials: credentialBackend(() => {
+        backendCalls += 1;
+      }),
+      adapter: {
+        async readPage() {
+          adapterCalls += 1;
+          return { ok: true, page: { items: [], observedAt: OBSERVED } };
+        },
+      },
+    },
+  );
+
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'CURSOR_SCOPE_MISMATCH',
+    authorizesExecution: false,
+  });
+  assert.equal(backendCalls, 0);
+  assert.equal(adapterCalls, 0);
+});
+
+"""
+          replace_once(test, marker, insertion + marker)
+          PY
+      - name: Format changed provider-read files
+        run: npx prettier --write packages/providers/src/read/types.ts packages/providers/src/read/reader.ts packages/providers/test/w08c-read-adapter.test.ts
+      - name: Validate provider suite
+        run: npm test
+      - name: Commit scratch-only validated output
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/providers/src/read/types.ts packages/providers/src/read/reader.ts packages/providers/test/w08c-read-adapter.test.ts
+          git commit -m 'fix(scratch): bind W08-C observations and cursors to tenant context'
+          git push origin HEAD:${{ github.head_ref }}
