@@ -198,7 +198,9 @@ test('W13-D requires complete responsive Display text, business-name and image c
     { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' },
   );
 
-  const result = planGoogleAdsAssets(fixture({ surface: 'DISPLAY', assets: displayAssets() }, false));
+  const result = planGoogleAdsAssets(
+    fixture({ surface: 'DISPLAY', assets: displayAssets() }, false),
+  );
   assert.equal(result.status, 'READY');
 });
 
@@ -243,13 +245,7 @@ test('W13-D enforces the documented 5120 KB image and logo file-size boundary', 
 
   const overBoundary = pmaxAssets().map((asset) =>
     asset.assetId === 'square-1'
-      ? imageAsset(
-          'square-1',
-          'SQUARE_MARKETING_IMAGE',
-          600,
-          600,
-          MAX_IMAGE_FILE_SIZE_BYTES + 1,
-        )
+      ? imageAsset('square-1', 'SQUARE_MARKETING_IMAGE', 600, 600, MAX_IMAGE_FILE_SIZE_BYTES + 1)
       : asset,
   );
   assert.deepEqual(planGoogleAdsAssets(fixture({ assets: overBoundary })), {
@@ -332,12 +328,20 @@ test('W13-D supports asset-group brand assets only when PMax brand guidelines ar
 test('W13-D requires an explicit YouTube video for YouTube-only planning', () => {
   assert.deepEqual(
     planGoogleAdsAssets(
-      fixture({ surface: 'YOUTUBE', assets: [textAsset('youtube-headline', 'HEADLINE', 'Assista agora')] }, false),
+      fixture(
+        {
+          surface: 'YOUTUBE',
+          assets: [textAsset('youtube-headline', 'HEADLINE', 'Assista agora')],
+        },
+        false,
+      ),
     ),
     { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' },
   );
 
-  const result = planGoogleAdsAssets(fixture({ surface: 'YOUTUBE', assets: [videoAsset()] }, false));
+  const result = planGoogleAdsAssets(
+    fixture({ surface: 'YOUTUBE', assets: [videoAsset()] }, false),
+  );
   assert.equal(result.status, 'READY');
   if (result.status !== 'READY') return;
   assert.equal(result.plan.constraints.providerAutomationExpected, false);
@@ -448,27 +452,4 @@ test('W13-D fails closed on provenance, duplicate assets, malformed costs and in
     ),
     { status: 'BLOCKED', code: 'INVALID_CAPABILITY' },
   );
-});
-
-const TEMP_W13D_PRETTIER_DIAGNOSTIC_MARKER = true;
-test('TEMP W13-D canonical format diagnostic', async () => {
-  assert.equal(TEMP_W13D_PRETTIER_DIAGNOSTIC_MARKER, true);
-  // @ts-expect-error -- revenue harness has no @types/node; diagnostic is removed before acceptance.
-  const { readFile } = await import('node:fs/promises');
-  const { format } = await import('prettier');
-  const raw = await readFile('packages/revenue/test/w13d-google-ads-asset-planning.test.ts', 'utf8');
-  const marker = raw.indexOf('\nconst TEMP_W13D_PRETTIER_DIAGNOSTIC_MARKER');
-  const candidate = `${raw.slice(0, marker)}\n`;
-  const formatted = await format(candidate, {
-    parser: 'typescript',
-    arrowParens: 'always',
-    endOfLine: 'lf',
-    printWidth: 100,
-    semi: true,
-    singleQuote: true,
-    tabWidth: 2,
-    trailingComma: 'all',
-    useTabs: false,
-  });
-  console.log('W13D_PRETTIER_OUTPUT_START\n' + formatted + 'W13D_PRETTIER_OUTPUT_END');
 });
