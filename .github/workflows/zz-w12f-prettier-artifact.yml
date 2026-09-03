@@ -1,0 +1,30 @@
+name: TEMP W12-F Prettier Artifact
+
+on:
+  push:
+    branches:
+      - wave/12f-meta-ads-analytics
+    paths:
+      - .github/workflows/zz-w12f-prettier-artifact.yml
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npx prettier@3.9.6 --write packages/revenue/src/meta-ads/analytics.ts packages/revenue/test/w12f-meta-ads-analytics.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w12f-prettier-output
+          path: |
+            packages/revenue/src/meta-ads/analytics.ts
+            packages/revenue/test/w12f-meta-ads-analytics.test.ts
+          retention-days: 1
