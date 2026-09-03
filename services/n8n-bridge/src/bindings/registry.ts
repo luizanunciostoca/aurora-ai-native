@@ -6,6 +6,7 @@ import type {
   N8nWorkflowBindingResult,
   N8nWorkflowBindingStatus,
   N8nWorkflowBindingValidationError,
+  N8nWorkflowSanitizedLineage,
 } from './types.js';
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
@@ -38,7 +39,6 @@ function hasForbiddenMaterial(value: unknown, seen = new Set<object>()): boolean
   if (seen.has(value)) return false;
   seen.add(value);
   if (Array.isArray(value)) return value.some((entry) => hasForbiddenMaterial(entry, seen));
-
   for (const [key, child] of Object.entries(value)) {
     if (FORBIDDEN_KEYS.has(key.toLowerCase())) return true;
     if (hasForbiddenMaterial(child, seen)) return true;
@@ -65,9 +65,7 @@ function validHash(value: unknown): value is string {
 }
 
 function validTimestamp(value: unknown): value is string {
-  if (typeof value !== 'string' || !value.endsWith('Z')) return false;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
+  return typeof value === 'string' && value.endsWith('Z') && Number.isFinite(Date.parse(value));
 }
 
 function validStringArray(value: unknown): value is readonly string[] {
@@ -83,6 +81,15 @@ function promotable(binding: N8nWorkflowBinding): boolean {
     binding.provenance.licenseStatus !== 'REFERENCE_ONLY' &&
     binding.provenance.licenseStatus !== 'PROVENANCE_HOLD'
   );
+}
+
+function normalizeLineage(value: Record<string, unknown> | null): N8nWorkflowSanitizedLineage | null {
+  if (value === null) return null;
+  return Object.freeze({
+    corpusReference: value.corpusReference as string,
+    sourceEntryHash: value.sourceEntryHash as string,
+    sanitizerVersion: value.sanitizerVersion as string,
+  });
 }
 
 export function validateN8nWorkflowBinding(
@@ -139,8 +146,9 @@ export function validateN8nWorkflowBinding(
   ) {
     return { ok: false, error: 'INVALID_SCHEMA' };
   }
-  if (!validIdentifier(workflow.workflowReference)) return { ok: false, error: 'INVALID_IDENTIFIER' };
-  if (!validVersion(workflow.workflowVersion)) return { ok: false, error: 'INVALID_VERSION' };
+  if (!validIdentifier(workflow.workflowReference) || !validIdentifier(workflow.workflowVersion)) {
+    return { ok: false, error: 'INVALID_IDENTIFIER' };
+  }
   if (!validHash(workflow.workflowHash)) return { ok: false, error: 'INVALID_HASH' };
 
   const capability = input.capability;
@@ -187,21 +195,22 @@ export function validateN8nWorkflowBinding(
     return { ok: false, error: 'INVALID_PROVENANCE' };
   }
 
-  const lineage = provenance.sanitizedLineage;
-  if (lineage !== null) {
+  const rawLineage = provenance.sanitizedLineage;
+  if (rawLineage !== null) {
     if (
-      !isRecord(lineage) ||
-      !exactKeys(lineage, ['corpusReference', 'sourceEntryHash', 'sanitizerVersion']) ||
-      !validIdentifier(lineage.corpusReference) ||
-      !validHash(lineage.sourceEntryHash) ||
-      !validVersion(lineage.sanitizerVersion)
+      !isRecord(rawLineage) ||
+      !exactKeys(rawLineage, ['corpusReference', 'sourceEntryHash', 'sanitizerVersion']) ||
+      !validIdentifier(rawLineage.corpusReference) ||
+      !validHash(rawLineage.sourceEntryHash) ||
+      !validVersion(rawLineage.sanitizerVersion)
     ) {
       return { ok: false, error: 'INVALID_PROVENANCE' };
     }
   }
-  if (provenance.sourceKind === 'SANITIZED_CORPUS' && lineage === null) {
+  if (provenance.sourceKind === 'SANITIZED_CORPUS' && rawLineage === null) {
     return { ok: false, error: 'INVALID_PROVENANCE' };
   }
+  const lineage = normalizeLineage(rawLineage as Record<string, unknown> | null);
 
   const credentialRequirements = input.credentialRequirements;
   if (!Array.isArray(credentialRequirements)) return { ok: false, error: 'INVALID_SCHEMA' };
@@ -259,28 +268,21 @@ export function validateN8nWorkflowBinding(
       sourceReference: provenance.sourceReference,
       sourceHash: provenance.sourceHash,
       licenseStatus: provenance.licenseStatus,
-      sanitizedLineage:
-        lineage === null
-          ? null
-          : Object.freeze({
-              corpusReference: lineage.corpusReference,
-              sourceEntryHash: lineage.sourceEntryHash,
-              sanitizerVersion: lineage.sanitizerVersion,
-            }),
+      sanitizedLineage: lineage,
     }),
     credentialRequirements: Object.freeze(
       credentialRequirements
         .map((requirement) =>
           Object.freeze({
-            credentialReference: requirement.credentialReference as string,
-            integration: requirement.integration as string,
+            credentialReference: (requirement as Record<string, unknown>).credentialReference as string,
+            integration: (requirement as Record<string, unknown>).integration as string,
           }),
         )
-        .sort((left, right) =>
-          `${left.integration}:${left.credentialReference}`.localeCompare(
-            `${right.integration}:${right.credentialReference}`,
-          ),
-        ),
+        .sort((left, right) => {
+          const leftKey = `${left.integration}:${left.credentialReference}`;
+          const rightKey = `${right.integration}:${right.credentialReference}`;
+          return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+        }),
     ),
     compatibility: Object.freeze({
       contractVersion: compatibility.contractVersion,
@@ -423,13 +425,10 @@ export class N8nWorkflowBindingRegistry {
   }
 
   resolve(lookup: N8nWorkflowBindingLookup): N8nWorkflowBindingResult<N8nWorkflowBinding> {
-    if (
-      !validIdentifier(lookup.tenantId) ||
-      !validIdentifier(lookup.bindingId) ||
-      !validVersion(lookup.bindingVersion)
-    ) {
+    if (!validIdentifier(lookup.tenantId) || !validIdentifier(lookup.bindingId)) {
       return { ok: false, error: 'INVALID_IDENTIFIER' };
     }
+    if (!validVersion(lookup.bindingVersion)) return { ok: false, error: 'INVALID_VERSION' };
     const record = this.records.get(recordKey(lookup.tenantId, lookup.bindingId, lookup.bindingVersion));
     if (record === undefined) {
       return this.missingResult(lookup.tenantId, lookup.bindingId, lookup.bindingVersion);
@@ -472,13 +471,11 @@ export class N8nWorkflowBindingRegistry {
   }
 
   snapshot(): N8nWorkflowBindingRegistrySnapshot {
-    const bindings = [...this.records.values()]
-      .map(project)
-      .sort((left, right) =>
-        `${left.tenantId}:${left.bindingId}:${left.bindingVersion}`.localeCompare(
-          `${right.tenantId}:${right.bindingId}:${right.bindingVersion}`,
-        ),
-      );
+    const bindings = [...this.records.values()].map(project).sort((left, right) => {
+      const leftKey = `${left.tenantId}:${left.bindingId}:${left.bindingVersion}`;
+      const rightKey = `${right.tenantId}:${right.bindingId}:${right.bindingVersion}`;
+      return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+    });
     return Object.freeze({
       bindings: Object.freeze(bindings),
       lifecycle: Object.freeze(this.events.map((event) => Object.freeze({ ...event }))),
