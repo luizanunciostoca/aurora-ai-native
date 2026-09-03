@@ -163,7 +163,10 @@ function validFinancialScope(scope: GoogleAdsFinancialScope): boolean {
   );
 }
 
-function validSurfaceForResource(surface: GoogleAdsSurface, resourceKind: GoogleAdsResourceKind): boolean {
+function validSurfaceForResource(
+  surface: GoogleAdsSurface,
+  resourceKind: GoogleAdsResourceKind,
+): boolean {
   if (resourceKind === 'KEYWORD') return surface === 'KEYWORD' || surface === 'SEARCH';
   if (resourceKind === 'CONVERSION_ACTION') return surface === 'CONVERSION';
   if (surface === 'KEYWORD' || surface === 'CONVERSION') return false;
