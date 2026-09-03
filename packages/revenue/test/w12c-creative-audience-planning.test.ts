@@ -17,7 +17,9 @@ const TENANT = 'ten_01JW12CTENANT000000000000' as TenantId;
 const OTHER_TENANT = 'ten_01JW12COTHER0000000000000' as TenantId;
 const CORRELATION = 'cor_01JW12CCORRELATION0000000' as CorrelationId;
 
-function domainPlan(operation: 'CREATE_PAUSED' | 'ACTIVATE' = 'CREATE_PAUSED'): MetaAdsCapabilityPlan {
+function domainPlan(
+  operation: 'CREATE_PAUSED' | 'ACTIVATE' = 'CREATE_PAUSED',
+): MetaAdsCapabilityPlan {
   const result = planMetaAdsDomainIntent({
     tenantId: TENANT,
     correlationId: CORRELATION,
@@ -66,7 +68,9 @@ function fact(overrides: Partial<W12VerifiedPlanningFact> = {}): W12VerifiedPlan
   };
 }
 
-function template(overrides: Partial<W12CreativeAudienceTemplate> = {}): W12CreativeAudienceTemplate {
+function template(
+  overrides: Partial<W12CreativeAudienceTemplate> = {},
+): W12CreativeAudienceTemplate {
   return {
     templateId: 'template:nightlife-safe:v2',
     tenantId: TENANT,
@@ -82,7 +86,9 @@ function template(overrides: Partial<W12CreativeAudienceTemplate> = {}): W12Crea
   };
 }
 
-function input(overrides: Partial<W12CreativeAudiencePlanningInput> = {}): W12CreativeAudiencePlanningInput {
+function input(
+  overrides: Partial<W12CreativeAudiencePlanningInput> = {},
+): W12CreativeAudiencePlanningInput {
   return {
     tenantId: TENANT,
     correlationId: CORRELATION,
@@ -214,7 +220,9 @@ test('escalates policy review, stale facts, conflicts and high uncertainty', () 
 });
 
 test('enforces tenant/domain-plan/template and audience-bound isolation', () => {
-  const crossTenantFact = planCreativeAndAudience(input({ facts: [fact({ tenantId: OTHER_TENANT })] }));
+  const crossTenantFact = planCreativeAndAudience(
+    input({ facts: [fact({ tenantId: OTHER_TENANT })] }),
+  );
   assert.deepEqual(crossTenantFact, { status: 'BLOCKED', code: 'DOMAIN_PLAN_MISMATCH' });
 
   const wrongDomainPlan = planCreativeAndAudience(
