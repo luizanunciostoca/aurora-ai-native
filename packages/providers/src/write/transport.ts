@@ -112,8 +112,7 @@ function isTimestamp(value: unknown): value is string {
 
 function isSafeMode(value: unknown): value is ProviderWriteSafeMode {
   return (
-    typeof value === 'string' &&
-    PROVIDER_WRITE_SAFE_MODES.includes(value as ProviderWriteSafeMode)
+    typeof value === 'string' && PROVIDER_WRITE_SAFE_MODES.includes(value as ProviderWriteSafeMode)
   );
 }
 
@@ -324,7 +323,9 @@ export async function executeGovernedProviderWrite(
   }
   if (Date.parse(deadlineAt) <= Date.parse(request.now)) return fail('DEADLINE_EXPIRED');
 
-  if (!executionProofValid(request.executionProof, request.actionIntent.actionIntentId, request.now)) {
+  if (
+    !executionProofValid(request.executionProof, request.actionIntent.actionIntentId, request.now)
+  ) {
     return fail('EXECUTION_PROOF_INVALID');
   }
 
@@ -400,9 +401,7 @@ export async function executeGovernedProviderWrite(
       if (!transport.ok) {
         transportOutcome = fail(transport.error, {
           mutationPossible: transport.mutationPossible,
-          ...(transport.retryAfterMs === undefined
-            ? {}
-            : { retryAfterMs: transport.retryAfterMs }),
+          ...(transport.retryAfterMs === undefined ? {} : { retryAfterMs: transport.retryAfterMs }),
           ...(transport.providerReference === undefined
             ? {}
             : { providerReference: transport.providerReference }),
