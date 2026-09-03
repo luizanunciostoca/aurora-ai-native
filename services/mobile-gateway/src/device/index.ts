@@ -1,0 +1,20 @@
+export { InMemoryDeviceRegistry, isDeviceId, parseDeviceId } from './registry.js';
+export {
+  DEVICE_LIFECYCLE_STATES,
+  type DeviceId,
+  type DeviceLifecycleState,
+  type DeviceRef,
+  type DeviceRegistrationError,
+  type DeviceRegistrationProvenance,
+  type DeviceRegistrationRecord,
+  type DeviceRegistrationRequest,
+  type DeviceRegistrationResult,
+  type DeviceResolutionError,
+  type DeviceResolutionResult,
+  type DeviceReregistrationPolicy,
+  type DeviceTransition,
+  type DeviceTransitionError,
+  type DeviceTransitionRequest,
+  type DeviceTransitionResult,
+  type ResolveDeviceRequest,
+} from './types.js';
