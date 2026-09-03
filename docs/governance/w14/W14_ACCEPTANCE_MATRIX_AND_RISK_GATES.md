@@ -1,6 +1,7 @@
 # W14 — Acceptance Matrix & Risk Gates
 
-Status: `CANDIDATE_FREEZE_W14_00`
+Status: `CANDIDATE_FREEZE_W14_00_RECONCILED`
+Reconciled main snapshot: `76aaa67a1f4f8f74b53c3340638c3b579a6c86e3`
 
 ## Universal acceptance discipline
 
@@ -12,8 +13,7 @@ Every W14 BUILD node must satisfy on the same exact final candidate HEAD:
 - cleanup / duplicate-source-of-truth / scope-leak audit;
 - deterministic positive, negative and boundary tests proportional to scope;
 - Risk Gates A-D;
-- independent Program Control review/acceptance;
-- live-main revalidation immediately before controlled merge;
+- live-main revalidation immediately before protected expected-head merge;
 - post-merge exact-main verification before releasing descendants.
 
 Any candidate movement, reconciliation or rebase invalidates prior exact-head evidence until the required gates are rerun.
@@ -30,7 +30,7 @@ Any candidate movement, reconciliation or rebase invalidates prior exact-head ev
 | W03/W07 reuse | no duplicate durability/executor semantics | yes |
 | DP3 barrier | remains closed until W14-H accepted/post-merge verified | yes |
 | exact-head CI | Q/TB/S all SUCCESS on final W14-00 HEAD | yes |
-| independent acceptance | connected author identity must not self-accept/self-merge | yes |
+| governed acceptance | Single-Owner Governed Acceptance lifecycle completed without stale evidence | yes |
 
 Acceptance of W14-00 releases only W14-A and W14-D.
 

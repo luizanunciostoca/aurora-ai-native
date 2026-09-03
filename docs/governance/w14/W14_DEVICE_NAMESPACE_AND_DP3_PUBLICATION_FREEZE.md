@@ -1,6 +1,7 @@
 # W14 — Device Namespace & DP3 Publication Freeze
 
-Status: `CANDIDATE_FREEZE_W14_00`
+Status: `CANDIDATE_FREEZE_W14_00_RECONCILED`
+Reconciled main snapshot: `76aaa67a1f4f8f74b53c3340638c3b579a6c86e3`
 
 This document freezes gateway/device-session semantics only. It does not publish runtime contracts or implement device execution.
 
@@ -61,7 +62,7 @@ Receipt or acknowledgement presence is not verified external state. W07 readback
 
 ## DP3 publication barrier
 
-`DP3 — W14 Device Gateway/session contracts accepted` remains CLOSED until W14-H is independently accepted and merged.
+`DP3 — W14 Device Gateway/session contracts accepted` remains CLOSED until W14-H satisfies Single-Owner Governed Acceptance, merges under protected exact-head conditions, and passes post-merge exact-main verification.
 
 DP3 opens only after all of the following are proven on the final W14-H exact HEAD and then post-merge exact main:
 
@@ -71,7 +72,7 @@ DP3 opens only after all of the following are proven on the final W14-H exact HE
 4. Exactly one accepted DeviceId/DeviceRef public namespace exists and remains compatible with W07 DEVICE target semantics.
 5. Quality, Test Build and Security are green on the same final HEAD.
 6. Risk Gates A-D pass with no release blocker.
-7. Independent Program Control acceptance and controlled merge complete.
+7. Live-main and exact-head revalidation complete immediately before protected merge.
 8. Post-merge exact-main verification is green and the explicit W15 handoff/publication surface is recorded.
 
 Until DP3 opens, W15 implementation remains dependency-gated even if Android/mobile scaffolds exist.

@@ -1,19 +1,20 @@
 # W14 — Gateway & Device Session Wave Charter
 
-Status: `CANDIDATE_COORDINATION_FREEZE_W14_00`
+Status: `CANDIDATE_COORDINATION_FREEZE_W14_00_RECONCILED`
 Task: `W14-00`
 Issue: `#114`
-Exact BUILD base: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
+Reconciled main snapshot: `76aaa67a1f4f8f74b53c3340638c3b579a6c86e3`
+Historical candidate base: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
 
 ## Authority and dependency proof
 
 W14-00 is a governance-only coordination node. Live `main`, accepted exact-SHA/PR evidence, `CURRENT_PROGRAM_STATUS.md`, Developer Manual v0.5, ADR-002, canonical Device Plane governance in Drive and accepted owning-wave documents remain superior authority.
 
-The graph prerequisites for W14-00 are satisfied on the exact base used here:
+The graph prerequisites for W14-00 remain satisfied on the reconciled main snapshot:
 
 - W05-H accepted; W05 complete at accepted merge anchor `8deb67875ba6f3fecd7494f7cc955d5965543e3a`.
 - W07-H accepted; W07 complete at accepted merge anchor `3bf15c8d09e01be68bc5a4de1cd04defcb8b5025`.
-- Device Plane DP0 is accepted for planning. DP1/W04 and DP2/W07 are satisfied by the accepted program state; DP3 is owned by W14 and remains pending until W14-H acceptance.
+- Device Plane DP0 is accepted for planning. DP1/W04 and DP2/W07 remain satisfied by the accepted program state; DP3 is owned by W14 and remains pending until W14-H acceptance.
 
 ## Mission
 
@@ -71,4 +72,4 @@ W14 reserves exactly one canonical `DeviceId` and one canonical `DeviceRef` conc
 
 This node may change governance only under `docs/governance/w14/**`. It must not create runtime contracts/schemas/services, Android code, device secrets, real command delivery or side effects.
 
-Acceptance requires same-exact-HEAD Quality, Test Build and Security; cleanup/source-of-truth/scope audit; Risk Gates A-D; independent Program Control acceptance; immediate live-main revalidation before controlled merge; and post-merge exact-main verification.
+Acceptance follows the current Single-Owner Governed Acceptance lifecycle: same-exact-HEAD Quality, Test Build and Security; cleanup/source-of-truth/scope audit; Risk Gates A-D; live-main revalidation immediately before protected expected-head merge; then post-merge exact-main verification before `aurora:accepted` and descendant release.

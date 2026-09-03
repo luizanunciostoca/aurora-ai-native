@@ -1,13 +1,14 @@
 # W14 — Dependency Matrix
 
-Status: `CANDIDATE_FREEZE_W14_00`
-Exact base: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
+Status: `CANDIDATE_FREEZE_W14_00_RECONCILED`
+Reconciled main snapshot: `76aaa67a1f4f8f74b53c3340638c3b579a6c86e3`
+Historical candidate base: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
 
 ## Internal DAG
 
 | Node | Hard predecessors | Primary output | Release note |
 | --- | --- | --- | --- |
-| W14-00 | W05-H, W07-H | gateway/device namespace + risk freeze | governance-only; independent acceptance required |
+| W14-00 | W05-H, W07-H | gateway/device namespace + risk freeze | governance-only; governed acceptance required |
 | W14-A | W14-00 | authenticated gateway transport | transport auth never action authority |
 | W14-D | W14-00 | canonical DeviceId/DeviceRef + registration lifecycle | sole W14 device identifier publication node |
 | W14-B | W14-A, W14-D | realtime command/job session model | transport only; no side effects |
@@ -49,4 +50,4 @@ W15 remains blocked until W14-H/DP3 is accepted plus all other W15 prerequisites
 
 ## Stale evidence rule
 
-If live main or a candidate HEAD moves, previously green CI/review for a different exact SHA is stale. Reconcile with current accepted dependencies and rerun all required gates before acceptance or descendant release.
+Every W14 acceptance decision uses current live main and exact candidate HEAD evidence. If either moves, previous CI/review evidence is stale and must be rerun. Single-Owner Governed Acceptance does not waive exact-SHA, post-merge verification or dependency-release requirements.
