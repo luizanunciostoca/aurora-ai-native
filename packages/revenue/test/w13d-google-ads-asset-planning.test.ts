@@ -14,6 +14,7 @@ import {
 const TENANT = 'ten_01JW13DTENANT000000000000' as TenantId;
 const CORRELATION = 'cor_01JW13DCORRELATION000000' as CorrelationId;
 const HASH_A = `sha256:${'a'.repeat(64)}`;
+const MAX_IMAGE_FILE_SIZE_BYTES = 5_120 * 1_024;
 
 function provenance(id: string) {
   return {
@@ -25,7 +26,7 @@ function provenance(id: string) {
 
 function textAsset(
   assetId: string,
-  kind: 'HEADLINE' | 'LONG_HEADLINE' | 'DESCRIPTION',
+  kind: 'HEADLINE' | 'LONG_HEADLINE' | 'DESCRIPTION' | 'BUSINESS_NAME',
   text: string,
 ): GoogleAdsPlanningAsset {
   return { assetId, kind, text, provenance: provenance(assetId) };
@@ -36,6 +37,7 @@ function imageAsset(
   kind: 'MARKETING_IMAGE' | 'SQUARE_MARKETING_IMAGE' | 'LOGO_IMAGE',
   width: number,
   height: number,
+  fileSizeBytes = 1_000_000,
 ): GoogleAdsPlanningAsset {
   return {
     assetId,
@@ -45,6 +47,7 @@ function imageAsset(
       mimeType: 'image/png',
       width,
       height,
+      fileSizeBytes,
     },
     provenance: provenance(assetId),
   };
@@ -63,6 +66,18 @@ function videoAsset(assetId = 'video-1', durationSeconds = 30): GoogleAdsPlannin
   };
 }
 
+function campaignBrandContext() {
+  return {
+    source: 'W08_VERIFIED_GOOGLE_ADS_BRAND_CONTEXT',
+    brandGuidelinesEnabled: true,
+    linkageScope: 'CAMPAIGN',
+    businessNameAssetCount: 1,
+    logoAssetCount: 1,
+    verifiedAt: '2026-09-03T11:00:00.000Z',
+    authorizesExecution: false,
+  } as const;
+}
+
 function pmaxAssets(): readonly GoogleAdsPlanningAsset[] {
   return [
     textAsset('headline-3', 'HEADLINE', 'Reserve sua experiência'),
@@ -77,6 +92,21 @@ function pmaxAssets(): readonly GoogleAdsPlanningAsset[] {
     ),
     imageAsset('landscape-1', 'MARKETING_IMAGE', 1200, 628),
     imageAsset('square-1', 'SQUARE_MARKETING_IMAGE', 600, 600),
+  ];
+}
+
+function displayAssets(): readonly GoogleAdsPlanningAsset[] {
+  return [
+    textAsset('display-headline', 'HEADLINE', 'Conheça a experiência'),
+    textAsset(
+      'display-long',
+      'LONG_HEADLINE',
+      'Descubra uma experiência criada para momentos especiais',
+    ),
+    textAsset('display-description', 'DESCRIPTION', 'Veja detalhes e planeje sua visita.'),
+    textAsset('display-business', 'BUSINESS_NAME', 'Toca do Morcego'),
+    imageAsset('display-landscape', 'MARKETING_IMAGE', 1200, 628),
+    imageAsset('display-square', 'SQUARE_MARKETING_IMAGE', 600, 600),
   ];
 }
 
@@ -106,6 +136,7 @@ function fixture(
       rationaleReference: 'evidence:w13d:template-standard',
     },
     assets: pmaxAssets(),
+    performanceMaxBrandContext: campaignBrandContext(),
     ...overrides,
   };
 }
@@ -129,6 +160,7 @@ test('W13-D creates a deterministic PMax plan without granting provider or finan
     result.plan.assets.map((asset) => asset.assetId),
     [...result.plan.assets.map((asset) => asset.assetId)].sort(),
   );
+  assert.equal(result.plan.performanceMaxBrandContext?.linkageScope, 'CAMPAIGN');
 });
 
 test('W13-D escalates ambiguous custom creative strategy instead of widening authority', () => {
@@ -156,30 +188,45 @@ test('W13-D rejects text that exceeds current provider planning constraints', ()
   });
 });
 
-test('W13-D requires complete responsive Display text and image classes', () => {
-  const displayAssets: readonly GoogleAdsPlanningAsset[] = [
-    textAsset('display-headline', 'HEADLINE', 'Conheça a experiência'),
-    textAsset(
-      'display-long',
-      'LONG_HEADLINE',
-      'Descubra uma experiência criada para momentos especiais',
+test('W13-D requires complete responsive Display text, business-name and image classes', () => {
+  const missingSquare = displayAssets().filter((asset) => asset.kind !== 'SQUARE_MARKETING_IMAGE');
+  assert.deepEqual(
+    planGoogleAdsAssets(
+      fixture({ surface: 'DISPLAY', assets: missingSquare, performanceMaxBrandContext: undefined }),
     ),
-    textAsset('display-description', 'DESCRIPTION', 'Veja detalhes e planeje sua visita.'),
-    imageAsset('display-landscape', 'MARKETING_IMAGE', 1200, 628),
-  ];
-
-  assert.deepEqual(planGoogleAdsAssets(fixture({ surface: 'DISPLAY', assets: displayAssets })), {
-    status: 'BLOCKED',
-    code: 'MISSING_REQUIRED_ASSET',
-  });
+    { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' },
+  );
 
   const result = planGoogleAdsAssets(
-    fixture({
-      surface: 'DISPLAY',
-      assets: [...displayAssets, imageAsset('display-square', 'SQUARE_MARKETING_IMAGE', 600, 600)],
-    }),
+    fixture({ surface: 'DISPLAY', assets: displayAssets(), performanceMaxBrandContext: undefined }),
   );
   assert.equal(result.status, 'READY');
+});
+
+test('W13-D rejects missing or overlong responsive Display business name', () => {
+  const missingBusiness = displayAssets().filter((asset) => asset.kind !== 'BUSINESS_NAME');
+  assert.deepEqual(
+    planGoogleAdsAssets(
+      fixture({ surface: 'DISPLAY', assets: missingBusiness, performanceMaxBrandContext: undefined }),
+    ),
+    { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' },
+  );
+
+  const overlongBusiness = displayAssets().map((asset) =>
+    asset.kind === 'BUSINESS_NAME'
+      ? textAsset(asset.assetId, 'BUSINESS_NAME', 'x'.repeat(26))
+      : asset,
+  );
+  assert.deepEqual(
+    planGoogleAdsAssets(
+      fixture({
+        surface: 'DISPLAY',
+        assets: overlongBusiness,
+        performanceMaxBrandContext: undefined,
+      }),
+    ),
+    { status: 'BLOCKED', code: 'ASSET_CONSTRAINT_VIOLATION' },
+  );
 });
 
 test('W13-D rejects image dimensions or aspect ratios outside the provider boundary', () => {
@@ -195,18 +242,117 @@ test('W13-D rejects image dimensions or aspect ratios outside the provider bound
   });
 });
 
+test('W13-D enforces the documented 5120 KB image and logo file-size boundary', () => {
+  const atBoundary = pmaxAssets().map((asset) =>
+    asset.assetId === 'square-1'
+      ? imageAsset('square-1', 'SQUARE_MARKETING_IMAGE', 600, 600, MAX_IMAGE_FILE_SIZE_BYTES)
+      : asset,
+  );
+  assert.equal(planGoogleAdsAssets(fixture({ assets: atBoundary })).status, 'READY');
+
+  const overBoundary = pmaxAssets().map((asset) =>
+    asset.assetId === 'square-1'
+      ? imageAsset(
+          'square-1',
+          'SQUARE_MARKETING_IMAGE',
+          600,
+          600,
+          MAX_IMAGE_FILE_SIZE_BYTES + 1,
+        )
+      : asset,
+  );
+  assert.deepEqual(planGoogleAdsAssets(fixture({ assets: overBoundary })), {
+    status: 'BLOCKED',
+    code: 'ASSET_CONSTRAINT_VIOLATION',
+  });
+});
+
+test('W13-D requires verified PMax brand context and correct linkage scope', () => {
+  assert.deepEqual(planGoogleAdsAssets(fixture({ performanceMaxBrandContext: undefined })), {
+    status: 'BLOCKED',
+    code: 'INVALID_BRAND_CONTEXT',
+  });
+
+  assert.deepEqual(
+    planGoogleAdsAssets(
+      fixture({
+        performanceMaxBrandContext: {
+          ...campaignBrandContext(),
+          linkageScope: 'ASSET_GROUP',
+        },
+      }),
+    ),
+    { status: 'BLOCKED', code: 'INVALID_BRAND_CONTEXT' },
+  );
+
+  assert.deepEqual(
+    planGoogleAdsAssets(
+      fixture({
+        performanceMaxBrandContext: {
+          ...campaignBrandContext(),
+          businessNameAssetCount: 0,
+        },
+      }),
+    ),
+    { status: 'BLOCKED', code: 'INVALID_BRAND_CONTEXT' },
+  );
+});
+
+test('W13-D supports asset-group brand assets only when PMax brand guidelines are disabled', () => {
+  const assets = [
+    ...pmaxAssets(),
+    textAsset('business-name-1', 'BUSINESS_NAME', 'Toca do Morcego'),
+    imageAsset('brand-logo-1', 'LOGO_IMAGE', 128, 128),
+  ];
+  const result = planGoogleAdsAssets(
+    fixture({
+      assets,
+      performanceMaxBrandContext: {
+        source: 'W08_VERIFIED_GOOGLE_ADS_BRAND_CONTEXT',
+        brandGuidelinesEnabled: false,
+        linkageScope: 'ASSET_GROUP',
+        businessNameAssetCount: 1,
+        logoAssetCount: 1,
+        verifiedAt: '2026-09-03T11:00:00.000Z',
+        authorizesExecution: false,
+      },
+    }),
+  );
+  assert.equal(result.status, 'READY');
+
+  assert.deepEqual(
+    planGoogleAdsAssets(
+      fixture({
+        performanceMaxBrandContext: {
+          source: 'W08_VERIFIED_GOOGLE_ADS_BRAND_CONTEXT',
+          brandGuidelinesEnabled: false,
+          linkageScope: 'ASSET_GROUP',
+          businessNameAssetCount: 1,
+          logoAssetCount: 1,
+          verifiedAt: '2026-09-03T11:00:00.000Z',
+          authorizesExecution: false,
+        },
+      }),
+    ),
+    { status: 'BLOCKED', code: 'INVALID_BRAND_CONTEXT' },
+  );
+});
+
 test('W13-D requires an explicit YouTube video for YouTube-only planning', () => {
   assert.deepEqual(
     planGoogleAdsAssets(
       fixture({
         surface: 'YOUTUBE',
         assets: [textAsset('youtube-headline', 'HEADLINE', 'Assista agora')],
+        performanceMaxBrandContext: undefined,
       }),
     ),
     { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' },
   );
 
-  const result = planGoogleAdsAssets(fixture({ surface: 'YOUTUBE', assets: [videoAsset()] }));
+  const result = planGoogleAdsAssets(
+    fixture({ surface: 'YOUTUBE', assets: [videoAsset()], performanceMaxBrandContext: undefined }),
+  );
   assert.equal(result.status, 'READY');
   if (result.status !== 'READY') return;
   assert.equal(result.plan.constraints.providerAutomationExpected, false);
@@ -237,43 +383,39 @@ test('W13-D enforces current PMax provider maxima and minimum supplied-video dur
 });
 
 test('W13-D enforces responsive Display combined-media and video maxima', () => {
-  const baseDisplay: readonly GoogleAdsPlanningAsset[] = [
-    textAsset('display-headline-max', 'HEADLINE', 'Conheça a experiência'),
-    textAsset(
-      'display-long-max',
-      'LONG_HEADLINE',
-      'Descubra uma experiência criada para momentos especiais',
-    ),
-    textAsset('display-description-max', 'DESCRIPTION', 'Veja detalhes e planeje sua visita.'),
-    imageAsset('display-landscape-max', 'MARKETING_IMAGE', 1200, 628),
-    imageAsset('display-square-max', 'SQUARE_MARKETING_IMAGE', 600, 600),
-  ];
-
   const tooManyImages = [
-    ...baseDisplay,
+    ...displayAssets(),
     ...Array.from({ length: 14 }, (_, index) =>
       imageAsset(`display-extra-${index}`, 'MARKETING_IMAGE', 1200, 628),
     ),
   ];
-  assert.deepEqual(planGoogleAdsAssets(fixture({ surface: 'DISPLAY', assets: tooManyImages })), {
-    status: 'BLOCKED',
-    code: 'MISSING_REQUIRED_ASSET',
-  });
+  assert.deepEqual(
+    planGoogleAdsAssets(
+      fixture({ surface: 'DISPLAY', assets: tooManyImages, performanceMaxBrandContext: undefined }),
+    ),
+    { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' },
+  );
 
   const tooManyVideos = [
-    ...baseDisplay,
+    ...displayAssets(),
     ...Array.from({ length: 6 }, (_, index) => videoAsset(`display-video-${index}`)),
   ];
-  assert.deepEqual(planGoogleAdsAssets(fixture({ surface: 'DISPLAY', assets: tooManyVideos })), {
-    status: 'BLOCKED',
-    code: 'MISSING_REQUIRED_ASSET',
-  });
+  assert.deepEqual(
+    planGoogleAdsAssets(
+      fixture({ surface: 'DISPLAY', assets: tooManyVideos, performanceMaxBrandContext: undefined }),
+    ),
+    { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' },
+  );
 });
 
 test('W13-D rejects logo dimensions that match neither supported Google Ads logo ratio', () => {
   assert.deepEqual(
     planGoogleAdsAssets(
-      fixture({ assets: [...pmaxAssets(), imageAsset('invalid-logo', 'LOGO_IMAGE', 400, 300)] }),
+      fixture({
+        surface: 'DISPLAY',
+        assets: [...displayAssets(), imageAsset('invalid-logo', 'LOGO_IMAGE', 400, 300)],
+        performanceMaxBrandContext: undefined,
+      }),
     ),
     { status: 'BLOCKED', code: 'ASSET_CONSTRAINT_VIOLATION' },
   );
