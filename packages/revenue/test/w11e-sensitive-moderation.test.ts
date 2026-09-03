@@ -180,7 +180,6 @@ test('W11-E produces no response or moderation action for terminally deleted inb
       inbound: inbound({
         change: 'DELETED',
         deleted: true,
-        content: undefined,
         route: 'NO_RESPONSE_DELETED',
       }),
       context: context(),
