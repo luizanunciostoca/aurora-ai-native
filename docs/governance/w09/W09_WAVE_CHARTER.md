@@ -1,8 +1,8 @@
 # W09 — Governed n8n Workflow Fabric
 
 Status: `W09_00_BUILD_CANDIDATE / GOVERNANCE_FREEZE`
-Date: 2026-09-02
-Base exact main at branch creation: `5715ffa4e9d4cd628c1f6d4d6e7a3410ea3d5324`
+Date: 2026-09-03
+Reconciled exact base: `3ed51de66f3925c41c3a02a83de58b956e1cd1a9`
 Task: `W09-00`
 
 ## 1. Mission
@@ -76,4 +76,13 @@ W09-00 does not implement n8n API calls, workflow registration, webhooks, schedu
 
 ## 8. Acceptance rule
 
-W09-00 acceptance requires final exact candidate HEAD Quality + Test Build + Security, cleanup/source-of-truth/scope audit, Risk Gates A-D, independent Program Control review, immediate live-main revalidation, controlled merge and post-merge exact-main verification. The authoring identity must not self-accept or self-merge.
+W09-00 follows the current Single-Owner Governed Acceptance path already canonical on live main:
+
+1. final exact candidate HEAD passes Quality + Test Build + Security;
+2. cleanup/source-of-truth/scope audit is clean;
+3. Risk Gates A-D are recorded for that exact HEAD with blockers empty;
+4. live main, PR head/base, mergeability, changed paths and review threads are revalidated immediately before merge;
+5. merge uses the exact validated candidate HEAD;
+6. downstream release occurs only after Quality + Test Build + Security succeed on the exact post-merge main SHA.
+
+A second GitHub identity is optional, not required. The same owner may perform the governed acceptance lifecycle provided no stale CI, untested HEAD, unresolved blocker or post-merge gate is bypassed.
