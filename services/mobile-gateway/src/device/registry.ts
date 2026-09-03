@@ -4,6 +4,7 @@ import {
   type DeviceId,
   type DeviceLifecycleState,
   type DeviceRef,
+  type DeviceRegistrationError,
   type DeviceRegistrationProvenance,
   type DeviceRegistrationRecord,
   type DeviceRegistrationRequest,
@@ -19,6 +20,7 @@ import {
 const DEVICE_ID_PATTERN = /^dvc_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const TENANT_ID_PATTERN = /^ten_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const IDENTITY_ID_PATTERN = /^idn_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/u;
 
 const DEVICE_REF_KEYS = new Set(['kind', 'deviceId', 'tenantId', 'registrationVersion']);
 const PROVENANCE_KEYS = new Set(['source', 'reference', 'observedAt']);
@@ -32,6 +34,12 @@ const REGISTRATION_KEYS = new Set([
 ]);
 const TRANSITION_KEYS = new Set(['ref', 'expectedVersion', 'transitionedAt', 'provenance']);
 const RESOLUTION_KEYS = new Set(['ref', 'boundIdentityId']);
+const DEVICE_TRANSITIONS = new Set<DeviceTransition>([
+  'ACTIVATE',
+  'REVOKE',
+  'MARK_COMPROMISED',
+  'RETIRE',
+]);
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -56,8 +64,12 @@ function ownValue(value: Record<string, unknown>, key: string): unknown {
   return descriptor && 'value' in descriptor ? descriptor.value : undefined;
 }
 
-function isRfc3339Like(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value));
+function isRfc3339Utc(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    RFC3339_UTC_PATTERN.test(value) &&
+    Number.isFinite(Date.parse(value))
+  );
 }
 
 function isPositiveVersion(value: unknown): value is number {
@@ -109,16 +121,14 @@ function parseProvenance(value: unknown): DeviceRegistrationProvenance | null {
     reference.length === 0 ||
     reference.length > 256 ||
     reference.trim() !== reference ||
-    !isRfc3339Like(observedAt)
+    !isRfc3339Utc(observedAt)
   ) {
     return null;
   }
   return Object.freeze({ source, reference, observedAt });
 }
 
-function registrationFailure(
-  error: Exclude<DeviceRegistrationResult, { ok: true }>['error'],
-): DeviceRegistrationResult {
+function registrationFailure(error: DeviceRegistrationError): DeviceRegistrationResult {
   return { ok: false, error, authorizesExecution: false };
 }
 
@@ -165,7 +175,7 @@ function makeRecord(input: {
   });
 }
 
-function parseRegistrationRequest(request: DeviceRegistrationRequest):
+type ParsedRegistrationRequest =
   | {
       readonly ok: true;
       readonly deviceId: DeviceId;
@@ -175,7 +185,9 @@ function parseRegistrationRequest(request: DeviceRegistrationRequest):
       readonly provenance: DeviceRegistrationProvenance;
       readonly expectedVersion?: number;
     }
-  | { readonly ok: false; readonly error: DeviceRegistrationResult extends infer _T ? string : never } {
+  | { readonly ok: false; readonly error: DeviceRegistrationError };
+
+function parseRegistrationRequest(request: DeviceRegistrationRequest): ParsedRegistrationRequest {
   if (!isPlainRecord(request) || !hasOnlyOwnDataProperties(request, REGISTRATION_KEYS)) {
     return { ok: false, error: 'REQUEST_MALFORMED' };
   }
@@ -188,7 +200,7 @@ function parseRegistrationRequest(request: DeviceRegistrationRequest):
     return { ok: false, error: 'IDENTITY_ID_INVALID' };
   }
   const registeredAt = ownValue(request, 'registeredAt');
-  if (!isRfc3339Like(registeredAt)) return { ok: false, error: 'REQUEST_MALFORMED' };
+  if (!isRfc3339Utc(registeredAt)) return { ok: false, error: 'REQUEST_MALFORMED' };
   const provenance = parseProvenance(ownValue(request, 'provenance'));
   if (provenance === null || Date.parse(provenance.observedAt) > Date.parse(registeredAt)) {
     return { ok: false, error: 'PROVENANCE_INVALID' };
@@ -208,7 +220,10 @@ function parseRegistrationRequest(request: DeviceRegistrationRequest):
   };
 }
 
-function nextState(current: DeviceLifecycleState, transition: DeviceTransition): DeviceLifecycleState | null {
+function nextState(
+  current: DeviceLifecycleState,
+  transition: DeviceTransition,
+): DeviceLifecycleState | null {
   if (transition === 'ACTIVATE') return current === 'REGISTERED' ? 'ACTIVE' : null;
   if (transition === 'REVOKE') {
     return current === 'REGISTERED' || current === 'ACTIVE' ? 'REVOKED' : null;
@@ -216,26 +231,21 @@ function nextState(current: DeviceLifecycleState, transition: DeviceTransition):
   if (transition === 'MARK_COMPROMISED') {
     return current === 'RETIRED' || current === 'COMPROMISED' ? null : 'COMPROMISED';
   }
-  return current === 'RETIRED' ? null : 'RETIRED';
+  if (transition === 'RETIRE') return current === 'RETIRED' ? null : 'RETIRED';
+  return null;
 }
 
 export class InMemoryDeviceRegistry {
   readonly #records = new Map<DeviceId, DeviceRegistrationRecord>();
   readonly #reregistrationPolicy: DeviceReregistrationPolicy;
 
-  constructor(
-    reregistrationPolicy: DeviceReregistrationPolicy = 'DENY_AFTER_REVOCATION',
-  ) {
+  constructor(reregistrationPolicy: DeviceReregistrationPolicy = 'DENY_AFTER_REVOCATION') {
     this.#reregistrationPolicy = reregistrationPolicy;
   }
 
   register(request: DeviceRegistrationRequest): DeviceRegistrationResult {
     const parsed = parseRegistrationRequest(request);
-    if (!parsed.ok) {
-      return registrationFailure(
-        parsed.error as Exclude<DeviceRegistrationResult, { ok: true }>['error'],
-      );
-    }
+    if (!parsed.ok) return registrationFailure(parsed.error);
 
     const existing = this.#records.get(parsed.deviceId);
     if (!existing) {
@@ -304,6 +314,7 @@ export class InMemoryDeviceRegistry {
     transition: DeviceTransition,
     request: DeviceTransitionRequest,
   ): DeviceTransitionResult {
+    if (!DEVICE_TRANSITIONS.has(transition)) return transitionFailure('REQUEST_MALFORMED');
     if (!isPlainRecord(request) || !hasOnlyOwnDataProperties(request, TRANSITION_KEYS)) {
       return transitionFailure('REQUEST_MALFORMED');
     }
@@ -314,7 +325,7 @@ export class InMemoryDeviceRegistry {
     const provenance = parseProvenance(ownValue(request, 'provenance'));
     if (
       !isPositiveVersion(expectedVersion) ||
-      !isRfc3339Like(transitionedAt) ||
+      !isRfc3339Utc(transitionedAt) ||
       provenance === null ||
       Date.parse(provenance.observedAt) > Date.parse(transitionedAt)
     ) {
@@ -369,13 +380,16 @@ export class InMemoryDeviceRegistry {
     if (existing.ref.registrationVersion !== ref.registrationVersion) {
       return resolutionFailure('STALE_VERSION');
     }
-    if (boundIdentityId !== undefined && existing.boundIdentityId !== boundIdentityId) {
-      return resolutionFailure('IDENTITY_BINDING_MISMATCH');
-    }
     if (existing.state === 'REGISTERED') return resolutionFailure('DEVICE_NOT_ACTIVE');
     if (existing.state === 'REVOKED') return resolutionFailure('DEVICE_REVOKED');
     if (existing.state === 'COMPROMISED') return resolutionFailure('DEVICE_COMPROMISED');
     if (existing.state === 'RETIRED') return resolutionFailure('DEVICE_RETIRED');
+    if (existing.boundIdentityId !== undefined && boundIdentityId === undefined) {
+      return resolutionFailure('IDENTITY_BINDING_REQUIRED');
+    }
+    if (boundIdentityId !== undefined && existing.boundIdentityId !== boundIdentityId) {
+      return resolutionFailure('IDENTITY_BINDING_MISMATCH');
+    }
     return {
       ok: true,
       record: existing,
