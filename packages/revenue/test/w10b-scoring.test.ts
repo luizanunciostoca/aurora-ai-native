@@ -36,34 +36,51 @@ function leadRecord() {
   return created.record;
 }
 
+interface EngagementFeatureOptions {
+  readonly valueBps?: number | null;
+  readonly tenantId?: TenantId;
+  readonly key?: string;
+  readonly weightBps?: number;
+}
+
+function engagementFeature(options: EngagementFeatureOptions = {}): QualificationFeature {
+  return {
+    key: options.key ?? 'engagement',
+    valueBps: options.valueBps === undefined ? 9_000 : options.valueBps,
+    weightBps: options.weightBps ?? 6_000,
+    critical: true,
+    provenance: {
+      tenantId: options.tenantId ?? TENANT_A,
+      sourceSystem: 'conversation-analytics',
+      sourceRevision: 'conv-r7',
+      observedAt: '2026-09-03T06:10:30Z',
+    },
+  };
+}
+
+interface FitFeatureOptions {
+  readonly key?: string;
+  readonly weightBps?: number;
+}
+
+function fitFeature(options: FitFeatureOptions = {}): QualificationFeature {
+  return {
+    key: options.key ?? 'fit',
+    valueBps: 6_000,
+    weightBps: options.weightBps ?? 4_000,
+    critical: true,
+    provenance: {
+      tenantId: TENANT_A,
+      sourceSystem: 'crm-profile',
+      sourceRevision: 'profile-r3',
+      observedAt: '2026-09-03T06:10:20Z',
+      sourceReference: 'profile-001',
+    },
+  };
+}
+
 function features(): QualificationFeature[] {
-  return [
-    {
-      key: 'engagement',
-      valueBps: 9_000,
-      weightBps: 6_000,
-      critical: true,
-      provenance: {
-        tenantId: TENANT_A,
-        sourceSystem: 'conversation-analytics',
-        sourceRevision: 'conv-r7',
-        observedAt: '2026-09-03T06:10:30Z',
-      },
-    },
-    {
-      key: 'fit',
-      valueBps: 6_000,
-      weightBps: 4_000,
-      critical: true,
-      provenance: {
-        tenantId: TENANT_A,
-        sourceSystem: 'crm-profile',
-        sourceRevision: 'profile-r3',
-        observedAt: '2026-09-03T06:10:20Z',
-        sourceReference: 'profile-001',
-      },
-    },
-  ];
+  return [engagementFeature(), fitFeature()];
 }
 
 function deterministicInput(featureInput = features()): QualificationEvaluationInput {
@@ -85,7 +102,9 @@ function deterministicInput(featureInput = features()): QualificationEvaluationI
   };
 }
 
-function modelAssistedInput(disposition: 'PROCEED_WITH_EVIDENCE' | 'ESCALATE'): QualificationEvaluationInput {
+function modelAssistedInput(
+  disposition: 'PROCEED_WITH_EVIDENCE' | 'ESCALATE',
+): QualificationEvaluationInput {
   return {
     tenantId: TENANT_A,
     entity: { kind: 'LEAD', entityId: 'lead-score-001' },
@@ -151,8 +170,7 @@ test('W10-B deterministic scoring is order-stable, calibrated and non-authoritat
 });
 
 test('W10-B missing critical evidence is explicit instead of optimistic scoring', () => {
-  const missing = features();
-  missing[0] = { ...missing[0], valueBps: null };
+  const missing = [engagementFeature({ valueBps: null }), fitFeature()];
   const result = evaluateQualification(leadRecord(), deterministicInput(missing));
   assert.equal(result.ok, true);
   if (!result.ok) return;
@@ -163,18 +181,13 @@ test('W10-B missing critical evidence is explicit instead of optimistic scoring'
 });
 
 test('W10-B fails closed on cross-tenant features and duplicate keys', () => {
-  const crossTenant = features();
-  crossTenant[0] = {
-    ...crossTenant[0],
-    provenance: { ...crossTenant[0].provenance, tenantId: TENANT_B },
-  };
+  const crossTenant = [engagementFeature({ tenantId: TENANT_B }), fitFeature()];
   assert.deepEqual(evaluateQualification(leadRecord(), deterministicInput(crossTenant)), {
     ok: false,
     error: 'FEATURE_TENANT_MISMATCH',
   });
 
-  const duplicate = features();
-  duplicate[1] = { ...duplicate[1], key: duplicate[0].key };
+  const duplicate = [engagementFeature(), fitFeature({ key: 'engagement' })];
   assert.deepEqual(evaluateQualification(leadRecord(), deterministicInput(duplicate)), {
     ok: false,
     error: 'FEATURE_DUPLICATE',
@@ -270,8 +283,7 @@ test('W10-B detects material entity, fact, rule, threshold and model drift for r
 });
 
 test('W10-B rejects malformed weight calibration and merged lifecycle entities', () => {
-  const wrongWeights = features();
-  wrongWeights[1] = { ...wrongWeights[1], weightBps: 3_999 };
+  const wrongWeights = [engagementFeature(), fitFeature({ weightBps: 3_999 })];
   assert.deepEqual(evaluateQualification(leadRecord(), deterministicInput(wrongWeights)), {
     ok: false,
     error: 'WEIGHT_TOTAL_INVALID',
