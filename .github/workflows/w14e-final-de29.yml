@@ -1,0 +1,31 @@
+name: W14-E Exact-Head Focused Validation
+
+on:
+  push:
+    branches:
+      - scratch/w14e-final-de29
+
+permissions:
+  contents: read
+
+jobs:
+  focused-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: de29e9ce61c8080dd39b0d2918bbb5b3e3fa26bc
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Build canonical contracts
+        run: npm run build --workspace @aurora/contracts
+      - name: Compile exact W14-E focused suite
+        run: ./node_modules/.bin/tsc --project services/mobile-gateway/src/device-session/tsconfig.test.json --pretty false
+      - name: Run exact W14-E focused suite
+        run: node --test services/mobile-gateway/src/device-session/dist-test/test/w14e-device-session-trust.test.js
+      - name: Cleanup generated test output
+        run: rm -rf services/mobile-gateway/src/device-session/dist-test services/mobile-gateway/src/device-session/dist
