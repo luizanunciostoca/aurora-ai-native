@@ -4,11 +4,7 @@ import type { MetaAdsResourceKind } from './contracts.js';
 
 export type MetaAdsMeasurementCompleteness = 'COMPLETE' | 'PARTIAL' | 'DELAYED';
 export type MetaAdsAttributionWindow =
-  | 'PROVIDER_DEFAULT'
-  | '1D_VIEW'
-  | '1D_CLICK'
-  | '7D_CLICK'
-  | '28D_CLICK';
+  'PROVIDER_DEFAULT' | '1D_VIEW' | '1D_CLICK' | '7D_CLICK' | '28D_CLICK';
 
 export interface MetaAdsAnalyticsBindingProjection {
   readonly source: 'W08_PROVIDER_BINDING';
