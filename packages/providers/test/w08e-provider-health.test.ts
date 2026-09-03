@@ -17,7 +17,8 @@ const NOW = '2026-09-03T03:00:00Z' as Rfc3339Timestamp;
 const RECENT = '2026-09-03T02:59:30Z' as Rfc3339Timestamp;
 const STALE = '2026-09-03T02:00:00Z' as Rfc3339Timestamp;
 const TENANT = 'ten_01JTESTTENANTA000000000000' as ProviderBindingRecord['tenant']['tenantId'];
-const OTHER_TENANT = 'ten_01JTESTTENANTB000000000000' as ProviderBindingRecord['tenant']['tenantId'];
+const OTHER_TENANT =
+  'ten_01JTESTTENANTB000000000000' as ProviderBindingRecord['tenant']['tenantId'];
 const ACCOUNT = 'act_123' as ProviderBindingRecord['accountReference'];
 const OTHER_ACCOUNT = 'act_999' as ProviderBindingRecord['accountReference'];
 
