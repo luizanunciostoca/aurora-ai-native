@@ -1,0 +1,43 @@
+name: W14-B Canonical Prettier Scratch
+
+on:
+  push:
+    branches:
+      - scratch/w14b-prettier-a95b
+
+permissions:
+  contents: write
+
+jobs:
+  prettier:
+    if: ${{ !contains(github.event.head_commit.message, 'apply canonical prettier') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout scratch branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Apply canonical Prettier
+        run: |
+          npx prettier --write \
+            services/mobile-gateway/src/realtime-session/manager.ts \
+            services/mobile-gateway/src/realtime-session/types.ts \
+            services/mobile-gateway/src/realtime-session/test/w14b-realtime-command-session.test.ts
+      - name: Prove only W14-B files changed
+        run: |
+          git diff --name-only
+          test "$(git diff --name-only | grep -Ev '^(services/mobile-gateway/src/realtime-session/(manager.ts|types.ts|test/w14b-realtime-command-session.test.ts))$' | wc -l)" -eq 0
+      - name: Commit formatted blobs on scratch only
+        run: |
+          git config user.name 'Idebook Digital'
+          git config user.email 'luizanunciostoca@gmail.com'
+          git add services/mobile-gateway/src/realtime-session/manager.ts services/mobile-gateway/src/realtime-session/types.ts services/mobile-gateway/src/realtime-session/test/w14b-realtime-command-session.test.ts
+          git commit -m 'chore(W14-B): apply canonical prettier'
+          git push origin HEAD:scratch/w14b-prettier-a95b
