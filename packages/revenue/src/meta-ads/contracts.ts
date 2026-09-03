@@ -197,7 +197,10 @@ export function planMetaAdsDomainIntent(input: MetaAdsDomainIntentInput): MetaAd
   if (!nonEmpty(input.capability.capabilityId) || !nonEmpty(input.capability.registryVersion)) {
     return { status: 'BLOCKED', code: 'MISSING_CAPABILITY_REFERENCE' };
   }
-  if (input.capability.targetKind !== 'PROVIDER' || input.capability.compatibilityKey !== 'meta-ads') {
+  if (
+    input.capability.targetKind !== 'PROVIDER' ||
+    input.capability.compatibilityKey !== 'meta-ads'
+  ) {
     return { status: 'BLOCKED', code: 'INCOMPATIBLE_CAPABILITY' };
   }
   if (
