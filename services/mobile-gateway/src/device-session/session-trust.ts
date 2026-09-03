@@ -289,7 +289,10 @@ export class DeviceSessionTrustManager {
       parsed.value.nowMs,
     );
     if (bindingError !== null) return bindingError;
-    const attestationError = this.#validateAttestation(parsed.value.attestation, parsed.value.nowMs);
+    const attestationError = this.#validateAttestation(
+      parsed.value.attestation,
+      parsed.value.nowMs,
+    );
     if (attestationError !== null) return attestationError;
 
     const record: SessionRecord = {
@@ -319,7 +322,8 @@ export class DeviceSessionTrustManager {
     if (parsed.value.connectionId !== record.connectionId) {
       return error('CONNECTION_MISMATCH', 'Connection does not own the device session.');
     }
-    if (record.state === 'REVOKED') return error('SESSION_REVOKED', 'Device session trust was revoked.');
+    if (record.state === 'REVOKED')
+      return error('SESSION_REVOKED', 'Device session trust was revoked.');
     if (parsed.value.nowMs < record.lastEvaluatedAtMs) {
       return error('MALFORMED_REQUEST', 'Session evaluation time cannot move backwards.');
     }
@@ -336,10 +340,16 @@ export class DeviceSessionTrustManager {
       parsed.value.currentAttestation.provider !== record.attestation.provider ||
       parsed.value.currentAttestation.version !== record.attestation.version
     ) {
-      return error('ATTESTATION_MISMATCH', 'Attestation identity changed without an explicit resume.');
+      return error(
+        'ATTESTATION_MISMATCH',
+        'Attestation identity changed without an explicit resume.',
+      );
     }
     if (parsed.value.currentAttestation.observedAtMs < record.attestation.observedAtMs) {
-      return error('ATTESTATION_STALE', 'Attestation observation is older than the session observation.');
+      return error(
+        'ATTESTATION_STALE',
+        'Attestation observation is older than the session observation.',
+      );
     }
     const attestationError = this.#validateAttestation(
       parsed.value.currentAttestation,
@@ -357,20 +367,27 @@ export class DeviceSessionTrustManager {
     if (!parsed.ok) return parsed.result;
     const record = this.#sessions.get(parsed.value.deviceSessionId);
     if (record === undefined) return error('SESSION_NOT_FOUND', 'Device session does not exist.');
-    if (record.state === 'REVOKED') return error('SESSION_REVOKED', 'Revoked device session cannot resume.');
+    if (record.state === 'REVOKED')
+      return error('SESSION_REVOKED', 'Revoked device session cannot resume.');
     if (
       parsed.value.previousConnectionId !== record.connectionId ||
       parsed.value.gatewaySession.connectionId === record.connectionId ||
       parsed.value.gatewaySession.generation <= record.gatewayGeneration
     ) {
-      return error('RESUME_HIJACK_DETECTED', 'Resume does not prove a newer connection generation.');
+      return error(
+        'RESUME_HIJACK_DETECTED',
+        'Resume does not prove a newer connection generation.',
+      );
     }
     if (
       parsed.value.gatewaySession.sessionId !== record.gatewaySessionId ||
       parsed.value.gatewaySession.tenantId !== record.tenantId ||
       parsed.value.gatewaySession.actorIdentityId !== record.actorIdentityId
     ) {
-      return error('RESUME_HIJACK_DETECTED', 'Resume attempts to change the bound gateway identity.');
+      return error(
+        'RESUME_HIJACK_DETECTED',
+        'Resume attempts to change the bound gateway identity.',
+      );
     }
     if (parsed.value.gatewaySession.correlationId !== record.correlationId) {
       return error('CORRELATION_MISMATCH', 'Resume cannot change the bound correlation.');
@@ -385,12 +402,18 @@ export class DeviceSessionTrustManager {
       parsed.value.deviceRecord.ref.deviceId !== record.deviceRef.deviceId ||
       parsed.value.deviceRecord.ref.registrationVersion !== record.deviceRef.registrationVersion
     ) {
-      return error('DEVICE_BINDING_MISMATCH', 'Resume cannot cross a device registration identity.');
+      return error(
+        'DEVICE_BINDING_MISMATCH',
+        'Resume cannot cross a device registration identity.',
+      );
     }
     if (parsed.value.attestation.provider !== record.attestation.provider) {
       return error('ATTESTATION_MISMATCH', 'Resume cannot silently change attestation provider.');
     }
-    const attestationError = this.#validateAttestation(parsed.value.attestation, parsed.value.nowMs);
+    const attestationError = this.#validateAttestation(
+      parsed.value.attestation,
+      parsed.value.nowMs,
+    );
     if (attestationError !== null) return attestationError;
 
     record.connectionId = parsed.value.gatewaySession.connectionId;
@@ -425,17 +448,27 @@ export class DeviceSessionTrustManager {
     device: DeviceRegistrationRecord,
     nowMs: number,
   ): DeviceSessionTrustResult | null {
-    if (gateway.state !== 'OPEN') return error('GATEWAY_SESSION_NOT_OPEN', 'Gateway session is not open.');
+    if (gateway.state !== 'OPEN')
+      return error('GATEWAY_SESSION_NOT_OPEN', 'Gateway session is not open.');
     if (nowMs >= gateway.authExpiresAtMs) {
       return error('GATEWAY_AUTH_EXPIRED', 'Gateway authentication has expired.');
     }
     if (gateway.tenantId !== device.ref.tenantId) {
-      return error('TENANT_MISMATCH', 'Gateway and device registration belong to different tenants.');
+      return error(
+        'TENANT_MISMATCH',
+        'Gateway and device registration belong to different tenants.',
+      );
     }
     if (device.state !== 'ACTIVE') {
-      return error('DEVICE_NOT_ACTIVE', 'Only an active registered device may establish session trust.');
+      return error(
+        'DEVICE_NOT_ACTIVE',
+        'Only an active registered device may establish session trust.',
+      );
     }
-    if (device.boundIdentityId !== undefined && device.boundIdentityId !== gateway.actorIdentityId) {
+    if (
+      device.boundIdentityId !== undefined &&
+      device.boundIdentityId !== gateway.actorIdentityId
+    ) {
       return error('DEVICE_IDENTITY_MISMATCH', 'Device registration is bound to another identity.');
     }
     return null;
@@ -452,13 +485,22 @@ export class DeviceSessionTrustManager {
       return error('DEVICE_BINDING_MISMATCH', 'Current device state belongs to another device.');
     }
     if (current.ref.registrationVersion !== record.deviceRef.registrationVersion) {
-      return error('DEVICE_VERSION_MISMATCH', 'Device registration version changed after trust binding.');
+      return error(
+        'DEVICE_VERSION_MISMATCH',
+        'Device registration version changed after trust binding.',
+      );
     }
     if (current.state !== 'ACTIVE') {
       return error('DEVICE_NOT_ACTIVE', 'Current device lifecycle state is not active.');
     }
-    if (current.boundIdentityId !== undefined && current.boundIdentityId !== record.actorIdentityId) {
-      return error('DEVICE_IDENTITY_MISMATCH', 'Current device binding no longer matches the actor.');
+    if (
+      current.boundIdentityId !== undefined &&
+      current.boundIdentityId !== record.actorIdentityId
+    ) {
+      return error(
+        'DEVICE_IDENTITY_MISMATCH',
+        'Current device binding no longer matches the actor.',
+      );
     }
     return null;
   }
@@ -486,7 +528,9 @@ export class DeviceSessionTrustManager {
   }
 
   #prepareSessionSlot(): DeviceSessionTrustResult | null {
-    const active = [...this.#sessions.values()].filter((session) => session.state === 'ACTIVE').length;
+    const active = [...this.#sessions.values()].filter(
+      (session) => session.state === 'ACTIVE',
+    ).length;
     if (active >= this.#config.maxActiveSessions) {
       return error('BACKPRESSURE', 'Active device-session trust capacity is exhausted.', true);
     }
@@ -541,7 +585,13 @@ export class DeviceSessionTrustManager {
     | { ok: false; result: DeviceSessionTrustResult } {
     if (
       !isPlainDataRecord(input) ||
-      !hasOnlyKeys(input, ['deviceSessionId', 'gatewaySession', 'deviceRecord', 'attestation', 'nowMs']) ||
+      !hasOnlyKeys(input, [
+        'deviceSessionId',
+        'gatewaySession',
+        'deviceRecord',
+        'attestation',
+        'nowMs',
+      ]) ||
       !isBoundedToken(input.deviceSessionId) ||
       !isFiniteInteger(input.nowMs)
     ) {
@@ -553,7 +603,10 @@ export class DeviceSessionTrustManager {
     if (gatewaySession === null || deviceRecord === null || attestation === null) {
       return {
         ok: false,
-        result: error('MALFORMED_REQUEST', 'Open-session context contains malformed upstream data.'),
+        result: error(
+          'MALFORMED_REQUEST',
+          'Open-session context contains malformed upstream data.',
+        ),
       };
     }
     return {
@@ -586,7 +639,10 @@ export class DeviceSessionTrustManager {
       !isBoundedToken(input.connectionId) ||
       !isFiniteInteger(input.nowMs)
     ) {
-      return { ok: false, result: error('MALFORMED_REQUEST', 'Evaluate-session input is malformed.') };
+      return {
+        ok: false,
+        result: error('MALFORMED_REQUEST', 'Evaluate-session input is malformed.'),
+      };
     }
     const currentDeviceRecord = parseDeviceRecord(input.currentDeviceRecord);
     const currentAttestation = parseAttestation(input.currentAttestation);
@@ -627,7 +683,10 @@ export class DeviceSessionTrustManager {
       !isBoundedToken(input.previousConnectionId) ||
       !isFiniteInteger(input.nowMs)
     ) {
-      return { ok: false, result: error('MALFORMED_REQUEST', 'Resume-session input is malformed.') };
+      return {
+        ok: false,
+        result: error('MALFORMED_REQUEST', 'Resume-session input is malformed.'),
+      };
     }
     const gatewaySession = parseGatewaySession(input.gatewaySession);
     const deviceRecord = parseDeviceRecord(input.deviceRecord);
@@ -635,7 +694,10 @@ export class DeviceSessionTrustManager {
     if (gatewaySession === null || deviceRecord === null || attestation === null) {
       return {
         ok: false,
-        result: error('MALFORMED_REQUEST', 'Resume-session context contains malformed upstream data.'),
+        result: error(
+          'MALFORMED_REQUEST',
+          'Resume-session context contains malformed upstream data.',
+        ),
       };
     }
     return {
@@ -664,7 +726,10 @@ export class DeviceSessionTrustManager {
       !isFiniteInteger(input.revokedAtMs) ||
       !isBoundedToken(input.reasonReference, 512)
     ) {
-      return { ok: false, result: error('MALFORMED_REQUEST', 'Revoke-session input is malformed.') };
+      return {
+        ok: false,
+        result: error('MALFORMED_REQUEST', 'Revoke-session input is malformed.'),
+      };
     }
     return {
       ok: true,
