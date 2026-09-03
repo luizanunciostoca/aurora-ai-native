@@ -22,7 +22,7 @@ export interface SecretReferenceRecord {
   readonly state: SecretReferenceState;
   readonly credentialVersion: number;
   readonly updatedAt: Rfc3339Timestamp;
-  readonly expiresAt?: Rfc3339Timestamp;
+  readonly expiresAt?: Rfc3339Timestamp | undefined;
   readonly authorizesExecution: false;
 }
 
