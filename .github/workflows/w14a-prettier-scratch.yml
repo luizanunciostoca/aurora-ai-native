@@ -1,0 +1,29 @@
+name: W14-A Prettier Scratch
+
+on:
+  push:
+    branches:
+      - scratch/w14a-prettier-diagnostic
+
+permissions:
+  contents: read
+
+jobs:
+  prettier-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Apply canonical Prettier in scratch only
+        run: >-
+          npx prettier --write
+          services/mobile-gateway/src/gateway-auth/session-manager.ts
+          services/mobile-gateway/src/gateway-auth/test/w14a-gateway-auth-transport.test.ts
+      - name: Emit canonical formatting diff
+        run: git --no-pager diff --no-color -- services/mobile-gateway/src/gateway-auth/session-manager.ts services/mobile-gateway/src/gateway-auth/test/w14a-gateway-auth-transport.test.ts
