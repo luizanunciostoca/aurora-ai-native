@@ -150,7 +150,9 @@ function nbaIsValid(input: RevenueIntegrationEvaluationInput): boolean {
     Number.isSafeInteger(nba.entityVersion) &&
     nba.entityVersion >= 1 &&
     isTimestamp(nba.evaluatedAt) &&
-    (nba.disposition === 'SELECTED' || nba.disposition === 'ABSTAIN' || nba.disposition === 'ESCALATE') &&
+    (nba.disposition === 'SELECTED' ||
+      nba.disposition === 'ABSTAIN' ||
+      nba.disposition === 'ESCALATE') &&
     Array.isArray(nba.candidates) &&
     nba.authoritySemantics === 'DOMAIN_CANDIDATE_ONLY_NO_ACTION_INTENT' &&
     nba.downstreamExecutionStillRequiresCurrentValidation === true &&
@@ -228,8 +230,7 @@ function contactPolicyIsValid(input: RevenueIntegrationEvaluationInput): boolean
       policy.consentStatus === 'UNKNOWN') &&
     Array.isArray(policy.allowedPurposes) &&
     policy.allowedPurposes.every(
-      (purpose) =>
-        purpose === 'MARKETING' || purpose === 'SALES' || purpose === 'CUSTOMER_SUCCESS',
+      (purpose) => purpose === 'MARKETING' || purpose === 'SALES' || purpose === 'CUSTOMER_SUCCESS',
     ) &&
     isNonEmptyString(policy.sourceRevision) &&
     isNonEmptyString(policy.sourceReference) &&
@@ -252,7 +253,8 @@ function executionIsValid(input: RevenueIntegrationEvaluationInput): boolean {
     isTimestamp(execution.observedAt) &&
     (execution.authoritativeEvidenceReference === undefined ||
       isNonEmptyString(execution.authoritativeEvidenceReference)) &&
-    (execution.outcome !== 'VERIFIED' || isNonEmptyString(execution.authoritativeEvidenceReference)) &&
+    (execution.outcome !== 'VERIFIED' ||
+      isNonEmptyString(execution.authoritativeEvidenceReference)) &&
     execution.authorizesExecution === false &&
     execution.canGrantPermission === false
   );
@@ -343,7 +345,9 @@ function measurementIsValid(input: RevenueIntegrationEvaluationInput): boolean {
   );
 }
 
-function tenantAndEntityError(input: RevenueIntegrationEvaluationInput): RevenueIntegrationError | undefined {
+function tenantAndEntityError(
+  input: RevenueIntegrationEvaluationInput,
+): RevenueIntegrationError | undefined {
   const tenantIds = [
     input.crm.model.tenantId,
     input.qualification.tenantId,
@@ -383,7 +387,9 @@ function tenantAndEntityError(input: RevenueIntegrationEvaluationInput): Revenue
     : undefined;
 }
 
-function correlationError(input: RevenueIntegrationEvaluationInput): RevenueIntegrationError | undefined {
+function correlationError(
+  input: RevenueIntegrationEvaluationInput,
+): RevenueIntegrationError | undefined {
   const expected = input.correlation.correlationId;
   const correlations = [
     correlationIdOf(input.crm.model.correlation),
@@ -401,7 +407,9 @@ function correlationError(input: RevenueIntegrationEvaluationInput): RevenueInte
     : undefined;
 }
 
-function futureEvidenceError(input: RevenueIntegrationEvaluationInput): RevenueIntegrationError | undefined {
+function futureEvidenceError(
+  input: RevenueIntegrationEvaluationInput,
+): RevenueIntegrationError | undefined {
   const evaluatedAt = Date.parse(input.evaluatedAt);
   const timestamps = [
     input.crm.model.observedAt,
@@ -419,7 +427,9 @@ function futureEvidenceError(input: RevenueIntegrationEvaluationInput): RevenueI
     : undefined;
 }
 
-function assessBudget(input: RevenueIntegrationEvaluationInput): RevenueIntegrationBudgetAssessment {
+function assessBudget(
+  input: RevenueIntegrationEvaluationInput,
+): RevenueIntegrationBudgetAssessment {
   const { measurement } = input;
   const latencyWithinBudget = measurement.latencyMicros <= measurement.budget.maxLatencyMicros;
   const modelCallsWithinBudget = measurement.modelCalls <= measurement.budget.maxModelCalls;
@@ -437,14 +447,20 @@ function assessBudget(input: RevenueIntegrationEvaluationInput): RevenueIntegrat
   };
 }
 
-function buildBusinessOutcome(input: RevenueIntegrationEvaluationInput): RevenueBusinessOutcomeEvidence {
+function buildBusinessOutcome(
+  input: RevenueIntegrationEvaluationInput,
+): RevenueBusinessOutcomeEvidence {
   const correction = input.humanCorrection;
   if (correction?.disposition === 'REJECT_OUTCOME') {
     return {
       status: 'HUMAN_REJECTED_OUTCOME',
-      ...(input.businessOutcome === undefined ? {} : { outcomeType: input.businessOutcome.outcomeType }),
+      ...(input.businessOutcome === undefined
+        ? {}
+        : { outcomeType: input.businessOutcome.outcomeType }),
       ...(input.execution === undefined ? {} : { executionOutcome: input.execution.outcome }),
-      ...(input.execution === undefined ? {} : { executionReference: input.execution.executionReference }),
+      ...(input.execution === undefined
+        ? {}
+        : { executionReference: input.execution.executionReference }),
       ...(input.providerReadback === undefined
         ? {}
         : { providerReadbackObservation: input.providerReadback.observation }),
@@ -464,13 +480,16 @@ function buildBusinessOutcome(input: RevenueIntegrationEvaluationInput): Revenue
       outcomeType: input.businessOutcome.outcomeType,
       businessProvenanceReference: input.businessOutcome.provenanceReference,
       ...(input.execution === undefined ? {} : { executionOutcome: input.execution.outcome }),
-      ...(input.execution === undefined ? {} : { executionReference: input.execution.executionReference }),
+      ...(input.execution === undefined
+        ? {}
+        : { executionReference: input.execution.executionReference }),
       ...(input.providerReadback === undefined
         ? {}
         : { providerReadbackObservation: input.providerReadback.observation }),
-      ...(correction === undefined ? {} : { humanCorrectionReference: correction.provenanceReference }),
-      suitableForW17W18Evaluation:
-        input.businessOutcome.verification === 'VERIFIED_BUSINESS_FACT',
+      ...(correction === undefined
+        ? {}
+        : { humanCorrectionReference: correction.provenanceReference }),
+      suitableForW17W18Evaluation: input.businessOutcome.verification === 'VERIFIED_BUSINESS_FACT',
       adaptiveLearningPromotionAllowed: false,
       authorizesExecution: false,
       canGrantPermission: false,
@@ -493,7 +512,9 @@ function buildBusinessOutcome(input: RevenueIntegrationEvaluationInput): Revenue
   return {
     status: 'NO_EXTERNAL_EXECUTION_OR_BUSINESS_OUTCOME',
     ...(input.execution === undefined ? {} : { executionOutcome: input.execution.outcome }),
-    ...(input.execution === undefined ? {} : { executionReference: input.execution.executionReference }),
+    ...(input.execution === undefined
+      ? {}
+      : { executionReference: input.execution.executionReference }),
     suitableForW17W18Evaluation: false,
     adaptiveLearningPromotionAllowed: false,
     authorizesExecution: false,
@@ -549,7 +570,9 @@ function evaluation(
   return { ok: true, evaluation: result };
 }
 
-function malformedError(input: RevenueIntegrationEvaluationInput): RevenueIntegrationError | undefined {
+function malformedError(
+  input: RevenueIntegrationEvaluationInput,
+): RevenueIntegrationError | undefined {
   if (!requestIsValid(input)) return 'REQUEST_MALFORMED';
   if (!crmIsValid(input)) return 'CRM_MALFORMED';
   if (!qualificationIsValid(input)) return 'QUALIFICATION_MALFORMED';
