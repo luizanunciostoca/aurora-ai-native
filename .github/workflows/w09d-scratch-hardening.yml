@@ -1,0 +1,60 @@
+name: W09-D Scratch Hardening
+
+on:
+  push:
+    branches:
+      - scratch/w09d-hardening-format
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Apply W09-D hardening
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('services/n8n-bridge/src/evidence/normalizer.ts')
+          text = path.read_text()
+          old_import = "import { validateN8nWorkflowBinding } from '../bindings/index.js';"
+          new_import = "import { validateN8nWorkflowBinding, type N8nWorkflowBinding } from '../bindings/index.js';"
+          if old_import not in text:
+              raise SystemExit('expected binding import not found')
+          text = text.replace(old_import, new_import, 1)
+          old_sig = "function normalizeEvent(binding: ReturnType<typeof validateN8nWorkflowBinding> extends { ok: true; value: infer T } ? T : never, input: unknown): N8nWorkflowForwardingResult {"
+          new_sig = "function normalizeEvent(\n  binding: N8nWorkflowBinding,\n  input: unknown,\n): N8nWorkflowForwardingResult {"
+          if old_sig not in text:
+              raise SystemExit('expected normalizeEvent signature not found')
+          text = text.replace(old_sig, new_sig, 1)
+          old_chain = "  for (const event of ordered) {\n    if (!sameChainContext(first, event)) return chainFail('CHAIN_CONTEXT_MISMATCH');\n  }\n\n  let currentWorkflowState: N8nWorkflowRunState | null = null;"
+          new_chain = "  for (const event of ordered) {\n    if (!sameChainContext(first, event)) return chainFail('CHAIN_CONTEXT_MISMATCH');\n  }\n  for (let index = 1; index < ordered.length; index += 1) {\n    const previous = ordered[index - 1];\n    const event = ordered[index];\n    if (previous === undefined || event === undefined || event.causationId !== previous.forwardingId) {\n      return chainFail('CHAIN_CONTEXT_MISMATCH');\n    }\n  }\n\n  let currentWorkflowState: N8nWorkflowRunState | null = null;"
+          if old_chain not in text:
+              raise SystemExit('expected chain context block not found')
+          text = text.replace(old_chain, new_chain, 1)
+          path.write_text(text)
+          PY
+      - run: npx prettier --write services/n8n-bridge/src/evidence/types.ts services/n8n-bridge/src/evidence/normalizer.ts services/n8n-bridge/src/evidence/index.ts services/n8n-bridge/test/w09d-receipt-evidence-forwarding.test.ts
+      - run: npx tsc -p services/n8n-bridge/tsconfig.test.json --pretty false
+      - run: node --test services/n8n-bridge/dist-test/test/w09d-receipt-evidence-forwarding.test.js
+      - run: git diff --check
+      - name: Commit hardened W09-D tree
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add services/n8n-bridge/src/evidence services/n8n-bridge/test/w09d-receipt-evidence-forwarding.test.ts
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "fix(W09-D): harden evidence chain reconstruction"
+          git push
