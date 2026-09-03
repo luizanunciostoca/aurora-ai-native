@@ -120,7 +120,10 @@ export type GoogleAdsAssetPlanningBlockCode =
 export type GoogleAdsAssetPlanningResult =
   | { readonly status: 'READY'; readonly plan: GoogleAdsAssetPlan }
   | { readonly status: 'ESCALATION_REQUIRED'; readonly code: 'AMBIGUOUS_CREATIVE_STRATEGY' }
-  | { readonly status: 'BLOCKED'; readonly code: Exclude<GoogleAdsAssetPlanningBlockCode, 'AMBIGUOUS_CREATIVE_STRATEGY'> };
+  | {
+      readonly status: 'BLOCKED';
+      readonly code: Exclude<GoogleAdsAssetPlanningBlockCode, 'AMBIGUOUS_CREATIVE_STRATEGY'>;
+    };
 
 const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const IMAGE_MIME_PATTERN = /^image\/(gif|jpeg|png)$/;
@@ -149,7 +152,12 @@ function validCost(cost: GoogleAdsExpectedAssetCost): boolean {
   );
 }
 
-function imageRatioWithin(width: number, height: number, target: number, tolerance: number): boolean {
+function imageRatioWithin(
+  width: number,
+  height: number,
+  target: number,
+  tolerance: number,
+): boolean {
   if (width <= 0 || height <= 0) return false;
   return Math.abs(width / height - target) / target <= tolerance;
 }
@@ -171,10 +179,18 @@ function validImageMedia(
   }
 
   if (kind === 'MARKETING_IMAGE') {
-    return media.width >= 600 && media.height >= 314 && imageRatioWithin(media.width, media.height, 1.91, 0.01);
+    return (
+      media.width >= 600 &&
+      media.height >= 314 &&
+      imageRatioWithin(media.width, media.height, 1.91, 0.01)
+    );
   }
   if (kind === 'SQUARE_MARKETING_IMAGE') {
-    return media.width >= 300 && media.height >= 300 && imageRatioWithin(media.width, media.height, 1, 0.01);
+    return (
+      media.width >= 300 &&
+      media.height >= 300 &&
+      imageRatioWithin(media.width, media.height, 1, 0.01)
+    );
   }
   return media.width >= 128 && media.height >= 128;
 }
@@ -201,10 +217,20 @@ function validAsset(asset: GoogleAdsPlanningAsset): boolean {
 
   switch (asset.kind) {
     case 'HEADLINE':
-      return asset.text !== undefined && nonEmpty(asset.text) && asset.text.length <= 30 && asset.media === undefined;
+      return (
+        asset.text !== undefined &&
+        nonEmpty(asset.text) &&
+        asset.text.length <= 30 &&
+        asset.media === undefined
+      );
     case 'LONG_HEADLINE':
     case 'DESCRIPTION':
-      return asset.text !== undefined && nonEmpty(asset.text) && asset.text.length <= 90 && asset.media === undefined;
+      return (
+        asset.text !== undefined &&
+        nonEmpty(asset.text) &&
+        asset.text.length <= 90 &&
+        asset.media === undefined
+      );
     case 'MARKETING_IMAGE':
     case 'SQUARE_MARKETING_IMAGE':
     case 'LOGO_IMAGE':
@@ -214,7 +240,10 @@ function validAsset(asset: GoogleAdsPlanningAsset): boolean {
   }
 }
 
-function countKind(assets: readonly GoogleAdsPlanningAsset[], kind: GoogleAdsPlanningAssetKind): number {
+function countKind(
+  assets: readonly GoogleAdsPlanningAsset[],
+  kind: GoogleAdsPlanningAssetKind,
+): number {
   return assets.filter((asset) => asset.kind === kind).length;
 }
 
@@ -254,11 +283,17 @@ function satisfiesSurfaceRequirements(
   return countKind(assets, 'YOUTUBE_VIDEO') >= 1;
 }
 
-function freezeAssets(assets: readonly GoogleAdsPlanningAsset[]): readonly GoogleAdsPlanningAsset[] {
-  return Object.freeze([...assets].sort((left, right) => left.assetId.localeCompare(right.assetId)));
+function freezeAssets(
+  assets: readonly GoogleAdsPlanningAsset[],
+): readonly GoogleAdsPlanningAsset[] {
+  return Object.freeze(
+    [...assets].sort((left, right) => left.assetId.localeCompare(right.assetId)),
+  );
 }
 
-export function planGoogleAdsAssets(input: GoogleAdsAssetPlanningInput): GoogleAdsAssetPlanningResult {
+export function planGoogleAdsAssets(
+  input: GoogleAdsAssetPlanningInput,
+): GoogleAdsAssetPlanningResult {
   if (!nonEmpty(input.planId) || !nonEmpty(input.assetGroupKey)) {
     return { status: 'BLOCKED', code: 'INVALID_PLAN' };
   }

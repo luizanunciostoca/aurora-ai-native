@@ -80,7 +80,9 @@ function pmaxAssets(): readonly GoogleAdsPlanningAsset[] {
   ];
 }
 
-function fixture(overrides: Partial<GoogleAdsAssetPlanningInput> = {}): GoogleAdsAssetPlanningInput {
+function fixture(
+  overrides: Partial<GoogleAdsAssetPlanningInput> = {},
+): GoogleAdsAssetPlanningInput {
   return {
     tenantId: TENANT,
     correlationId: CORRELATION,
@@ -146,9 +148,7 @@ test('W13-D escalates ambiguous custom creative strategy instead of widening aut
 
 test('W13-D rejects text that exceeds current provider planning constraints', () => {
   const assets = pmaxAssets().map((asset) =>
-    asset.assetId === 'headline-1'
-      ? textAsset('headline-1', 'HEADLINE', 'x'.repeat(31))
-      : asset,
+    asset.assetId === 'headline-1' ? textAsset('headline-1', 'HEADLINE', 'x'.repeat(31)) : asset,
   );
   assert.deepEqual(planGoogleAdsAssets(fixture({ assets })), {
     status: 'BLOCKED',
@@ -159,15 +159,19 @@ test('W13-D rejects text that exceeds current provider planning constraints', ()
 test('W13-D requires complete responsive Display text and image classes', () => {
   const displayAssets: readonly GoogleAdsPlanningAsset[] = [
     textAsset('display-headline', 'HEADLINE', 'Conheça a experiência'),
-    textAsset('display-long', 'LONG_HEADLINE', 'Descubra uma experiência criada para momentos especiais'),
+    textAsset(
+      'display-long',
+      'LONG_HEADLINE',
+      'Descubra uma experiência criada para momentos especiais',
+    ),
     textAsset('display-description', 'DESCRIPTION', 'Veja detalhes e planeje sua visita.'),
     imageAsset('display-landscape', 'MARKETING_IMAGE', 1200, 628),
   ];
 
-  assert.deepEqual(
-    planGoogleAdsAssets(fixture({ surface: 'DISPLAY', assets: displayAssets })),
-    { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' },
-  );
+  assert.deepEqual(planGoogleAdsAssets(fixture({ surface: 'DISPLAY', assets: displayAssets })), {
+    status: 'BLOCKED',
+    code: 'MISSING_REQUIRED_ASSET',
+  });
 
   const result = planGoogleAdsAssets(
     fixture({
@@ -223,10 +227,10 @@ test('W13-D fails closed on provenance, duplicate assets, malformed costs and in
     { status: 'BLOCKED', code: 'INVALID_PROVENANCE' },
   );
 
-  assert.deepEqual(
-    planGoogleAdsAssets(fixture({ assets: [...pmaxAssets(), pmaxAssets()[0]!] })),
-    { status: 'BLOCKED', code: 'DUPLICATE_ASSET' },
-  );
+  assert.deepEqual(planGoogleAdsAssets(fixture({ assets: [...pmaxAssets(), pmaxAssets()[0]!] })), {
+    status: 'BLOCKED',
+    code: 'DUPLICATE_ASSET',
+  });
 
   assert.deepEqual(
     planGoogleAdsAssets(
