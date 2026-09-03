@@ -49,7 +49,9 @@ function hasForbiddenMaterial(value: unknown, seen = new Set<object>()): boolean
 function exactKeys(value: Record<string, unknown>, expected: readonly string[]): boolean {
   const actual = Object.keys(value).sort();
   const canonical = [...expected].sort();
-  return actual.length === canonical.length && actual.every((key, index) => key === canonical[index]);
+  return (
+    actual.length === canonical.length && actual.every((key, index) => key === canonical[index])
+  );
 }
 
 function validIdentifier(value: unknown): value is string {
@@ -83,7 +85,9 @@ function promotable(binding: N8nWorkflowBinding): boolean {
   );
 }
 
-function normalizeLineage(value: Record<string, unknown> | null): N8nWorkflowSanitizedLineage | null {
+function normalizeLineage(
+  value: Record<string, unknown> | null,
+): N8nWorkflowSanitizedLineage | null {
   if (value === null) return null;
   return Object.freeze({
     corpusReference: value.corpusReference as string,
@@ -274,7 +278,8 @@ export function validateN8nWorkflowBinding(
       credentialRequirements
         .map((requirement) =>
           Object.freeze({
-            credentialReference: (requirement as Record<string, unknown>).credentialReference as string,
+            credentialReference: (requirement as Record<string, unknown>)
+              .credentialReference as string,
             integration: (requirement as Record<string, unknown>).integration as string,
           }),
         )
@@ -343,7 +348,10 @@ export class N8nWorkflowBindingRegistry {
           `SUPERSEDED_BY:${binding.bindingVersion}`,
         );
       }
-      this.activeVersions.set(familyKey(binding.tenantId, binding.bindingId), binding.bindingVersion);
+      this.activeVersions.set(
+        familyKey(binding.tenantId, binding.bindingId),
+        binding.bindingVersion,
+      );
     }
 
     const record: BindingRecord = { binding, status: binding.status };
@@ -429,7 +437,9 @@ export class N8nWorkflowBindingRegistry {
       return { ok: false, error: 'INVALID_IDENTIFIER' };
     }
     if (!validVersion(lookup.bindingVersion)) return { ok: false, error: 'INVALID_VERSION' };
-    const record = this.records.get(recordKey(lookup.tenantId, lookup.bindingId, lookup.bindingVersion));
+    const record = this.records.get(
+      recordKey(lookup.tenantId, lookup.bindingId, lookup.bindingVersion),
+    );
     if (record === undefined) {
       return this.missingResult(lookup.tenantId, lookup.bindingId, lookup.bindingVersion);
     }
@@ -496,7 +506,9 @@ export class N8nWorkflowBindingRegistry {
     if (binding.supersedesVersion !== currentVersion) {
       return { ok: false, error: 'INVALID_SUPERSESSION' };
     }
-    const current = this.records.get(recordKey(binding.tenantId, binding.bindingId, currentVersion));
+    const current = this.records.get(
+      recordKey(binding.tenantId, binding.bindingId, currentVersion),
+    );
     if (current === undefined || current.status !== 'ACTIVE') {
       return { ok: false, error: 'INVALID_SUPERSESSION' };
     }

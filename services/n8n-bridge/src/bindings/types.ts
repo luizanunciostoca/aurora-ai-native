@@ -1,20 +1,11 @@
 export type N8nWorkflowBindingStatus =
-  | 'CANDIDATE'
-  | 'ACTIVE'
-  | 'SUPERSEDED'
-  | 'DISABLED'
-  | 'REVOKED';
+  'CANDIDATE' | 'ACTIVE' | 'SUPERSEDED' | 'DISABLED' | 'REVOKED';
 
 export type N8nWorkflowBindingSourceKind =
-  | 'AURORA_NATIVE'
-  | 'SANITIZED_CORPUS'
-  | 'GOVERNED_MIGRATION';
+  'AURORA_NATIVE' | 'SANITIZED_CORPUS' | 'GOVERNED_MIGRATION';
 
 export type N8nWorkflowBindingLicenseStatus =
-  | 'AURORA_OWNED'
-  | 'REFERENCE_ONLY'
-  | 'PROVENANCE_ACCEPTED'
-  | 'PROVENANCE_HOLD';
+  'AURORA_OWNED' | 'REFERENCE_ONLY' | 'PROVENANCE_ACCEPTED' | 'PROVENANCE_HOLD';
 
 export interface N8nExternalWorkflowReference {
   /** Opaque n8n-side workflow reference. It is never an Aurora authority identifier. */
