@@ -5,7 +5,10 @@ import test from 'node:test';
 
 import type { CorrelationId, TenantId } from '@aurora/contracts';
 
-import { planGoogleAdsDomainIntent, type GoogleAdsCapabilityPlan } from '../src/google-ads/contracts.js';
+import {
+  planGoogleAdsDomainIntent,
+  type GoogleAdsCapabilityPlan,
+} from '../src/google-ads/contracts.js';
 import {
   prepareGoogleAdsFinancialMutation,
   type GoogleAdsFinancialGovernanceInput,
@@ -55,8 +58,11 @@ function domainPlan(): GoogleAdsCapabilityPlan {
   return result.plan;
 }
 
-function fixture(overrides: Partial<GoogleAdsFinancialGovernanceInput> = {}): GoogleAdsFinancialGovernanceInput {
+function fixture(
+  overrides: Partial<GoogleAdsFinancialGovernanceInput> = {},
+): GoogleAdsFinancialGovernanceInput {
   const plan = domainPlan();
+  const manager = plan.managerCustomerId ? { managerCustomerId: plan.managerCustomerId } : {};
   return {
     nowMs: NOW,
     plan,
@@ -66,7 +72,7 @@ function fixture(overrides: Partial<GoogleAdsFinancialGovernanceInput> = {}): Go
       tenantId: TENANT,
       providerBindingReference: plan.providerBindingReference,
       customerId: plan.customerId,
-      managerCustomerId: plan.managerCustomerId,
+      ...manager,
       bindingState: 'ACTIVE',
       verificationState: 'VERIFIED',
       observedAtMs: NOW - 5_000,
@@ -79,7 +85,7 @@ function fixture(overrides: Partial<GoogleAdsFinancialGovernanceInput> = {}): Go
       capabilityId: plan.capability.capabilityId,
       providerBindingReference: plan.providerBindingReference,
       customerId: plan.customerId,
-      managerCustomerId: plan.managerCustomerId,
+      ...manager,
       operation: 'SET_BUDGET',
       authorized: true,
       approvalReference: 'approval:w13f:1',
@@ -94,7 +100,7 @@ function fixture(overrides: Partial<GoogleAdsFinancialGovernanceInput> = {}): Go
       tenantId: TENANT,
       providerBindingReference: plan.providerBindingReference,
       customerId: plan.customerId,
-      managerCustomerId: plan.managerCustomerId,
+      ...manager,
       currency: 'BRL',
       remainingMicros: 100_000_000,
       maxOperationMicros: 30_000_000,
@@ -107,6 +113,7 @@ function fixture(overrides: Partial<GoogleAdsFinancialGovernanceInput> = {}): Go
       tenantId: TENANT,
       providerBindingReference: plan.providerBindingReference,
       customerId: plan.customerId,
+      ...manager,
       operation: 'SET_BUDGET',
       windowReference: 'w04:mutation-window:1',
       committedMutations: 1,
@@ -125,7 +132,12 @@ function fixture(overrides: Partial<GoogleAdsFinancialGovernanceInput> = {}): Go
   };
 }
 
-test('W13-F composes current authority, budget, account precheck and mutation bounds without granting execution', () => {
+function required<T>(value: T | null, label: string): T {
+  if (value === null) throw new Error(`${label} fixture must be present`);
+  return value;
+}
+
+test('W13-F composes bounded financial governance without granting execution', () => {
   const result = prepareGoogleAdsFinancialMutation(fixture());
   assert.equal(result.status, 'READY');
   if (result.status !== 'READY') return;
@@ -147,8 +159,7 @@ test('W13-F blocks missing or denied approval even when strategy confidence is m
     code: 'MISSING_APPROVAL',
   });
 
-  const authority = fixture().authority;
-  assert.ok(authority);
+  const authority = required(fixture().authority, 'authority');
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
       fixture({
@@ -166,8 +177,7 @@ test('W13-F blocks missing or denied approval even when strategy confidence is m
 });
 
 test('W13-F fails closed on stale provider precheck and wrong-account evidence', () => {
-  const precheck = fixture().precheck;
-  assert.ok(precheck);
+  const precheck = required(fixture().precheck, 'precheck');
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
       fixture({ precheck: { ...precheck, validUntilMs: NOW } }),
@@ -175,8 +185,7 @@ test('W13-F fails closed on stale provider precheck and wrong-account evidence',
     { status: 'BLOCKED', code: 'PRECHECK_STALE' },
   );
 
-  const authority = fixture().authority;
-  assert.ok(authority);
+  const authority = required(fixture().authority, 'authority');
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
       fixture({ authority: { ...authority, customerId: '0000000000' } }),
@@ -193,10 +202,8 @@ test('W13-F fails closed on stale provider precheck and wrong-account evidence',
 });
 
 test('W13-F enforces the narrowest W13, W02 and W04 financial ceiling', () => {
-  const authority = fixture().authority;
-  const budget = fixture().budget;
-  assert.ok(authority);
-  assert.ok(budget);
+  const authority = required(fixture().authority, 'authority');
+  const budget = required(fixture().budget, 'budget');
 
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(fixture({ proposedMicros: 50_000_001 })),
@@ -204,47 +211,70 @@ test('W13-F enforces the narrowest W13, W02 and W04 financial ceiling', () => {
   );
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
-      fixture({ proposedMicros: 40_000_001, budget: { ...budget, maxOperationMicros: 60_000_000 } }),
+      fixture({
+        proposedMicros: 40_000_001,
+        budget: { ...budget, maxOperationMicros: 60_000_000 },
+      }),
     ),
     { status: 'BLOCKED', code: 'BUDGET_CEILING_EXCEEDED' },
   );
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
-      fixture({ proposedMicros: 30_000_001, authority: { ...authority, financialCeilingMicros: 60_000_000 } }),
+      fixture({
+        proposedMicros: 30_000_001,
+        authority: { ...authority, financialCeilingMicros: 60_000_000 },
+      }),
     ),
     { status: 'BLOCKED', code: 'BUDGET_CEILING_EXCEEDED' },
   );
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
-      fixture({ proposedMicros: 25_000_000, budget: { ...budget, remainingMicros: 24_999_999 } }),
+      fixture({
+        proposedMicros: 25_000_000,
+        budget: { ...budget, remainingMicros: 24_999_999 },
+      }),
     ),
     { status: 'BLOCKED', code: 'BUDGET_CEILING_EXCEEDED' },
   );
 });
 
 test('W13-F bounds repeated optimization mutations and requires fresh bound evidence', () => {
-  const mutationWindow = fixture().mutationWindow;
-  assert.ok(mutationWindow);
+  const mutationWindow = required(fixture().mutationWindow, 'mutationWindow');
 
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
-      fixture({ mutationWindow: { ...mutationWindow, committedMutations: 3 } }),
+      fixture({
+        mutationWindow: { ...mutationWindow, committedMutations: 3 },
+      }),
     ),
     { status: 'BLOCKED', code: 'MUTATION_LIMIT_EXCEEDED' },
   );
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
-      fixture({ mutationWindow: { ...mutationWindow, validUntilMs: NOW } }),
+      fixture({
+        mutationWindow: { ...mutationWindow, validUntilMs: NOW },
+      }),
     ),
     { status: 'BLOCKED', code: 'MUTATION_BOUND_STALE' },
   );
 });
 
-test('W13-F fails closed on stale authority, stale budget, currency drift and malformed strategy evidence', () => {
-  const authority = fixture().authority;
-  const budget = fixture().budget;
-  assert.ok(authority);
-  assert.ok(budget);
+test('W13-F rejects MCC drift in mutation-bound evidence', () => {
+  const mutationWindow = required(fixture().mutationWindow, 'mutationWindow');
+
+  assert.deepEqual(
+    prepareGoogleAdsFinancialMutation(
+      fixture({
+        mutationWindow: { ...mutationWindow, managerCustomerId: '1111222233' },
+      }),
+    ),
+    { status: 'BLOCKED', code: 'MUTATION_BOUND_INVALID' },
+  );
+});
+
+test('W13-F fails closed on stale authority/budget, currency drift and bad confidence', () => {
+  const authority = required(fixture().authority, 'authority');
+  const budget = required(fixture().budget, 'budget');
 
   assert.deepEqual(
     prepareGoogleAdsFinancialMutation(
@@ -253,7 +283,9 @@ test('W13-F fails closed on stale authority, stale budget, currency drift and ma
     { status: 'BLOCKED', code: 'AUTHORITY_STALE' },
   );
   assert.deepEqual(
-    prepareGoogleAdsFinancialMutation(fixture({ budget: { ...budget, validUntilMs: NOW } })),
+    prepareGoogleAdsFinancialMutation(
+      fixture({ budget: { ...budget, validUntilMs: NOW } }),
+    ),
     { status: 'BLOCKED', code: 'BUDGET_STALE' },
   );
   assert.deepEqual(
