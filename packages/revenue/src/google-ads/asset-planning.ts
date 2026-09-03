@@ -13,6 +13,7 @@ export const GOOGLE_ADS_PLANNING_ASSET_KINDS = [
   'HEADLINE',
   'LONG_HEADLINE',
   'DESCRIPTION',
+  'BUSINESS_NAME',
   'MARKETING_IMAGE',
   'SQUARE_MARKETING_IMAGE',
   'LOGO_IMAGE',
@@ -32,6 +33,7 @@ export interface GoogleAdsPlanningMedia {
   readonly width?: number;
   readonly height?: number;
   readonly durationSeconds?: number;
+  readonly fileSizeBytes?: number;
 }
 
 export interface GoogleAdsPlanningAsset {
@@ -60,6 +62,16 @@ export interface GoogleAdsExpectedAssetCost {
   readonly maximumMicros: number;
 }
 
+export interface GoogleAdsPerformanceMaxBrandContextProjection {
+  readonly source: 'W08_VERIFIED_GOOGLE_ADS_BRAND_CONTEXT';
+  readonly brandGuidelinesEnabled: boolean;
+  readonly linkageScope: 'CAMPAIGN' | 'ASSET_GROUP';
+  readonly businessNameAssetCount: number;
+  readonly logoAssetCount: number;
+  readonly verifiedAt: string;
+  readonly authorizesExecution: false;
+}
+
 export interface GoogleAdsAssetPlanningInput {
   readonly tenantId: TenantId;
   readonly correlationId: CorrelationId;
@@ -72,6 +84,7 @@ export interface GoogleAdsAssetPlanningInput {
   readonly capability: GoogleAdsCapabilityProjection;
   readonly strategy: GoogleAdsCreativeStrategy;
   readonly assets: readonly GoogleAdsPlanningAsset[];
+  readonly performanceMaxBrandContext?: GoogleAdsPerformanceMaxBrandContextProjection;
   readonly expectedCost?: GoogleAdsExpectedAssetCost;
 }
 
@@ -94,6 +107,7 @@ export interface GoogleAdsAssetPlan {
   readonly capability: GoogleAdsCapabilityProjection;
   readonly strategy: GoogleAdsCreativeStrategy;
   readonly assets: readonly GoogleAdsPlanningAsset[];
+  readonly performanceMaxBrandContext?: GoogleAdsPerformanceMaxBrandContextProjection;
   readonly expectedCost?: GoogleAdsExpectedAssetCost;
   readonly constraints: GoogleAdsAssetConstraintSummary;
   readonly riskClass: 'CREATIVE_PLAN_ONLY' | 'COST_AWARE_CREATIVE_PLAN';
@@ -112,6 +126,7 @@ export type GoogleAdsAssetPlanningBlockCode =
   | 'INVALID_STRATEGY'
   | 'AMBIGUOUS_CREATIVE_STRATEGY'
   | 'INVALID_COST_ESTIMATE'
+  | 'INVALID_BRAND_CONTEXT'
   | 'DUPLICATE_ASSET'
   | 'INVALID_PROVENANCE'
   | 'ASSET_CONSTRAINT_VIOLATION'
@@ -129,6 +144,7 @@ const HASH_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const IMAGE_MIME_PATTERN = /^image\/(gif|jpeg|png)$/;
 const VIDEO_MIME_PATTERN = /^video\//;
 const CUSTOM_STRATEGY_CONFIDENCE_FLOOR = 0.75;
+const MAX_IMAGE_FILE_SIZE_BYTES = 5_120 * 1_024;
 
 function nonEmpty(value: string): boolean {
   return value.trim().length > 0;
@@ -172,8 +188,12 @@ function validImageMedia(
     !IMAGE_MIME_PATTERN.test(media.mimeType) ||
     media.width === undefined ||
     media.height === undefined ||
+    media.fileSizeBytes === undefined ||
     !Number.isSafeInteger(media.width) ||
-    !Number.isSafeInteger(media.height)
+    !Number.isSafeInteger(media.height) ||
+    !Number.isSafeInteger(media.fileSizeBytes) ||
+    media.fileSizeBytes <= 0 ||
+    media.fileSizeBytes > MAX_IMAGE_FILE_SIZE_BYTES
   ) {
     return false;
   }
@@ -231,6 +251,13 @@ function validAsset(asset: GoogleAdsPlanningAsset): boolean {
         asset.text.length <= 30 &&
         asset.media === undefined
       );
+    case 'BUSINESS_NAME':
+      return (
+        asset.text !== undefined &&
+        nonEmpty(asset.text) &&
+        asset.text.length <= 25 &&
+        asset.media === undefined
+      );
     case 'LONG_HEADLINE':
     case 'DESCRIPTION':
       return (
@@ -261,6 +288,43 @@ function hasShortDescription(assets: readonly GoogleAdsPlanningAsset[]): boolean
   );
 }
 
+function validPerformanceMaxBrandContext(input: GoogleAdsAssetPlanningInput): boolean {
+  const brand = input.performanceMaxBrandContext;
+  if (
+    !brand ||
+    brand.source !== 'W08_VERIFIED_GOOGLE_ADS_BRAND_CONTEXT' ||
+    brand.authorizesExecution !== false ||
+    !validTimestamp(brand.verifiedAt) ||
+    !Number.isSafeInteger(brand.businessNameAssetCount) ||
+    !Number.isSafeInteger(brand.logoAssetCount) ||
+    brand.businessNameAssetCount < 0 ||
+    brand.logoAssetCount < 0 ||
+    brand.logoAssetCount > 5
+  ) {
+    return false;
+  }
+
+  const plannedBusinessNames = countKind(input.assets, 'BUSINESS_NAME');
+  const plannedLogos = countKind(input.assets, 'LOGO_IMAGE');
+  if (brand.brandGuidelinesEnabled) {
+    return (
+      brand.linkageScope === 'CAMPAIGN' &&
+      brand.businessNameAssetCount === 1 &&
+      brand.logoAssetCount >= 1 &&
+      plannedBusinessNames === 0 &&
+      plannedLogos === 0
+    );
+  }
+
+  return (
+    brand.linkageScope === 'ASSET_GROUP' &&
+    brand.businessNameAssetCount === 1 &&
+    brand.logoAssetCount >= 1 &&
+    plannedBusinessNames === brand.businessNameAssetCount &&
+    plannedLogos === brand.logoAssetCount
+  );
+}
+
 function satisfiesSurfaceRequirements(
   surface: GoogleAdsAssetPlanningSurface,
   assets: readonly GoogleAdsPlanningAsset[],
@@ -268,6 +332,7 @@ function satisfiesSurfaceRequirements(
   const headlines = countKind(assets, 'HEADLINE');
   const longHeadlines = countKind(assets, 'LONG_HEADLINE');
   const descriptions = countKind(assets, 'DESCRIPTION');
+  const businessNames = countKind(assets, 'BUSINESS_NAME');
   const marketingImages = countKind(assets, 'MARKETING_IMAGE');
   const squareMarketingImages = countKind(assets, 'SQUARE_MARKETING_IMAGE');
   const logos = countKind(assets, 'LOGO_IMAGE');
@@ -285,6 +350,7 @@ function satisfiesSurfaceRequirements(
       descriptions >= 2 &&
       descriptions <= 5 &&
       hasShortDescription(assets) &&
+      businessNames <= 1 &&
       marketingImages >= 1 &&
       marketingImages <= 20 &&
       squareMarketingImages >= 1 &&
@@ -302,6 +368,7 @@ function satisfiesSurfaceRequirements(
       longHeadlines === 1 &&
       descriptions >= 1 &&
       descriptions <= 5 &&
+      businessNames === 1 &&
       marketingImages >= 1 &&
       squareMarketingImages >= 1 &&
       marketingImages + squareMarketingImages <= 15 &&
@@ -380,6 +447,13 @@ export function planGoogleAdsAssets(
     if (!validAsset(asset)) return { status: 'BLOCKED', code: 'ASSET_CONSTRAINT_VIOLATION' };
   }
 
+  if (input.surface === 'PERFORMANCE_MAX' && !validPerformanceMaxBrandContext(input)) {
+    return { status: 'BLOCKED', code: 'INVALID_BRAND_CONTEXT' };
+  }
+  if (input.surface !== 'PERFORMANCE_MAX' && input.performanceMaxBrandContext !== undefined) {
+    return { status: 'BLOCKED', code: 'INVALID_BRAND_CONTEXT' };
+  }
+
   if (!satisfiesSurfaceRequirements(input.surface, input.assets)) {
     return { status: 'BLOCKED', code: 'MISSING_REQUIRED_ASSET' };
   }
@@ -407,6 +481,9 @@ export function planGoogleAdsAssets(
     capability: input.capability,
     strategy: input.strategy,
     assets: freezeAssets(input.assets),
+    ...(input.performanceMaxBrandContext
+      ? { performanceMaxBrandContext: input.performanceMaxBrandContext }
+      : {}),
     ...(input.expectedCost ? { expectedCost: input.expectedCost } : {}),
     constraints,
     riskClass: input.expectedCost ? 'COST_AWARE_CREATIVE_PLAN' : 'CREATIVE_PLAN_ONLY',
