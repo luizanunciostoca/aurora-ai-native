@@ -95,10 +95,10 @@ test('W12-A financial writes preserve currency/ceiling and remain W07/W08 govern
 });
 
 test('W12-A rejects ambiguous provider identity and mismatched external resource kinds', () => {
-  assert.deepEqual(
-    planMetaAdsDomainIntent(fixture({ adAccountExternalId: '' })),
-    { status: 'BLOCKED', code: 'MISSING_AD_ACCOUNT_EXTERNAL_ID' },
-  );
+  assert.deepEqual(planMetaAdsDomainIntent(fixture({ adAccountExternalId: '' })), {
+    status: 'BLOCKED',
+    code: 'MISSING_AD_ACCOUNT_EXTERNAL_ID',
+  });
 
   assert.deepEqual(
     planMetaAdsDomainIntent(
