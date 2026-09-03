@@ -75,10 +75,7 @@ function request(session: { sessionId: string; connectionId: string }, overrides
   };
 }
 
-function boundOperation(
-  session: { sessionId: string; connectionId: string },
-  overrides = {},
-) {
+function boundOperation(session: { sessionId: string; connectionId: string }, overrides = {}) {
   return {
     protocolVersion: GATEWAY_PROTOCOL_VERSION,
     sessionId: session.sessionId,
@@ -92,10 +89,7 @@ function boundOperation(
   };
 }
 
-function boundSession(
-  session: { sessionId: string; connectionId: string },
-  overrides = {},
-) {
+function boundSession(session: { sessionId: string; connectionId: string }, overrides = {}) {
   return {
     protocolVersion: GATEWAY_PROTOCOL_VERSION,
     sessionId: session.sessionId,
@@ -158,7 +152,9 @@ test('rejects cross-tenant and identity/session mismatches', () => {
   assert.equal(wrongCorrelation.ok ? '' : wrongCorrelation.error.code, 'CORRELATION_MISMATCH');
 
   assert.equal(openedManager.beginRequest(request(session)).ok, true);
-  const wrongCancelTenant = openedManager.cancelRequest(boundOperation(session, { tenantId: tenantB }));
+  const wrongCancelTenant = openedManager.cancelRequest(
+    boundOperation(session, { tenantId: tenantB }),
+  );
   const wrongCompleteActor = openedManager.completeRequest(
     boundOperation(session, { actorIdentityId: actorB }),
   );
@@ -185,7 +181,10 @@ test('requires explicit reconnect and fresh authentication after close', () => {
     'CORRELATION_MISMATCH',
   );
 
-  authenticator.set('credential:reconnect', claims({ issuedAtMs: now + 500, expiresAtMs: now + 90_000 }));
+  authenticator.set(
+    'credential:reconnect',
+    claims({ issuedAtMs: now + 500, expiresAtMs: now + 90_000 }),
+  );
   const reconnect = manager.reconnectSession({
     ...handshake('credential:reconnect'),
     previousConnectionId: session.connectionId,
@@ -196,7 +195,10 @@ test('requires explicit reconnect and fresh authentication after close', () => {
   assert.equal(reconnect.value.generation, 2);
   assert.notEqual(reconnect.value.connectionId, session.connectionId);
 
-  assert.equal(manager.closeSession(boundSession(reconnect.value, { nowMs: now + 2_000 })).ok, true);
+  assert.equal(
+    manager.closeSession(boundSession(reconnect.value, { nowMs: now + 2_000 })).ok,
+    true,
+  );
   authenticator.set('credential:expired-reconnect', claims({ expiresAtMs: now + 2_000 }));
   const expiredReconnect = manager.reconnectSession({
     ...handshake('credential:expired-reconnect'),
@@ -208,14 +210,19 @@ test('requires explicit reconnect and fresh authentication after close', () => {
 
 test('expires active sessions and refuses stale connection reuse', () => {
   const { manager, session } = openManager();
-  const afterExpiry = manager.beginRequest(request(session, { nowMs: now + 60_000, deadlineMs: now + 61_000 }));
+  const afterExpiry = manager.beginRequest(
+    request(session, { nowMs: now + 60_000, deadlineMs: now + 61_000 }),
+  );
   assert.equal(afterExpiry.ok ? '' : afterExpiry.error.code, 'AUTH_EXPIRED');
   const staleConnection = manager.beginRequest(request(session));
   assert.equal(staleConnection.ok ? '' : staleConnection.error.code, 'SESSION_CLOSED');
 });
 
 test('enforces deadlines, bounded outstanding requests and duplicate request rejection', () => {
-  const { manager, session } = openManager({ maxOutstandingRequestsPerSession: 1, maxDeadlineHorizonMs: 60_000 });
+  const { manager, session } = openManager({
+    maxOutstandingRequestsPerSession: 1,
+    maxDeadlineHorizonMs: 60_000,
+  });
   const expired = manager.beginRequest(request(session, { deadlineMs: now }));
   const tooFar = manager.beginRequest(request(session, { deadlineMs: now + 60_001 }));
   assert.equal(expired.ok ? '' : expired.error.code, 'DEADLINE_EXCEEDED');

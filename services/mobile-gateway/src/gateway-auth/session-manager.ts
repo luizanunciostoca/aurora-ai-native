@@ -232,7 +232,10 @@ export class GatewaySessionManager {
     if (!parsed.ok) return parsed;
     const existing = this.#sessions.get(parsed.value.sessionId);
     if (existing !== undefined) {
-      return error('SESSION_CONFLICT', 'Session identifier already exists; use explicit reconnect.');
+      return error(
+        'SESSION_CONFLICT',
+        'Session identifier already exists; use explicit reconnect.',
+      );
     }
     const capacity = this.#prepareSessionSlot();
     if (!capacity.ok) return capacity;
@@ -281,7 +284,10 @@ export class GatewaySessionManager {
       );
     }
     if (session.requests.has(parsed.value.requestId)) {
-      return error('REQUEST_DUPLICATE', 'Request identifier has already been used in this session.');
+      return error(
+        'REQUEST_DUPLICATE',
+        'Request identifier has already been used in this session.',
+      );
     }
     const outstanding = [...session.requests.values()].filter(
       (request) => request.state !== 'COMPLETED',
@@ -435,10 +441,7 @@ export class GatewaySessionManager {
     return success(sessionSnapshot(record));
   }
 
-  #parseOpenInput(
-    input: unknown,
-    reconnect: false,
-  ): GatewayProtocolResult<OpenGatewaySessionInput>;
+  #parseOpenInput(input: unknown, reconnect: false): GatewayProtocolResult<OpenGatewaySessionInput>;
   #parseOpenInput(
     input: unknown,
     reconnect: true,
@@ -613,7 +616,10 @@ export class GatewaySessionManager {
       return error('ACTOR_MISMATCH', 'Operation actor does not match the authenticated session.');
     }
     if (result.value.correlationId !== input.correlationId) {
-      return error('CORRELATION_MISMATCH', 'Operation correlation does not match the session context.');
+      return error(
+        'CORRELATION_MISMATCH',
+        'Operation correlation does not match the session context.',
+      );
     }
     return result;
   }
@@ -631,7 +637,10 @@ export class GatewaySessionManager {
       return error('ACTOR_MISMATCH', 'Request actor does not match the authenticated session.');
     }
     if (result.value.correlationId !== input.correlationId) {
-      return error('CORRELATION_MISMATCH', 'Request correlation does not match the session context.');
+      return error(
+        'CORRELATION_MISMATCH',
+        'Request correlation does not match the session context.',
+      );
     }
     return result;
   }
