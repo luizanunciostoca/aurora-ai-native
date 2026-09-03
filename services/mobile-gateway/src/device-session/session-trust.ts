@@ -281,8 +281,6 @@ export class DeviceSessionTrustManager {
     if (this.#sessions.has(parsed.value.deviceSessionId)) {
       return error('SESSION_CONFLICT', 'Device session identifier already exists.');
     }
-    const capacity = this.#prepareSessionSlot();
-    if (capacity !== null) return capacity;
     const bindingError = this.#validateGatewayDeviceBinding(
       parsed.value.gatewaySession,
       parsed.value.deviceRecord,
@@ -294,6 +292,8 @@ export class DeviceSessionTrustManager {
       parsed.value.nowMs,
     );
     if (attestationError !== null) return attestationError;
+    const capacity = this.#prepareSessionSlot();
+    if (capacity !== null) return capacity;
 
     const record: SessionRecord = {
       deviceSessionId: parsed.value.deviceSessionId,
