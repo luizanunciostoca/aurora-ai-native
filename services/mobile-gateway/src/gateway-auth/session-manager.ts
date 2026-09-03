@@ -57,7 +57,11 @@ const DEFAULT_CONFIG: GatewayTransportConfig = {
 const ACTOR_KINDS = new Set(['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM']);
 const SAFE_TOKEN = /^[A-Za-z0-9._:-]+$/;
 
-function error(code: GatewayProtocolErrorCode, message: string, retryable = false): GatewayProtocolError {
+function error(
+  code: GatewayProtocolErrorCode,
+  message: string,
+  retryable = false,
+): GatewayProtocolError {
   return { ok: false, error: { code, message, retryable } };
 }
 
@@ -123,14 +127,23 @@ function validateAuthClaims(
 ): GatewayProtocolResult<GatewayAuthClaims> {
   if (
     !isPlainDataRecord(value) ||
-    !hasOnlyKeys(value, ['tenantId', 'actorIdentityId', 'issuedAtMs', 'expiresAtMs', 'authVersion']) ||
+    !hasOnlyKeys(value, [
+      'tenantId',
+      'actorIdentityId',
+      'issuedAtMs',
+      'expiresAtMs',
+      'authVersion',
+    ]) ||
     !isBoundedToken(value.tenantId, 256) ||
     !isBoundedToken(value.actorIdentityId, 256) ||
     !isBoundedToken(value.authVersion, 64) ||
     !isFiniteInteger(value.issuedAtMs) ||
     !isFiniteInteger(value.expiresAtMs)
   ) {
-    return error('AUTH_INVALID', 'Authentication claims are malformed or contain unsupported fields.');
+    return error(
+      'AUTH_INVALID',
+      'Authentication claims are malformed or contain unsupported fields.',
+    );
   }
 
   if (value.issuedAtMs > nowMs || value.expiresAtMs <= value.issuedAtMs) {
@@ -166,8 +179,9 @@ function sessionSnapshot(record: SessionRecord): GatewaySessionSnapshot {
     authIssuedAtMs: record.authIssuedAtMs,
     authExpiresAtMs: record.authExpiresAtMs,
     openedAtMs: record.openedAtMs,
-    outstandingRequests: [...record.requests.values()].filter((request) => request.state !== 'COMPLETED')
-      .length,
+    outstandingRequests: [...record.requests.values()].filter(
+      (request) => request.state !== 'COMPLETED',
+    ).length,
     authorizesExecution: false as const,
   };
   return record.closedAtMs === undefined ? base : { ...base, closedAtMs: record.closedAtMs };
@@ -229,7 +243,9 @@ export class GatewaySessionManager {
     const parsed = this.#parseOpenInput(input, true);
     if (!parsed.ok) return parsed;
     const existing = this.#sessions.get(parsed.value.sessionId);
-    if (existing === undefined) return error('SESSION_NOT_FOUND', 'No previous session exists to reconnect.');
+    if (existing === undefined) {
+      return error('SESSION_NOT_FOUND', 'No previous session exists to reconnect.');
+    }
     if (existing.state === 'OPEN') {
       return error('SESSION_CONFLICT', 'An active connection already owns this session.');
     }
@@ -259,13 +275,17 @@ export class GatewaySessionManager {
       return error('DEADLINE_EXCEEDED', 'Request deadline has already expired.');
     }
     if (parsed.value.deadlineMs - parsed.value.nowMs > this.#config.maxDeadlineHorizonMs) {
-      return error('DEADLINE_OUT_OF_RANGE', 'Request deadline exceeds the bounded transport horizon.');
+      return error(
+        'DEADLINE_OUT_OF_RANGE',
+        'Request deadline exceeds the bounded transport horizon.',
+      );
     }
     if (session.requests.has(parsed.value.requestId)) {
       return error('REQUEST_DUPLICATE', 'Request identifier has already been used in this session.');
     }
-    const outstanding = [...session.requests.values()].filter((request) => request.state !== 'COMPLETED')
-      .length;
+    const outstanding = [...session.requests.values()].filter(
+      (request) => request.state !== 'COMPLETED',
+    ).length;
     if (outstanding >= this.#config.maxOutstandingRequestsPerSession) {
       return error('BACKPRESSURE', 'Session has too many outstanding requests.', true);
     }
@@ -334,7 +354,9 @@ export class GatewaySessionManager {
   }
 
   #prepareSessionSlot(): GatewayProtocolResult<true> {
-    const activeSessions = [...this.#sessions.values()].filter((session) => session.state === 'OPEN').length;
+    const activeSessions = [...this.#sessions.values()].filter(
+      (session) => session.state === 'OPEN',
+    ).length;
     if (activeSessions >= this.#config.maxOpenSessions) {
       return error('BACKPRESSURE', 'Gateway session capacity is exhausted.', true);
     }
@@ -381,7 +403,9 @@ export class GatewaySessionManager {
     } catch {
       return error('AUTH_INVALID', 'Authentication verifier rejected the credential.');
     }
-    if (rawClaims === null) return error('AUTH_INVALID', 'Authentication credential is invalid.');
+    if (rawClaims === null) {
+      return error('AUTH_INVALID', 'Authentication credential is invalid.');
+    }
     const claims = validateAuthClaims(rawClaims, input.nowMs, this.#config);
     if (!claims.ok) return claims;
     if (claims.value.tenantId !== input.tenantId) {
