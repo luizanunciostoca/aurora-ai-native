@@ -113,7 +113,10 @@ function timestamp(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function isStale(observation: SocialProviderObservation, evaluatedAt: number | undefined): boolean {
+function isStale(
+  observation: SocialProviderObservation,
+  evaluatedAt: number | undefined,
+): boolean {
   const observedAt = timestamp(observation.observedAt);
   if (
     evaluatedAt === undefined ||
@@ -178,7 +181,9 @@ function aggregateBusinessOutcomes(
  * Build a read-only W11-G projection. Provider counters remain observations and
  * are never promoted into CRM/business outcomes or execution authority.
  */
-export function buildSocialAnalyticsReadModel(input: BuildSocialAnalyticsInput): SocialAnalyticsReadModel {
+export function buildSocialAnalyticsReadModel(
+  input: BuildSocialAnalyticsInput,
+): SocialAnalyticsReadModel {
   const providerObservations = input.providerObservations.filter(
     (observation) => observation.tenantId === input.tenantId,
   );
@@ -186,7 +191,8 @@ export function buildSocialAnalyticsReadModel(input: BuildSocialAnalyticsInput):
     (outcome) => outcome.tenantId === input.tenantId,
   );
   const rejectedCrossTenantRecords =
-    input.providerObservations.length - providerObservations.length +
+    input.providerObservations.length -
+    providerObservations.length +
     (input.businessOutcomes.length - businessOutcomes.length);
 
   const evaluatedAt = timestamp(input.evaluatedAt);
