@@ -106,7 +106,7 @@ test('W08-B exposes credential material only inside the transient callback and r
 test('W08-B fails closed on tenant, provider, account and binding mismatch before backend access', async () => {
   let backendCalls = 0;
   const backend: CredentialBackend = {
-    async withCredential(_lookup, _consume) {
+    async withCredential() {
       backendCalls += 1;
     },
   };
@@ -173,7 +173,7 @@ test('W08-B fails closed on tenant, provider, account and binding mismatch befor
 test('W08-B rejects unavailable binding and revoked, rotated or expired credential metadata', async () => {
   let backendCalls = 0;
   const backend: CredentialBackend = {
-    async withCredential(_lookup, _consume) {
+    async withCredential() {
       backendCalls += 1;
     },
   };
@@ -244,7 +244,7 @@ test('W08-B rejects malformed, accessor, inherited and raw-token-like reference 
 
   let backendCalls = 0;
   const backend: CredentialBackend = {
-    async withCredential(_lookup, _consume) {
+    async withCredential() {
       backendCalls += 1;
     },
   };
@@ -270,7 +270,7 @@ test('W08-B rejects malformed, accessor, inherited and raw-token-like reference 
 
 test('W08-B sanitizes backend and consumer failures instead of returning thrown credential-bearing messages', async () => {
   const backendFailure: CredentialBackend = {
-    async withCredential(_lookup, _consume) {
+    async withCredential() {
       throw new Error(`backend:${TRANSIENT_FIXTURE_VALUE}`);
     },
   };
@@ -313,7 +313,7 @@ test('W08-B sanitizes backend and consumer failures instead of returning thrown 
 
 test('W08-B fails closed when the credential backend violates the callback protocol', async () => {
   const noCallback: CredentialBackend = {
-    async withCredential(_lookup, _consume) {},
+    async withCredential() {},
   };
   const twice: CredentialBackend = {
     async withCredential(_lookup, consume) {
