@@ -102,58 +102,58 @@ function credentialBackend(onCall?: () => void): CredentialBackend {
   };
 }
 
-test(
-  'W08-C reads bounded pages with transient credentials and normalized observation metadata',
-  async () => {
-    const calls: ProviderReadTransportRequest[] = [];
-    const adapter: ProviderReadAdapter = {
-      async readPage(input, credential) {
-        assert.equal(credential, CREDENTIAL);
-        calls.push(input);
-        if (calls.length === 1) {
-          return {
-            ok: true,
-            page: {
-              items: [{ id: 'media-1' }],
-              observedAt: OBSERVED,
-              nextCursorToken: 'cursor-2',
-              providerRevision: 'rev-10',
-              rateLimit: { remaining: 9, limit: 10 },
-            },
-          };
-        }
+test('W08-C reads bounded pages with transient credentials and normalized observation metadata', async () => {
+  const calls: ProviderReadTransportRequest[] = [];
+  const adapter: ProviderReadAdapter = {
+    async readPage(input, credential) {
+      assert.equal(credential, CREDENTIAL);
+      calls.push(input);
+      if (calls.length === 1) {
         return {
           ok: true,
           page: {
-            items: [{ id: 'media-2' }],
+            items: [{ id: 'media-1' }],
             observedAt: OBSERVED,
-            providerRevision: 'rev-11',
+            nextCursorToken: 'cursor-2',
+            providerRevision: 'rev-10',
+            rateLimit: { remaining: 9, limit: 10 },
           },
         };
-      },
-    };
+      }
+      return {
+        ok: true,
+        page: {
+          items: [{ id: 'media-2' }],
+          observedAt: OBSERVED,
+          providerRevision: 'rev-11',
+        },
+      };
+    },
+  };
 
-    const result = await executeProviderRead(request(), {
-      credentials: credentialBackend(),
-      adapter,
-    });
+  const result = await executeProviderRead(request(), {
+    credentials: credentialBackend(),
+    adapter,
+  });
 
-    assert.equal(result.ok, true);
-    assert.equal(result.authorizesExecution, false);
-    if (!result.ok) return;
-    assert.equal(result.pagesRead, 2);
-    assert.equal(result.items.length, 2);
-    assert.equal(result.provider, 'META');
-    assert.equal(result.accountReference, ACCOUNT);
-    assert.equal(result.bindingReference, 'provider-binding-meta-account-1');
-    assert.equal(result.providerRevision, 'rev-11');
-    assert.equal(result.continuationCursor, undefined);
-    assert.equal(calls[0]?.cursorToken, undefined);
-    assert.equal(calls[1]?.cursorToken, 'cursor-2');
-    assert.equal(calls.every((call) => call.itemBudget <= 4), true);
-    assert.equal(JSON.stringify(result).includes(CREDENTIAL), false);
-  },
-);
+  assert.equal(result.ok, true);
+  assert.equal(result.authorizesExecution, false);
+  if (!result.ok) return;
+  assert.equal(result.pagesRead, 2);
+  assert.equal(result.items.length, 2);
+  assert.equal(result.provider, 'META');
+  assert.equal(result.accountReference, ACCOUNT);
+  assert.equal(result.bindingReference, 'provider-binding-meta-account-1');
+  assert.equal(result.providerRevision, 'rev-11');
+  assert.equal(result.continuationCursor, undefined);
+  assert.equal(calls[0]?.cursorToken, undefined);
+  assert.equal(calls[1]?.cursorToken, 'cursor-2');
+  assert.equal(
+    calls.every((call) => call.itemBudget <= 4),
+    true,
+  );
+  assert.equal(JSON.stringify(result).includes(CREDENTIAL), false);
+});
 
 test('W08-C stops at page budget and scopes continuation cursor to the exact request', async () => {
   const adapter: ProviderReadAdapter = {
@@ -199,52 +199,46 @@ test('W08-C stops at page budget and scopes continuation cursor to the exact req
   assert.equal(resumedCursor, 'cursor-next');
 });
 
-test(
-  'W08-C rejects cursor scope reuse across a different query before credential/provider access',
-  async () => {
-    let backendCalls = 0;
-    let adapterCalls = 0;
-    const seed = await executeProviderRead(
-      request({ limits: { maxPages: 1, maxItems: 10 } }),
-      {
-        credentials: credentialBackend(),
-        adapter: {
-          async readPage() {
-            return {
-              ok: true,
-              page: { items: [], observedAt: OBSERVED, nextCursorToken: 'cursor-scope' },
-            };
-          },
+test('W08-C rejects cursor scope reuse across a different query before credential/provider access', async () => {
+  let backendCalls = 0;
+  let adapterCalls = 0;
+  const seed = await executeProviderRead(request({ limits: { maxPages: 1, maxItems: 10 } }), {
+    credentials: credentialBackend(),
+    adapter: {
+      async readPage() {
+        return {
+          ok: true,
+          page: { items: [], observedAt: OBSERVED, nextCursorToken: 'cursor-scope' },
+        };
+      },
+    },
+  });
+  assert.equal(seed.ok, true);
+  if (!seed.ok || seed.continuationCursor === undefined) return;
+
+  const result = await executeProviderRead(
+    request({ cursor: seed.continuationCursor, query: { limit: 99 } }),
+    {
+      credentials: credentialBackend(() => {
+        backendCalls += 1;
+      }),
+      adapter: {
+        async readPage() {
+          adapterCalls += 1;
+          return { ok: true, page: { items: [], observedAt: OBSERVED } };
         },
       },
-    );
-    assert.equal(seed.ok, true);
-    if (!seed.ok || seed.continuationCursor === undefined) return;
+    },
+  );
 
-    const result = await executeProviderRead(
-      request({ cursor: seed.continuationCursor, query: { limit: 99 } }),
-      {
-        credentials: credentialBackend(() => {
-          backendCalls += 1;
-        }),
-        adapter: {
-          async readPage() {
-            adapterCalls += 1;
-            return { ok: true, page: { items: [], observedAt: OBSERVED } };
-          },
-        },
-      },
-    );
-
-    assert.deepEqual(result, {
-      ok: false,
-      error: 'CURSOR_SCOPE_MISMATCH',
-      authorizesExecution: false,
-    });
-    assert.equal(backendCalls, 0);
-    assert.equal(adapterCalls, 0);
-  },
-);
+  assert.deepEqual(result, {
+    ok: false,
+    error: 'CURSOR_SCOPE_MISMATCH',
+    authorizesExecution: false,
+  });
+  assert.equal(backendCalls, 0);
+  assert.equal(adapterCalls, 0);
+});
 
 test('W08-C fails closed on wrong tenant/account binding before credential resolution', async () => {
   let backendCalls = 0;
@@ -296,48 +290,42 @@ test('W08-C rejects incompatible credential metadata before provider adapter acc
   assert.equal(adapterCalls, 0);
 });
 
-test(
-  'W08-C rejects over-budget pages and repeated cursors as adapter protocol violations',
-  async () => {
-    const overBudget = await executeProviderRead(
-      request({ limits: { maxPages: 1, maxItems: 1 } }),
-      {
-        credentials: credentialBackend(),
-        adapter: {
-          async readPage() {
-            return {
-              ok: true,
-              page: { items: [{ id: 1 }, { id: 2 }], observedAt: OBSERVED },
-            };
-          },
-        },
+test('W08-C rejects over-budget pages and repeated cursors as adapter protocol violations', async () => {
+  const overBudget = await executeProviderRead(request({ limits: { maxPages: 1, maxItems: 1 } }), {
+    credentials: credentialBackend(),
+    adapter: {
+      async readPage() {
+        return {
+          ok: true,
+          page: { items: [{ id: 1 }, { id: 2 }], observedAt: OBSERVED },
+        };
       },
-    );
-    assert.equal(overBudget.ok, false);
-    if (!overBudget.ok) assert.equal(overBudget.error, 'ADAPTER_PROTOCOL_VIOLATION');
+    },
+  });
+  assert.equal(overBudget.ok, false);
+  if (!overBudget.ok) assert.equal(overBudget.error, 'ADAPTER_PROTOCOL_VIOLATION');
 
-    let call = 0;
-    const repeated = await executeProviderRead(request(), {
-      credentials: credentialBackend(),
-      adapter: {
-        async readPage() {
-          call += 1;
-          return {
-            ok: true,
-            page: {
-              items: [],
-              observedAt: OBSERVED,
-              nextCursorToken: 'same-cursor',
-            },
-          };
-        },
+  let call = 0;
+  const repeated = await executeProviderRead(request(), {
+    credentials: credentialBackend(),
+    adapter: {
+      async readPage() {
+        call += 1;
+        return {
+          ok: true,
+          page: {
+            items: [],
+            observedAt: OBSERVED,
+            nextCursorToken: 'same-cursor',
+          },
+        };
       },
-    });
-    assert.equal(repeated.ok, false);
-    if (!repeated.ok) assert.equal(repeated.error, 'ADAPTER_PROTOCOL_VIOLATION');
-    assert.equal(call, 2);
-  },
-);
+    },
+  });
+  assert.equal(repeated.ok, false);
+  if (!repeated.ok) assert.equal(repeated.error, 'ADAPTER_PROTOCOL_VIOLATION');
+  assert.equal(call, 2);
+});
 
 test('W08-C normalizes provider errors without leaking raw credential material', async () => {
   const result = await executeProviderRead(request(), {
@@ -359,42 +347,42 @@ test('W08-C normalizes provider errors without leaking raw credential material',
   assert.equal(JSON.stringify(result).includes(CREDENTIAL), false);
 });
 
-test(
-  'W08-C fails closed on malformed query/accessor input and exposes no write/raw-client API',
-  async () => {
-    let backendCalls = 0;
-    const accessorQuery = Object.create(null) as Record<string, unknown>;
-    Object.defineProperty(accessorQuery, 'danger', {
-      enumerable: true,
-      get() {
-        throw new Error('accessor must never execute');
-      },
-    });
+test('W08-C fails closed on malformed query/accessor input and exposes no write/raw-client API', async () => {
+  let backendCalls = 0;
+  const accessorQuery = Object.create(null) as Record<string, unknown>;
+  Object.defineProperty(accessorQuery, 'danger', {
+    enumerable: true,
+    get() {
+      throw new Error('accessor must never execute');
+    },
+  });
 
-    const result = await executeProviderRead(
-      request({ query: accessorQuery as ProviderReadRequest['query'] }),
-      {
-        credentials: credentialBackend(() => {
-          backendCalls += 1;
-        }),
-        adapter: {
-          async readPage() {
-            throw new Error('must not run');
-          },
+  const result = await executeProviderRead(
+    request({ query: accessorQuery as ProviderReadRequest['query'] }),
+    {
+      credentials: credentialBackend(() => {
+        backendCalls += 1;
+      }),
+      adapter: {
+        async readPage() {
+          throw new Error('must not run');
         },
       },
-    );
+    },
+  );
 
-    assert.equal(result.ok, false);
-    if (!result.ok) assert.equal(result.error, 'REQUEST_MALFORMED');
-    assert.equal(backendCalls, 0);
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error, 'REQUEST_MALFORMED');
+  assert.equal(backendCalls, 0);
 
-    const runtimeExports = Object.keys(readApi).sort();
-    assert.deepEqual(runtimeExports, [
-      'PROVIDER_READ_ERRORS',
-      'PROVIDER_READ_TRANSPORT_ERRORS',
-      'executeProviderRead',
-    ]);
-    assert.equal(runtimeExports.some((name) => /write|mutat|client/iu.test(name)), false);
-  },
-);
+  const runtimeExports = Object.keys(readApi).sort();
+  assert.deepEqual(runtimeExports, [
+    'PROVIDER_READ_ERRORS',
+    'PROVIDER_READ_TRANSPORT_ERRORS',
+    'executeProviderRead',
+  ]);
+  assert.equal(
+    runtimeExports.some((name) => /write|mutat|client/iu.test(name)),
+    false,
+  );
+});

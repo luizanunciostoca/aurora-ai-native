@@ -270,16 +270,12 @@ function parseTransportResult(
   return null;
 }
 
-function requestShape(
-  request: ProviderReadRequest,
-):
-  | Readonly<{
-      fields: readonly string[];
-      query: Readonly<Record<string, ProviderReadQueryValue>>;
-      limits: { readonly maxPages: number; readonly maxItems: number };
-      cursor?: ProviderReadCursor;
-    }>
-  | null {
+function requestShape(request: ProviderReadRequest): Readonly<{
+  fields: readonly string[];
+  query: Readonly<Record<string, ProviderReadQueryValue>>;
+  limits: { readonly maxPages: number; readonly maxItems: number };
+  cursor?: ProviderReadCursor;
+}> | null {
   if (!isPlainRecord(request) || !hasOnlyOwnDataProperties(request, REQUEST_KEYS)) return null;
   if (
     !isNonEmptyString(request.correlationReference, 512) ||
