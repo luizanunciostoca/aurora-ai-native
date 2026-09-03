@@ -451,10 +451,13 @@ export function planRevenueFlow(input: PlanRevenueFlowInput): PlanRevenueFlowRes
     if (issue !== null) return { ok: false, error: issue };
   }
 
-  let record = input.existing;
-  if (record === undefined) {
-    record = baseRecord(input);
-    if (record === null) return { ok: false, error: 'TEMPLATE_MALFORMED' };
+  let record: RevenueFlowRecord;
+  if (input.existing !== undefined) {
+    record = input.existing;
+  } else {
+    const createdRecord = baseRecord(input);
+    if (createdRecord === null) return { ok: false, error: 'TEMPLATE_MALFORMED' };
+    record = createdRecord;
   }
   if (record.state === 'COMPLETED') return plan('TERMINAL', 'FLOW_COMPLETED', record, false);
   if (record.state === 'CANCELLED') return plan('TERMINAL', 'FLOW_CANCELLED', record, false);
