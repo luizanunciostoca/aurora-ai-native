@@ -271,12 +271,15 @@ test('W14-D compromised and retired lifecycle states are fail-closed', () => {
     ),
     { ok: false, error: 'DEVICE_RETIRED', authorizesExecution: false },
   );
-  assert.deepEqual(retiredRegistry.resolve({ ref: retired.record.ref, boundIdentityId: IDENTITY_A }), {
-    ok: false,
-    error: 'DEVICE_RETIRED',
-    authorizesExecution: false,
-    canGrantPermission: false,
-  });
+  assert.deepEqual(
+    retiredRegistry.resolve({ ref: retired.record.ref, boundIdentityId: IDENTITY_A }),
+    {
+      ok: false,
+      error: 'DEVICE_RETIRED',
+      authorizesExecution: false,
+      canGrantPermission: false,
+    },
+  );
 });
 
 test('W14-D rejects stale versions, wrong-tenant references and invalid transition values', () => {
@@ -286,12 +289,15 @@ test('W14-D rejects stale versions, wrong-tenant references and invalid transiti
   if (!registered.ok) return;
   const active = registerAndActivate(new InMemoryDeviceRegistry());
 
-  assert.deepEqual(registry.transition('ACTIVATE', {
-    ref: registered.record.ref,
-    expectedVersion: 2,
-    transitionedAt: '2026-09-03T07:32:00Z',
-    provenance: provenance('activation:stale', '2026-09-03T07:32:00Z'),
-  }), { ok: false, error: 'STALE_VERSION', authorizesExecution: false });
+  assert.deepEqual(
+    registry.transition('ACTIVATE', {
+      ref: registered.record.ref,
+      expectedVersion: 2,
+      transitionedAt: '2026-09-03T07:32:00Z',
+      provenance: provenance('activation:stale', '2026-09-03T07:32:00Z'),
+    }),
+    { ok: false, error: 'STALE_VERSION', authorizesExecution: false },
+  );
 
   const activeRegistry = new InMemoryDeviceRegistry();
   const current = registerAndActivate(activeRegistry);

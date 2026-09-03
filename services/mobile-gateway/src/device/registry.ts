@@ -297,9 +297,7 @@ export class InMemoryDeviceRegistry {
     const record = makeRecord({
       deviceId: parsed.deviceId,
       tenantId: parsed.tenantId,
-      ...(parsed.boundIdentityId === undefined
-        ? {}
-        : { boundIdentityId: parsed.boundIdentityId }),
+      ...(parsed.boundIdentityId === undefined ? {} : { boundIdentityId: parsed.boundIdentityId }),
       state: 'REGISTERED',
       registeredAt: existing.registeredAt,
       updatedAt: parsed.registeredAt,
