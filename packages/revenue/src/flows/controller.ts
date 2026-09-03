@@ -7,6 +7,7 @@ import type {
   RevenueContactPolicyProjection,
   RevenueDispatchObservation,
   RevenueDomainTask,
+  RevenueFlowError,
   RevenueFlowPlan,
   RevenueFlowRecord,
   RevenueFlowReason,
@@ -77,7 +78,9 @@ function isTemplateStepValid(step: RevenueFlowTemplateStepProjection | undefined
   );
 }
 
-function templateError(template: RevenueFlowTemplateProjection): 'TEMPLATE_MALFORMED' | 'TEMPLATE_STEP_DUPLICATE' | null {
+function templateError(
+  template: RevenueFlowTemplateProjection,
+): 'TEMPLATE_MALFORMED' | 'TEMPLATE_STEP_DUPLICATE' | null {
   if (
     template.source !== 'W04_TEMPLATE_PLAN' ||
     !isNonEmptyString(template.tenantId) ||
@@ -125,7 +128,10 @@ function qualificationBoundaryError(
   if (qualification.tenantId !== input.tenantId) return 'TENANT_MISMATCH';
   if (!sameEntity(qualification.entity, input.crm.model.entity)) return 'ENTITY_MISMATCH';
   if (qualification.entityVersion !== input.crm.model.entityVersion) return 'ENTITY_VERSION_CONFLICT';
-  if (!isTimestamp(qualification.evaluatedAt) || Date.parse(qualification.evaluatedAt) > Date.parse(input.evaluatedAt)) {
+  if (
+    !isTimestamp(qualification.evaluatedAt) ||
+    Date.parse(qualification.evaluatedAt) > Date.parse(input.evaluatedAt)
+  ) {
     return 'OUT_OF_ORDER_EVALUATION';
   }
   return null;
@@ -152,6 +158,17 @@ function flowApplicabilityReason(input: PlanRevenueFlowInput): RevenueFlowReason
   return model.entity.kind === 'LEAD' && qualification.stage === 'QUALIFIED'
     ? null
     : 'FLOW_NOT_APPLICABLE';
+}
+
+function policyBlockReason(
+  policy: RevenueContactPolicyProjection,
+  step: RevenueFlowTemplateStepProjection,
+): 'CONTACT_POLICY_NOT_CURRENT' | 'CONSENT_BLOCKED' | 'PURPOSE_NOT_ALLOWED' | null {
+  if (!step.externalAction) return null;
+  if (!policy.current) return 'CONTACT_POLICY_NOT_CURRENT';
+  if (policy.consentStatus !== 'ALLOWED') return 'CONSENT_BLOCKED';
+  if (!policy.allowedPurposes.includes(step.contactPurpose)) return 'PURPOSE_NOT_ALLOWED';
+  return null;
 }
 
 function addMilliseconds(timestamp: string, milliseconds: number): string {
@@ -214,7 +231,7 @@ function recordWith(
 function existingRecordError(
   input: PlanRevenueFlowInput,
   record: RevenueFlowRecord,
-): PlanRevenueFlowResult['error'] | null {
+): RevenueFlowError | null {
   if (
     record.kind !== 'REVENUE_DOMAIN_FLOW' ||
     record.schemaVersion !== '1.0.0' ||
@@ -225,9 +242,15 @@ function existingRecordError(
     !isNonNegativeInteger(record.attemptsForStep, MAX_ATTEMPTS_PER_STEP) ||
     !isTimestamp(record.nextEligibleAt) ||
     !isTimestamp(record.updatedAt) ||
-    !['ACTIVE', 'PAUSED_POLICY', 'WAITING_RECONCILIATION', 'COMPLETED', 'CANCELLED'].includes(record.state) ||
-    !['NONE', 'ACKNOWLEDGED', 'NO_EFFECT_CONFIRMED', 'EXECUTION_UNCERTAIN'].includes(record.lastDispatchObservation) ||
-    !['NONE', 'USER_REQUEST', 'CONSENT_REVOKED', 'BUSINESS_CANCELLED'].includes(record.cancellationReason) ||
+    !['ACTIVE', 'PAUSED_POLICY', 'WAITING_RECONCILIATION', 'COMPLETED', 'CANCELLED'].includes(
+      record.state,
+    ) ||
+    !['NONE', 'ACKNOWLEDGED', 'NO_EFFECT_CONFIRMED', 'EXECUTION_UNCERTAIN'].includes(
+      record.lastDispatchObservation,
+    ) ||
+    !['NONE', 'USER_REQUEST', 'CONSENT_REVOKED', 'BUSINESS_CANCELLED'].includes(
+      record.cancellationReason,
+    ) ||
     record.authorizesExecution !== false ||
     record.canGrantPermission !== false
   ) {
@@ -258,7 +281,7 @@ function plan(
   invalidatesPendingOutreach: boolean,
   task?: RevenueDomainTask,
 ): PlanRevenueFlowResult {
-  const base: RevenueFlowPlan = {
+  const result: RevenueFlowPlan = {
     kind: 'REVENUE_FLOW_PLAN',
     schemaVersion: '1.0.0',
     disposition,
@@ -271,7 +294,20 @@ function plan(
     canGrantPermission: false,
     ...(task === undefined ? {} : { task }),
   };
-  return { ok: true, plan: base };
+  return { ok: true, plan: result };
+}
+
+function pauseForPolicy(
+  input: PlanRevenueFlowInput,
+  record: RevenueFlowRecord,
+  reason: 'CONTACT_POLICY_NOT_CURRENT' | 'CONSENT_BLOCKED' | 'PURPOSE_NOT_ALLOWED',
+): PlanRevenueFlowResult {
+  const paused = recordWith(
+    record,
+    { state: 'PAUSED_POLICY', updatedAt: input.evaluatedAt },
+    false,
+  );
+  return plan('ABSTAIN', reason, paused, true);
 }
 
 function applyObservation(
@@ -382,12 +418,7 @@ export function planRevenueFlow(input: PlanRevenueFlowInput): PlanRevenueFlowRes
   ) {
     return { ok: false, error: 'TENANT_MISMATCH' };
   }
-  if (input.template.flowKind === 'NURTURE' || input.template.flowKind === 'SALES') {
-    if (input.qualification !== undefined) {
-      const boundary = qualificationBoundaryError(input, input.qualification);
-      if (boundary !== null) return { ok: false, error: boundary };
-    }
-  } else if (input.qualification !== undefined) {
+  if (input.qualification !== undefined) {
     const boundary = qualificationBoundaryError(input, input.qualification);
     if (boundary !== null) return { ok: false, error: boundary };
   }
@@ -434,37 +465,19 @@ export function planRevenueFlow(input: PlanRevenueFlowInput): PlanRevenueFlowRes
   }
 
   const observation = input.dispatchObservation ?? 'NONE';
+  const pendingStep = input.template.steps[record.stepIndex]!;
+  if (observation === 'NONE' && record.lastTaskDedupeKey !== undefined) {
+    const pendingPolicyBlock = policyBlockReason(input.contactPolicy, pendingStep);
+    if (pendingPolicyBlock !== null) return pauseForPolicy(input, record, pendingPolicyBlock);
+  }
+
   const observationResult = applyObservation(input, record, observation);
   if ('ok' in observationResult) return observationResult;
   record = observationResult;
 
   const step = input.template.steps[record.stepIndex]!;
-  if (step.externalAction) {
-    if (!input.contactPolicy.current) {
-      const paused = recordWith(
-        record,
-        { state: 'PAUSED_POLICY', updatedAt: input.evaluatedAt },
-        false,
-      );
-      return plan('ABSTAIN', 'CONTACT_POLICY_NOT_CURRENT', paused, true);
-    }
-    if (input.contactPolicy.consentStatus !== 'ALLOWED') {
-      const paused = recordWith(
-        record,
-        { state: 'PAUSED_POLICY', updatedAt: input.evaluatedAt },
-        false,
-      );
-      return plan('ABSTAIN', 'CONSENT_BLOCKED', paused, true);
-    }
-    if (!input.contactPolicy.allowedPurposes.includes(step.contactPurpose)) {
-      const paused = recordWith(
-        record,
-        { state: 'PAUSED_POLICY', updatedAt: input.evaluatedAt },
-        false,
-      );
-      return plan('ABSTAIN', 'PURPOSE_NOT_ALLOWED', paused, true);
-    }
-  }
+  const policyBlock = policyBlockReason(input.contactPolicy, step);
+  if (policyBlock !== null) return pauseForPolicy(input, record, policyBlock);
 
   if (record.attemptsForStep >= step.maxAttempts) {
     return plan('ESCALATE', 'RETRY_BUDGET_EXHAUSTED', record, false);
