@@ -1,0 +1,48 @@
+name: W10-D Temporary Canonical Format
+
+on:
+  push:
+    branches:
+      - wave/10d-nurture-sales-customer-success
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/10d-nurture-sales-customer-success
+      - name: Setup canonical Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install exact lockfile
+        run: npm ci
+      - name: Format only W10-D files
+        run: |
+          ./node_modules/.bin/prettier --write \
+            packages/revenue/src/flows/controller.ts \
+            packages/revenue/src/flows/types.ts \
+            packages/revenue/test/w10d-revenue-flows.test.ts
+      - name: Commit canonical formatting when needed
+        run: |
+          if git diff --quiet -- \
+            packages/revenue/src/flows/controller.ts \
+            packages/revenue/src/flows/types.ts \
+            packages/revenue/test/w10d-revenue-flows.test.ts; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            packages/revenue/src/flows/controller.ts \
+            packages/revenue/src/flows/types.ts \
+            packages/revenue/test/w10d-revenue-flows.test.ts
+          git commit -m "style(W10-D): apply canonical prettier"
+          git push origin HEAD:wave/10d-nurture-sales-customer-success
