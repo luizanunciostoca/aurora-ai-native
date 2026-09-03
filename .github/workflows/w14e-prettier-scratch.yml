@@ -1,0 +1,38 @@
+name: W14-E Prettier Scratch
+
+on:
+  push:
+    branches:
+      - scratch/w14e-prettier
+
+permissions:
+  contents: write
+
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Apply canonical Prettier
+        run: >-
+          npx prettier --write
+          services/mobile-gateway/src/device-session/session-trust.ts
+          services/mobile-gateway/test/w14e-device-session-trust.test.ts
+      - name: Commit formatted blobs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add services/mobile-gateway/src/device-session/session-trust.ts services/mobile-gateway/test/w14e-device-session-trust.test.ts
+          if git diff --cached --quiet; then
+            echo "No formatting changes required"
+          else
+            git commit -m "style(W14-E): capture canonical Prettier blobs"
+            git push origin HEAD:scratch/w14e-prettier
+          fi
