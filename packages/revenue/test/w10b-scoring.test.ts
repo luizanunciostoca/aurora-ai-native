@@ -216,10 +216,7 @@ test('W10-B rejects stale entity versions and out-of-order evaluation time', () 
 });
 
 test('W10-B rejects feature observations from after the evaluation time', () => {
-  const futureEvidence = [
-    engagementFeature({ observedAt: '2026-09-03T06:11:01Z' }),
-    fitFeature(),
-  ];
+  const futureEvidence = [engagementFeature({ observedAt: '2026-09-03T06:11:01Z' }), fitFeature()];
   assert.deepEqual(evaluateQualification(leadRecord(), deterministicInput(futureEvidence)), {
     ok: false,
     error: 'FEATURE_FUTURE_OBSERVATION',
