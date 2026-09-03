@@ -92,7 +92,9 @@ function actionIntent(overrides: Record<string, unknown> = {}): ActionIntent {
   } as unknown as ActionIntent;
 }
 
-function successfulWrite(overrides: Partial<Extract<ProviderWriteResult, { ok: true }>> = {}): ProviderWriteResult {
+function successfulWrite(
+  overrides: Partial<Extract<ProviderWriteResult, { ok: true }>> = {},
+): ProviderWriteResult {
   return {
     ok: true,
     provider: 'META',
@@ -168,7 +170,10 @@ test('W08-F observed expected state becomes W07 effect observation without retry
       assert.equal(credential, CREDENTIAL);
       assert.equal(frame.provider, 'META');
       assert.equal(frame.bindingReference, 'provider-binding-meta-act-123');
-      assert.deepEqual(frame.expectedState, { stateType: 'AD_STATUS', value: { status: 'PAUSED' } });
+      assert.deepEqual(frame.expectedState, {
+        stateType: 'AD_STATUS',
+        value: { status: 'PAUSED' },
+      });
       return {
         ok: true,
         status: 'OBSERVED',
@@ -270,22 +275,19 @@ test('W08-F eventual-consistency statuses remain indeterminate and request furth
 });
 
 test('W08-F stale and out-of-order observations cannot resolve write outcome', async () => {
-  const stale = await reconcileProviderWrite(
-    request({ maxObservationAgeMs: 1_000 }),
-    {
-      credentials: credentials(),
-      adapter: {
-        async readbackOnce() {
-          return {
-            ok: true,
-            status: 'OBSERVED',
-            observedAt: OBSERVED_AT,
-            observedState: { status: 'PAUSED' },
-          };
-        },
+  const stale = await reconcileProviderWrite(request({ maxObservationAgeMs: 1_000 }), {
+    credentials: credentials(),
+    adapter: {
+      async readbackOnce() {
+        return {
+          ok: true,
+          status: 'OBSERVED',
+          observedAt: OBSERVED_AT,
+          observedState: { status: 'PAUSED' },
+        };
       },
     },
-  );
+  });
   assert.equal(stale.ok, true);
   if (stale.ok && stale.observation.state === 'INDETERMINATE') {
     assert.equal(stale.observation.reason, 'READBACK_STALE');
