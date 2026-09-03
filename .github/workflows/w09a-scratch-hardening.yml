@@ -24,55 +24,29 @@ jobs:
       - name: Install canonical workspace
         run: npm ci
       - name: Apply exact supersession hardening
+        env:
+          W09A_TEST_B64: CnRlc3QoJ1cwOS1BIHJlamVjdHMgaW1wbGljaXQgc3VwZXJzZXNzaW9uIGFjcXVpcmVkIGFmdGVyIGltbXV0YWJsZSBjYW5kaWRhdGUgcmVnaXN0cmF0aW9uJywgKCkgPT4gewogIGNvbnN0IHJlZ2lzdHJ5ID0gbmV3IE44bldvcmtmbG93QmluZGluZ1JlZ2lzdHJ5KCk7CiAgY29uc3QgY2FuZGlkYXRlID0gYmluZGluZyh7CiAgICBiaW5kaW5nVmVyc2lvbjogJzIuMC4wJywKICAgIHN0YXR1czogJ0NBTkRJREFURScsCiAgICB3b3JrZmxvdzogeyAuLi5iaW5kaW5nKCkud29ya2Zsb3csIHdvcmtmbG93SGFzaDogSEFTSF9DIH0sCiAgICByZWdpc3RlcmVkQXQ6ICcyMDI2LTA5LTAzVDA3OjQ4OjAwLjAwMFonLAogICAgc3VwZXJzZWRlc1ZlcnNpb246IG51bGwsCiAgfSk7CiAgYXNzZXJ0LmVxdWFsKHJlZ2lzdHJ5LnJlZ2lzdGVyKGNhbmRpZGF0ZSkub2ssIHRydWUpOwoKICBjb25zdCBsYXRlckFjdGl2ZSA9IGJpbmRpbmcoewogICAgcmVnaXN0ZXJlZEF0OiAnMjAyNi0wOS0wM1QwNzo0OTowMC4wMDBaJywKICB9KTsKICBhc3NlcnQuZXF1YWwocmVnaXN0cnkucmVnaXN0ZXIobGF0ZXJBY3RpdmUpLm9rLCB0cnVlKTsKCiAgYXNzZXJ0LmRlZXBFcXVhbCgKICAgIHJlZ2lzdHJ5LmFjdGl2YXRlKAogICAgICBjYW5kaWRhdGUudGVuYW50SWQsCiAgICAgIGNhbmRpZGF0ZS5iaW5kaW5nSWQsCiAgICAgIGNhbmRpZGF0ZS5iaW5kaW5nVmVyc2lvbiwKICAgICAgJzIwMjYtMDktMDNUMDc6NTA6MDAuMDAwWicsCiAgICAgIGxhdGVyQWN0aXZlLmJpbmRpbmdWZXJzaW9uLAogICAgKSwKICAgIHsgb2s6IGZhbHNlLCBlcnJvcjogJ0lOVkFMSURfU1VQRVJTRVNTSU9OJyB9LAogICk7Cn0pOwo=
         shell: bash
         run: |
           python - <<'PY'
+          import base64
+          import os
           from pathlib import Path
 
           registry = Path('services/n8n-bridge/src/bindings/registry.ts')
           text = registry.read_text()
-          old = """    if (\n      record.binding.supersedesVersion !== null &&\n      record.binding.supersedesVersion !== expectedPreviousVersion\n    ) {\n      return { ok: false, error: 'INVALID_SUPERSESSION' };\n    }\n"""
-          new = """    if (record.binding.supersedesVersion !== expectedPreviousVersion) {\n      return { ok: false, error: 'INVALID_SUPERSESSION' };\n    }\n"""
+          old = "    if (\n      record.binding.supersedesVersion !== null &&\n      record.binding.supersedesVersion !== expectedPreviousVersion\n    ) {\n      return { ok: false, error: 'INVALID_SUPERSESSION' };\n    }\n"
+          new = "    if (record.binding.supersedesVersion !== expectedPreviousVersion) {\n      return { ok: false, error: 'INVALID_SUPERSESSION' };\n    }\n"
           if text.count(old) != 1:
               raise SystemExit('expected activation supersession fence not found exactly once')
           registry.write_text(text.replace(old, new))
 
           test_file = Path('services/n8n-bridge/test/w09a-n8n-workflow-binding-registry.test.ts')
           tests = test_file.read_text()
-          marker = "W09-A rejects implicit supersession acquired after immutable candidate registration"
+          marker = 'W09-A rejects implicit supersession acquired after immutable candidate registration'
           if marker in tests:
               raise SystemExit('hardening test already present')
-          tests += """
-
-test('W09-A rejects implicit supersession acquired after immutable candidate registration', () => {
-  const registry = new N8nWorkflowBindingRegistry();
-  const candidate = binding({
-    bindingVersion: '2.0.0',
-    status: 'CANDIDATE',
-    workflow: { ...binding().workflow, workflowHash: HASH_C },
-    registeredAt: '2026-09-03T07:48:00.000Z',
-    supersedesVersion: null,
-  });
-  assert.equal(registry.register(candidate).ok, true);
-
-  const laterActive = binding({
-    registeredAt: '2026-09-03T07:49:00.000Z',
-  });
-  assert.equal(registry.register(laterActive).ok, true);
-
-  assert.deepEqual(
-    registry.activate(
-      candidate.tenantId,
-      candidate.bindingId,
-      candidate.bindingVersion,
-      '2026-09-03T07:50:00.000Z',
-      laterActive.bindingVersion,
-    ),
-    { ok: false, error: 'INVALID_SUPERSESSION' },
-  );
-});
-"""
-          test_file.write_text(tests)
+          test_file.write_text(tests + base64.b64decode(os.environ['W09A_TEST_B64']).decode())
           PY
       - name: Apply canonical Prettier
         run: >-
