@@ -1,0 +1,44 @@
+name: W14-B Mutation Guard Scratch
+
+on:
+  push:
+    branches:
+      - scratch/w14b-mutation-guard
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Apply no-mutation-before-validation guard
+        env:
+          OLD_B64: ICAgIGNvbnN0IGNhcGFjaXR5ID0gdGhpcy4jcHJlcGFyZVNlc3Npb25TbG90KCk7CiAgICBpZiAoIWNhcGFjaXR5Lm9rKSByZXR1cm4gY2FwYWNpdHk7CiAgICBjb25zdCBiaW5kaW5ncyA9IHRoaXMuI3Jlc29sdmVCaW5kaW5ncygKICAgICAgcGFyc2VkLnZhbHVlLmdhdGV3YXlTZXNzaW9uSWQsCiAgICAgIHBhcnNlZC52YWx1ZS5kZXZpY2VSZWYsCiAgICAgIHBhcnNlZC52YWx1ZS5ub3dNcywKICAgICk7CiAgICBpZiAoIWJpbmRpbmdzLm9rKSByZXR1cm4gYmluZGluZ3M7Cg==
+          NEW_B64: ICAgIGNvbnN0IGJpbmRpbmdzID0gdGhpcy4jcmVzb2x2ZUJpbmRpbmdzKAogICAgICBwYXJzZWQudmFsdWUuZ2F0ZXdheVNlc3Npb25JZCwKICAgICAgcGFyc2VkLnZhbHVlLmRldmljZVJlZiwKICAgICAgcGFyc2VkLnZhbHVlLm5vd01zLAogICAgKTsKICAgIGlmICghYmluZGluZ3Mub2spIHJldHVybiBiaW5kaW5nczsKICAgIGNvbnN0IGNhcGFjaXR5ID0gdGhpcy4jcHJlcGFyZVNlc3Npb25TbG90KCk7CiAgICBpZiAoIWNhcGFjaXR5Lm9rKSByZXR1cm4gY2FwYWNpdHk7Cg==
+          ADD_B64: Cgp0ZXN0KCdXMTQtQiBpbnZhbGlkIG9wZW4gY2Fubm90IGV2aWN0IGEgcmVtZW1iZXJlZCBjbG9zZWQgcmVhbHRpbWUgc2Vzc2lvbicsICgpID0+IHsKICBjb25zdCB7IGdhdGV3YXksIGdhdGV3YXlTZXNzaW9uLCBtYW5hZ2VyLCBzZXNzaW9uLCBhY3RpdmVEZXZpY2UgfSA9IHNldHVwKHsgbWF4U2Vzc2lvbnM6IDEgfSk7CiAgY29uc3QgY2xvc2VkR2F0ZXdheSA9IGdhdGV3YXkuY2xvc2VTZXNzaW9uKGdhdGV3YXlCb3VuZFNlc3Npb24oZ2F0ZXdheVNlc3Npb24sIE5PVyArIDMwKSk7CiAgYXNzZXJ0LmVxdWFsKGNsb3NlZEdhdGV3YXkub2ssIHRydWUpOwogIGNvbnN0IGNsb3NlZFJlYWx0aW1lID0gbWFuYWdlci5nZXRTZXNzaW9uKHNlc3Npb24uZ2F0ZXdheVNlc3Npb25JZCwgTk9XICsgMzEpOwogIGFzc2VydC5lcXVhbChjbG9zZWRSZWFsdGltZS5vaywgdHJ1ZSk7CiAgaWYgKGNsb3NlZFJlYWx0aW1lLm9rKSBhc3NlcnQuZXF1YWwoY2xvc2VkUmVhbHRpbWUudmFsdWUuc3RhdGUsICdDTE9TRUQnKTsKCiAgY29uc3Qgc2Vjb25kR2F0ZXdheSA9IGdhdGV3YXkub3BlblNlc3Npb24oewogICAgLi4uZ2F0ZXdheUhhbmRzaGFrZShOT1cgKyAzMiksCiAgICBzZXNzaW9uSWQ6ICdzZXNzaW9uOncxNGI6YmV0YScsCiAgfSk7CiAgYXNzZXJ0LmVxdWFsKHNlY29uZEdhdGV3YXkub2ssIHRydWUpOwogIGlmICghc2Vjb25kR2F0ZXdheS5vaykgcmV0dXJuOwoKICBjb25zdCBpbnZhbGlkT3BlbiA9IG1hbmFnZXIub3BlblNlc3Npb24oewogICAgZ2F0ZXdheVNlc3Npb25JZDogc2Vjb25kR2F0ZXdheS52YWx1ZS5zZXNzaW9uSWQsCiAgICBkZXZpY2VSZWY6IHsgLi4uYWN0aXZlRGV2aWNlLnJlZiwgdGVuYW50SWQ6IFRFTkFOVF9CIH0sCiAgICBub3dNczogTk9XICsgMzMsCiAgfSk7CiAgYXNzZXJ0LmVxdWFsKGludmFsaWRPcGVuLm9rLCBmYWxzZSk7CiAgaWYgKCFpbnZhbGlkT3Blbi5vaykgYXNzZXJ0LmVxdWFsKGludmFsaWRPcGVuLmVycm9yLmNvZGUsICdERVZJQ0VfQklORElOR19NSVNNQVRDSCcpOwoKICBjb25zdCByZXRhaW5lZCA9IG1hbmFnZXIuZ2V0U2Vzc2lvbihzZXNzaW9uLmdhdGV3YXlTZXNzaW9uSWQsIE5PVyArIDM0KTsKICBhc3NlcnQuZXF1YWwocmV0YWluZWQub2ssIHRydWUpOwogIGlmIChyZXRhaW5lZC5vaykgYXNzZXJ0LmVxdWFsKHJldGFpbmVkLnZhbHVlLnN0YXRlLCAnQ0xPU0VEJyk7Cn0pOwo=
+        run: |
+          python3 -c "import base64,os; from pathlib import Path; p=Path('services/mobile-gateway/src/realtime-session/manager.ts'); t=p.read_text(); old=base64.b64decode(os.environ['OLD_B64']).decode(); new=base64.b64decode(os.environ['NEW_B64']).decode(); assert old in t; p.write_text(t.replace(old,new,1)); q=Path('services/mobile-gateway/src/realtime-session/test/w14b-realtime-command-session.test.ts'); s=q.read_text(); a=base64.b64decode(os.environ['ADD_B64']).decode(); assert 'invalid open cannot evict a remembered closed realtime session' not in s; q.write_text(s+a)"
+          npx prettier --write services/mobile-gateway/src/realtime-session/manager.ts services/mobile-gateway/src/realtime-session/test/w14b-realtime-command-session.test.ts
+      - name: Validate focused W14-B after patch
+        run: |
+          npm run build --workspace @aurora/contracts
+          ./node_modules/.bin/tsc --project services/mobile-gateway/src/realtime-session/tsconfig.build.json --pretty false
+          ./node_modules/.bin/tsc --project services/mobile-gateway/src/realtime-session/tsconfig.test.json --pretty false
+          node --test services/mobile-gateway/src/realtime-session/dist-test/realtime-session/test/w14b-realtime-command-session.test.js
+          rm -rf services/mobile-gateway/src/realtime-session/dist services/mobile-gateway/src/realtime-session/dist-test packages/contracts/dist
+      - name: Commit guarded blobs
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add services/mobile-gateway/src/realtime-session/manager.ts services/mobile-gateway/src/realtime-session/test/w14b-realtime-command-session.test.ts
+          git commit -m 'fix(W14-B): validate binding before retention mutation'
+          git push
