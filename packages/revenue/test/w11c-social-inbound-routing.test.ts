@@ -16,8 +16,11 @@ const TENANT = 'ten_01JW11CTENANT000000000000' as TenantId;
 const OTHER_TENANT = 'ten_01JW11COTHER00000000000' as TenantId;
 const CORRELATION = 'cor_01JW11CCORRELATION000000' as CorrelationId;
 
-function fixture(overrides: Partial<SocialInboundInput> = {}): SocialInboundInput {
-  return {
+function fixture(
+  overrides: Partial<SocialInboundInput> = {},
+  includeDefaultContent = true,
+): SocialInboundInput {
+  const base: SocialInboundInput = {
     tenantId: TENANT,
     correlationId: CORRELATION,
     provider: 'INSTAGRAM',
@@ -33,10 +36,12 @@ function fixture(overrides: Partial<SocialInboundInput> = {}): SocialInboundInpu
     evaluatedAt: '2026-09-03T15:00:02Z',
     connectionGeneration: 1,
     deliveryCursor: 'cursor-1',
-    content: 'Qual é o horário hoje?',
     w10ConversationEntityId: 'conversation:w10:1',
     ...overrides,
   };
+
+  if (!includeDefaultContent) return base;
+  return { ...base, content: overrides.content ?? 'Qual é o horário hoje?' };
 }
 
 function applied(input: SocialInboundInput): SocialInboundRecord {
@@ -119,16 +124,18 @@ test('W11-C applies edits and makes delete terminal with no response route', () 
   assert.equal(edited.route, 'LEAD_HANDOFF_CANDIDATE');
 
   const deleted = applied(
-    fixture({
-      previous: edited,
-      revision: 3,
-      change: 'DELETED',
-      content: undefined,
-      occurredAt: '2026-09-03T15:02:00Z',
-      observedAt: '2026-09-03T15:02:01Z',
-      evaluatedAt: '2026-09-03T15:02:02Z',
-      deliveryCursor: 'cursor-3',
-    }),
+    fixture(
+      {
+        previous: edited,
+        revision: 3,
+        change: 'DELETED',
+        occurredAt: '2026-09-03T15:02:00Z',
+        observedAt: '2026-09-03T15:02:01Z',
+        evaluatedAt: '2026-09-03T15:02:02Z',
+        deliveryCursor: 'cursor-3',
+      },
+      false,
+    ),
   );
   assert.equal(deleted.deleted, true);
   assert.equal(deleted.route, 'NO_RESPONSE_DELETED');
