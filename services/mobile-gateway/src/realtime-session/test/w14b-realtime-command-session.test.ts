@@ -505,3 +505,31 @@ test('W14-B rejects accessor/prototype/extra authority-bearing inputs without in
   assert.equal(extraAuthority.ok, false);
   if (!extraAuthority.ok) assert.equal(extraAuthority.error.code, 'MALFORMED_REQUEST');
 });
+
+test('W14-B invalid open cannot evict a remembered closed realtime session', () => {
+  const { gateway, gatewaySession, manager, session, activeDevice } = setup({ maxSessions: 1 });
+  const closedGateway = gateway.closeSession(gatewayBoundSession(gatewaySession, NOW + 30));
+  assert.equal(closedGateway.ok, true);
+  const closedRealtime = manager.getSession(session.gatewaySessionId, NOW + 31);
+  assert.equal(closedRealtime.ok, true);
+  if (closedRealtime.ok) assert.equal(closedRealtime.value.state, 'CLOSED');
+
+  const secondGateway = gateway.openSession({
+    ...gatewayHandshake(NOW + 32),
+    sessionId: 'session:w14b:beta',
+  });
+  assert.equal(secondGateway.ok, true);
+  if (!secondGateway.ok) return;
+
+  const invalidOpen = manager.openSession({
+    gatewaySessionId: secondGateway.value.sessionId,
+    deviceRef: { ...activeDevice.ref, tenantId: TENANT_B },
+    nowMs: NOW + 33,
+  });
+  assert.equal(invalidOpen.ok, false);
+  if (!invalidOpen.ok) assert.equal(invalidOpen.error.code, 'DEVICE_BINDING_MISMATCH');
+
+  const retained = manager.getSession(session.gatewaySessionId, NOW + 34);
+  assert.equal(retained.ok, true);
+  if (retained.ok) assert.equal(retained.value.state, 'CLOSED');
+});

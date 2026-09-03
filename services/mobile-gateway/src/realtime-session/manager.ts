@@ -383,14 +383,14 @@ export class RealtimeCommandSessionManager {
     if (this.#sessions.has(parsed.value.gatewaySessionId)) {
       return failure('SESSION_CONFLICT', 'Realtime session already exists; use explicit resume.');
     }
-    const capacity = this.#prepareSessionSlot();
-    if (!capacity.ok) return capacity;
     const bindings = this.#resolveBindings(
       parsed.value.gatewaySessionId,
       parsed.value.deviceRef,
       parsed.value.nowMs,
     );
     if (!bindings.ok) return bindings;
+    const capacity = this.#prepareSessionSlot();
+    if (!capacity.ok) return capacity;
     const gateway = bindings.value.gateway;
     const record: SessionRecord = {
       gatewaySessionId: gateway.sessionId,
