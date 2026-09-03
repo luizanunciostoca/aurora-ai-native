@@ -1,0 +1,46 @@
+name: W09-A Scratch Formatter
+
+on:
+  push:
+    branches: [scratch/w09a-prettier]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout scratch branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: scratch/w09a-prettier
+          persist-credentials: true
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install canonical workspace
+        run: npm ci
+      - name: Format W09-A candidate files
+        run: >-
+          npx prettier --write
+          services/n8n-bridge/src/bindings/registry.ts
+          services/n8n-bridge/src/bindings/types.ts
+          services/n8n-bridge/test/w09a-n8n-workflow-binding-registry.test.ts
+      - name: Commit formatter output
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add services/n8n-bridge/src/bindings/registry.ts \
+            services/n8n-bridge/src/bindings/types.ts \
+            services/n8n-bridge/test/w09a-n8n-workflow-binding-registry.test.ts
+          if git diff --cached --quiet; then
+            echo 'No formatter changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'style(W09-A): apply canonical Prettier'
+          git push origin HEAD:scratch/w09a-prettier
