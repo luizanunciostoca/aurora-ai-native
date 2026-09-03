@@ -1,0 +1,37 @@
+name: Scratch W08-D Prettier
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  prettier:
+    if: github.head_ref == 'scratch/w08d-prettier-commit'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.head_ref }}
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Format and commit scratch-only output
+        shell: bash
+        run: |
+          npx prettier --write packages/providers/src/write/transport.ts packages/providers/test/w08d-governed-write-transport.test.ts
+          if git diff --quiet -- packages/providers/src/write/transport.ts packages/providers/test/w08d-governed-write-transport.test.ts; then
+            echo 'already formatted'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/providers/src/write/transport.ts packages/providers/test/w08d-governed-write-transport.test.ts
+          git commit -m 'chore(scratch): apply canonical W08-D formatting'
+          git push origin HEAD:${{ github.head_ref }}
