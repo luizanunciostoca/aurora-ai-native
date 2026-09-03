@@ -165,6 +165,7 @@ function stableQuery(query: Readonly<Record<string, ProviderReadQueryValue>>): s
 }
 
 function scopeKey(
+  tenantId: string,
   bindingReference: string,
   bindingVersion: number,
   provider: string,
@@ -174,6 +175,7 @@ function scopeKey(
   query: Readonly<Record<string, ProviderReadQueryValue>>,
 ): string {
   return JSON.stringify([
+    tenantId,
     bindingReference,
     bindingVersion,
     provider,
@@ -316,6 +318,7 @@ export async function executeProviderRead(
 
   const binding = resolution.binding;
   const expectedScope = scopeKey(
+    request.tenant.tenantId,
     binding.bindingReference,
     binding.bindingVersion,
     binding.provider,
@@ -356,6 +359,7 @@ export async function executeProviderRead(
         try {
           rawResult = await dependencies.adapter.readPage(
             {
+              tenant: request.tenant,
               provider: binding.provider,
               accountReference: binding.accountReference,
               bindingReference: binding.bindingReference,
@@ -408,6 +412,7 @@ export async function executeProviderRead(
 
       readOutcome = {
         ok: true,
+        tenant: request.tenant,
         provider: binding.provider,
         accountReference: binding.accountReference,
         bindingReference: binding.bindingReference,
