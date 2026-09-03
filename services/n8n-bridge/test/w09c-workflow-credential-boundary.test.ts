@@ -40,9 +40,7 @@ function binding(overrides: Partial<N8nWorkflowBinding> = {}): N8nWorkflowBindin
       licenseStatus: 'AURORA_OWNED',
       sanitizedLineage: null,
     },
-    credentialRequirements: [
-      { credentialReference: 'credref.crm.primary', integration: 'crm' },
-    ],
+    credentialRequirements: [{ credentialReference: 'credref.crm.primary', integration: 'crm' }],
     compatibility: {
       contractVersion: '1.0.0',
       requiredTargetClasses: ['PROVIDER'],
@@ -201,10 +199,7 @@ test('W09-C requires exact integration/provider context and a declared W09-A req
   for (const [candidate, expected] of [
     [integrationMismatch, 'INTEGRATION_MISMATCH'],
     [providerMismatch, 'PROVIDER_MISMATCH'],
-    [
-      request(reference({ credentialReference: 'credref.crm.unlisted' })),
-      'REFERENCE_NOT_REQUIRED',
-    ],
+    [request(reference({ credentialReference: 'credref.crm.unlisted' })), 'REFERENCE_NOT_REQUIRED'],
   ] as const) {
     let backendCalls = 0;
     const result = await withResolvedN8nWorkflowCredential(
@@ -226,10 +221,7 @@ test('W09-C rejects candidate, revoked, rotated, stale and expired credential st
     [request(reference({ state: 'REVOKED' })), 'CREDENTIAL_REVOKED'],
     [request(reference({ state: 'ROTATED' })), 'CREDENTIAL_ROTATED'],
     [request(reference({ state: 'STALE' })), 'CREDENTIAL_STALE'],
-    [
-      request(reference({ expiresAt: '2026-09-03T08:15:00.000Z' })),
-      'CREDENTIAL_EXPIRED',
-    ],
+    [request(reference({ expiresAt: '2026-09-03T08:15:00.000Z' })), 'CREDENTIAL_EXPIRED'],
   ];
 
   for (const [candidate, expected] of cases) {
