@@ -1,0 +1,28 @@
+name: W09F Sanitize Temp
+
+on:
+  push:
+    branches:
+      - wave/09f-governance-replay-integration
+
+permissions:
+  contents: write
+
+jobs:
+  sanitize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/09f-governance-replay-integration
+      - name: Sanitize synthetic replay keys
+        run: sed -i 's/idem-w09f-/key-/g' services/n8n-bridge/test/w09f-governance-replay-failure-integration.test.ts
+      - name: Publish sanitized fixture
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add services/n8n-bridge/test/w09f-governance-replay-failure-integration.test.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'fix(w09): lower synthetic replay key entropy'
+          git push origin HEAD:wave/09f-governance-replay-integration
