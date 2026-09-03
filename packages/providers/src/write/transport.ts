@@ -7,10 +7,10 @@ import {
   PROVIDER_WRITE_SAFE_MODES,
   PROVIDER_WRITE_TRANSPORT_ERRORS,
   type ProviderWriteDependencies,
+  type ProviderWriteRequest,
   type ProviderWriteResult,
   type ProviderWriteSafeMode,
   type ProviderWriteTransportResult,
-  type ProviderWriteRequest,
 } from './types.js';
 
 const REQUEST_KEYS = new Set([
@@ -58,12 +58,6 @@ const TRANSPORT_FAILURE_KEYS = new Set([
 const CONTRACT_VERSION = /^\d+\.\d+\.\d+$/u;
 const MAX_JSON_DEPTH = 8;
 const MAX_JSON_NODES = 512;
-
-function failure(
-  error: ProviderWriteResult extends infer _ ? never : never,
-): never {
-  throw new Error(String(error));
-}
 
 function fail(
   error: Extract<ProviderWriteResult, { readonly ok: false }>['error'],
@@ -188,7 +182,9 @@ function correlationReference(value: unknown): string | null {
   return isNonEmptyString(correlationId, 512) ? correlationId : null;
 }
 
-function capability(value: unknown): { readonly capability: string; readonly actionType: string } | null {
+function capability(
+  value: unknown,
+): { readonly capability: string; readonly actionType: string } | null {
   if (!isPlainRecord(value) || !hasOnlyOwnDataProperties(value, CAPABILITY_KEYS)) return null;
   const capabilityValue = ownValue(value, 'capability');
   const actionType = ownValue(value, 'actionType');
@@ -404,7 +400,9 @@ export async function executeGovernedProviderWrite(
       if (!transport.ok) {
         transportOutcome = fail(transport.error, {
           mutationPossible: transport.mutationPossible,
-          ...(transport.retryAfterMs === undefined ? {} : { retryAfterMs: transport.retryAfterMs }),
+          ...(transport.retryAfterMs === undefined
+            ? {}
+            : { retryAfterMs: transport.retryAfterMs }),
           ...(transport.providerReference === undefined
             ? {}
             : { providerReference: transport.providerReference }),
@@ -435,5 +433,3 @@ export async function executeGovernedProviderWrite(
   if (!credentialResult.ok) return fail('CREDENTIAL_UNAVAILABLE');
   return transportOutcome ?? fail('ADAPTER_PROTOCOL_VIOLATION');
 }
-
-void failure;
