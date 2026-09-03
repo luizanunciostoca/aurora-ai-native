@@ -183,7 +183,8 @@ function chooseReasoningLevel(
 function validateBudgetEstimate(
   candidate: W12CreativeAudienceCandidate,
 ): W12AdvisoryBudgetEstimate | undefined {
-  if (candidate.estimatedBudgetMinor === undefined && candidate.currency === undefined) return undefined;
+  if (candidate.estimatedBudgetMinor === undefined && candidate.currency === undefined)
+    return undefined;
   if (
     candidate.estimatedBudgetMinor === undefined ||
     candidate.currency === undefined ||
@@ -317,7 +318,8 @@ export function planCreativeAndAudience(
 
   const budgetEstimate = validateBudgetEstimate(input.candidate);
   if (
-    (input.candidate.estimatedBudgetMinor !== undefined || input.candidate.currency !== undefined) &&
+    (input.candidate.estimatedBudgetMinor !== undefined ||
+      input.candidate.currency !== undefined) &&
     budgetEstimate === undefined
   ) {
     return { status: 'BLOCKED', code: 'INVALID_INPUT' };
