@@ -289,10 +289,12 @@ function contextMatches(record: SocialInboundRecord, context: W11ModerationPolic
   );
 }
 
-export function planSensitiveModeration(input: Readonly<{
-  inbound: SocialInboundRecord;
-  context: W11ModerationPolicyContext;
-}>): W11SensitiveModerationResult {
+export function planSensitiveModeration(
+  input: Readonly<{
+    inbound: SocialInboundRecord;
+    context: W11ModerationPolicyContext;
+  }>,
+): W11SensitiveModerationResult {
   const { inbound, context } = input;
 
   if (!nonEmpty(context.purpose)) {
