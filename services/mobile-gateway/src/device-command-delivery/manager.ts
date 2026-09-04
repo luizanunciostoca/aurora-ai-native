@@ -437,6 +437,12 @@ export class DeviceCommandDeliveryManager {
       candidate.deviceSession,
     );
     if (binding) return binding;
+    const trustBlock = validateTrust<AcknowledgeDeviceCommandDeliverySuccess>(
+      candidate.command,
+      candidate.deviceSession,
+      candidate.observedAtMs,
+    );
+    if (trustBlock) return trustBlock;
     if (candidate.deliveryReference !== record.deliveryReference) {
       return failure('ACK_CONFLICT', 'Acknowledgement references a different delivery.');
     }
