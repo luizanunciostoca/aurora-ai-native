@@ -13,6 +13,7 @@ import type { RealtimeCommandSnapshot } from '../realtime-session/types.js';
 
 export interface DeviceSessionRevokeIngressConfig {
   readonly maxSeenIngress: number;
+  readonly maxControlledSessions: number;
   readonly maxIngressAgeMs: number;
   readonly maxReferenceLength: number;
 }
@@ -120,6 +121,36 @@ export type DeviceIngressClassification =
   | 'LATE_AFTER_RECONNECT'
   | 'LATE_AFTER_REVOKE';
 
+export interface W03DurableIngressReservationRequest {
+  readonly tenantId: TenantId;
+  readonly correlationId: CorrelationId;
+  readonly commandId: CommandId;
+  readonly executionId: ExecutionId;
+  readonly ingressId: ReceiptId | EvidenceId;
+  readonly idempotencyKey: string;
+  readonly contentFingerprint: string;
+  readonly receivedAtMs: number;
+}
+
+export type W03DurableIngressReservationResult =
+  | Readonly<{
+      ok: true;
+      disposition: 'RESERVED' | 'ALREADY_RESERVED';
+      durableReference: string;
+      authorizesExecution: false;
+    }>
+  | Readonly<{
+      ok: false;
+      code: 'CONFLICT' | 'UNAVAILABLE' | 'MALFORMED';
+      retryable: boolean;
+      authorizesExecution: false;
+    }>;
+
+/** Compatibility port over W03 durable idempotency/replay ownership. */
+export interface W03DurableIngressReservationPort {
+  reserve(request: W03DurableIngressReservationRequest): W03DurableIngressReservationResult;
+}
+
 export interface W07DeviceReceiptVerificationRequest {
   readonly receiptId: ReceiptId;
   readonly actionIntentId: ActionIntentId;
@@ -194,8 +225,9 @@ export interface DeviceIngressProjection {
   readonly receivedAtMs: number;
   readonly sourceReference: string;
   readonly integrityReference: string;
+  readonly durableIngressReference: string;
   readonly w07VerificationReference: string;
-  readonly requiresW07Reconciliation: boolean;
+  readonly requiresW07Reconciliation: true;
   readonly outcomeAuthority: 'W07_ONLY';
   readonly ingressAuthoritySemantics: 'PROVENANCE_VERIFIED_INPUT_ONLY_NOT_EXECUTION_OUTCOME';
   readonly receiptPresenceProvesBusinessOutcome: false;
@@ -234,6 +266,9 @@ export const DEVICE_REVOKE_INGRESS_ERROR_CODES = [
   'PROVENANCE_STALE',
   'PROVENANCE_FUTURE',
   'INGRESS_CONFLICT',
+  'DURABLE_IDEMPOTENCY_CONFLICT',
+  'DURABLE_IDEMPOTENCY_UNAVAILABLE',
+  'DURABLE_IDEMPOTENCY_PROTOCOL_VIOLATION',
   'W07_REJECTED',
   'W07_PROTOCOL_VIOLATION',
   'BACKPRESSURE',
