@@ -75,26 +75,7 @@ function typecheck() {
   return 0;
 }
 
-function formatCheck() {
-  const status = runBinary('prettier', ['--check', '.']);
-  if (status === 0) return 0;
-  const files = [
-    'services/mobile-gateway/src/device-receipt-ingress/manager.ts',
-    'services/mobile-gateway/src/device-receipt-ingress/types.ts',
-    'services/mobile-gateway/src/device-receipt-ingress/test/w14g-device-receipt-ingress.test.ts',
-  ];
-  const writeStatus = runBinary('prettier', ['--write', ...files]);
-  if (writeStatus !== 0) return status;
-  const diff = spawnSync('git', ['diff', '--', ...files], {
-    cwd: rootDir,
-    encoding: 'utf8',
-  });
-  console.log('W14_G_PRETTIER_DIFF_START');
-  console.log(diff.stdout ?? '');
-  console.log('W14_G_PRETTIER_DIFF_END');
-  return status;
-}
-
+const formatCheck = () => runBinary('prettier', ['--check', '.']);
 const formatWrite = () => runBinary('prettier', ['--write', '.']);
 const lint = () => runBinary('eslint', ['.', '--max-warnings=0']);
 function runAll() {
