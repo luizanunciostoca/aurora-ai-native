@@ -112,13 +112,9 @@ export interface DeviceCommandDeliverySnapshot {
 
 export type PrepareDeviceCommandDeliveryDisposition = 'PREPARED' | 'ALREADY_PREPARED';
 export type ClaimDeviceCommandDeliveryDisposition =
-  | 'DELIVER'
-  | 'REPLAY_SAME_ENVELOPE'
-  | 'HOLD_ALREADY_ACCEPTED_OR_RUNNING';
+  'DELIVER' | 'REPLAY_SAME_ENVELOPE' | 'HOLD_ALREADY_ACCEPTED_OR_RUNNING';
 export type AcknowledgeDeviceCommandDeliveryDisposition =
-  | 'ACKNOWLEDGED'
-  | 'DUPLICATE_ACK'
-  | 'LATE_ACK_AFTER_RECONNECT';
+  'ACKNOWLEDGED' | 'DUPLICATE_ACK' | 'LATE_ACK_AFTER_RECONNECT';
 
 export interface PrepareDeviceCommandDeliverySuccess {
   readonly disposition: PrepareDeviceCommandDeliveryDisposition;

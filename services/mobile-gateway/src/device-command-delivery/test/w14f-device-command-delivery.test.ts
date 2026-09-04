@@ -20,7 +20,7 @@ import type {
   W03DurableDeliveryReservationResult,
 } from '../types.js';
 
-const TENANT = 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAV' as TenantId;
+const TENANT = 'tnn_01ARZ3NDEKTSV4RRFFQ69G5FAV' as TenantId;
 const CORRELATION = 'cor_01ARZ3NDEKTSV4RRFFQ69G5FAV' as CorrelationId;
 const COMMAND_1 = 'cmd_01ARZ3NDEKTSV4RRFFQ69G5FAV' as CommandId;
 const COMMAND_2 = 'cmd_01ARZ3NDEKTSV4RRFFQ69G5FAW' as CommandId;
@@ -65,8 +65,7 @@ function command(
     updatedAtMs: 1_000,
     submittedGatewayGeneration: 1,
     lastRemoteSequence: 0,
-    redeliveryDisposition:
-      state === 'UNCERTAIN' ? 'BLOCK_UNCERTAIN' : 'NOT_DECIDED_BY_W14_B',
+    redeliveryDisposition: state === 'UNCERTAIN' ? 'BLOCK_UNCERTAIN' : 'NOT_DECIDED_BY_W14_B',
     authoritySemantics: 'TRANSPORT_SESSION_ONLY_NO_ACTION_AUTHORITY',
     authorizesExecution: false,
     provesExecutionSuccess: false,

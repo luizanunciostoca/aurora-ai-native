@@ -145,7 +145,10 @@ function validateTrust<T>(
     command.executionTarget.kind !== 'DEVICE' ||
     command.executionTarget.bindingReference !== trust.deviceRef.deviceId
   ) {
-    return failure('DEVICE_MISMATCH', 'Command execution target does not match the trusted device.');
+    return failure(
+      'DEVICE_MISMATCH',
+      'Command execution target does not match the trusted device.',
+    );
   }
   return null;
 }
@@ -174,9 +177,7 @@ function snapshot(record: DeliveryRecord): DeviceCommandDeliverySnapshot {
       : { lastDeliveryGatewayGeneration: record.lastDeliveryGatewayGeneration }),
     deliveryAttempts: record.deliveryAttempts,
     ...(record.ackReference === undefined ? {} : { ackReference: record.ackReference }),
-    ...(record.acknowledgedAtMs === undefined
-      ? {}
-      : { acknowledgedAtMs: record.acknowledgedAtMs }),
+    ...(record.acknowledgedAtMs === undefined ? {} : { acknowlededAtMs: record.acknowlededAtMs }),
     authoritySemantics: 'TRANSPORT_ONLY_W07_RETAINS_EXECUTION_AUTHORITY' as const,
     retryAuthority: 'W07_RECONCILIATION_REQUIRED_FOR_UNCERTAIN' as const,
     authorizesExecution: false as const,
@@ -211,7 +212,8 @@ export class DeviceCommandDeliveryManager {
   }
 
   prepare(input: unknown): DeviceCommandDeliveryResult<PrepareDeviceCommandDeliverySuccess> {
-    if (!isPlainRecord(input)) return failure('MALFORMED_REQUEST', 'Delivery request is malformed.');
+    if (!isPlainRecord(input))
+      return failure('MALFORMED_REQUEST', 'Delivery request is malformed.');
     const candidate = input as unknown as PrepareDeviceCommandDeliveryInput;
     if (
       !isPlainRecord(candidate.command) ||
@@ -223,7 +225,10 @@ export class DeviceCommandDeliveryManager {
       typeof candidate.command.commandId !== 'string' ||
       !COMMAND_ID.test(candidate.command.commandId)
     ) {
-      return failure('MALFORMED_REQUEST', 'Delivery identifiers, ordering or timing are malformed.');
+      return failure(
+        'MALFORMED_REQUEST',
+        'Delivery identifiers, ordering or timing are malformed.',
+      );
     }
 
     const commandBlock = commandDeliverability<PrepareDeviceCommandDeliverySuccess>(
@@ -285,14 +290,20 @@ export class DeviceCommandDeliveryManager {
           : 'DURABLE_IDEMPOTENCY_UNAVAILABLE',
         'W03 durable idempotency reservation did not succeed.',
         reservation.retryable,
-      );
+     );
     }
-    if (!isSafeToken(reservation.durableReference, 256) || reservation.authorizesExecution !== false) {
+    if (
+      !isSafeToken(reservation.durableReference, 256) ||
+      reservation.authorizesExecution !== false
+    ) {
       return failure('DURABLE_IDEMPOTENCY_UNAVAILABLE', 'W03 reservation response is invalid.');
     }
 
     const record: DeliveryRecord = {
-      deliveryReference: deliveryReference(candidate.command.commandId, reservation.durableReference),
+      deliveryReference: deliveryReference(
+        candidate.command.commandId,
+        reservation.durableReference,
+      ),
       durableIdempotencyReference: reservation.durableReference,
       idempotencyKey: candidate.idempotencyKey,
       commandId: candidate.command.commandId,
@@ -326,7 +337,8 @@ export class DeviceCommandDeliveryManager {
       return failure('MALFORMED_REQUEST', 'Claim request fields are malformed.');
     }
     const record = this.#deliveries.get(candidate.command.commandId);
-    if (record === undefined) return failure('DELIVERY_NOT_FOUND', 'Delivery has not been prepared.');
+    if (record === undefined)
+      return failure('DELIVERY_NOT_FOUND', 'Delivery has not been prepared.');
     const binding = this.#validateBinding<ClaimDeviceCommandDeliverySuccess>(
       record,
       candidate.command,
@@ -417,7 +429,8 @@ export class DeviceCommandDeliveryManager {
       return failure('MALFORMED_REQUEST', 'Acknowledgement fields are malformed.');
     }
     const record = this.#deliveries.get(candidate.command.commandId);
-    if (record === undefined) return failure('DELIVERY_NOT_FOUND', 'Delivery has not been prepared.');
+    if (record === undefined)
+      return failure('DELIVERY_NOT_FOUND', 'Delivery has not been prepared.');
     const binding = this.#validateBinding<AcknowledgeDeviceCommandDeliverySuccess>(
       record,
       candidate.command,
@@ -464,7 +477,8 @@ export class DeviceCommandDeliveryManager {
       return failure('MALFORMED_REQUEST', 'Command identifier is malformed.');
     }
     const record = this.#deliveries.get(commandId as CommandId);
-    if (record === undefined) return failure('DELIVERY_NOT_FOUND', 'Delivery has not been prepared.');
+    if (record === undefined)
+      return failure('DELIVERY_NOT_FOUND', 'Delivery has not been prepared.');
     return success(snapshot(record));
   }
 
@@ -479,7 +493,10 @@ export class DeviceCommandDeliveryManager {
     if (record.tenantId !== trust.tenantId) {
       return failure('TENANT_MISMATCH', 'Tenant binding changed.');
     }
-    if (record.correlationId !== command.correlationId || record.correlationId !== trust.correlationId) {
+    if (
+      record.correlationId !== command.correlationId ||
+      record.correlationId !== trust.correlationId
+    ) {
       return failure('CORRELATION_MISMATCH', 'Correlation binding changed.');
     }
     if (
