@@ -100,7 +100,10 @@ test('W12-G produces deterministic benefit/risk/cost candidates without ActionIn
   assert.equal(first.decisionSupport.canGrantPermission, false);
   assert.equal(first.decisionSupport.automaticSpendEscalation, false);
   assert.equal(first.decisionSupport.candidates.length, 3);
-  assert.equal(first.decisionSupport.candidates.every((item) => item.actionIntent === null), true);
+  assert.equal(
+    first.decisionSupport.candidates.every((item) => item.actionIntent === null),
+    true,
+  );
   assert.equal(
     first.decisionSupport.candidates.every((item) => item.expectedBenefit.kind === 'ESTIMATE_ONLY'),
     true,
@@ -116,9 +119,10 @@ test('W12-G abstains when evidence is incomplete, stale-ineligible or below benc
   });
   assert.equal(incomplete.status, 'READY');
   if (incomplete.status !== 'READY') return;
-  assert.deepEqual(incomplete.decisionSupport.candidates.map((item) => item.kind), [
-    'HOLD_FOR_MORE_EVIDENCE',
-  ]);
+  assert.deepEqual(
+    incomplete.decisionSupport.candidates.map((item) => item.kind),
+    ['HOLD_FOR_MORE_EVIDENCE'],
+  );
   assert.equal(incomplete.decisionSupport.candidates[0]?.nextStep, 'ABSTAIN');
 
   const weak = buildMetaAdsOptimizationDecisionSupport({
@@ -135,7 +139,9 @@ test('W12-G abstains when evidence is incomplete, stale-ineligible or below benc
 test('W12-G adaptive reasoning is advisory only and cannot create execution authority', () => {
   const result = buildMetaAdsOptimizationDecisionSupport({
     evaluatedAtMs: NOW,
-    analytics: [projection({ impressions: 10_000, clicks: 1_000, conversions: 200, spendMinor: 10_000 })],
+    analytics: [
+      projection({ impressions: 10_000, clicks: 1_000, conversions: 200, spendMinor: 10_000 }),
+    ],
     policy,
     evidenceScoreBps: 9_500,
     adaptiveReasoning: {
@@ -147,7 +153,10 @@ test('W12-G adaptive reasoning is advisory only and cannot create execution auth
   });
   assert.equal(result.status, 'READY');
   if (result.status !== 'READY') return;
-  assert.deepEqual(result.decisionSupport.candidates.map((item) => item.kind), ['REVIEW_CREATIVE']);
+  assert.deepEqual(
+    result.decisionSupport.candidates.map((item) => item.kind),
+    ['REVIEW_CREATIVE'],
+  );
   assert.equal(result.decisionSupport.candidates[0]?.actionIntent, null);
   assert.equal(result.decisionSupport.candidates[0]?.authorizesExecution, false);
 });
@@ -173,7 +182,10 @@ test('W12-G high-impact cost review requires human review and never escalates sp
 test('W12-G blocks cross-account analytics instead of blending tenant/provider evidence', () => {
   const result = buildMetaAdsOptimizationDecisionSupport({
     evaluatedAtMs: NOW,
-    analytics: [projection(), projection({ resourceExternalId: 'campaign-2', adAccountExternalId: 'act_other' })],
+    analytics: [
+      projection(),
+      projection({ resourceExternalId: 'campaign-2', adAccountExternalId: 'act_other' }),
+    ],
     policy,
     evidenceScoreBps: 9_000,
   });
