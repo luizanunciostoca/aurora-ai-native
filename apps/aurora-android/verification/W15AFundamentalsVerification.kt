@@ -80,6 +80,12 @@ fun main() {
     check(runCatching {
         RuntimeEnvironmentConfig(AuroraEnvironment.LOCAL, "http://example.com", true)
     }.isFailure)
+    check(runCatching {
+        RuntimeEnvironmentConfig(AuroraEnvironment.STAGING, "https:staging.invalid", false)
+    }.isFailure)
+    check(runCatching {
+        RuntimeEnvironmentConfig(AuroraEnvironment.STAGING, "https:/", false)
+    }.isFailure)
 
     println("W15-A fundamentals verification: PASS")
 }
