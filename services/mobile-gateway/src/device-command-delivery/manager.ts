@@ -177,7 +177,7 @@ function snapshot(record: DeliveryRecord): DeviceCommandDeliverySnapshot {
       : { lastDeliveryGatewayGeneration: record.lastDeliveryGatewayGeneration }),
     deliveryAttempts: record.deliveryAttempts,
     ...(record.ackReference === undefined ? {} : { ackReference: record.ackReference }),
-    ...(record.acknowledgedAtMs === undefined ? {} : { acknowlededAtMs: record.acknowlededAtMs }),
+    ...(record.acknowledgedAtMs === undefined ? {} : { acknowledgedAtMs: record.acknowledgedAtMs }),
     authoritySemantics: 'TRANSPORT_ONLY_W07_RETAINS_EXECUTION_AUTHORITY' as const,
     retryAuthority: 'W07_RECONCILIATION_REQUIRED_FOR_UNCERTAIN' as const,
     authorizesExecution: false as const,
@@ -290,7 +290,7 @@ export class DeviceCommandDeliveryManager {
           : 'DURABLE_IDEMPOTENCY_UNAVAILABLE',
         'W03 durable idempotency reservation did not succeed.',
         reservation.retryable,
-     );
+      );
     }
     if (
       !isSafeToken(reservation.durableReference, 256) ||
