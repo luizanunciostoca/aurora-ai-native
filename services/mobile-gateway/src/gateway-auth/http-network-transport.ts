@@ -1,7 +1,7 @@
 // @ts-expect-error -- Aurora targets Node 22 runtime built-ins without repository-wide @types/node.
 import { createServer } from 'node:http';
 
-import { GatewaySessionManager } from './session-manager.js';
+import type { GatewaySessionManager } from './session-manager.js';
 import { GATEWAY_PROTOCOL_VERSION, type GatewaySessionSnapshot } from './types.js';
 
 const DEFAULT_MAX_BODY_BYTES = 32 * 1024;
@@ -40,8 +40,7 @@ interface IncomingRequestLike {
   readonly socket: SocketLike;
   setEncoding(encoding: 'utf8'): void;
   on(event: 'data', listener: (chunk: string) => void): this;
-  on(event: 'end', listener: () => void): this;
-  on(event: 'error', listener: () => void): this;
+  on(event: 'end' | 'error', listener: () => void): this;
 }
 
 interface SocketLike {
