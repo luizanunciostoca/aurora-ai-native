@@ -1,0 +1,38 @@
+name: W14-G Typecheck Diagnostic
+
+on:
+  push:
+    branches:
+      - wave/14g-session-revoke-evidence-ingress
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Capture exact W14-G typecheck output
+        shell: bash
+        run: |
+          set +e
+          OUTPUT="$(npx tsc --project services/mobile-gateway/src/session-revoke-evidence-ingress/tsconfig.json --noEmit --pretty false 2>&1)"
+          STATUS=$?
+          set -e
+          if [ "$STATUS" -eq 0 ]; then
+            OUTPUT="W14_G_TARGETED_TYPECHECK_PASS"
+          fi
+          printf '%s\n' "$OUTPUT"
+          git config user.name "aurora-typecheck-diagnostic[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore(W14-G): targeted typecheck diagnostic" -m "$OUTPUT"
+          git push origin HEAD:wave/14g-session-revoke-evidence-ingress
