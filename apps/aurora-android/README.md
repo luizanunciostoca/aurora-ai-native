@@ -5,18 +5,18 @@ This directory contains the W15-A Android application foundation only. It establ
 ## Build baseline
 
 - Android Gradle Plugin: `9.2.0`
-- Android `compileSdk` / `targetSdk`: `37`
+- Android `compileSdk` / `targetSdk`: `36`
 - Java toolchain level: `17`
 - Minimum Android API: `26`
 - Build variants: `local`, `staging`, `production`
 
-A Gradle installation compatible with AGP 9.2.0 and Android SDK 37 is required. From this directory, use for example:
+A Gradle installation compatible with AGP 9.2.0 and Android SDK 36 is required. From this directory, use for example:
 
 ```bash
 gradle :app:testLocalDebugUnitTest :app:assembleLocalDebug
 ```
 
-The repository does not vendor a Gradle wrapper JAR in W15-A. CI/release infrastructure may supply Gradle externally without placing binary build tooling inside this ownership lane.
+W15-A deliberately targets the current stable Android SDK baseline rather than requiring an Android 17/API 37 preview SDK. The repository does not vendor a Gradle wrapper JAR in W15-A. CI/release infrastructure may supply Gradle externally without placing binary build tooling inside this ownership lane.
 
 ## Environment separation
 
