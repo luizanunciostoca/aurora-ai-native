@@ -1,0 +1,35 @@
+name: W14G Remediation Format Oracle
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/mobile-gateway/src/device-receipt-ingress/test/w14g-device-receipt-ingress.test.ts'
+      - '.github/workflows/w14g-remediation-format-oracle.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-clean:
+    if: github.event.pull_request.number == 387
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - run: npm exec -- prettier --write services/mobile-gateway/src/device-receipt-ingress/test/w14g-device-receipt-ingress.test.ts
+      - name: Commit canonical formatting and remove oracle
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/w14g-remediation-format-oracle.yml
+          git add services/mobile-gateway/src/device-receipt-ingress/test/w14g-device-receipt-ingress.test.ts
+          git commit -m 'style(W14-G): apply canonical formatting'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
