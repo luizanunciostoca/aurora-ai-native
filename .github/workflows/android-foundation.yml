@@ -1,0 +1,44 @@
+name: Android Foundation
+
+on:
+  pull_request:
+    paths:
+      - "apps/aurora-android/**"
+      - ".github/workflows/android-foundation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/aurora-android/**"
+      - ".github/workflows/android-foundation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: "9.4.1"
+          cache-read-only: true
+      - name: Install Android API 37
+        shell: bash
+        run: sdkmanager "platforms;android-37" "build-tools;36.0.0"
+      - name: Test and assemble Android foundation
+        shell: bash
+        run: >-
+          gradle --no-daemon --console=plain -p apps/aurora-android
+          :app:testLocalDebugUnitTest
+          :app:assembleLocalDebug
+          :app:assembleStagingDebug
+          :app:assembleProductionDebug
