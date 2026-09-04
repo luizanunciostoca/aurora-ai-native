@@ -297,7 +297,7 @@ class DeviceExecutorRuntime(
                         deadlineAtMs = request.deadlineAtMs,
                     ),
                 )
-            } catch (failure: RuntimeException) {
+            } catch (failure: Exception) {
                 DeviceActionResult.Ambiguous(failure.message ?: "native action raised after dispatch")
             }
 
