@@ -1,0 +1,37 @@
+name: W14-C Focused 85f074c
+
+on:
+  push:
+    branches:
+      - scratch/w14c-focused-85f074c
+
+permissions:
+  contents: read
+
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout scratch branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build canonical contracts dependency
+        run: npm run build --workspace @aurora/contracts
+      - name: Build W14-C source
+        run: ./node_modules/.bin/tsc --project services/mobile-gateway/src/progress-cancellation/tsconfig.build.json --pretty false
+      - name: Compile W14-C focused test
+        run: ./node_modules/.bin/tsc --project services/mobile-gateway/src/progress-cancellation/tsconfig.test.json --pretty false
+      - name: Execute W14-C focused tests
+        run: node --test services/mobile-gateway/src/progress-cancellation/dist-test/progress-cancellation/test/w14c-progress-cancellation.test.js
+      - name: Cleanup generated output
+        run: rm -rf services/mobile-gateway/src/progress-cancellation/dist services/mobile-gateway/src/progress-cancellation/dist-test
+      - name: Confirm candidate files remained unchanged
+        run: git diff --exit-code -- services/mobile-gateway/src/progress-cancellation
