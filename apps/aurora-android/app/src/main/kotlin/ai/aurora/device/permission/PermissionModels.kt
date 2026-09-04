@@ -45,6 +45,7 @@ enum class RuntimePermissionState {
     REVOKED,
     BACKGROUND_RESTRICTED,
     STALE_RUNTIME_STATE,
+    LOCAL_STATE_UNAVAILABLE,
 }
 
 data class RuntimePermissionObservation(
@@ -71,6 +72,7 @@ enum class PermissionPromptDecision {
     SETTINGS_REQUIRED,
     BACKGROUND_RESTRICTION_REQUIRES_SETTINGS,
     STALE_RUNTIME_STATE,
+    LOCAL_STATE_UNAVAILABLE,
     PROMPT_LAUNCH_FAILED,
 }
 
@@ -110,16 +112,25 @@ class PermissionConsentBroker(
             snapshot.observedAtMs > currentMs ||
             currentMs >= expiresAtMs
         ) {
-            return RuntimePermissionObservation(
+            return observation(
                 requirement = requirement,
-                state = RuntimePermissionState.STALE_RUNTIME_STATE,
-                observedAtMs = snapshot.observedAtMs,
+                snapshot = snapshot,
                 expiresAtMs = expiresAtMs,
-                shouldShowRationale = snapshot.shouldShowRationale,
+                state = RuntimePermissionState.STALE_RUNTIME_STATE,
             )
         }
 
-        val history = historyStore.load(requirement.permission)
+        val history =
+            try {
+                historyStore.load(requirement.permission)
+            } catch (_: RuntimeException) {
+                return observation(
+                    requirement = requirement,
+                    snapshot = snapshot,
+                    expiresAtMs = expiresAtMs,
+                    state = RuntimePermissionState.LOCAL_STATE_UNAVAILABLE,
+                )
+            }
         val state =
             when {
                 snapshot.granted && requirement.requiresBackgroundAccess && snapshot.backgroundRestricted ->
@@ -133,15 +144,23 @@ class PermissionConsentBroker(
             }
 
         if (snapshot.granted && !history.everGranted) {
-            historyStore.save(requirement.permission, history.copy(everGranted = true))
+            try {
+                historyStore.save(requirement.permission, history.copy(everGranted = true))
+            } catch (_: RuntimeException) {
+                return observation(
+                    requirement = requirement,
+                    snapshot = snapshot,
+                    expiresAtMs = expiresAtMs,
+                    state = RuntimePermissionState.LOCAL_STATE_UNAVAILABLE,
+                )
+            }
         }
 
-        return RuntimePermissionObservation(
+        return observation(
             requirement = requirement,
-            state = state,
-            observedAtMs = snapshot.observedAtMs,
+            snapshot = snapshot,
             expiresAtMs = expiresAtMs,
-            shouldShowRationale = snapshot.shouldShowRationale,
+            state = state,
         )
     }
 
@@ -161,6 +180,8 @@ class PermissionConsentBroker(
                 RuntimePermissionState.BACKGROUND_RESTRICTED ->
                     PermissionPromptDecision.BACKGROUND_RESTRICTION_REQUIRES_SETTINGS
                 RuntimePermissionState.STALE_RUNTIME_STATE -> PermissionPromptDecision.STALE_RUNTIME_STATE
+                RuntimePermissionState.LOCAL_STATE_UNAVAILABLE ->
+                    PermissionPromptDecision.LOCAL_STATE_UNAVAILABLE
                 RuntimePermissionState.NOT_REQUESTED,
                 RuntimePermissionState.DENIED -> null
             }
@@ -178,7 +199,13 @@ class PermissionConsentBroker(
             return PermissionPromptResult(PermissionPromptDecision.ALREADY_IN_FLIGHT, observation)
         }
 
-        val previousHistory = historyStore.load(permission)
+        val previousHistory =
+            try {
+                historyStore.load(permission)
+            } catch (_: RuntimeException) {
+                promptsInFlight.remove(permission)
+                return PermissionPromptResult(PermissionPromptDecision.LOCAL_STATE_UNAVAILABLE, observation)
+            }
         return try {
             historyStore.save(permission, previousHistory.copy(everRequested = true))
             promptLauncher.launch(permission)
@@ -195,6 +222,20 @@ class PermissionConsentBroker(
         promptsInFlight.remove(requirement.permission)
         return observe(requirement)
     }
+
+    private fun observation(
+        requirement: RuntimePermissionRequirement,
+        snapshot: RuntimePermissionSnapshot,
+        expiresAtMs: Long,
+        state: RuntimePermissionState,
+    ): RuntimePermissionObservation =
+        RuntimePermissionObservation(
+            requirement = requirement,
+            state = state,
+            observedAtMs = snapshot.observedAtMs,
+            expiresAtMs = expiresAtMs,
+            shouldShowRationale = snapshot.shouldShowRationale,
+        )
 
     private fun saturatingAdd(left: Long, right: Long): Long =
         if (left > Long.MAX_VALUE - right) Long.MAX_VALUE else left + right
