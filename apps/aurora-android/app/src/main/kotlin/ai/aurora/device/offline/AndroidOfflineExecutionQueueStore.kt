@@ -10,8 +10,9 @@ import org.json.JSONObject
 /**
  * Restart-safe Android store for W15-H's non-authoritative queue projection.
  *
- * No W07 authorization snapshot, policy token, approval, secret, Keystore material or gateway
- * credential is persisted here.
+ * No W07 authorization snapshot, policy token, approval, arbitrary action argument, secret,
+ * Keystore material or gateway credential is persisted here. Records are bounded by the queue model
+ * and the complete serialized store has an independent hard byte ceiling.
  */
 class AndroidOfflineExecutionQueueStore(context: Context) : OfflineExecutionQueueStore {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -19,6 +20,9 @@ class AndroidOfflineExecutionQueueStore(context: Context) : OfflineExecutionQueu
     override fun loadAll(): List<OfflineDeferredExecution> {
         val encoded = preferences.getString(KEY_RECORDS, null) ?: return emptyList()
         return try {
+            check(encoded.toByteArray(Charsets.UTF_8).size <= MAX_STORED_QUEUE_BYTES) {
+                "offline queue exceeds storage bound"
+            }
             val array = JSONArray(encoded)
             buildList {
                 for (index in 0 until array.length()) {
@@ -36,13 +40,20 @@ class AndroidOfflineExecutionQueueStore(context: Context) : OfflineExecutionQueu
     override fun saveAll(records: List<OfflineDeferredExecution>) {
         val array = JSONArray()
         records.forEach { record -> array.put(encodeRecord(record)) }
-        check(preferences.edit().putString(KEY_RECORDS, array.toString()).commit()) {
+        val encoded = array.toString()
+        check(encoded.toByteArray(Charsets.UTF_8).size <= MAX_STORED_QUEUE_BYTES) {
+            "offline queue exceeds storage bound"
+        }
+        check(preferences.edit().putString(KEY_RECORDS, encoded).commit()) {
             "failed to persist offline execution queue"
         }
     }
 
     private fun encodeRecord(record: OfflineDeferredExecution): JSONObject =
         JSONObject().apply {
+            check(record.request.action.arguments.isEmpty()) {
+                "offline queue must not persist arbitrary action arguments"
+            }
             put("idempotencyKey", record.idempotencyKey)
             put("operationName", record.operationName)
             put("canonicalPayloadHash", record.canonicalPayloadHash)
@@ -57,12 +68,14 @@ class AndroidOfflineExecutionQueueStore(context: Context) : OfflineExecutionQueu
             if (record.request.appId == null) put("appId", JSONObject.NULL)
             else put("appId", record.request.appId)
             put("actionId", record.request.action.actionId)
-            put("actionArguments", encodeArguments(record.request.action.arguments))
             put("permissionRequirements", encodePermissions(record.request.permissionRequirements))
         }
 
-    private fun decodeRecord(json: JSONObject): OfflineDeferredExecution =
-        OfflineDeferredExecution(
+    private fun decodeRecord(json: JSONObject): OfflineDeferredExecution {
+        check(!json.has("actionArguments")) {
+            "offline queue record contains prohibited action arguments"
+        }
+        return OfflineDeferredExecution(
             idempotencyKey = json.getString("idempotencyKey"),
             operationName = json.getString("operationName"),
             canonicalPayloadHash = json.getString("canonicalPayloadHash"),
@@ -77,14 +90,11 @@ class AndroidOfflineExecutionQueueStore(context: Context) : OfflineExecutionQueu
                     capabilityId = json.getString("capabilityId"),
                     permissionRequirements = decodePermissions(json.getJSONArray("permissionRequirements")),
                     appId = if (json.isNull("appId")) null else json.getString("appId"),
-                    action =
-                        DeviceActionCommand(
-                            actionId = json.getString("actionId"),
-                            arguments = decodeArguments(json.getJSONObject("actionArguments")),
-                        ),
+                    action = DeviceActionCommand(actionId = json.getString("actionId")),
                     deadlineAtMs = json.getLong("deadlineAtMs"),
                 ),
         )
+    }
 
     private fun encodePermissions(requirements: List<RuntimePermissionRequirement>): JSONArray =
         JSONArray().apply {
@@ -111,22 +121,9 @@ class AndroidOfflineExecutionQueueStore(context: Context) : OfflineExecutionQueu
             }
         }
 
-    private fun encodeArguments(arguments: Map<String, String>): JSONObject =
-        JSONObject().apply {
-            arguments.forEach { (key, value) -> put(key, value) }
-        }
-
-    private fun decodeArguments(json: JSONObject): Map<String, String> =
-        buildMap {
-            val keys = json.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                put(key, json.getString(key))
-            }
-        }
-
     private companion object {
         const val PREFERENCES_NAME = "aurora_offline_execution_queue"
         const val KEY_RECORDS = "records_json"
+        const val MAX_STORED_QUEUE_BYTES = 1024 * 1024
     }
 }
