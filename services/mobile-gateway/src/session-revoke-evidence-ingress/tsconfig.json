@@ -5,6 +5,7 @@
     "moduleResolution": "NodeNext",
     "baseUrl": ".",
     "paths": {
+      "@aurora/contracts/context": ["../../../../packages/contracts/src/context/index.ts"],
       "@aurora/contracts/execution-target": [
         "../../../../packages/contracts/src/execution-target/index.ts"
       ],
