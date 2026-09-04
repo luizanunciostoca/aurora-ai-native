@@ -5,7 +5,6 @@ import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import ai.aurora.device.lifecycle.PermissionSnapshotProvider
 import ai.aurora.device.lifecycle.PresenceEngine
 
 class AndroidRuntimePermissionProbe(
@@ -37,11 +36,13 @@ class SharedPreferencesPermissionHistoryStore(context: Context) : PermissionHist
         )
 
     override fun save(permission: String, history: PermissionHistory) {
-        preferences
-            .edit()
-            .putBoolean("$permission.requested", history.everRequested)
-            .putBoolean("$permission.granted", history.everGranted)
-            .apply()
+        check(
+            preferences
+                .edit()
+                .putBoolean("$permission.requested", history.everRequested)
+                .putBoolean("$permission.granted", history.everGranted)
+                .commit(),
+        ) { "permission history commit failed" }
     }
 
     companion object {
