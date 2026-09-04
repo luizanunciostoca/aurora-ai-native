@@ -289,6 +289,12 @@ class OfflineExecutionQueueCoordinator(
             }
             val reboundRequest = record.request.copy(deviceSessionId = reconnectSession.deviceSessionId)
 
+            // Persist a fail-closed crash fence before entering the native side-effect boundary.
+            // If the process dies after dispatch but before terminal readback is saved, restart sees
+            // RECONCILIATION_REQUIRED and cannot blindly execute the command again.
+            records[index] = record.copy(state = OfflineQueueState.RECONCILIATION_REQUIRED)
+            store.saveAll(records)
+
             when (val decision = dispatcher.execute(reboundRequest)) {
                 is DeviceExecutionDecision.Completed -> {
                     if (decision.receipt.outcome == DeviceExecutionOutcome.EXECUTION_UNCERTAIN) {
