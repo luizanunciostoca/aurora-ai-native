@@ -23,8 +23,6 @@ import type {
   DeviceIngressAuthenticationPort,
   DeviceIngressAuthenticationRequest,
   DeviceIngressAuthenticationResult,
-  DeviceSessionCurrentTrustRequest,
-  DeviceSessionCurrentTrustResult,
   DeviceSessionTrustPort,
   W03ReceiptIngressCompletionRequest,
   W03ReceiptIngressCompletionResult,
@@ -109,7 +107,7 @@ function trust(state: 'ACTIVE' | 'REVOKED' = 'ACTIVE'): DeviceSessionTrustSnapsh
 }
 
 class StatefulSessionTrustPort implements DeviceSessionTrustPort {
-  verifyCalls = 0;
+  getCalls = 0;
   revokeCalls = 0;
   current: DeviceSessionTrustSnapshot;
 
@@ -117,13 +115,36 @@ class StatefulSessionTrustPort implements DeviceSessionTrustPort {
     this.current = initial;
   }
 
-  verifyCurrent(request: DeviceSessionCurrentTrustRequest): DeviceSessionCurrentTrustResult {
-    this.verifyCalls += 1;
-    if (request.deviceSession.deviceSessionId !== this.current.deviceSessionId) {
+  getSession(
+    deviceSessionId: string,
+    connectionId: string,
+    nowMs: number,
+  ): DeviceSessionTrustResult {
+    this.getCalls += 1;
+    if (deviceSessionId !== this.current.deviceSessionId) {
       return {
         ok: false,
-        code: 'NOT_FOUND',
-        retryable: false,
+        error: { code: 'SESSION_NOT_FOUND', message: 'Session not found.', retryable: false },
+        authorizesExecution: false,
+        canGrantPermission: false,
+      };
+    }
+    if (connectionId !== this.current.connectionId) {
+      return {
+        ok: false,
+        error: { code: 'CONNECTION_MISMATCH', message: 'Connection mismatch.', retryable: false },
+        authorizesExecution: false,
+        canGrantPermission: false,
+      };
+    }
+    if (
+      this.current.state === 'ACTIVE' &&
+      (nowMs >= this.current.gatewayAuthExpiresAtMs ||
+        nowMs >= this.current.attestation.expiresAtMs)
+    ) {
+      return {
+        ok: false,
+        error: { code: 'SESSION_EXPIRED', message: 'Current trust is stale.', retryable: false },
         authorizesExecution: false,
         canGrantPermission: false,
       };
@@ -131,7 +152,6 @@ class StatefulSessionTrustPort implements DeviceSessionTrustPort {
     return {
       ok: true,
       snapshot: this.current,
-      current: true,
       authorizesExecution: false,
       canGrantPermission: false,
     };

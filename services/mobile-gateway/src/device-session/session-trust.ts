@@ -314,6 +314,38 @@ export class DeviceSessionTrustManager {
     return success(this.#snapshot(record));
   }
 
+  getSession(
+    deviceSessionId: string,
+    connectionId: string,
+    nowMs: number,
+  ): DeviceSessionTrustResult {
+    if (
+      !isBoundedToken(deviceSessionId) ||
+      !isBoundedToken(connectionId) ||
+      !isFiniteInteger(nowMs)
+    ) {
+      return error('MALFORMED_REQUEST', 'Current-session read input is malformed.');
+    }
+    const record = this.#sessions.get(deviceSessionId);
+    if (record === undefined) return error('SESSION_NOT_FOUND', 'Device session does not exist.');
+    if (connectionId !== record.connectionId) {
+      return error('CONNECTION_MISMATCH', 'Connection does not own the device session.');
+    }
+    if (nowMs < record.lastEvaluatedAtMs) {
+      return error('MALFORMED_REQUEST', 'Current-session read time cannot move backwards.');
+    }
+    if (record.state === 'REVOKED') return success(this.#snapshot(record));
+    if (nowMs - record.openedAtMs > this.#config.maxSessionAgeMs) {
+      return error('SESSION_EXPIRED', 'Device session exceeded its bounded lifetime.');
+    }
+    if (nowMs >= record.gatewayAuthExpiresAtMs) {
+      return error('GATEWAY_AUTH_EXPIRED', 'Gateway authentication is no longer current.');
+    }
+    const attestationError = this.#validateAttestation(record.attestation, nowMs);
+    if (attestationError !== null) return attestationError;
+    return success(this.#snapshot(record));
+  }
+
   evaluateSession(input: unknown): DeviceSessionTrustResult {
     const parsed = this.#parseEvaluateInput(input);
     if (!parsed.ok) return parsed.result;
