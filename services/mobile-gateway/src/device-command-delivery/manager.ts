@@ -194,6 +194,7 @@ export class DeviceCommandDeliveryManager {
   readonly #config: DeviceCommandDeliveryConfig;
   readonly #deliveries = new Map<CommandId, DeliveryRecord>();
   readonly #orderBindings = new Map<string, CommandId>();
+  readonly #orderingFloors = new Map<string, number>();
 
   constructor(
     durable: W03DurableDeliveryReservationPort,
@@ -259,6 +260,13 @@ export class DeviceCommandDeliveryManager {
       return failure('DELIVERY_CONFLICT', 'Command is already bound to a different delivery.');
     }
 
+    const orderingFloor = this.#orderingFloors.get(candidate.orderingKey) ?? 0;
+    if (candidate.orderingSequence <= orderingFloor) {
+      return failure(
+        'ORDERING_CONFLICT',
+        'Ordering sequence is already retired as acknowledged.',
+      );
+    }
     const orderKey = `${candidate.orderingKey}|${candidate.orderingSequence}`;
     const ordered = this.#orderBindings.get(orderKey);
     if (ordered !== undefined && ordered !== candidate.command.commandId) {
@@ -271,6 +279,7 @@ export class DeviceCommandDeliveryManager {
       if (evictable === undefined) {
         return failure('BACKPRESSURE', 'Delivery tracking capacity is exhausted.', true);
       }
+      this.#advanceOrderingFloor(evictable.orderingKey, evictable.orderingSequence);
       this.#deliveries.delete(evictable.commandId);
       this.#orderBindings.delete(`${evictable.orderingKey}|${evictable.orderingSequence}`);
     }
@@ -515,8 +524,21 @@ export class DeviceCommandDeliveryManager {
     return null;
   }
 
+  #advanceOrderingFloor(orderingKey: string, orderingSequence: number): void {
+    const currentFloor = this.#orderingFloors.get(orderingKey) ?? 0;
+    if (orderingSequence <= currentFloor) return;
+    this.#orderingFloors.delete(orderingKey);
+    this.#orderingFloors.set(orderingKey, orderingSequence);
+    while (this.#orderingFloors.size > this.#config.maxTrackedDeliveries) {
+      const oldestOrderingKey = this.#orderingFloors.keys().next().value;
+      if (oldestOrderingKey === undefined) break;
+      this.#orderingFloors.delete(oldestOrderingKey);
+    }
+  }
+
   #validateOrdering<T>(record: DeliveryRecord): DeviceCommandDeliveryResult<T> | null {
-    for (let sequence = 1; sequence < record.orderingSequence; sequence += 1) {
+    const orderingFloor = this.#orderingFloors.get(record.orderingKey) ?? 0;
+    for (let sequence = orderingFloor + 1; sequence < record.orderingSequence; sequence += 1) {
       const commandId = this.#orderBindings.get(`${record.orderingKey}|${sequence}`);
       if (commandId === undefined) {
         return failure('ORDERING_GAP', 'A prior ordering sequence is missing.');
