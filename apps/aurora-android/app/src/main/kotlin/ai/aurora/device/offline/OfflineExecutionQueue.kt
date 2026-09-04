@@ -9,6 +9,11 @@ import ai.aurora.device.executor.DeviceExecutionReceipt
 import ai.aurora.device.session.W14DeviceSessionTrustState
 import ai.aurora.device.session.W14DeviceSessionTrustView
 
+private const val MAX_OFFLINE_REFERENCE_BYTES = 512
+private const val MAX_OFFLINE_PERMISSION_REQUIREMENTS = 16
+private const val MAX_OFFLINE_RECORD_BYTES = 8 * 1024
+private const val OFFLINE_RECORD_FIXED_OVERHEAD_BYTES = 256
+
 /** Android consumer view of the accepted W03 idempotency status vocabulary. */
 enum class W03IdempotencyState {
     ACCEPTED,
@@ -70,6 +75,12 @@ data class OfflineDeferredExecution(
         require(operationName.isNotBlank()) { "operationName must not be blank" }
         require(canonicalPayloadHash.isNotBlank()) { "canonicalPayloadHash must not be blank" }
         require(enqueuedAtMs >= 0) { "enqueuedAtMs must be non-negative" }
+        require(request.action.arguments.isEmpty()) {
+            "offline queue must not persist arbitrary action arguments"
+        }
+        require(persistedRecordWithinBounds(idempotencyKey, operationName, canonicalPayloadHash, request)) {
+            "offline queue record exceeds persistence bounds"
+        }
     }
 
     /** Intentionally contains no PolicyToken/OwnerDecision/W07 authorization snapshot. */
@@ -97,6 +108,8 @@ data class OfflineEnqueueRequest(
 
 enum class OfflineEnqueueRejection {
     NOT_SAFE_TO_DEFER,
+    PERSISTENCE_ARGUMENTS_NOT_ALLOWED,
+    PERSISTED_PAYLOAD_TOO_LARGE,
     DEADLINE_EXPIRED,
     W03_STATE_MISSING,
     W03_BINDING_CONFLICT,
@@ -135,9 +148,10 @@ data class OfflineDrainResult(
  * W15-H offline/reconnect orchestration.
  *
  * The queue persists only a non-authoritative execution reference plus W03 idempotency identity.
- * It never persists a W07 authorization snapshot, never grants retry authority, and never blindly
- * replays EXECUTION_UNCERTAIN work. Every drain re-reads W03, W07 and the W14-owned current device
- * session before W15-F performs its own final current-precondition validation.
+ * Arbitrary action arguments are never persisted. It never persists a W07 authorization snapshot,
+ * never grants retry authority, and never blindly replays EXECUTION_UNCERTAIN work. Every drain
+ * re-reads W03, W07 and the W14-owned current device session before W15-F performs its own final
+ * current-precondition validation.
  */
 class OfflineExecutionQueueCoordinator(
     private val store: OfflineExecutionQueueStore,
@@ -156,6 +170,21 @@ class OfflineExecutionQueueCoordinator(
         val now = nowMs()
         if (candidate.safety != OfflineDeferralSafety.SAFE_TO_DEFER) {
             return OfflineEnqueueDecision.Rejected(OfflineEnqueueRejection.NOT_SAFE_TO_DEFER)
+        }
+        if (candidate.execution.action.arguments.isNotEmpty()) {
+            return OfflineEnqueueDecision.Rejected(
+                OfflineEnqueueRejection.PERSISTENCE_ARGUMENTS_NOT_ALLOWED,
+            )
+        }
+        if (
+            !persistedRecordWithinBounds(
+                candidate.idempotencyKey,
+                candidate.operationName,
+                candidate.canonicalPayloadHash,
+                candidate.execution,
+            )
+        ) {
+            return OfflineEnqueueDecision.Rejected(OfflineEnqueueRejection.PERSISTED_PAYLOAD_TOO_LARGE)
         }
         if (now >= candidate.execution.deadlineAtMs) {
             return OfflineEnqueueDecision.Rejected(OfflineEnqueueRejection.DEADLINE_EXPIRED)
@@ -408,3 +437,35 @@ class OfflineExecutionQueueCoordinator(
             disposition = disposition,
         )
 }
+
+private fun persistedRecordWithinBounds(
+    idempotencyKey: String,
+    operationName: String,
+    canonicalPayloadHash: String,
+    request: DeviceExecutionRequest,
+): Boolean {
+    if (request.permissionRequirements.size > MAX_OFFLINE_PERMISSION_REQUIREMENTS) return false
+    val references =
+        buildList {
+            add(idempotencyKey)
+            add(operationName)
+            add(canonicalPayloadHash)
+            add(request.executionId)
+            add(request.tenantId)
+            add(request.deviceId)
+            add(request.deviceSessionId)
+            add(request.capabilityId)
+            request.appId?.let(::add)
+            add(request.action.actionId)
+            request.permissionRequirements.forEach { add(it.permission) }
+        }
+    if (references.any { utf8Size(it) > MAX_OFFLINE_REFERENCE_BYTES }) return false
+
+    val totalBytes =
+        references.fold(OFFLINE_RECORD_FIXED_OVERHEAD_BYTES.toLong()) { total, value ->
+            total + utf8Size(value)
+        }
+    return totalBytes <= MAX_OFFLINE_RECORD_BYTES
+}
+
+private fun utf8Size(value: String): Int = value.toByteArray(Charsets.UTF_8).size
