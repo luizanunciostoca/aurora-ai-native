@@ -1,0 +1,72 @@
+{
+  "schemaVersion": "1.0.0",
+  "wave": "W15-J",
+  "dp4Status": "OPEN",
+  "dp5Status": "CLOSED_PHYSICAL_EVIDENCE_INCOMPLETE",
+  "candidateSha": "REQUIRED",
+  "apk": {
+    "applicationId": "REQUIRED",
+    "variant": "REQUIRED",
+    "versionCode": "REQUIRED",
+    "versionName": "REQUIRED"
+  },
+  "device": {
+    "serialSha256": "REQUIRED",
+    "manufacturer": "REQUIRED",
+    "model": "REQUIRED",
+    "product": "REQUIRED",
+    "apiLevel": "REQUIRED",
+    "buildFingerprint": "REQUIRED",
+    "physicalDeviceVerified": false
+  },
+  "environment": {
+    "gatewayIdentity": "REQUIRED_OR_BLOCKED",
+    "gatewayVersion": "REQUIRED_OR_BLOCKED",
+    "operator": "REQUIRED",
+    "observedAtUtc": "REQUIRED"
+  },
+  "scenarios": {
+    "lifecycleAndRestart": "NOT_RUN",
+    "registrationAndSession": "NOT_RUN",
+    "sessionRotation": "NOT_RUN",
+    "sessionRevocation": "NOT_RUN",
+    "capabilityFreshness": "NOT_RUN",
+    "permissionDenialAndRevocation": "NOT_RUN",
+    "installedAppMissingWrongReplaced": "NOT_RUN",
+    "governedNativeExecution": "NOT_RUN",
+    "killAndCancellation": "NOT_RUN",
+    "executionUncertain": "NOT_RUN",
+    "offlineReconnectDedupe": "NOT_RUN",
+    "lateReceiptEvidence": "NOT_RUN",
+    "processDeathCrashFence": "NOT_RUN",
+    "voiceFalseWakeAmbiguityPrivacy": "NOT_RUN"
+  },
+  "threatReview": {
+    "packageImpersonation": "NOT_RUN",
+    "secretLeakage": "NOT_RUN",
+    "privilegeEscalation": "NOT_RUN",
+    "staleTrust": "NOT_RUN",
+    "forgedEvidence": "NOT_RUN",
+    "uiAutomationFallback": "NOT_RUN",
+    "localPersistenceCorruption": "NOT_RUN"
+  },
+  "resourceObservations": {
+    "startup": "NOT_OBSERVED",
+    "reconnect": "NOT_OBSERVED",
+    "battery": "NOT_OBSERVED",
+    "cpu": "NOT_OBSERVED",
+    "memory": "NOT_OBSERVED",
+    "storage": "NOT_OBSERVED",
+    "foregroundService": "NOT_OBSERVED"
+  },
+  "handoffs": {
+    "w17Telemetry": [],
+    "w19SecurityHardening": [],
+    "w20ReleaseRollout": []
+  },
+  "evidenceReferences": [],
+  "notes": [
+    "This file is an evidence template only and grants no execution authority.",
+    "PASS requires representative physical-device evidence; CI/emulator/in-process mocks cannot close DP5."
+  ]
+}
