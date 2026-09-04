@@ -63,7 +63,15 @@ const EVENT_ID = /^evt_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const COMMAND_ID = /^cmd_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const SAFE_REFERENCE = /^[A-Za-z0-9._:/-]+$/u;
 const REASON_CODE = /^[A-Z][A-Z0-9_]{0,63}$/u;
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/u;
+const CONTROL_CHARACTERS = {
+  test(value: string): boolean {
+    for (const character of value) {
+      const codePoint = character.charCodeAt(0);
+      if (codePoint <= 0x1f || codePoint === 0x7f) return true;
+    }
+    return false;
+  },
+} as const;
 const PRIVATE_REASONING_MARKERS =
   /(?:chain[\s-]*of[\s-]*thought|private reasoning|hidden reasoning|scratchpad|system prompt|developer message|<analysis>|<\/analysis>)/iu;
 
