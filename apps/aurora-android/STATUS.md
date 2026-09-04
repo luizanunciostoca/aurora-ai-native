@@ -1,9 +1,27 @@
-# Status: SCAFFOLD / PLANNED_DEPENDENCY_GATED
+# Status: W15-A BUILD CANDIDATE — FOUNDATION / PRESENCE / LIFECYCLE
 
-This directory reserves the canonical future Android client location. It does not currently contain the accepted W15 Android Device Runtime.
+W15-00 is accepted and the W15-A Android application foundation is now implemented on its canonical candidate branch. Acceptance is not complete until exact-final-HEAD Quality, Test Build and Security, Android build/unit evidence, Risk Gates A-D, protected merge and post-merge exact-main gates succeed.
 
-Planning authority: Developer Manual v0.4.1 + ADR-002.
+Implemented in W15-A:
 
-W15 implementation is gated on accepted upstream outputs from W02 policy/authority, W03 durable event/idempotency foundations, W04 target-neutral capabilities, W07 execution-target/executor contracts and W14 Device Gateway/session/trust.
+- native Android application/build foundation;
+- `local` / `staging` / `production` non-secret environment separation;
+- deterministic process/presence/local-service lifecycle state model;
+- non-secret process-generation checkpointing and restart recovery;
+- Android activity lifecycle bridge;
+- observational session lifecycle hooks;
+- positive, negative, boundary and process-death/restart tests.
 
-Visual behavior may use the preserved desktop Aurora face as provenance, but runtime implementation choices belong to W15 ownership. Presence/voice, installed-app integration, permissions, Device Executor, offline queue and optional Device Owner/Launcher work must not be implemented here before W15 release.
+Explicitly not implemented in W15-A:
+
+- W15-B DeviceId/DeviceRef registration client, secure session or Android Keystore credentials;
+- W15-C native capability bridge;
+- W15-D installed-app integration;
+- W15-E permission/consent broker;
+- W15-F native side effects or DEVICE executor;
+- W15-G voice/wake path;
+- W15-H offline execution queue/reconciliation;
+- W15-I Device Owner/Launcher profile;
+- W15-J physical-device acceptance.
+
+Authority remains upstream-owned: Android permission, local lifecycle state, environment selection, device/session state or future Keystore possession cannot create or widen Aurora policy/action authority. W07 execution/outcome/reconciliation semantics and W14 device/session/trust ownership remain unchanged.
