@@ -23,12 +23,14 @@ class AndroidPresenceCheckpointStore(context: Context) : PresenceCheckpointStore
     }
 
     override fun save(checkpoint: PresenceCheckpoint) {
-        preferences
-            .edit()
-            .putLong(KEY_PROCESS_GENERATION, checkpoint.processGeneration)
-            .putString(KEY_LAST_VISIBILITY, checkpoint.lastVisibility.name)
-            .putLong(KEY_TRANSITION_SEQUENCE, checkpoint.transitionSequence)
-            .apply()
+        val persisted =
+            preferences
+                .edit()
+                .putLong(KEY_PROCESS_GENERATION, checkpoint.processGeneration)
+                .putString(KEY_LAST_VISIBILITY, checkpoint.lastVisibility.name)
+                .putLong(KEY_TRANSITION_SEQUENCE, checkpoint.transitionSequence)
+                .commit()
+        check(persisted) { "failed to persist presence checkpoint" }
     }
 
     private companion object {
