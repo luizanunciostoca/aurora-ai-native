@@ -19,14 +19,27 @@ function run(command, args) {
   return spawnSync(command, args, { cwd: repoRoot, stdio: 'inherit' }).status ?? 1;
 }
 
-function compileAndRunServiceTests(servicePath, testFiles) {
-  if (testFiles.length === 0) return 0;
-  const tsc = resolve(
+function tscCommand() {
+  return resolve(
     repoRoot,
     'node_modules',
     '.bin',
     process.platform === 'win32' ? 'tsc.cmd' : 'tsc',
   );
+}
+
+function typecheckProjects(projectPaths) {
+  const tsc = tscCommand();
+  for (const projectPath of projectPaths) {
+    const projectStatus = run(tsc, ['--project', projectPath, '--noEmit', '--pretty', 'false']);
+    if (projectStatus !== 0) return projectStatus;
+  }
+  return 0;
+}
+
+function compileAndRunServiceTests(servicePath, testFiles) {
+  if (testFiles.length === 0) return 0;
+  const tsc = tscCommand();
   let serviceStatus = run(tsc, [
     '--project',
     `${servicePath}/tsconfig.test.json`,
@@ -34,14 +47,9 @@ function compileAndRunServiceTests(servicePath, testFiles) {
     'false',
   ]);
   if (serviceStatus === 0) {
-    const testRoot = resolve(repoRoot, servicePath, 'test');
+    const serviceRoot = resolve(repoRoot, servicePath);
     const compiledTests = testFiles.map((testFile) =>
-      join(
-        repoRoot,
-        servicePath,
-        'dist-test/test',
-        relative(testRoot, testFile).replace(/\.ts$/, '.js'),
-      ),
+      join(serviceRoot, 'dist-test', relative(serviceRoot, testFile).replace(/\.ts$/, '.js')),
     );
     serviceStatus = run(process.execPath, ['--test', ...compiledTests]);
   }
@@ -71,6 +79,16 @@ n8nBridgeTests.sort();
 const mobileGatewayTests = [];
 collectTests(resolve(repoRoot, 'services/mobile-gateway'), mobileGatewayTests);
 mobileGatewayTests.sort();
+
+const mobileGatewaySourceProjects = [
+  'services/mobile-gateway/src/gateway-auth/tsconfig.json',
+  'services/mobile-gateway/src/realtime-session/tsconfig.json',
+  'services/mobile-gateway/src/progress-cancellation/tsconfig.json',
+  'services/mobile-gateway/src/device/tsconfig.json',
+  'services/mobile-gateway/src/device-session/tsconfig.json',
+  'services/mobile-gateway/src/device-command-delivery/tsconfig.json',
+  'services/mobile-gateway/src/device-receipt-ingress/tsconfig.json',
+];
 
 const contextTests = [];
 collectTests(resolve(repoRoot, 'packages/context/test'), contextTests);
@@ -108,6 +126,10 @@ if (status === 0) {
 
 if (status === 0) {
   status = compileAndRunServiceTests('services/n8n-bridge', n8nBridgeTests);
+}
+
+if (status === 0 && mobileGatewayTests.length > 0) {
+  status = typecheckProjects(mobileGatewaySourceProjects);
 }
 
 if (status === 0) {
