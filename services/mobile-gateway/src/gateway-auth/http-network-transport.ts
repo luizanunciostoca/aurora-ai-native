@@ -263,7 +263,7 @@ function bindingFrom(snapshot: GatewaySessionSnapshot): SocketBinding {
 export class GatewayHttpNetworkTransport {
   readonly #manager: GatewaySessionManager;
   readonly #config: ResolvedConfig;
-  readonly #devicePlane?: GatewayDevicePlaneNetworkHandler;
+  readonly #devicePlane: GatewayDevicePlaneNetworkHandler | undefined;
   readonly #socketBindings = new WeakMap<SocketLike, SocketBinding>();
   readonly #devicePlaneStates = new WeakMap<SocketLike, GatewayDevicePlaneConnectionState>();
   readonly #server: ServerLike;
