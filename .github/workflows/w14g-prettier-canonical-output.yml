@@ -1,0 +1,37 @@
+name: W14-G Prettier Canonical Output
+
+on:
+  push:
+    branches:
+      - wave/14g-session-revoke-evidence-ingress
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Apply repository Prettier exactly
+        run: npx prettier --write services/mobile-gateway/src/session-revoke-evidence-ingress
+      - name: Commit canonical formatting when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- services/mobile-gateway/src/session-revoke-evidence-ingress; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "aurora-format-oracle[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add services/mobile-gateway/src/session-revoke-evidence-ingress
+          git commit -m "style(W14-G): apply canonical Prettier output"
+          git push origin HEAD:wave/14g-session-revoke-evidence-ingress
