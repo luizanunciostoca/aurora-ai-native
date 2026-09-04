@@ -328,6 +328,7 @@ export class GatewayDevicePlaneNetworkHandler {
         case '/v1/device/receipts/ingest':
           return this.#ingestReceipt(input);
       }
+      return devicePlaneError(404, 'ROUTE_NOT_FOUND');
     } catch {
       return devicePlaneError(503, 'DEVICE_PLANE_DEPENDENCY_UNAVAILABLE');
     }
@@ -432,10 +433,14 @@ export class GatewayDevicePlaneNetworkHandler {
     input: GatewayDevicePlaneHandleInput,
     proof: string,
     deviceRecord: Record<string, unknown>,
+    deviceSessionId: string,
+    previousConnectionId?: string,
   ): Promise<Record<string, unknown> | null> {
     const verified = await invokeAsync(this.#dependencies.deviceProofVerifier, 'verifyAttestation', {
       deviceRecord,
       gatewaySession: input.gatewaySession,
+      deviceSessionId,
+      ...(previousConnectionId === undefined ? {} : { previousConnectionId }),
       proof,
       nowMs: input.nowMs,
     });
@@ -468,7 +473,12 @@ export class GatewayDevicePlaneNetworkHandler {
     const device = this.#resolveActiveDevice(input);
     const deviceRecord = resultRecord(device);
     if (deviceRecord === null) return managerResponse(device);
-    const attestation = await this.#verifiedAttestation(input, input.body.proof, deviceRecord);
+    const attestation = await this.#verifiedAttestation(
+      input,
+      input.body.proof,
+      deviceRecord,
+      input.body.deviceSessionId,
+    );
     if (attestation === null) return devicePlaneError(403, 'ATTESTATION_PROOF_REJECTED');
 
     const opened = invoke(this.#dependencies.deviceSessions, 'openSession', {
@@ -503,7 +513,13 @@ export class GatewayDevicePlaneNetworkHandler {
     const device = this.#resolveActiveDevice(input);
     const deviceRecord = resultRecord(device);
     if (deviceRecord === null) return managerResponse(device);
-    const attestation = await this.#verifiedAttestation(input, input.body.proof, deviceRecord);
+    const attestation = await this.#verifiedAttestation(
+      input,
+      input.body.proof,
+      deviceRecord,
+      input.body.deviceSessionId,
+      input.body.previousConnectionId,
+    );
     if (attestation === null) return devicePlaneError(403, 'ATTESTATION_PROOF_REJECTED');
 
     const resumed = invoke(this.#dependencies.deviceSessions, 'resumeSession', {
@@ -546,7 +562,9 @@ export class GatewayDevicePlaneNetworkHandler {
       return devicePlaneError(400, 'BODY_MALFORMED');
     }
     const deviceSessionId = input.connectionState.deviceSessionId;
-    if (deviceSessionId === undefined) return devicePlaneError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
+    if (deviceSessionId === undefined) {
+      return devicePlaneError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
+    }
     return managerResponse(
       invoke(this.#dependencies.deviceSessions, 'revokeSession', {
         deviceSessionId,
@@ -576,6 +594,9 @@ export class GatewayDevicePlaneNetworkHandler {
     ) {
       return devicePlaneError(400, 'BODY_MALFORMED');
     }
+    if (input.connectionState.deviceSessionId === undefined) {
+      return devicePlaneError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
+    }
     const currentTrust = this.#currentTrust(input);
     const trust = trustSnapshot(currentTrust);
     if (trust === null) return managerResponse(currentTrust);
@@ -600,6 +621,9 @@ export class GatewayDevicePlaneNetworkHandler {
       !safeReference(input.body.ackReference, 256)
     ) {
       return devicePlaneError(400, 'BODY_MALFORMED');
+    }
+    if (input.connectionState.deviceSessionId === undefined) {
+      return devicePlaneError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
     }
     const currentTrust = this.#currentTrust(input);
     const trust = trustSnapshot(currentTrust);
@@ -639,6 +663,9 @@ export class GatewayDevicePlaneNetworkHandler {
       !safeNonNegativeInteger(input.body.capturedAtMs)
     ) {
       return devicePlaneError(400, 'BODY_MALFORMED');
+    }
+    if (input.connectionState.deviceSessionId === undefined) {
+      return devicePlaneError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
     }
     const currentTrust = this.#currentTrust(input);
     const trust = trustSnapshot(currentTrust);
