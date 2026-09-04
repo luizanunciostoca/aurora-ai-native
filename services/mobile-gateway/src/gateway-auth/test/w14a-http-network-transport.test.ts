@@ -268,6 +268,15 @@ test('fails closed on unauthenticated socket use, auth failure and client-contro
       false,
     );
 
+    const rebound = await postJson(
+      address.port,
+      '/v1/gateway/sessions/open',
+      { ...openBody(), sessionId: 'session:second' },
+      boundAgent,
+    );
+    assert.equal(rebound.statusCode, 409);
+    assert.equal(transportCode(rebound), 'SESSION_ALREADY_BOUND');
+
     const injectedBinding = await postJson(
       address.port,
       '/v1/gateway/requests/begin',
