@@ -22,6 +22,8 @@ data class RuntimeEnvironmentConfig(
             throw IllegalArgumentException("gateway origin must be a valid URI", it)
         }
         require(uri.isAbsolute) { "gateway origin must be absolute" }
+        require(!uri.isOpaque) { "gateway origin must be hierarchical" }
+        require(!uri.host.isNullOrBlank()) { "gateway origin must contain a host" }
         require(uri.rawUserInfo == null) { "gateway origin must not contain credentials" }
         require(uri.rawQuery == null && uri.rawFragment == null) {
             "gateway origin must not contain query or fragment"
