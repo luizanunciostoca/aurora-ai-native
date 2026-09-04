@@ -1,6 +1,5 @@
 package ai.aurora.device.offline
 
-import ai.aurora.device.executor.CurrentDeviceSessionTrust
 import ai.aurora.device.executor.CurrentW07DeviceAuthorization
 import ai.aurora.device.executor.DeviceActionCommand
 import ai.aurora.device.executor.DeviceExecutionDecision
@@ -8,7 +7,6 @@ import ai.aurora.device.executor.DeviceExecutionEvidence
 import ai.aurora.device.executor.DeviceExecutionOutcome
 import ai.aurora.device.executor.DeviceExecutionReceipt
 import ai.aurora.device.executor.DeviceExecutionRequest
-import ai.aurora.device.executor.DeviceExecutionRejection
 import ai.aurora.device.executor.W07AuthorizedDeviceExecutionView
 import ai.aurora.device.session.W14DeviceRefView
 import ai.aurora.device.session.W14DeviceSessionTrustState
@@ -36,8 +34,7 @@ class OfflineExecutionQueueTest {
         val fixture = Fixture()
         fixture.coordinator().enqueue(fixture.candidate())
 
-        val secondCoordinator = fixture.coordinator()
-        val decision = secondCoordinator.enqueue(fixture.candidate())
+        val decision = fixture.coordinator().enqueue(fixture.candidate())
 
         assertTrue(decision is OfflineEnqueueDecision.Duplicate)
         assertEquals(1, fixture.store.records.size)
@@ -98,6 +95,47 @@ class OfflineExecutionQueueTest {
 
         assertEquals(OfflineDrainDisposition.STALE_SESSION, result.disposition)
         assertEquals(OfflineQueueState.STALE_SESSION, fixture.store.records.single().state)
+        assertEquals(0, fixture.dispatchCalls)
+    }
+
+    @Test
+    fun reconnectMayRebindOnlyToCurrentW14SessionForSameCanonicalDevice() {
+        val fixture = Fixture()
+        fixture.coordinator().enqueue(fixture.candidate())
+        fixture.session =
+            fixture.session.copy(
+                deviceSessionId = "session-2",
+                connectionId = "connection-2",
+                lastEvaluatedAtMs = 990,
+            )
+
+        val result = fixture.coordinator().drain().single()
+
+        assertEquals(OfflineDrainDisposition.DISPATCHED_TERMINAL, result.disposition)
+        assertEquals("session-2", fixture.lastDispatchedRequest!!.deviceSessionId)
+        assertEquals("device-1", fixture.lastDispatchedRequest!!.deviceId)
+        assertEquals("tenant-1", fixture.lastDispatchedRequest!!.tenantId)
+        assertEquals(1, fixture.dispatchCalls)
+    }
+
+    @Test
+    fun wrongDeviceReconnectSessionFailsClosed() {
+        val fixture = Fixture()
+        fixture.coordinator().enqueue(fixture.candidate())
+        fixture.session =
+            fixture.session.copy(
+                deviceRef =
+                    W14DeviceRefView(
+                        kind = "AURORA_DEVICE",
+                        deviceId = "other-device",
+                        tenantId = "tenant-1",
+                        registrationVersion = 1,
+                    ),
+            )
+
+        val result = fixture.coordinator().drain().single()
+
+        assertEquals(OfflineDrainDisposition.STALE_SESSION, result.disposition)
         assertEquals(0, fixture.dispatchCalls)
     }
 
@@ -233,6 +271,7 @@ class OfflineExecutionQueueTest {
         var dispatchOutcome = DeviceExecutionOutcome.SUCCEEDED
         var dispatchCalls = 0
         var lastReceipt: DeviceExecutionReceipt? = null
+        var lastDispatchedRequest: DeviceExecutionRequest? = null
 
         fun coordinator(): OfflineExecutionQueueCoordinator =
             OfflineExecutionQueueCoordinator(
@@ -243,12 +282,15 @@ class OfflineExecutionQueueTest {
                 w07Authorization = CurrentW07DeviceAuthorization { executionId ->
                     authorization.takeIf { it.executionId == executionId }
                 },
-                sessionTrust = CurrentDeviceSessionTrust { deviceSessionId ->
-                    session.takeIf { it.deviceSessionId == deviceSessionId }
+                currentSession = CurrentReconnectDeviceSession { tenantId, deviceId ->
+                    session.takeIf {
+                        it.tenantId == tenantId && it.deviceRef.deviceId == deviceId
+                    }
                 },
                 dispatcher =
                     DeviceExecutionDispatcher { request ->
                         dispatchCalls += 1
+                        lastDispatchedRequest = request
                         completed(request, dispatchOutcome).also { lastReceipt = it.receipt }
                     },
                 nowMs = { now },
