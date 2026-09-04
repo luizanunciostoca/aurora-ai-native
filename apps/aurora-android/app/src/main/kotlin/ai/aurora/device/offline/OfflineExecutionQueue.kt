@@ -1,6 +1,5 @@
 package ai.aurora.device.offline
 
-import ai.aurora.device.executor.CurrentDeviceSessionTrust
 import ai.aurora.device.executor.CurrentW07DeviceAuthorization
 import ai.aurora.device.executor.DeviceExecutionDecision
 import ai.aurora.device.executor.DeviceExecutionOutcome
@@ -8,6 +7,7 @@ import ai.aurora.device.executor.DeviceExecutionRequest
 import ai.aurora.device.executor.DeviceExecutionRejection
 import ai.aurora.device.executor.DeviceExecutionReceipt
 import ai.aurora.device.session.W14DeviceSessionTrustState
+import ai.aurora.device.session.W14DeviceSessionTrustView
 
 /** Android consumer view of the accepted W03 idempotency status vocabulary. */
 enum class W03IdempotencyState {
@@ -17,9 +17,7 @@ enum class W03IdempotencyState {
     COMPLETED,
 }
 
-/**
- * Current W03 idempotency projection. W15-H never creates or advances this canonical state.
- */
+/** Current W03 idempotency projection. W15-H never creates or advances this canonical state. */
 data class W03IdempotencyProjection(
     val tenantId: String,
     val key: String,
@@ -37,6 +35,11 @@ data class W03IdempotencyProjection(
 
 fun interface CurrentW03IdempotencyProjection {
     fun current(tenantId: String, key: String): W03IdempotencyProjection?
+}
+
+/** W14-owned lookup of the currently trusted reconnect session for one canonical device. */
+fun interface CurrentReconnectDeviceSession {
+    fun current(tenantId: String, deviceId: String): W14DeviceSessionTrustView?
 }
 
 enum class OfflineDeferralSafety {
@@ -133,14 +136,14 @@ data class OfflineDrainResult(
  *
  * The queue persists only a non-authoritative execution reference plus W03 idempotency identity.
  * It never persists a W07 authorization snapshot, never grants retry authority, and never blindly
- * replays EXECUTION_UNCERTAIN work. Every drain re-reads W03, W07 and W14 current state before the
- * W15-F executor performs its own final current-precondition validation.
+ * replays EXECUTION_UNCERTAIN work. Every drain re-reads W03, W07 and the W14-owned current device
+ * session before W15-F performs its own final current-precondition validation.
  */
 class OfflineExecutionQueueCoordinator(
     private val store: OfflineExecutionQueueStore,
     private val w03Idempotency: CurrentW03IdempotencyProjection,
     private val w07Authorization: CurrentW07DeviceAuthorization,
-    private val sessionTrust: CurrentDeviceSessionTrust,
+    private val currentSession: CurrentReconnectDeviceSession,
     private val dispatcher: DeviceExecutionDispatcher,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     private val maxRecords: Int = 128,
@@ -230,8 +233,7 @@ class OfflineExecutionQueueCoordinator(
             }
             when (currentW03.state) {
                 W03IdempotencyState.COMPLETED,
-                W03IdempotencyState.REJECTED,
-                -> {
+                W03IdempotencyState.REJECTED -> {
                     records[index] = record.copy(state = OfflineQueueState.TERMINAL_OBSERVED)
                     results += result(record, OfflineDrainDisposition.W03_TERMINAL)
                     return@forEach
@@ -249,13 +251,16 @@ class OfflineExecutionQueueCoordinator(
                 results += result(record, OfflineDrainDisposition.STALE_AUTHORITY)
                 return@forEach
             }
-            if (!currentSessionMatches(record, now)) {
+
+            val reconnectSession = currentSessionFor(record, now)
+            if (reconnectSession == null) {
                 records[index] = record.copy(state = OfflineQueueState.STALE_SESSION)
                 results += result(record, OfflineDrainDisposition.STALE_SESSION)
                 return@forEach
             }
+            val reboundRequest = record.request.copy(deviceSessionId = reconnectSession.deviceSessionId)
 
-            when (val decision = dispatcher.execute(record.request)) {
+            when (val decision = dispatcher.execute(reboundRequest)) {
                 is DeviceExecutionDecision.Completed -> {
                     if (decision.receipt.outcome == DeviceExecutionOutcome.EXECUTION_UNCERTAIN) {
                         records[index] = record.copy(state = OfflineQueueState.RECONCILIATION_REQUIRED)
@@ -276,9 +281,7 @@ class OfflineExecutionQueueCoordinator(
         return results
     }
 
-    /**
-     * Consumes a late/local receipt only as dedupe/reconciliation evidence. It never dispatches.
-     */
+    /** Consumes a late/local receipt only as dedupe/reconciliation evidence. It never dispatches. */
     fun observeReceipt(receipt: DeviceExecutionReceipt): Boolean {
         val records = store.loadAll().toMutableList()
         val index = records.indexOfFirst { it.request.executionId == receipt.executionId }
@@ -309,15 +312,22 @@ class OfflineExecutionQueueCoordinator(
             authority.capabilityId == record.request.capabilityId
     }
 
-    private fun currentSessionMatches(record: OfflineDeferredExecution, now: Long): Boolean {
-        val session = sessionTrust.current(record.request.deviceSessionId) ?: return false
-        return session.state == W14DeviceSessionTrustState.ACTIVE &&
-            session.executionPreconditionSatisfied &&
-            session.lastEvaluatedAtMs <= now &&
-            now < session.gatewayAuthExpiresAtMs &&
-            session.deviceSessionId == record.request.deviceSessionId &&
-            session.tenantId == record.request.tenantId &&
-            session.deviceRef.deviceId == record.request.deviceId
+    private fun currentSessionFor(
+        record: OfflineDeferredExecution,
+        now: Long,
+    ): W14DeviceSessionTrustView? {
+        val session = currentSession.current(record.request.tenantId, record.request.deviceId) ?: return null
+        if (
+            session.state != W14DeviceSessionTrustState.ACTIVE ||
+            !session.executionPreconditionSatisfied ||
+            session.lastEvaluatedAtMs > now ||
+            now >= session.gatewayAuthExpiresAtMs ||
+            session.tenantId != record.request.tenantId ||
+            session.deviceRef.deviceId != record.request.deviceId
+        ) {
+            return null
+        }
+        return session
     }
 
     private fun stateForRejection(reason: DeviceExecutionRejection): OfflineQueueState =
@@ -326,18 +336,15 @@ class OfflineExecutionQueueCoordinator(
             DeviceExecutionRejection.W07_AUTHORIZATION_NOT_CURRENT,
             DeviceExecutionRejection.W07_AUTHORIZATION_CANCELLED,
             DeviceExecutionRejection.W07_TARGET_MISMATCH,
-            DeviceExecutionRejection.CANCELLED,
-            -> OfflineQueueState.STALE_AUTHORITY
+            DeviceExecutionRejection.CANCELLED -> OfflineQueueState.STALE_AUTHORITY
             DeviceExecutionRejection.SESSION_TRUST_MISSING,
             DeviceExecutionRejection.SESSION_TRUST_NOT_CURRENT,
-            DeviceExecutionRejection.SESSION_TARGET_MISMATCH,
-            -> OfflineQueueState.STALE_SESSION
+            DeviceExecutionRejection.SESSION_TARGET_MISMATCH -> OfflineQueueState.STALE_SESSION
             DeviceExecutionRejection.DEADLINE_EXPIRED -> OfflineQueueState.EXPIRED
             DeviceExecutionRejection.CAPABILITY_NOT_CURRENT,
             DeviceExecutionRejection.PERMISSION_PRECONDITION_NOT_SATISFIED,
             DeviceExecutionRejection.APP_INTEGRATION_NOT_CURRENT,
-            DeviceExecutionRejection.KILL_SWITCH_ENGAGED,
-            -> OfflineQueueState.RECONCILIATION_REQUIRED
+            DeviceExecutionRejection.KILL_SWITCH_ENGAGED -> OfflineQueueState.RECONCILIATION_REQUIRED
         }
 
     private fun dispositionForRejection(reason: DeviceExecutionRejection): OfflineDrainDisposition =
@@ -364,25 +371,37 @@ class OfflineExecutionQueueCoordinator(
         if (safelyEvictable != null) records.removeAt(safelyEvictable)
     }
 
-    private fun matchesW03(candidate: OfflineEnqueueRequest, projection: W03IdempotencyProjection): Boolean =
+    private fun matchesW03(
+        candidate: OfflineEnqueueRequest,
+        projection: W03IdempotencyProjection,
+    ): Boolean =
         projection.tenantId == candidate.execution.tenantId &&
             projection.key == candidate.idempotencyKey &&
             projection.operationName == candidate.operationName &&
             projection.canonicalPayloadHash == candidate.canonicalPayloadHash
 
-    private fun matchesW03(record: OfflineDeferredExecution, projection: W03IdempotencyProjection): Boolean =
+    private fun matchesW03(
+        record: OfflineDeferredExecution,
+        projection: W03IdempotencyProjection,
+    ): Boolean =
         projection.tenantId == record.request.tenantId &&
             projection.key == record.idempotencyKey &&
             projection.operationName == record.operationName &&
             projection.canonicalPayloadHash == record.canonicalPayloadHash
 
-    private fun sameIdentity(record: OfflineDeferredExecution, candidate: OfflineEnqueueRequest): Boolean =
+    private fun sameIdentity(
+        record: OfflineDeferredExecution,
+        candidate: OfflineEnqueueRequest,
+    ): Boolean =
         record.operationName == candidate.operationName &&
             record.canonicalPayloadHash == candidate.canonicalPayloadHash &&
             record.request.executionId == candidate.execution.executionId &&
             record.request.tenantId == candidate.execution.tenantId
 
-    private fun result(record: OfflineDeferredExecution, disposition: OfflineDrainDisposition) =
+    private fun result(
+        record: OfflineDeferredExecution,
+        disposition: OfflineDrainDisposition,
+    ) =
         OfflineDrainResult(
             idempotencyKey = record.idempotencyKey,
             executionId = record.request.executionId,
