@@ -41,6 +41,19 @@ export interface DeviceSessionRevocationPort {
   revokeSession(input: RevokeDeviceSessionTrustInput): DeviceSessionTrustResult;
 }
 
+export interface DeviceSessionCurrentTrustRequest {
+  readonly tenantId: TenantId;
+  readonly correlationId: CorrelationId;
+  readonly deviceSessionId: string;
+  readonly claimedSession: DeviceSessionTrustSnapshot;
+  readonly nowMs: number;
+}
+
+/** W14-E-owned current trust projection. W14-G stores no competing revocation/session ledger. */
+export interface DeviceSessionCurrentTrustPort {
+  validateCurrent(request: DeviceSessionCurrentTrustRequest): DeviceSessionTrustResult;
+}
+
 export interface DeviceIngressAuthenticationRequest {
   readonly tenantId: TenantId;
   readonly correlationId: CorrelationId;
@@ -88,10 +101,35 @@ export interface W03ReceiptIngressReservationRequest {
   readonly nowMs: number;
 }
 
+export type W03ReceiptIngressDurableStatus = 'inflight' | 'completed';
+
 export type W03ReceiptIngressReservationResult =
   | Readonly<{
       ok: true;
       disposition: 'RESERVED' | 'ALREADY_RESERVED';
+      status: W03ReceiptIngressDurableStatus;
+      durableReference: string;
+      authorizesExecution: false;
+    }>
+  | Readonly<{
+      ok: false;
+      code: 'CONFLICT' | 'UNAVAILABLE' | 'MALFORMED';
+      retryable: boolean;
+      authorizesExecution: false;
+    }>;
+
+export interface W03ReceiptIngressCompletionRequest {
+  readonly tenantId: TenantId;
+  readonly receiptId: ReceiptId;
+  readonly durableReference: string;
+  readonly nowMs: number;
+}
+
+export type W03ReceiptIngressCompletionResult =
+  | Readonly<{
+      ok: true;
+      disposition: 'COMPLETED' | 'ALREADY_COMPLETED';
+      status: 'completed';
       durableReference: string;
       authorizesExecution: false;
     }>
@@ -105,6 +143,7 @@ export type W03ReceiptIngressReservationResult =
 /** Compatibility port over W03 durable idempotency/replay ownership. W14-G owns no ledger. */
 export interface W03ReceiptIngressReservationPort {
   reserve(request: W03ReceiptIngressReservationRequest): W03ReceiptIngressReservationResult;
+  complete(request: W03ReceiptIngressCompletionRequest): W03ReceiptIngressCompletionResult;
 }
 
 export interface W07DeviceReceiptEvidenceObservation {
@@ -258,6 +297,7 @@ export type DeviceReceiptIngressResult<T> =
 
 export interface DeviceReceiptIngressDependencies {
   readonly sessionRevocation: DeviceSessionRevocationPort;
+  readonly currentSessionTrust: DeviceSessionCurrentTrustPort;
   readonly cancellation: ProgressCancellationPort;
   readonly authentication: DeviceIngressAuthenticationPort;
   readonly durableIngress: W03ReceiptIngressReservationPort;
