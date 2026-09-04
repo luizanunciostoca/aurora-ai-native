@@ -1,14 +1,7 @@
-import type {
-  MetaAdsCapabilityPlan,
-  MetaAdsOperation,
-  MetaAdsResourceKind,
-} from './contracts.js';
+import type { MetaAdsCapabilityPlan, MetaAdsOperation, MetaAdsResourceKind } from './contracts.js';
 import type { MetaAdsGovernedFinancialMutationPlan } from './financial-governance.js';
 
-export type MetaAdsManagedResourceKind = Extract<
-  MetaAdsResourceKind,
-  'CAMPAIGN' | 'AD_SET' | 'AD'
->;
+export type MetaAdsManagedResourceKind = Extract<MetaAdsResourceKind, 'CAMPAIGN' | 'AD_SET' | 'AD'>;
 
 export type MetaAdsExecutableOperation = Exclude<
   MetaAdsOperation,
@@ -189,9 +182,7 @@ function managedResourceKind(
   return resourceKind === 'CAMPAIGN' || resourceKind === 'AD_SET' || resourceKind === 'AD';
 }
 
-function executableOperation(
-  operation: MetaAdsOperation,
-): operation is MetaAdsExecutableOperation {
+function executableOperation(operation: MetaAdsOperation): operation is MetaAdsExecutableOperation {
   return operation !== 'OBSERVE' && operation !== 'ACTIVATE' && operation !== 'DELETE';
 }
 
