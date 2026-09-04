@@ -3,13 +3,13 @@ name: Android Foundation
 on:
   pull_request:
     paths:
-      - "apps/aurora-android/**"
-      - ".github/workflows/android-foundation.yml"
+      - 'apps/aurora-android/**'
+      - '.github/workflows/android-foundation.yml'
   push:
     branches: [main]
     paths:
-      - "apps/aurora-android/**"
-      - ".github/workflows/android-foundation.yml"
+      - 'apps/aurora-android/**'
+      - '.github/workflows/android-foundation.yml'
   workflow_dispatch:
 
 permissions:
@@ -23,26 +23,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: "22.16.0"
-          cache: npm
-      - name: Install workspace formatter
-        run: npm ci
-      - name: Emit canonical Prettier formatting
-        shell: bash
-        run: |
-          npx prettier .github/workflows/android-foundation.yml --write
-          echo '---BEGIN_FORMATTED_ANDROID_WORKFLOW---'
-          cat .github/workflows/android-foundation.yml
-          echo '---END_FORMATTED_ANDROID_WORKFLOW---'
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
         with:
-          gradle-version: "9.4.1"
+          gradle-version: '9.4.1'
           cache-read-only: true
       - name: Install stable Android SDK
         shell: bash
