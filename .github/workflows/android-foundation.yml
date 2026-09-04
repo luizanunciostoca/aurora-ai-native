@@ -31,14 +31,14 @@ jobs:
         with:
           gradle-version: "9.4.1"
           cache-read-only: true
-      - name: Install Android API 37
+      - name: Install stable Android SDK
         shell: bash
         run: |
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           test -n "$SDK_ROOT"
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
-          "$SDKMANAGER" "platforms;android-37" "build-tools;36.0.0"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
       - name: Test and assemble Android foundation
         shell: bash
         run: >-
