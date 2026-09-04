@@ -37,33 +37,12 @@ export interface DeviceReceiptIngressConfig {
   readonly maxIntegrityDigestLength: number;
 }
 
-export interface DeviceSessionCurrentTrustRequest {
-  readonly deviceSession: DeviceSessionTrustSnapshot;
-  readonly nowMs: number;
-}
-
-export type DeviceSessionCurrentTrustResult =
-  | Readonly<{
-      ok: true;
-      snapshot: DeviceSessionTrustSnapshot;
-      current: true;
-      authorizesExecution: false;
-      canGrantPermission: false;
-    }>
-  | Readonly<{
-      ok: false;
-      code: 'NOT_CURRENT' | 'NOT_FOUND' | 'BINDING_MISMATCH' | 'UNAVAILABLE' | 'MALFORMED';
-      retryable: boolean;
-      authorizesExecution: false;
-      canGrantPermission: false;
-    }>;
-
 /**
- * Structural compatibility port over W14-E. W14-G consumes current trust and revocation truth;
- * it does not own or synthesize device-session trust state.
+ * Structural compatibility port over the exact W14-E current-session read and revocation surface.
+ * W14-G consumes W14-E truth directly and owns no trust cache or ledger.
  */
 export interface DeviceSessionTrustPort {
-  verifyCurrent(request: DeviceSessionCurrentTrustRequest): DeviceSessionCurrentTrustResult;
+  getSession(deviceSessionId: string, connectionId: string, nowMs: number): DeviceSessionTrustResult;
   revokeSession(input: RevokeDeviceSessionTrustInput): DeviceSessionTrustResult;
 }
 
