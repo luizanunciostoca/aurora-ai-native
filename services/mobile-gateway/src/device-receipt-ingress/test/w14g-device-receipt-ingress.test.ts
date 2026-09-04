@@ -192,7 +192,8 @@ class SessionTrustPort implements DeviceSessionTrustPort {
     }
     if (
       this.current.state === 'ACTIVE' &&
-      (nowMs >= this.current.gatewayAuthExpiresAtMs || nowMs >= this.current.attestation.expiresAtMs)
+      (nowMs >= this.current.gatewayAuthExpiresAtMs ||
+        nowMs >= this.current.attestation.expiresAtMs)
     ) {
       return {
         ok: false,
@@ -445,7 +446,11 @@ test('W14-E current read returns active trust, enforces binding/freshness and pr
   });
   assert.equal(revoked.ok, true);
 
-  const revocationEvidence = manager.getSession(active.deviceSessionId, active.connectionId, 50_000);
+  const revocationEvidence = manager.getSession(
+    active.deviceSessionId,
+    active.connectionId,
+    50_000,
+  );
   assert.equal(revocationEvidence.ok, true);
   if (revocationEvidence.ok) {
     assert.equal(revocationEvidence.snapshot.state, 'REVOKED');

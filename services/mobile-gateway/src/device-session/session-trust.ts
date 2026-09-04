@@ -314,7 +314,11 @@ export class DeviceSessionTrustManager {
     return success(this.#snapshot(record));
   }
 
-  getSession(deviceSessionId: string, connectionId: string, nowMs: number): DeviceSessionTrustResult {
+  getSession(
+    deviceSessionId: string,
+    connectionId: string,
+    nowMs: number,
+  ): DeviceSessionTrustResult {
     if (
       !isBoundedToken(deviceSessionId) ||
       !isBoundedToken(connectionId) ||

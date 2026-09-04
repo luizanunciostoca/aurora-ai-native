@@ -139,7 +139,8 @@ class StatefulSessionTrustPort implements DeviceSessionTrustPort {
     }
     if (
       this.current.state === 'ACTIVE' &&
-      (nowMs >= this.current.gatewayAuthExpiresAtMs || nowMs >= this.current.attestation.expiresAtMs)
+      (nowMs >= this.current.gatewayAuthExpiresAtMs ||
+        nowMs >= this.current.attestation.expiresAtMs)
     ) {
       return {
         ok: false,

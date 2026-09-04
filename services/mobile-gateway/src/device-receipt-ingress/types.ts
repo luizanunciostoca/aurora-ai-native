@@ -42,7 +42,11 @@ export interface DeviceReceiptIngressConfig {
  * W14-G consumes W14-E truth directly and owns no trust cache or ledger.
  */
 export interface DeviceSessionTrustPort {
-  getSession(deviceSessionId: string, connectionId: string, nowMs: number): DeviceSessionTrustResult;
+  getSession(
+    deviceSessionId: string,
+    connectionId: string,
+    nowMs: number,
+  ): DeviceSessionTrustResult;
   revokeSession(input: RevokeDeviceSessionTrustInput): DeviceSessionTrustResult;
 }
 
