@@ -8,6 +8,7 @@ import ai.aurora.device.permission.RuntimePermissionState
 import ai.aurora.device.session.W14DeviceRefView
 import ai.aurora.device.session.W14DeviceSessionTrustState
 import ai.aurora.device.session.W14DeviceSessionTrustView
+import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -104,15 +105,16 @@ class DeviceExecutorRuntimeTest {
     }
 
     @Test
-    fun actionExceptionIsUncertainBecauseSideEffectMayAlreadyHaveOccurred() {
+    fun checkedActionExceptionIsUncertainBecauseSideEffectMayAlreadyHaveOccurred() {
         val fixture = Fixture()
-        fixture.throwFromAction = true
+        fixture.throwCheckedFromAction = true
 
         val decision = fixture.runtime().execute(fixture.request()) as DeviceExecutionDecision.Completed
 
         assertEquals(DeviceExecutionOutcome.EXECUTION_UNCERTAIN, decision.receipt.outcome)
         assertTrue(decision.receipt.requiresReconciliation)
         assertFalse(decision.receipt.retryEligible)
+        assertEquals("transport result unknown", decision.evidence.detail)
     }
 
     @Test
@@ -199,7 +201,7 @@ class DeviceExecutorRuntimeTest {
         var control = DeviceExecutionControlSnapshot()
         var controlAfterAction: DeviceExecutionControlSnapshot? = null
         var actionResult: DeviceActionResult = DeviceActionResult.VerifiedSuccess()
-        var throwFromAction = false
+        var throwCheckedFromAction = false
         var actionCalls = 0
         private var controlReads = 0
 
@@ -230,7 +232,7 @@ class DeviceExecutorRuntimeTest {
                 actionPort =
                     DeviceActionPort { _, _ ->
                         actionCalls += 1
-                        if (throwFromAction) throw IllegalStateException("transport result unknown")
+                        if (throwCheckedFromAction) throw IOException("transport result unknown")
                         actionResult
                     },
                 nowMs = { now },
