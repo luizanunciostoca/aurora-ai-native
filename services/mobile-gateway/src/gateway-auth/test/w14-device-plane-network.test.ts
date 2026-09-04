@@ -13,7 +13,7 @@ import {
   GatewayHttpNetworkTransport,
   GatewaySessionManager,
 } from '../index.js';
-import type { GatewayAuthClaims, GatewayAuthenticator, GatewaySessionSnapshot } from '../types.js';
+import type { GatewayAuthClaims, GatewayAuthenticator } from '../types.js';
 
 const TENANT = 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAV' as TenantId;
 const ACTOR = 'idn_01ARZ3NDEKTSV4RRFFQ69G5FAV' as IdentityId;
@@ -505,7 +505,6 @@ test('same authenticated socket derives registration/session bindings and reject
     );
     assert.equal(sessionOpened.statusCode, 200);
     assert.equal(fakes.verifier.attestationCalls, 1);
-    assert.equal(fakes.sessions.lastOpen?.gatewaySession, undefined, 'nested object check follows');
     assert.equal(isRecord(fakes.sessions.lastOpen?.gatewaySession), true);
     if (isRecord(fakes.sessions.lastOpen?.gatewaySession)) {
       assert.equal(fakes.sessions.lastOpen.gatewaySession.tenantId, TENANT);
