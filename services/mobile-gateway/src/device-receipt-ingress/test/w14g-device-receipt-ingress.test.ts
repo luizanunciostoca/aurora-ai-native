@@ -104,8 +104,17 @@ class SessionTrustPort implements DeviceSessionTrustPort {
     this.current = initial;
   }
 
-  verifyCurrent(_request: DeviceSessionCurrentTrustRequest): DeviceSessionCurrentTrustResult {
+  verifyCurrent(request: DeviceSessionCurrentTrustRequest): DeviceSessionCurrentTrustResult {
     this.verifyCalls += 1;
+    if (request.deviceSession.deviceSessionId !== this.current.deviceSessionId) {
+      return {
+        ok: false,
+        code: 'NOT_FOUND',
+        retryable: false,
+        authorizesExecution: false,
+        canGrantPermission: false,
+      };
+    }
     return {
       ok: true,
       snapshot: this.current,
