@@ -152,6 +152,21 @@ function deviceRefMatches(left: DeviceRef, right: DeviceRef): boolean {
   );
 }
 
+function immutableTrustBindingMatches(
+  claimed: DeviceSessionTrustSnapshot,
+  current: DeviceSessionTrustSnapshot,
+): boolean {
+  return (
+    claimed.deviceSessionId === current.deviceSessionId &&
+    claimed.gatewaySessionId === current.gatewaySessionId &&
+    claimed.tenantId === current.tenantId &&
+    claimed.actorIdentityId === current.actorIdentityId &&
+    claimed.correlationId === current.correlationId &&
+    claimed.openedAtMs === current.openedAtMs &&
+    deviceRefMatches(claimed.deviceRef, current.deviceRef)
+  );
+}
+
 function trustBindingError<T>(
   trust: DeviceSessionTrustSnapshot,
   tenantId: TenantId,
@@ -309,7 +324,43 @@ export class DeviceReceiptIngressManager {
     const parsed = this.#parseIngressInput(input);
     if (!parsed.ok) return parsed.result;
     const candidate = parsed.value;
-    const trust = candidate.deviceSession;
+
+    const currentTrust = this.#dependencies.currentSessionTrust.validateCurrent({
+      tenantId: candidate.tenantId,
+      correlationId: candidate.correlationId,
+      deviceSessionId: candidate.deviceSessionId,
+      claimedSession: candidate.deviceSession,
+      nowMs: candidate.receivedAtMs,
+    });
+    if (!currentTrust.ok) {
+      return failure(
+        'SESSION_NOT_TRUSTED',
+        'Canonical W14-E current session trust validation rejected the receipt.',
+        currentTrust.error.retryable,
+        currentTrust.error.code,
+      );
+    }
+    if (
+      currentTrust.authorizesExecution !== false ||
+      currentTrust.canGrantPermission !== false ||
+      !isTrustSnapshotShape(currentTrust.snapshot)
+    ) {
+      return failure(
+        'SESSION_NOT_TRUSTED',
+        'Canonical W14-E current trust projection violated the session trust contract.',
+      );
+    }
+
+    const trust = currentTrust.snapshot;
+    if (
+      !immutableTrustBindingMatches(candidate.deviceSession, trust) ||
+      candidate.deviceSession.state !== trust.state
+    ) {
+      return failure(
+        'SESSION_NOT_TRUSTED',
+        'Claimed device-session trust is not the current canonical W14-E trust state.',
+      );
+    }
 
     const trustBlock = trustBindingError<DeviceReceiptIngressSuccess>(
       trust,
@@ -354,7 +405,7 @@ export class DeviceReceiptIngressManager {
     if (trust.state === 'REVOKED') {
       if (
         trust.revokedAtMs === undefined ||
-        candidate.capturedAtMs > trust.revokedAtMs + this.#config.maxLateAfterRevokeMs
+        candidate.receivedAtMs > trust.revokedAtMs + this.#config.maxLateAfterRevokeMs
       ) {
         return failure('RECEIPT_STALE', 'Receipt is outside the bounded post-revocation window.');
       }
@@ -420,14 +471,16 @@ export class DeviceReceiptIngressManager {
     }
     if (
       reservation.authorizesExecution !== false ||
-      !isSafeToken(reservation.durableReference, this.#config.maxReferenceLength)
+      !isSafeToken(reservation.durableReference, this.#config.maxReferenceLength) ||
+      (reservation.status !== 'inflight' && reservation.status !== 'completed') ||
+      (reservation.disposition === 'RESERVED' && reservation.status !== 'inflight')
     ) {
       return failure(
         'DURABLE_IDEMPOTENCY_UNAVAILABLE',
         'W03 durable ingress reservation returned an invalid result.',
       );
     }
-    if (reservation.disposition === 'ALREADY_RESERVED') {
+    if (reservation.disposition === 'ALREADY_RESERVED' && reservation.status === 'completed') {
       return success({
         classification: 'DUPLICATE',
         durableReference: reservation.durableReference,
@@ -488,6 +541,34 @@ export class DeviceReceiptIngressManager {
       return failure(
         'W07_INGRESS_PROTOCOL_VIOLATION',
         'W07 ingress response violated authority or reference constraints.',
+      );
+    }
+
+    const completion = this.#dependencies.durableIngress.complete({
+      tenantId: candidate.tenantId,
+      receiptId: candidate.receiptId,
+      durableReference: reservation.durableReference,
+      nowMs: candidate.receivedAtMs,
+    });
+    if (!completion.ok) {
+      return failure(
+        completion.code === 'CONFLICT'
+          ? 'DURABLE_IDEMPOTENCY_CONFLICT'
+          : 'DURABLE_IDEMPOTENCY_UNAVAILABLE',
+        'W03 durable ingress completion did not succeed after W07 observation.',
+        completion.retryable,
+        completion.code,
+      );
+    }
+    if (
+      completion.authorizesExecution !== false ||
+      completion.status !== 'completed' ||
+      completion.durableReference !== reservation.durableReference ||
+      !isSafeToken(completion.durableReference, this.#config.maxReferenceLength)
+    ) {
+      return failure(
+        'DURABLE_IDEMPOTENCY_UNAVAILABLE',
+        'W03 durable ingress completion returned an invalid result.',
       );
     }
 
