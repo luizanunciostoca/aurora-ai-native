@@ -1,6 +1,11 @@
 // @ts-expect-error -- Aurora targets Node 22 runtime built-ins without repository-wide @types/node.
 import { createServer } from 'node:http';
 
+import type {
+  GatewayDevicePlaneConnectionState,
+  GatewayDevicePlaneNetworkHandler,
+  GatewayDevicePlaneResponse,
+} from './device-plane-network.js';
 import type { GatewaySessionManager } from './session-manager.js';
 import { GATEWAY_PROTOCOL_VERSION, type GatewaySessionSnapshot } from './types.js';
 
@@ -187,6 +192,13 @@ function protocolResult(response: ServerResponseLike, result: unknown): void {
   response.end(JSON.stringify(result));
 }
 
+function devicePlaneResult(response: ServerResponseLike, result: GatewayDevicePlaneResponse): void {
+  response.statusCode = result.statusCode;
+  response.setHeader('content-type', 'application/json; charset=utf-8');
+  response.setHeader('cache-control', 'no-store');
+  response.end(JSON.stringify(result.body));
+}
+
 function normalizedContentType(headers: IncomingRequestLike['headers']): string | null {
   const value = headers['content-type'];
   if (typeof value === 'string') return value.toLowerCase();
@@ -251,13 +263,20 @@ function bindingFrom(snapshot: GatewaySessionSnapshot): SocketBinding {
 export class GatewayHttpNetworkTransport {
   readonly #manager: GatewaySessionManager;
   readonly #config: ResolvedConfig;
+  readonly #devicePlane?: GatewayDevicePlaneNetworkHandler;
   readonly #socketBindings = new WeakMap<SocketLike, SocketBinding>();
+  readonly #devicePlaneStates = new WeakMap<SocketLike, GatewayDevicePlaneConnectionState>();
   readonly #server: ServerLike;
   #started = false;
 
-  constructor(manager: GatewaySessionManager, config: GatewayHttpNetworkTransportConfig = {}) {
+  constructor(
+    manager: GatewaySessionManager,
+    config: GatewayHttpNetworkTransportConfig = {},
+    devicePlane?: GatewayDevicePlaneNetworkHandler,
+  ) {
     this.#manager = manager;
     this.#config = resolveConfig(config);
+    this.#devicePlane = devicePlane;
     this.#server = createServer((request: IncomingRequestLike, response: ServerResponseLike) => {
       void this.#handle(request, response);
     }) as ServerLike;
@@ -311,13 +330,15 @@ export class GatewayHttpNetworkTransport {
   async #handle(request: IncomingRequestLike, response: ServerResponseLike): Promise<void> {
     const method = request.method ?? '';
     const path = new URL(request.url ?? '/', 'http://aurora-gateway.invalid').pathname;
+    const deviceRoute = this.#devicePlane?.isRoute(path) === true;
     const knownRoute =
       path === '/v1/gateway/sessions/open' ||
       path === '/v1/gateway/sessions/reconnect' ||
       path === '/v1/gateway/requests/begin' ||
       path === '/v1/gateway/requests/cancel' ||
       path === '/v1/gateway/requests/complete' ||
-      path === '/v1/gateway/sessions/close';
+      path === '/v1/gateway/sessions/close' ||
+      deviceRoute;
 
     if (!knownRoute) {
       transportError(
@@ -413,6 +434,53 @@ export class GatewayHttpNetworkTransport {
       return;
     }
 
+    if (deviceRoute) {
+      const devicePlane = this.#devicePlane;
+      const connectionState = this.#devicePlaneStates.get(request.socket);
+      if (devicePlane === undefined || connectionState === undefined) {
+        transportError(
+          response,
+          409,
+          'SESSION_BINDING_REQUIRED',
+          'Authenticated device-plane socket state is unavailable.',
+        );
+        return;
+      }
+      const nowMs = this.#config.clock();
+      const current = this.#manager.getSession(binding.sessionId, nowMs);
+      if (!current.ok) {
+        protocolResult(response, current);
+        return;
+      }
+      if (
+        current.value.state !== 'OPEN' ||
+        current.value.connectionId !== binding.connectionId ||
+        current.value.tenantId !== binding.tenantId ||
+        current.value.actorIdentityId !== binding.actorIdentityId ||
+        current.value.correlationId !== binding.correlationId
+      ) {
+        transportError(
+          response,
+          409,
+          'SESSION_BINDING_REQUIRED',
+          'Authenticated gateway socket binding is no longer current.',
+        );
+        return;
+      }
+      devicePlaneResult(
+        response,
+        await devicePlane.handle({
+          path,
+          body: parsed.value,
+          gatewaySession: current.value,
+          socketBinding: binding,
+          connectionState,
+          nowMs,
+        }),
+      );
+      return;
+    }
+
     if (path === '/v1/gateway/requests/begin') {
       if (!hasOnlyKeys(parsed.value, BEGIN_KEYS)) {
         transportError(
@@ -474,15 +542,18 @@ export class GatewayHttpNetworkTransport {
       }),
     );
     this.#socketBindings.delete(request.socket);
+    this.#devicePlaneStates.delete(request.socket);
   }
 
   #bindSocket(socket: SocketLike, snapshot: GatewaySessionSnapshot): void {
     const binding = bindingFrom(snapshot);
     this.#socketBindings.set(socket, binding);
+    this.#devicePlaneStates.set(socket, {});
     socket.once('close', () => {
       const current = this.#socketBindings.get(socket);
       if (current === undefined || current.connectionId !== binding.connectionId) return;
       this.#socketBindings.delete(socket);
+      this.#devicePlaneStates.delete(socket);
       this.#manager.closeSession({
         protocolVersion: GATEWAY_PROTOCOL_VERSION,
         ...binding,
