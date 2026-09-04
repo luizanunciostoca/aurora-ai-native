@@ -1,41 +1,36 @@
 package ai.aurora.device.capability
 
-data class NativeCapabilityRegistration(
-    val binding: NativeCapabilityBinding,
-    val handler: NativeCapabilityHandler,
-)
-
 /**
- * Registry-driven Android native bridge.
+ * Registry-driven Android native capability discovery bridge.
  *
- * Discovery is deliberately separate from execution authority. Dispatch performs a fresh local
- * runtime observation and then requires an explicit W07/W15-F target authorization decision before
- * invoking a handler. Android runtime permission presence is only a precondition here; W15-E owns
- * user prompting/consent brokering.
+ * This W15-C surface is intentionally non-executable. It projects externally supplied W04
+ * capability bindings onto current Android API/feature/permission preconditions and freshness.
+ * W15-F owns native execution and must pass through W07 authority/target semantics before any side
+ * effect. W15-E owns permission/consent prompting and richer denial/background-restriction state.
  */
 class NativeCapabilityBridge(
-    registrations: Collection<NativeCapabilityRegistration>,
+    bindings: Collection<NativeCapabilityBinding>,
     private val runtimeProbe: NativeRuntimeProbe,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) {
-    private val registrationsById: Map<String, NativeCapabilityRegistration>
+    private val bindingsById: Map<String, NativeCapabilityBinding>
 
     init {
         val duplicates =
-            registrations
-                .groupingBy { it.binding.capabilityId }
+            bindings
+                .groupingBy { it.capabilityId }
                 .eachCount()
                 .filterValues { it > 1 }
                 .keys
         require(duplicates.isEmpty()) {
             "duplicate native capability bindings: ${duplicates.sorted().joinToString()}"
         }
-        registrationsById = registrations.associateBy { it.binding.capabilityId }
+        bindingsById = bindings.associateBy { it.capabilityId }
     }
 
     fun discover(capabilityId: String): NativeCapabilityObservation {
         val currentMs = nowMs()
-        val registration = registrationsById[capabilityId]
+        val binding = bindingsById[capabilityId]
             ?: return NativeCapabilityObservation(
                 capabilityId = capabilityId,
                 availability = NativeCapabilityAvailability.UNKNOWN_CAPABILITY,
@@ -43,53 +38,34 @@ class NativeCapabilityBridge(
                 expiresAtMs = currentMs,
             )
 
-        return observe(registration.binding, runtimeProbe.snapshot(registration.binding), currentMs)
+        return observe(binding, runtimeProbe.snapshot(binding), currentMs)
     }
 
     fun discoverAll(): List<NativeCapabilityObservation> =
-        registrationsById.keys.sorted().map(::discover)
+        bindingsById.keys.sorted().map(::discover)
 
-    fun dispatch(
-        command: NativeCapabilityCommand,
-        targetAuthorization: ExecutionTargetAuthorizationPort,
-    ): NativeDispatchResult {
-        val registration = registrationsById[command.capabilityId]
-            ?: return command.rejected(NativeDispatchRejection.UNKNOWN_CAPABILITY)
-
-        val observation =
-            observe(
-                registration.binding,
-                runtimeProbe.snapshot(registration.binding),
-                nowMs(),
+    /**
+     * Returns a fresh non-executable binding projection for W15-F consumption.
+     *
+     * Ready means only that the current local Android requirements are satisfied at this instant.
+     * It does not authorize an action and does not replace W07 target/current-authority validation.
+     */
+    fun resolve(capabilityId: String): NativeCapabilityResolution {
+        val currentMs = nowMs()
+        val binding = bindingsById[capabilityId]
+            ?: return NativeCapabilityResolution.Rejected(
+                NativeCapabilityObservation(
+                    capabilityId = capabilityId,
+                    availability = NativeCapabilityAvailability.UNKNOWN_CAPABILITY,
+                    observedAtMs = currentMs,
+                    expiresAtMs = currentMs,
+                ),
             )
-        if (!observation.isAvailable) {
-            return command.rejected(observation.availability.toDispatchRejection())
-        }
-
-        when (targetAuthorization.validate(command)) {
-            ExecutionTargetAuthorizationDecision.AUTHORIZED_DEVICE_TARGET -> Unit
-            ExecutionTargetAuthorizationDecision.NOT_AUTHORIZED ->
-                return command.rejected(NativeDispatchRejection.TARGET_NOT_AUTHORIZED)
-            ExecutionTargetAuthorizationDecision.WRONG_TARGET ->
-                return command.rejected(NativeDispatchRejection.TARGET_WRONG_KIND)
-            ExecutionTargetAuthorizationDecision.STALE_TARGET ->
-                return command.rejected(NativeDispatchRejection.TARGET_STALE)
-            ExecutionTargetAuthorizationDecision.AMBIGUOUS_TARGET ->
-                return command.rejected(NativeDispatchRejection.TARGET_AMBIGUOUS)
-        }
-
-        return when (val result = registration.handler.dispatch(command)) {
-            is NativeHandlerResult.Success ->
-                NativeDispatchResult.Dispatched(
-                    requestId = command.requestId,
-                    capabilityId = command.capabilityId,
-                    output = result.output,
-                )
-            is NativeHandlerResult.Failure ->
-                command.rejected(
-                    reason = NativeDispatchRejection.HANDLER_REJECTED,
-                    handlerCode = result.code,
-                )
+        val observation = observe(binding, runtimeProbe.snapshot(binding), currentMs)
+        return if (observation.isAvailable) {
+            NativeCapabilityResolution.Ready(binding = binding, observation = observation)
+        } else {
+            NativeCapabilityResolution.Rejected(observation)
         }
     }
 
@@ -151,30 +127,6 @@ class NativeCapabilityBridge(
             expiresAtMs = expiresAtMs,
         )
     }
-
-    private fun NativeCapabilityAvailability.toDispatchRejection(): NativeDispatchRejection =
-        when (this) {
-            NativeCapabilityAvailability.AVAILABLE ->
-                error("available capability cannot map to a dispatch rejection")
-            NativeCapabilityAvailability.UNKNOWN_CAPABILITY -> NativeDispatchRejection.UNKNOWN_CAPABILITY
-            NativeCapabilityAvailability.UNSUPPORTED_API -> NativeDispatchRejection.UNSUPPORTED_API
-            NativeCapabilityAvailability.UNSUPPORTED_FEATURE -> NativeDispatchRejection.UNSUPPORTED_FEATURE
-            NativeCapabilityAvailability.PRECONDITION_REQUIRED ->
-                NativeDispatchRejection.PRECONDITION_REQUIRED
-            NativeCapabilityAvailability.STALE_RUNTIME_STATE ->
-                NativeDispatchRejection.STALE_RUNTIME_STATE
-        }
-
-    private fun NativeCapabilityCommand.rejected(
-        reason: NativeDispatchRejection,
-        handlerCode: String? = null,
-    ): NativeDispatchResult.Rejected =
-        NativeDispatchResult.Rejected(
-            requestId = requestId,
-            capabilityId = capabilityId,
-            reason = reason,
-            handlerCode = handlerCode,
-        )
 
     private fun saturatingAdd(left: Long, right: Long): Long =
         if (left > Long.MAX_VALUE - right) Long.MAX_VALUE else left + right
