@@ -1,3 +1,4 @@
+export * from './device-key-proof-verifier.js';
 export * from './device-plane-network.js';
 export * from './http-network-transport.js';
 export * from './session-manager.js';
