@@ -6,6 +6,9 @@ import ai.aurora.device.lifecycle.AndroidPresenceCheckpointStore
 import ai.aurora.device.lifecycle.AndroidPresenceCoordinator
 import ai.aurora.device.lifecycle.PresenceEngine
 import ai.aurora.device.lifecycle.PresenceSnapshot
+import ai.aurora.device.security.AndroidKeystoreSigningKeyStore
+import ai.aurora.device.session.AndroidDeviceSessionMetadataStore
+import ai.aurora.device.session.SecureDeviceSessionClient
 import ai.aurora.device.session.SessionLifecycleHooks
 
 class AuroraApplication : Application() {
@@ -14,6 +17,7 @@ class AuroraApplication : Application() {
 
     private lateinit var presenceEngine: PresenceEngine
     private lateinit var presenceCoordinator: AndroidPresenceCoordinator
+    private lateinit var secureDeviceSessionClient: SecureDeviceSessionClient
 
     override fun onCreate() {
         super.onCreate()
@@ -24,11 +28,17 @@ class AuroraApplication : Application() {
                 allowCleartextTraffic = BuildConfig.AURORA_ALLOW_CLEARTEXT,
             )
 
+        secureDeviceSessionClient =
+            SecureDeviceSessionClient(
+                metadataStore = AndroidDeviceSessionMetadataStore(this),
+                keyStore = AndroidKeystoreSigningKeyStore(),
+            )
+
         presenceEngine =
             PresenceEngine(
                 store = AndroidPresenceCheckpointStore(this),
                 sessionHooks = SessionLifecycleHooks { _ ->
-                    // W15-A publishes lifecycle observations only. W15-B owns the secure session client.
+                    // W15-B owns secure registration/session state; W14 remains canonical authority owner.
                 },
             )
         presenceCoordinator = AndroidPresenceCoordinator(this, presenceEngine)
@@ -36,4 +46,6 @@ class AuroraApplication : Application() {
     }
 
     fun presenceSnapshot(): PresenceSnapshot = presenceEngine.snapshot
+
+    fun deviceSessionClient(): SecureDeviceSessionClient = secureDeviceSessionClient
 }
