@@ -34,12 +34,12 @@ class PermissionConsentBrokerTest {
     fun `requested denial distinguishes rationale from permanent denial`() {
         val denied =
             fixture(
-                snapshot = snapshot(granted = false, shouldShowRationale = true),
+                snapshot = snapshot(shouldShowRationale = true),
                 history = PermissionHistory(everRequested = true),
             )
         val permanent =
             fixture(
-                snapshot = snapshot(granted = false, shouldShowRationale = false),
+                snapshot = snapshot(shouldShowRationale = false),
                 history = PermissionHistory(everRequested = true),
             )
 
@@ -56,10 +56,7 @@ class PermissionConsentBrokerTest {
         val foregroundOnly = fixture(snapshot = restrictedSnapshot)
         val background = fixture(snapshot = restrictedSnapshot)
 
-        assertEquals(
-            RuntimePermissionState.GRANTED,
-            foregroundOnly.broker.observe(REQUIREMENT).state,
-        )
+        assertEquals(RuntimePermissionState.GRANTED, foregroundOnly.broker.observe(REQUIREMENT).state)
         assertEquals(
             RuntimePermissionState.BACKGROUND_RESTRICTED,
             background.broker.observe(REQUIREMENT.copy(requiresBackgroundAccess = true)).state,
@@ -67,9 +64,10 @@ class PermissionConsentBrokerTest {
     }
 
     @Test
-    fun `stale and future snapshots fail closed`() {
+    fun `stale future and exact expiry snapshots fail closed`() {
         val exactExpiry = fixture(snapshot = snapshot(observedAtMs = NOW_MS - MAX_AGE_MS))
         val future = fixture(snapshot = snapshot(observedAtMs = NOW_MS + 1))
+        val justFresh = fixture(snapshot = snapshot(observedAtMs = NOW_MS - MAX_AGE_MS + 1))
 
         assertEquals(
             RuntimePermissionState.STALE_RUNTIME_STATE,
@@ -79,13 +77,10 @@ class PermissionConsentBrokerTest {
             RuntimePermissionState.STALE_RUNTIME_STATE,
             future.broker.observe(REQUIREMENT).state,
         )
-    }
-
-    @Test
-    fun `runtime snapshot remains valid immediately before expiry`() {
-        val fixture = fixture(snapshot = snapshot(observedAtMs = NOW_MS - MAX_AGE_MS + 1))
-
-        assertEquals(RuntimePermissionState.NOT_REQUESTED, fixture.broker.observe(REQUIREMENT).state)
+        assertEquals(
+            RuntimePermissionState.NOT_REQUESTED,
+            justFresh.broker.observe(REQUIREMENT).state,
+        )
     }
 
     @Test
@@ -118,14 +113,16 @@ class PermissionConsentBrokerTest {
     }
 
     @Test
-    fun `foreground user prompt is durable before launch and deduplicated while in flight`() {
+    fun `foreground user prompt is durable and remains explicitly in flight until callback`() {
         val fixture = fixture()
         val context = PermissionPromptContext(AppVisibility.FOREGROUND, userInitiated = true)
 
         val first = fixture.broker.request(REQUIREMENT, context)
+        val inFlight = fixture.broker.observe(REQUIREMENT)
         val duplicate = fixture.broker.request(REQUIREMENT, context)
 
         assertEquals(PermissionPromptDecision.PROMPT_LAUNCHED, first.decision)
+        assertEquals(RuntimePermissionState.PROMPT_IN_FLIGHT, inFlight.state)
         assertEquals(PermissionPromptDecision.ALREADY_IN_FLIGHT, duplicate.decision)
         assertEquals(listOf(PERMISSION), fixture.launcher.launched)
         assertEquals(PermissionHistory(everRequested = true), fixture.history.load(PERMISSION))
@@ -135,7 +132,10 @@ class PermissionConsentBrokerTest {
     fun `prompt completion reobserves grant and clears in flight state`() {
         val fixture = fixture()
         val context = PermissionPromptContext(AppVisibility.FOREGROUND, userInitiated = true)
-        assertEquals(PermissionPromptDecision.PROMPT_LAUNCHED, fixture.broker.request(REQUIREMENT, context).decision)
+        assertEquals(
+            PermissionPromptDecision.PROMPT_LAUNCHED,
+            fixture.broker.request(REQUIREMENT, context).decision,
+        )
 
         fixture.probe.current = snapshot(granted = true)
         val completed = fixture.broker.onPromptResult(REQUIREMENT)
@@ -159,10 +159,7 @@ class PermissionConsentBrokerTest {
                 snapshot = snapshot(shouldShowRationale = true),
                 history = PermissionHistory(everRequested = true, everGranted = true),
             )
-        val background =
-            fixture(
-                snapshot = snapshot(granted = true, backgroundRestricted = true),
-            )
+        val background = fixture(snapshot = snapshot(granted = true, backgroundRestricted = true))
 
         assertEquals(
             PermissionPromptDecision.SETTINGS_REQUIRED,
@@ -189,11 +186,12 @@ class PermissionConsentBrokerTest {
         val context = PermissionPromptContext(AppVisibility.FOREGROUND, userInitiated = true)
 
         val failed = fixture.broker.request(REQUIREMENT, context)
-        fixture.launcher.fail = false
-        val retry = fixture.broker.request(REQUIREMENT, context)
 
         assertEquals(PermissionPromptDecision.PROMPT_LAUNCH_FAILED, failed.decision)
         assertEquals(PermissionHistory(), fixture.history.load(PERMISSION))
+
+        fixture.launcher.fail = false
+        val retry = fixture.broker.request(REQUIREMENT, context)
         assertEquals(PermissionPromptDecision.PROMPT_LAUNCHED, retry.decision)
     }
 
@@ -212,6 +210,17 @@ class PermissionConsentBrokerTest {
         assertEquals(RuntimePermissionState.LOCAL_STATE_UNAVAILABLE, observation.state)
         assertEquals(PermissionPromptDecision.LOCAL_STATE_UNAVAILABLE, request.decision)
         assertTrue(fixture.launcher.launched.isEmpty())
+    }
+
+    @Test
+    fun `history write failure blocks grant from becoming an apparently durable precondition`() {
+        val fixture = fixture(snapshot = snapshot(granted = true))
+        fixture.history.failSaves = true
+
+        val observation = fixture.broker.observe(REQUIREMENT)
+
+        assertEquals(RuntimePermissionState.LOCAL_STATE_UNAVAILABLE, observation.state)
+        assertFalse(observation.preconditionSatisfied)
     }
 
     private fun fixture(
