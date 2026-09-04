@@ -1,0 +1,29 @@
+name: W12-H Prettier Diagnostic
+
+on:
+  push:
+    branches:
+      - wave/12h-meta-ads-reconciliation-acceptance
+
+permissions:
+  contents: read
+
+jobs:
+  prettier-diff:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact branch HEAD
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install canonical workspace
+        run: npm ci
+      - name: Print canonical Prettier diff
+        run: |
+          npx prettier --write packages/revenue/test/w12h-meta-ads-reconciliation-acceptance.test.ts
+          git --no-pager diff -- packages/revenue/test/w12h-meta-ads-reconciliation-acceptance.test.ts
