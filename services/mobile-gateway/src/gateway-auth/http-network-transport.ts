@@ -30,6 +30,7 @@ type TransportErrorCode =
   | 'CONTENT_TYPE_UNSUPPORTED'
   | 'METHOD_NOT_ALLOWED'
   | 'ROUTE_NOT_FOUND'
+  | 'SESSION_ALREADY_BOUND'
   | 'SESSION_BINDING_REQUIRED';
 
 interface IncomingRequestLike {
@@ -65,6 +66,7 @@ interface ServerLike {
   maxRequestsPerSocket: number;
   listen(port: number, host: string, callback: () => void): void;
   close(callback: (error?: Error) => void): void;
+  closeAllConnections(): void;
   address(): ServerAddressLike | string | null;
   once(event: 'error', listener: (error: Error) => void): this;
   off(event: 'error', listener: (error: Error) => void): this;
@@ -302,6 +304,7 @@ export class GatewayHttpNetworkTransport {
         if (error !== undefined) reject(error);
         else resolve();
       });
+      this.#server.closeAllConnections();
     });
     this.#started = false;
   }
@@ -356,6 +359,18 @@ export class GatewayHttpNetworkTransport {
     if (!isPlainRecord(parsed.value)) {
       transportError(response, 400, 'BODY_MALFORMED', 'Gateway transport body must be an object.');
       return;
+    }
+
+    if (path === '/v1/gateway/sessions/open' || path === '/v1/gateway/sessions/reconnect') {
+      if (this.#socketBindings.has(request.socket)) {
+        transportError(
+          response,
+          409,
+          'SESSION_ALREADY_BOUND',
+          'This TCP connection is already bound to an authenticated gateway session.',
+        );
+        return;
+      }
     }
 
     if (path === '/v1/gateway/sessions/open') {
