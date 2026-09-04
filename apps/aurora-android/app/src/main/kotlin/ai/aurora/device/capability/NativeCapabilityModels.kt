@@ -94,10 +94,7 @@ fun interface NativeCapabilityHandler {
 sealed interface NativeHandlerResult {
     data class Success(val output: Map<String, String> = emptyMap()) : NativeHandlerResult
 
-    data class Failure(
-        val code: String,
-        val retryable: Boolean = false,
-    ) : NativeHandlerResult {
+    data class Failure(val code: String) : NativeHandlerResult {
         init {
             require(code.isNotBlank()) { "handler failure code must not be blank" }
         }
@@ -129,6 +126,5 @@ sealed interface NativeDispatchResult {
         val capabilityId: String,
         val reason: NativeDispatchRejection,
         val handlerCode: String? = null,
-        val handlerRetryable: Boolean = false,
     ) : NativeDispatchResult
 }
