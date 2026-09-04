@@ -30,6 +30,61 @@ class OfflineExecutionQueueTest {
     }
 
     @Test
+    fun arbitraryActionArgumentsAreRejectedBeforeOfflinePersistence() {
+        val fixture = Fixture()
+        val candidate = fixture.candidate()
+        val withSensitiveArgument =
+            candidate.copy(
+                execution =
+                    candidate.execution.copy(
+                        action = DeviceActionCommand("camera.capture", mapOf("token" to "secret-value")),
+                    ),
+            )
+
+        val decision = fixture.coordinator().enqueue(withSensitiveArgument) as OfflineEnqueueDecision.Rejected
+
+        assertEquals(OfflineEnqueueRejection.PERSISTENCE_ARGUMENTS_NOT_ALLOWED, decision.reason)
+        assertEquals(0, fixture.store.records.size)
+        assertEquals(0, fixture.dispatchCalls)
+    }
+
+    @Test
+    fun oversizedPersistencePayloadIsRejectedBeforeStoreOrDispatch() {
+        val fixture = Fixture()
+        val candidate = fixture.candidate().copy(canonicalPayloadHash = "x".repeat(513))
+
+        val decision = fixture.coordinator().enqueue(candidate) as OfflineEnqueueDecision.Rejected
+
+        assertEquals(OfflineEnqueueRejection.PERSISTED_PAYLOAD_TOO_LARGE, decision.reason)
+        assertEquals(0, fixture.store.records.size)
+        assertEquals(0, fixture.dispatchCalls)
+    }
+
+    @Test
+    fun restoredModelWithArbitraryArgumentsFailsClosed() {
+        val fixture = Fixture()
+        val request =
+            fixture.candidate().execution.copy(
+                action = DeviceActionCommand("camera.capture", mapOf("credential" to "forbidden")),
+            )
+        var failedClosed = false
+
+        try {
+            OfflineDeferredExecution(
+                idempotencyKey = "idem-restore",
+                operationName = "device.execute",
+                canonicalPayloadHash = "hash-restore",
+                request = request,
+                enqueuedAtMs = 1_000,
+            )
+        } catch (_: IllegalArgumentException) {
+            failedClosed = true
+        }
+
+        assertTrue(failedClosed)
+    }
+
+    @Test
     fun duplicateIdempotencyIdentitySurvivesCoordinatorRestartWithoutSecondRecord() {
         val fixture = Fixture()
         fixture.coordinator().enqueue(fixture.candidate())
