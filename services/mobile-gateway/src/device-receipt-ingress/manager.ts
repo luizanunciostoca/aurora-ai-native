@@ -134,8 +134,7 @@ function isTrustSnapshotShape(value: unknown): value is DeviceSessionTrustSnapsh
   }
   if (
     value.revokedAtMs !== undefined &&
-    (!isNonNegativeInteger(value.revokedAtMs) ||
-      !isSafeToken(value.revocationReasonReference, 512))
+    (!isNonNegativeInteger(value.revokedAtMs) || !isSafeToken(value.revocationReasonReference, 512))
   ) {
     return false;
   }
@@ -223,9 +222,7 @@ export class DeviceReceiptIngressManager {
     }
   }
 
-  revokeAndKill(
-    input: unknown,
-  ): DeviceReceiptIngressResult<RevokeAndKillDeviceSessionSuccess> {
+  revokeAndKill(input: unknown): DeviceReceiptIngressResult<RevokeAndKillDeviceSessionSuccess> {
     const parsed = this.#parseRevokeAndKillInput(input);
     if (!parsed.ok) return parsed.result;
     const candidate = parsed.value;
@@ -299,8 +296,7 @@ export class DeviceReceiptIngressManager {
       effect: 'SESSION_REVOKED_AND_COMMAND_CANCELLATION_REQUESTED',
       outcomeAuthority: 'W07_ONLY',
       requiresW07Reconciliation:
-        !cancellation.ok ||
-        cancellation.value.disposition === 'NOOP_TERMINAL_OR_UNCERTAIN',
+        !cancellation.ok || cancellation.value.disposition === 'NOOP_TERMINAL_OR_UNCERTAIN',
       authorizesExecution: false,
       canGrantPermission: false,
       provesExecutionPrevented: false,
@@ -329,7 +325,10 @@ export class DeviceReceiptIngressManager {
       candidate.deviceSessionId !== trust.deviceSessionId ||
       candidate.gatewaySessionId !== trust.gatewaySessionId
     ) {
-      return failure('SESSION_MISMATCH', 'Receipt session identity does not match canonical trust.');
+      return failure(
+        'SESSION_MISMATCH',
+        'Receipt session identity does not match canonical trust.',
+      );
     }
     if (candidate.gatewayGeneration > trust.gatewayGeneration) {
       return failure('SESSION_MISMATCH', 'Receipt claims a future gateway generation.');
@@ -338,7 +337,10 @@ export class DeviceReceiptIngressManager {
       candidate.gatewayGeneration === trust.gatewayGeneration &&
       candidate.connectionId !== trust.connectionId
     ) {
-      return failure('SESSION_MISMATCH', 'Receipt connection does not match its gateway generation.');
+      return failure(
+        'SESSION_MISMATCH',
+        'Receipt connection does not match its gateway generation.',
+      );
     }
     if (candidate.capturedAtMs > candidate.receivedAtMs) {
       return failure('RECEIPT_FROM_FUTURE', 'Receipt capture time is later than ingress time.');

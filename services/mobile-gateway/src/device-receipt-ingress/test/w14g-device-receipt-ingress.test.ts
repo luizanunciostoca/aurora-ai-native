@@ -80,9 +80,7 @@ function trust(
     openedAtMs: 900,
     lastEvaluatedAtMs: state === 'REVOKED' ? 1_500 : 1_000,
     gatewayAuthExpiresAtMs: 20_000,
-    ...(state === 'REVOKED'
-      ? { revokedAtMs: 1_500, revocationReasonReference: 'kill-1' }
-      : {}),
+    ...(state === 'REVOKED' ? { revokedAtMs: 1_500, revocationReasonReference: 'kill-1' } : {}),
     executionPreconditionSatisfied: state === 'ACTIVE',
     requiresCurrentAuthorityValidation: true,
     authoritySemantics: 'DEVICE_SESSION_TRUST_IS_PRECONDITION_METADATA_ONLY',
@@ -185,9 +183,7 @@ class DurableIngressPort implements W03ReceiptIngressReservationPort {
 class W07IngressPort implements W07DeviceReceiptEvidenceIngressPort {
   observations: W07DeviceReceiptEvidenceObservation[] = [];
 
-  observe(
-    observation: W07DeviceReceiptEvidenceObservation,
-  ): W07DeviceReceiptEvidenceIngressResult {
+  observe(observation: W07DeviceReceiptEvidenceObservation): W07DeviceReceiptEvidenceIngressResult {
     this.observations.push(observation);
     return {
       ok: true,

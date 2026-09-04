@@ -171,8 +171,7 @@ export interface RevokeAndKillDeviceSessionInput {
 export interface RevokeAndKillDeviceSessionSuccess {
   readonly deviceSession: DeviceSessionTrustSnapshot;
   readonly cancellationDisposition:
-    | ProgressCancellationPortSuccess['disposition']
-    | 'UPSTREAM_CANCELLATION_UNCONFIRMED';
+    ProgressCancellationPortSuccess['disposition'] | 'UPSTREAM_CANCELLATION_UNCONFIRMED';
   readonly effect: 'SESSION_REVOKED_AND_COMMAND_CANCELLATION_REQUESTED';
   readonly outcomeAuthority: 'W07_ONLY';
   readonly requiresW07Reconciliation: boolean;
@@ -236,8 +235,7 @@ export const DEVICE_RECEIPT_INGRESS_ERROR_CODES = [
   'CANCELLATION_BINDING_MISMATCH',
 ] as const;
 
-export type DeviceReceiptIngressErrorCode =
-  (typeof DEVICE_RECEIPT_INGRESS_ERROR_CODES)[number];
+export type DeviceReceiptIngressErrorCode = (typeof DEVICE_RECEIPT_INGRESS_ERROR_CODES)[number];
 
 export type DeviceReceiptIngressResult<T> =
   | Readonly<{
