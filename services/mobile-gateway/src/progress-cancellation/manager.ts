@@ -6,7 +6,6 @@ import {
   PROGRESS_STATES,
   type ProgressCancellationPort,
   type ProgressCancellationProjection,
-  type ProgressCancellationPortResult,
   type ProgressCancellationPortSuccess,
   type ProgressCancellationSessionView,
   type ProgressFrame,
@@ -358,7 +357,7 @@ export class ProgressCancellationProjectionManager {
 
     const existing = this.#streams.get(key);
     const remembered = existing?.observations.get(parsed.value.observationId);
-    if (remembered !== undefined) {
+    if (remembered !== undefined && existing !== undefined) {
       if (remembered.fingerprint !== fingerprint) {
         return failure(
           'OBSERVATION_CONFLICT',
@@ -487,9 +486,7 @@ export class ProgressCancellationProjectionManager {
     });
   }
 
-  requestCancellation(
-    input: unknown,
-  ): ProgressProjectionResult<ProgressCancellationProjection> {
+  requestCancellation(input: unknown): ProgressProjectionResult<ProgressCancellationProjection> {
     const parsed = this.#parseCancellation(input);
     if (!parsed.ok) return parsed;
 
@@ -622,10 +619,16 @@ export class ProgressCancellationProjectionManager {
       return failure('MALFORMED_REQUEST', 'Progress observation cannot be from the future.');
     }
     if (input.nowMs - input.observedAtMs > this.#config.maxObservationAgeMs) {
-      return failure('OBSERVATION_STALE', 'Progress observation exceeds the bounded freshness window.');
+      return failure(
+        'OBSERVATION_STALE',
+        'Progress observation exceeds the bounded freshness window.',
+      );
     }
     if (input.scope === 'COMMAND' && !COMMAND_ID.test(input.subjectId)) {
-      return failure('MALFORMED_REQUEST', 'Command progress requires a canonical command identifier.');
+      return failure(
+        'MALFORMED_REQUEST',
+        'Command progress requires a canonical command identifier.',
+      );
     }
     if (
       Object.hasOwn(input, 'reasonCode') &&
@@ -639,13 +642,19 @@ export class ProgressCancellationProjectionManager {
       !input.evidenceRefs.every((reference) => isSafeReference(reference)) ||
       new Set(input.evidenceRefs).size !== input.evidenceRefs.length
     ) {
-      return failure('MALFORMED_REQUEST', 'Progress evidence references are malformed or unbounded.');
+      return failure(
+        'MALFORMED_REQUEST',
+        'Progress evidence references are malformed or unbounded.',
+      );
     }
 
     const hasCompleted = Object.hasOwn(input, 'completedUnits');
     const hasTotal = Object.hasOwn(input, 'totalUnits');
     if (hasCompleted !== hasTotal) {
-      return failure('MALFORMED_REQUEST', 'Progress units must provide completed and total together.');
+      return failure(
+        'MALFORMED_REQUEST',
+        'Progress units must provide completed and total together.',
+      );
     }
     if (
       hasCompleted &&
@@ -670,9 +679,7 @@ export class ProgressCancellationProjectionManager {
       safeSummary: input.safeSummary,
       ...(typeof input.reasonCode === 'string' ? { reasonCode: input.reasonCode } : {}),
       evidenceRefs: Object.freeze([...input.evidenceRefs]) as readonly string[],
-      ...(typeof input.completedUnits === 'number'
-        ? { completedUnits: input.completedUnits }
-        : {}),
+      ...(typeof input.completedUnits === 'number' ? { completedUnits: input.completedUnits } : {}),
       ...(typeof input.totalUnits === 'number' ? { totalUnits: input.totalUnits } : {}),
     });
   }
@@ -698,7 +705,10 @@ export class ProgressCancellationProjectionManager {
       return failure('MALFORMED_REQUEST', 'Progress replay binding or cursor is malformed.');
     }
     if (input.scope === 'COMMAND' && !COMMAND_ID.test(input.subjectId)) {
-      return failure('MALFORMED_REQUEST', 'Command replay requires a canonical command identifier.');
+      return failure(
+        'MALFORMED_REQUEST',
+        'Command replay requires a canonical command identifier.',
+      );
     }
     if (
       Object.hasOwn(input, 'limit') &&
@@ -716,9 +726,7 @@ export class ProgressCancellationProjectionManager {
     });
   }
 
-  #parseCancellation(
-    input: unknown,
-  ): ProgressProjectionResult<RequestProgressCancellationInput> {
+  #parseCancellation(input: unknown): ProgressProjectionResult<RequestProgressCancellationInput> {
     if (
       !isPlainDataRecord(input) ||
       !hasOnlyKeys(input, CANCELLATION_KEYS) ||
@@ -909,9 +917,7 @@ export class ProgressCancellationProjectionManager {
     });
   }
 
-  #mapCancellationPortFailure(
-    result: Record<string, unknown>,
-  ): ProgressProjectionError {
+  #mapCancellationPortFailure(result: Record<string, unknown>): ProgressProjectionError {
     if (
       result.authorizesExecution !== false ||
       !isPlainDataRecord(result.error) ||

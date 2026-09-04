@@ -212,7 +212,9 @@ export interface ProgressCancellationPort {
     gatewaySessionId: unknown,
     nowMs: unknown,
   ): ProgressCancellationPortResult<ProgressCancellationSessionView>;
-  requestCancellation(input: unknown): ProgressCancellationPortResult<ProgressCancellationPortSuccess>;
+  requestCancellation(
+    input: unknown,
+  ): ProgressCancellationPortResult<ProgressCancellationPortSuccess>;
 }
 
 export interface ProgressCancellationProjection {

@@ -76,12 +76,18 @@ class FixtureCancellationPort implements ProgressCancellationPort {
     return { ok: true, value: this.session, authorizesExecution: false };
   }
 
-  requestCancellation(input: unknown): ProgressCancellationPortResult<ProgressCancellationPortSuccess> {
+  requestCancellation(
+    input: unknown,
+  ): ProgressCancellationPortResult<ProgressCancellationPortSuccess> {
     this.cancellationCalls += 1;
     if (this.rejectCancellation) {
       return {
         ok: false,
-        error: { code: 'GATEWAY_CONNECTION_MISMATCH', message: 'fixture rejection', retryable: false },
+        error: {
+          code: 'GATEWAY_CONNECTION_MISMATCH',
+          message: 'fixture rejection',
+          retryable: false,
+        },
         authorizesExecution: false,
       };
     }
@@ -139,7 +145,9 @@ function cancellationInput(overrides: Record<string, unknown> = {}): Record<stri
   };
 }
 
-function setup(config: ConstructorParameters<typeof ProgressCancellationProjectionManager>[2] = {}) {
+function setup(
+  config: ConstructorParameters<typeof ProgressCancellationProjectionManager>[2] = {},
+) {
   const verifier = new FixtureVerifier();
   const port = new FixtureCancellationPort();
   const manager = new ProgressCancellationProjectionManager(verifier, port, config);
