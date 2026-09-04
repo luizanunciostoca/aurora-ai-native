@@ -272,9 +272,7 @@ class W07IngressPort implements W07DeviceReceiptEvidenceIngressPort {
   }
 }
 
-function createHarness(
-  config: { maxReceiptAgeMs?: number; maxLateAfterRevokeMs?: number } = {},
-) {
+function createHarness(config: { maxReceiptAgeMs?: number; maxLateAfterRevokeMs?: number } = {}) {
   const currentTrust = new CurrentTrustPort();
   const revocation = new RevocationPort(currentTrust);
   const cancellation = new CancellationPort();
