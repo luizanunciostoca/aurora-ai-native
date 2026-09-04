@@ -1,0 +1,37 @@
+name: W14-F Format Artifact Diagnostic
+
+on:
+  push:
+    branches:
+      - wave/14f-device-command-delivery
+
+permissions:
+  contents: read
+
+jobs:
+  format-artifact:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Produce canonical manager formatting
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          import { format } from 'prettier';
+          const path = 'services/mobile-gateway/src/device-command-delivery/manager.ts';
+          const input = await readFile(path, 'utf8');
+          const output = await format(input, { parser: 'typescript' });
+          await writeFile('w14f-manager-formatted.ts', output, 'utf8');
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w14f-manager-formatted
+          path: w14f-manager-formatted.ts
+          if-no-files-found: error
