@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { performance } from 'node:perf_hooks';
 import test from 'node:test';
 
 import type {
@@ -50,6 +51,21 @@ const RECEIPT = 'rcp_01ARZ3NDEKTSV4RRFFQ69G5FAV' as ReceiptId;
 const EVIDENCE = 'evd_01ARZ3NDEKTSV4RRFFQ69G5FAV' as EvidenceId;
 const DEVICE = 'device-1' as DeviceId;
 const REVOKED_AT_MS = 1_500;
+
+function percentile(values: readonly number[], quantile: number): number {
+  assert.ok(values.length > 0);
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil(sorted.length * quantile) - 1));
+  return sorted[index] ?? 0;
+}
+
+function summarizeLatency(values: readonly number[]) {
+  return {
+    p50: Number(percentile(values, 0.5).toFixed(6)),
+    p95: Number(percentile(values, 0.95).toFixed(6)),
+    p99: Number(percentile(values, 0.99).toFixed(6)),
+  };
+}
 
 function trust(state: 'ACTIVE' | 'REVOKED' = 'ACTIVE'): DeviceSessionTrustSnapshot {
   return {
@@ -384,4 +400,75 @@ test('DP3 late-after-revoke window is bounded by ingress time, not only device c
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.error.code, 'RECEIPT_STALE');
   assert.equal(w07Ingress.calls, 0);
+});
+
+test('DP3 emits test-scope p50/p95/p99 evidence without claiming physical-device or production SLO', () => {
+  const active = trust('ACTIVE');
+  const currentHarness = createHarness(active);
+  const currentIngressMs: number[] = [];
+  const currentSamples = 256;
+
+  for (let index = 0; index < currentSamples; index += 1) {
+    const startedAt = performance.now();
+    const result = currentHarness.manager.ingest(
+      ingressInput(active, `rcp_w14h_current_${index}` as ReceiptId),
+    );
+    currentIngressMs.push(performance.now() - startedAt);
+    assert.equal(result.ok, true);
+  }
+  assert.equal(currentHarness.w07Ingress.calls, currentSamples);
+
+  const staleActive = trust('ACTIVE');
+  const rejectionHarness = createHarness(staleActive);
+  const killed = rejectionHarness.manager.revokeAndKill({
+    deviceSession: staleActive,
+    tenantId: TENANT,
+    correlationId: CORRELATION,
+    commandId: COMMAND,
+    revokedAtMs: REVOKED_AT_MS,
+    reasonReference: 'benchmark-kill',
+  });
+  assert.equal(killed.ok, true);
+
+  const staleTrustRejectMs: number[] = [];
+  const rejectionSamples = 128;
+  for (let index = 0; index < rejectionSamples; index += 1) {
+    const startedAt = performance.now();
+    const result = rejectionHarness.manager.ingest(
+      ingressInput(
+        staleActive,
+        `rcp_w14h_stale_${index}` as ReceiptId,
+        REVOKED_AT_MS + 1,
+        REVOKED_AT_MS + 2,
+      ),
+    );
+    staleTrustRejectMs.push(performance.now() - startedAt);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.error.code, 'SESSION_NOT_TRUSTED');
+  }
+  assert.equal(rejectionHarness.w07Ingress.calls, 0);
+
+  const evidence = {
+    kind: 'W14H_DP3_PERFORMANCE_EVIDENCE',
+    measurementBoundary: 'TEST_ONLY_NOT_PRODUCTION_SLO',
+    currentReceiptIngress: {
+      samples: currentSamples,
+      latencyMs: summarizeLatency(currentIngressMs),
+    },
+    staleTrustRejection: {
+      samples: rejectionSamples,
+      latencyMs: summarizeLatency(staleTrustRejectMs),
+    },
+    providerNetworkLatency: 'NOT_OBSERVED',
+    physicalDeviceLatencyBatteryResource: 'NOT_OBSERVED_W15_J',
+    productionSlo: 'NOT_CLAIMED',
+  } as const;
+
+  assert.ok(Number.isFinite(evidence.currentReceiptIngress.latencyMs.p50));
+  assert.ok(Number.isFinite(evidence.currentReceiptIngress.latencyMs.p95));
+  assert.ok(Number.isFinite(evidence.currentReceiptIngress.latencyMs.p99));
+  assert.ok(Number.isFinite(evidence.staleTrustRejection.latencyMs.p50));
+  assert.ok(Number.isFinite(evidence.staleTrustRejection.latencyMs.p95));
+  assert.ok(Number.isFinite(evidence.staleTrustRejection.latencyMs.p99));
+  console.log(`[w14h:benchmark] ${JSON.stringify(evidence)}`);
 });
