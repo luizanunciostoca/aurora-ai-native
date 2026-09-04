@@ -334,3 +334,145 @@ test('wrong device, stale trust and W03 conflict fail closed', () => {
   assert.equal(conflict.ok, false);
   if (!conflict.ok) assert.equal(conflict.error.code, 'DURABLE_IDEMPOTENCY_CONFLICT');
 });
+
+test('expired trust cannot acknowledge or release ordered delivery', () => {
+  const manager = new DeviceCommandDeliveryManager(new DurablePort());
+  const firstCommand = command(COMMAND_1, EXECUTION_1);
+  const secondCommand = command(COMMAND_2, EXECUTION_2);
+  assert.equal(
+    manager.prepare({
+      command: firstCommand,
+      deviceSession: trust(),
+      idempotencyKey: 'idem-expired-ack-1',
+      orderingKey: 'expired-ack-order',
+      orderingSequence: 1,
+      nowMs: 1_100,
+    }).ok,
+    true,
+  );
+  assert.equal(
+    manager.prepare({
+      command: secondCommand,
+      deviceSession: trust(),
+      idempotencyKey: 'idem-expired-ack-2',
+      orderingKey: 'expired-ack-order',
+      orderingSequence: 2,
+      nowMs: 1_100,
+    }).ok,
+    true,
+  );
+  const first = manager.claim({
+    command: firstCommand,
+    deviceSession: trust(),
+    nowMs: 1_200,
+  });
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+
+  const expiredAck = manager.acknowledge({
+    command: firstCommand,
+    deviceSession: { ...trust(), gatewayAuthExpiresAtMs: 1_250 },
+    deliveryReference: first.value.delivery.deliveryReference,
+    ackReference: 'ack-expired',
+    observedAtMs: 1_300,
+  });
+  assert.equal(expiredAck.ok, false);
+  if (!expiredAck.ok) assert.equal(expiredAck.error.code, 'SESSION_EXPIRED');
+
+  const second = manager.claim({
+    command: secondCommand,
+    deviceSession: trust(),
+    nowMs: 1_400,
+  });
+  assert.equal(second.ok, false);
+  if (!second.ok) assert.equal(second.error.code, 'ORDERING_BLOCKED');
+});
+
+test('acknowledged eviction advances ordering floor without creating a gap', () => {
+  const manager = new DeviceCommandDeliveryManager(new DurablePort(), {
+    maxTrackedDeliveries: 2,
+  });
+  const firstCommand = command(COMMAND_1, EXECUTION_1);
+  const secondCommand = command(COMMAND_2, EXECUTION_2);
+  const thirdCommand = command(
+    'cmd_01ARZ3NDEKTSV4RRFFQ69G5FAX' as CommandId,
+    'exe_01ARZ3NDEKTSV4RRFFQ69G5FAX' as ExecutionId,
+  );
+
+  assert.equal(
+    manager.prepare({
+      command: firstCommand,
+      deviceSession: trust(),
+      idempotencyKey: 'idem-evict-1',
+      orderingKey: 'evict-order',
+      orderingSequence: 1,
+      nowMs: 1_100,
+    }).ok,
+    true,
+  );
+  const first = manager.claim({
+    command: firstCommand,
+    deviceSession: trust(),
+    nowMs: 1_200,
+  });
+  assert.equal(first.ok, true);
+  if (!first.ok) return;
+  assert.equal(
+    manager.acknowledge({
+      command: firstCommand,
+      deviceSession: trust(),
+      deliveryReference: first.value.delivery.deliveryReference,
+      ackReference: 'ack-evict-1',
+      observedAtMs: 1_300,
+    }).ok,
+    true,
+  );
+
+  assert.equal(
+    manager.prepare({
+      command: secondCommand,
+      deviceSession: trust(),
+      idempotencyKey: 'idem-evict-2',
+      orderingKey: 'evict-order',
+      orderingSequence: 2,
+      nowMs: 1_400,
+    }).ok,
+    true,
+  );
+  assert.equal(
+    manager.prepare({
+      command: thirdCommand,
+      deviceSession: trust(),
+      idempotencyKey: 'idem-evict-3',
+      orderingKey: 'evict-order',
+      orderingSequence: 3,
+      nowMs: 1_500,
+    }).ok,
+    true,
+  );
+
+  const second = manager.claim({
+    command: secondCommand,
+    deviceSession: trust(),
+    nowMs: 1_600,
+  });
+  assert.equal(second.ok, true);
+  if (!second.ok) return;
+  assert.equal(
+    manager.acknowledge({
+      command: secondCommand,
+      deviceSession: trust(),
+      deliveryReference: second.value.delivery.deliveryReference,
+      ackReference: 'ack-evict-2',
+      observedAtMs: 1_700,
+    }).ok,
+    true,
+  );
+
+  const third = manager.claim({
+    command: thirdCommand,
+    deviceSession: trust(),
+    nowMs: 1_800,
+  });
+  assert.equal(third.ok, true);
+});

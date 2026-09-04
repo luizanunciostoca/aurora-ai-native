@@ -262,10 +262,7 @@ export class DeviceCommandDeliveryManager {
 
     const orderingFloor = this.#orderingFloors.get(candidate.orderingKey) ?? 0;
     if (candidate.orderingSequence <= orderingFloor) {
-      return failure(
-        'ORDERING_CONFLICT',
-        'Ordering sequence is already retired as acknowledged.',
-      );
+      return failure('ORDERING_CONFLICT', 'Ordering sequence is already retired as acknowledged.');
     }
     const orderKey = `${candidate.orderingKey}|${candidate.orderingSequence}`;
     const ordered = this.#orderBindings.get(orderKey);
@@ -538,11 +535,7 @@ export class DeviceCommandDeliveryManager {
 
   #validateOrdering<T>(record: DeliveryRecord): DeviceCommandDeliveryResult<T> | null {
     const orderingFloor = this.#orderingFloors.get(record.orderingKey) ?? 0;
-    for (
-      let sequence = orderingFloor + 1;
-      sequence < record.orderingSequence;
-      sequence += 1
-    ) {
+    for (let sequence = orderingFloor + 1; sequence < record.orderingSequence; sequence += 1) {
       const commandId = this.#orderBindings.get(`${record.orderingKey}|${sequence}`);
       if (commandId === undefined) {
         return failure('ORDERING_GAP', 'A prior ordering sequence is missing.');
