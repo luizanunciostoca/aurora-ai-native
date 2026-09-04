@@ -198,9 +198,7 @@ export class DeviceSessionRevokeEvidenceIngressManager {
     }
   }
 
-  revokeOrKillSession(
-    input: unknown,
-  ): DeviceRevokeIngressResult<DeviceSessionControlProjection> {
+  revokeOrKillSession(input: unknown): DeviceRevokeIngressResult<DeviceSessionControlProjection> {
     const parsed = this.#parseControlInput(input);
     if (!parsed.ok) return parsed;
     const existing = this.#controls.get(parsed.value.deviceSession.deviceSessionId);
@@ -261,11 +259,7 @@ export class DeviceSessionRevokeEvidenceIngressManager {
     const projection: DeviceSessionControlProjection = Object.freeze({
       mode: parsed.value.mode,
       disposition:
-        parsed.value.mode === 'KILL'
-          ? 'KILLED'
-          : wasAlreadyRevoked
-            ? 'ALREADY_REVOKED'
-            : 'REVOKED',
+        parsed.value.mode === 'KILL' ? 'KILLED' : wasAlreadyRevoked ? 'ALREADY_REVOKED' : 'REVOKED',
       deviceSessionId: revoked.deviceSessionId,
       tenantId: revoked.tenantId,
       correlationId: revoked.correlationId,
@@ -301,7 +295,10 @@ export class DeviceSessionRevokeEvidenceIngressManager {
     const duplicate = this.#seenIngress.get(ingressKey);
     if (duplicate !== undefined) {
       if (duplicate.fingerprint !== fingerprint) {
-        return failure('INGRESS_CONFLICT', 'Receipt identifier was reused with conflicting contents.');
+        return failure(
+          'INGRESS_CONFLICT',
+          'Receipt identifier was reused with conflicting contents.',
+        );
       }
       return success({
         disposition: 'DUPLICATE',
@@ -352,7 +349,10 @@ export class DeviceSessionRevokeEvidenceIngressManager {
     const duplicate = this.#seenIngress.get(ingressKey);
     if (duplicate !== undefined) {
       if (duplicate.fingerprint !== fingerprint) {
-        return failure('INGRESS_CONFLICT', 'Evidence identifier was reused with conflicting contents.');
+        return failure(
+          'INGRESS_CONFLICT',
+          'Evidence identifier was reused with conflicting contents.',
+        );
       }
       return success({
         disposition: 'DUPLICATE',
@@ -401,8 +401,14 @@ export class DeviceSessionRevokeEvidenceIngressManager {
     if (frame.tenantId !== session.tenantId) {
       return failure('TENANT_MISMATCH', 'Ingress tenant does not match the device session.');
     }
-    if (frame.correlationId !== session.correlationId || frame.correlationId !== command.correlationId) {
-      return failure('CORRELATION_MISMATCH', 'Ingress correlation does not match the command/session.');
+    if (
+      frame.correlationId !== session.correlationId ||
+      frame.correlationId !== command.correlationId
+    ) {
+      return failure(
+        'CORRELATION_MISMATCH',
+        'Ingress correlation does not match the command/session.',
+      );
     }
     if (
       command.executionTarget.kind !== 'DEVICE' ||
@@ -426,7 +432,10 @@ export class DeviceSessionRevokeEvidenceIngressManager {
       provenance.sourceGatewayGeneration < command.submittedGatewayGeneration ||
       provenance.sourceGatewayGeneration > session.gatewayGeneration
     ) {
-      return failure('PROVENANCE_STALE', 'Ingress gateway generation is outside the command/session chain.');
+      return failure(
+        'PROVENANCE_STALE',
+        'Ingress gateway generation is outside the command/session chain.',
+      );
     }
 
     const control = this.#controls.get(session.deviceSessionId);
@@ -441,7 +450,10 @@ export class DeviceSessionRevokeEvidenceIngressManager {
         provenance.capturedAtMs > control.revokedAtMs ||
         provenance.receivedAtMs < control.revokedAtMs
       ) {
-        return failure('SESSION_REVOKED', 'Post-revocation device output is not admissible as late evidence.');
+        return failure(
+          'SESSION_REVOKED',
+          'Post-revocation device output is not admissible as late evidence.',
+        );
       }
       if (
         provenance.sourceGatewayGeneration === control.gatewayGeneration &&
@@ -467,14 +479,23 @@ export class DeviceSessionRevokeEvidenceIngressManager {
       session.authorizesExecution !== false ||
       session.canGrantPermission !== false
     ) {
-      return failure('SESSION_NOT_TRUSTED', 'Device session is not an active accepted trust snapshot.');
+      return failure(
+        'SESSION_NOT_TRUSTED',
+        'Device session is not an active accepted trust snapshot.',
+      );
     }
     if (provenance.receivedAtMs >= session.gatewayAuthExpiresAtMs) {
-      return failure('SESSION_EXPIRED', 'Device ingress arrived after gateway authentication expiry.');
+      return failure(
+        'SESSION_EXPIRED',
+        'Device ingress arrived after gateway authentication expiry.',
+      );
     }
     if (provenance.sourceGatewayGeneration === session.gatewayGeneration) {
       if (provenance.sourceConnectionId !== session.connectionId) {
-        return failure('PROVENANCE_MISMATCH', 'Current-generation ingress came from another connection.');
+        return failure(
+          'PROVENANCE_MISMATCH',
+          'Current-generation ingress came from another connection.',
+        );
       }
       return success({ classification: 'CURRENT_SESSION' });
     }
@@ -608,7 +629,9 @@ export class DeviceSessionRevokeEvidenceIngressManager {
     return this.#validateW07Result(result);
   }
 
-  #validateW07Result(result: W07DeviceIngressVerificationResult): DeviceRevokeIngressResult<string> {
+  #validateW07Result(
+    result: W07DeviceIngressVerificationResult,
+  ): DeviceRevokeIngressResult<string> {
     if (
       result.authorizesExecution !== false ||
       result.provesExecutionSuccess !== false ||
@@ -687,15 +710,15 @@ export class DeviceSessionRevokeEvidenceIngressManager {
     }
   }
 
-  #parseControlInput(
-    input: unknown,
-  ): DeviceRevokeIngressResult<RevokeOrKillDeviceSessionInput> {
-    if (!isPlainRecord(input)) return failure('MALFORMED_REQUEST', 'Session control input is malformed.');
+  #parseControlInput(input: unknown): DeviceRevokeIngressResult<RevokeOrKillDeviceSessionInput> {
+    if (!isPlainRecord(input))
+      return failure('MALFORMED_REQUEST', 'Session control input is malformed.');
     if (input.mode !== 'REVOKE' && input.mode !== 'KILL') {
       return failure('MALFORMED_REQUEST', 'Session control mode is invalid.');
     }
     const session = this.#parseSession(input.deviceSession);
-    if (session === null) return failure('MALFORMED_REQUEST', 'Device session snapshot is malformed.');
+    if (session === null)
+      return failure('MALFORMED_REQUEST', 'Device session snapshot is malformed.');
     if (!isReference(input.reasonReference, this.#config.maxReferenceLength)) {
       return failure('MALFORMED_REQUEST', 'Session control reason reference is malformed.');
     }
@@ -711,23 +734,31 @@ export class DeviceSessionRevokeEvidenceIngressManager {
   }
 
   #parseReceiptInput(input: unknown): DeviceRevokeIngressResult<IngestDeviceReceiptInput> {
-    if (!isPlainRecord(input)) return failure('MALFORMED_REQUEST', 'Receipt ingress input is malformed.');
+    if (!isPlainRecord(input))
+      return failure('MALFORMED_REQUEST', 'Receipt ingress input is malformed.');
     const command = this.#parseCommand(input.command);
     const session = this.#parseSession(input.deviceSession);
     const frame = this.#parseReceiptFrame(input.frame);
     if (command === null || session === null || frame === null) {
-      return failure('MALFORMED_REQUEST', 'Receipt ingress contains malformed command/session/frame data.');
+      return failure(
+        'MALFORMED_REQUEST',
+        'Receipt ingress contains malformed command/session/frame data.',
+      );
     }
     return success({ command, deviceSession: session, frame });
   }
 
   #parseEvidenceInput(input: unknown): DeviceRevokeIngressResult<IngestDeviceEvidenceInput> {
-    if (!isPlainRecord(input)) return failure('MALFORMED_REQUEST', 'Evidence ingress input is malformed.');
+    if (!isPlainRecord(input))
+      return failure('MALFORMED_REQUEST', 'Evidence ingress input is malformed.');
     const command = this.#parseCommand(input.command);
     const session = this.#parseSession(input.deviceSession);
     const frame = this.#parseEvidenceFrame(input.frame);
     if (command === null || session === null || frame === null) {
-      return failure('MALFORMED_REQUEST', 'Evidence ingress contains malformed command/session/frame data.');
+      return failure(
+        'MALFORMED_REQUEST',
+        'Evidence ingress contains malformed command/session/frame data.',
+      );
     }
     return success({ command, deviceSession: session, frame });
   }

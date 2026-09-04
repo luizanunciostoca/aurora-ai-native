@@ -250,7 +250,9 @@ function manager(
   });
 }
 
-function errorCode(result: ReturnType<DeviceSessionRevokeEvidenceIngressManager['ingestReceipt']>): string {
+function errorCode(
+  result: ReturnType<DeviceSessionRevokeEvidenceIngressManager['ingestReceipt']>,
+): string {
   assert.equal(result.ok, false);
   if (result.ok) throw new Error('Expected failure.');
   assert.equal(result.authorizesExecution, false);
@@ -263,7 +265,11 @@ function errorCode(result: ReturnType<DeviceSessionRevokeEvidenceIngressManager[
 test('accepts current-session receipt only as W03-durable, W07-verified evidence input', () => {
   const trust = new DeviceSessionTrustManager();
   const session = openTrust(trust);
-  const result = manager(trust).ingestReceipt({ command: command(), deviceSession: session, frame: receipt() });
+  const result = manager(trust).ingestReceipt({
+    command: command(),
+    deviceSession: session,
+    frame: receipt(),
+  });
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.value.disposition, 'ACCEPTED');
@@ -429,8 +435,16 @@ test('deduplicates identical ingress and rejects identifier reuse with conflicti
   const trust = new DeviceSessionTrustManager();
   const session = openTrust(trust);
   const target = manager(trust);
-  const first = target.ingestReceipt({ command: command(), deviceSession: session, frame: receipt() });
-  const second = target.ingestReceipt({ command: command(), deviceSession: session, frame: receipt() });
+  const first = target.ingestReceipt({
+    command: command(),
+    deviceSession: session,
+    frame: receipt(),
+  });
+  const second = target.ingestReceipt({
+    command: command(),
+    deviceSession: session,
+    frame: receipt(),
+  });
   assert.equal(first.ok, true);
   assert.equal(second.ok, true);
   if (second.ok) assert.equal(second.value.disposition, 'DUPLICATE');

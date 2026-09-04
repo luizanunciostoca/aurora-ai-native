@@ -8,7 +8,10 @@ import type {
   TenantId,
 } from '@aurora/contracts/ids';
 
-import type { DeviceSessionTrustResult, DeviceSessionTrustSnapshot } from '../device-session/types.js';
+import type {
+  DeviceSessionTrustResult,
+  DeviceSessionTrustSnapshot,
+} from '../device-session/types.js';
 import type { RealtimeCommandSnapshot } from '../realtime-session/types.js';
 
 export interface DeviceSessionRevokeIngressConfig {
@@ -117,9 +120,7 @@ export interface IngestDeviceEvidenceInput {
 }
 
 export type DeviceIngressClassification =
-  | 'CURRENT_SESSION'
-  | 'LATE_AFTER_RECONNECT'
-  | 'LATE_AFTER_REVOKE';
+  'CURRENT_SESSION' | 'LATE_AFTER_RECONNECT' | 'LATE_AFTER_REVOKE';
 
 export interface W03DurableIngressReservationRequest {
   readonly tenantId: TenantId;
