@@ -58,73 +58,21 @@ data class NativeCapabilityObservation(
         get() = availability == NativeCapabilityAvailability.AVAILABLE
 }
 
-data class NativeCapabilityCommand(
-    val requestId: String,
-    val capabilityId: String,
-    val arguments: Map<String, String> = emptyMap(),
-) {
-    init {
-        require(requestId.isNotBlank()) { "requestId must not be blank" }
-        require(capabilityId.isNotBlank()) { "capabilityId must not be blank" }
-    }
-}
-
 /**
- * Port implemented by the W07/W15-F execution boundary.
+ * Non-executable resolution artifact for a native DEVICE capability.
  *
- * W15-C consumes this decision; it never derives action authority from capability availability,
- * Android permissions, device presence, or session possession.
+ * A Ready result is only a fresh local availability/precondition projection. It is never a W07
+ * ExecutionTargetReference, PolicyToken, OwnerDecision, approval, retry permission, or proof that a
+ * side effect may run. W15-F must consume W07-authorized target semantics and revalidate all current
+ * execution/session/capability/permission preconditions before any native action.
  */
-fun interface ExecutionTargetAuthorizationPort {
-    fun validate(command: NativeCapabilityCommand): ExecutionTargetAuthorizationDecision
-}
-
-enum class ExecutionTargetAuthorizationDecision {
-    AUTHORIZED_DEVICE_TARGET,
-    NOT_AUTHORIZED,
-    WRONG_TARGET,
-    STALE_TARGET,
-    AMBIGUOUS_TARGET,
-}
-
-fun interface NativeCapabilityHandler {
-    fun dispatch(command: NativeCapabilityCommand): NativeHandlerResult
-}
-
-sealed interface NativeHandlerResult {
-    data class Success(val output: Map<String, String> = emptyMap()) : NativeHandlerResult
-
-    data class Failure(val code: String) : NativeHandlerResult {
-        init {
-            require(code.isNotBlank()) { "handler failure code must not be blank" }
-        }
-    }
-}
-
-enum class NativeDispatchRejection {
-    UNKNOWN_CAPABILITY,
-    UNSUPPORTED_API,
-    UNSUPPORTED_FEATURE,
-    PRECONDITION_REQUIRED,
-    STALE_RUNTIME_STATE,
-    TARGET_NOT_AUTHORIZED,
-    TARGET_WRONG_KIND,
-    TARGET_STALE,
-    TARGET_AMBIGUOUS,
-    HANDLER_REJECTED,
-}
-
-sealed interface NativeDispatchResult {
-    data class Dispatched(
-        val requestId: String,
-        val capabilityId: String,
-        val output: Map<String, String>,
-    ) : NativeDispatchResult
+sealed interface NativeCapabilityResolution {
+    data class Ready(
+        val binding: NativeCapabilityBinding,
+        val observation: NativeCapabilityObservation,
+    ) : NativeCapabilityResolution
 
     data class Rejected(
-        val requestId: String,
-        val capabilityId: String,
-        val reason: NativeDispatchRejection,
-        val handlerCode: String? = null,
-    ) : NativeDispatchResult
+        val observation: NativeCapabilityObservation,
+    ) : NativeCapabilityResolution
 }
