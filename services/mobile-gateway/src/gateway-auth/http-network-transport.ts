@@ -9,6 +9,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 const DEFAULT_HEADERS_TIMEOUT_MS = 5_000;
 const DEFAULT_KEEP_ALIVE_TIMEOUT_MS = 5_000;
 const DEFAULT_MAX_REQUESTS_PER_SOCKET = 128;
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 
 const OPEN_KEYS = new Set([
   'protocolVersion',
@@ -124,8 +125,8 @@ function positiveInteger(value: number, name: string, maximum = Number.MAX_SAFE_
 
 function resolveConfig(config: GatewayHttpNetworkTransportConfig): ResolvedConfig {
   const host = config.host ?? '127.0.0.1';
-  if (host.length === 0 || host.length > 255 || /\s/u.test(host)) {
-    throw new Error('Gateway HTTP transport host is invalid.');
+  if (!LOOPBACK_HOSTS.has(host)) {
+    throw new Error('Gateway HTTP transport must bind to an explicit loopback host.');
   }
   const requestTimeoutMs = positiveInteger(
     config.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
@@ -195,12 +196,19 @@ function normalizedContentType(headers: IncomingRequestLike['headers']): string 
 async function readJsonBody(
   request: IncomingRequestLike,
   maxBodyBytes: number,
-): Promise<{ readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly tooLarge: boolean }> {
+): Promise<
+  | { readonly ok: true; readonly value: unknown }
+  | { readonly ok: false; readonly tooLarge: boolean }
+> {
   return new Promise((resolve) => {
     let settled = false;
     let bytes = 0;
     let body = '';
-    const finish = (value: { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly tooLarge: boolean }): void => {
+    const finish = (
+      value:
+        | { readonly ok: true; readonly value: unknown }
+        | { readonly ok: false; readonly tooLarge: boolean },
+    ): void => {
       if (settled) return;
       settled = true;
       resolve(value);
@@ -272,12 +280,12 @@ export class GatewayHttpNetworkTransport {
         resolve();
       });
     });
+    this.#started = true;
     const address = this.#server.address();
     if (address === null || typeof address === 'string') {
       await this.stop();
       throw new Error('Gateway HTTP transport did not expose a TCP address.');
     }
-    this.#started = true;
     return {
       protocol: 'http',
       host: address.address,
@@ -310,7 +318,12 @@ export class GatewayHttpNetworkTransport {
       path === '/v1/gateway/sessions/close';
 
     if (!knownRoute) {
-      transportError(response, 404, 'ROUTE_NOT_FOUND', 'Gateway transport route is not allowlisted.');
+      transportError(
+        response,
+        404,
+        'ROUTE_NOT_FOUND',
+        'Gateway transport route is not allowlisted.',
+      );
       return;
     }
     if (method !== 'POST') {
@@ -347,7 +360,12 @@ export class GatewayHttpNetworkTransport {
 
     if (path === '/v1/gateway/sessions/open') {
       if (!hasOnlyKeys(parsed.value, OPEN_KEYS)) {
-        transportError(response, 400, 'BODY_MALFORMED', 'Gateway open-session body shape is invalid.');
+        transportError(
+          response,
+          400,
+          'BODY_MALFORMED',
+          'Gateway open-session body shape is invalid.',
+        );
         return;
       }
       const result = this.#manager.openSession({ ...parsed.value, nowMs: this.#config.clock() });
@@ -383,7 +401,12 @@ export class GatewayHttpNetworkTransport {
 
     if (path === '/v1/gateway/requests/begin') {
       if (!hasOnlyKeys(parsed.value, BEGIN_KEYS)) {
-        transportError(response, 400, 'BODY_MALFORMED', 'Gateway begin-request body shape is invalid.');
+        transportError(
+          response,
+          400,
+          'BODY_MALFORMED',
+          'Gateway begin-request body shape is invalid.',
+        );
         return;
       }
       protocolResult(
@@ -401,7 +424,12 @@ export class GatewayHttpNetworkTransport {
 
     if (path === '/v1/gateway/requests/cancel' || path === '/v1/gateway/requests/complete') {
       if (!hasOnlyKeys(parsed.value, REQUEST_KEYS)) {
-        transportError(response, 400, 'BODY_MALFORMED', 'Gateway request-operation body shape is invalid.');
+        transportError(
+          response,
+          400,
+          'BODY_MALFORMED',
+          'Gateway request-operation body shape is invalid.',
+        );
         return;
       }
       const input = {
