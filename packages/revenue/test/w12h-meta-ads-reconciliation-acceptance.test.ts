@@ -123,9 +123,9 @@ function domainPlan(operation: MetaAdsOperation = 'CREATE_PAUSED'): MetaAdsCapab
       authorizesExecution: false,
     },
     ...(operation === 'ACTIVATE' ||
-    operation === 'SET_BUDGET' ||
-    operation === 'SET_BID' ||
-    operation === 'WIDEN_TARGETING'
+      operation === 'SET_BUDGET' ||
+      operation === 'SET_BID' ||
+      operation === 'WIDEN_TARGETING'
       ? {
           financialScope: {
             currency: 'BRL',
