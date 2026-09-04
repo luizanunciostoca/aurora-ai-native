@@ -12,6 +12,7 @@ import type {
 } from '@aurora/contracts/ids';
 
 import type { DeviceId } from '../../device/types.js';
+import { DeviceSessionTrustManager } from '../../device-session/session-trust.js';
 import type {
   DeviceSessionTrustResult,
   DeviceSessionTrustSnapshot,
@@ -29,8 +30,6 @@ import type {
   DeviceIngressAuthenticationRequest,
   DeviceIngressAuthenticationResult,
   DeviceReceiptIngressConfig,
-  DeviceSessionCurrentTrustRequest,
-  DeviceSessionCurrentTrustResult,
   DeviceSessionTrustPort,
   W03ReceiptIngressCompletionRequest,
   W03ReceiptIngressCompletionResult,
@@ -51,6 +50,11 @@ const EXECUTION = 'exe_01ARZ3NDEKTSV4RRFFQ69G5FAV' as ExecutionId;
 const RECEIPT = 'rcp_01ARZ3NDEKTSV4RRFFQ69G5FAV' as ReceiptId;
 const EVIDENCE = 'evd_01ARZ3NDEKTSV4RRFFQ69G5FAV' as EvidenceId;
 const DEVICE = 'device-1' as DeviceId;
+
+const REAL_TENANT = 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAV' as TenantId;
+const REAL_ACTOR = 'idn_01ARZ3NDEKTSV4RRFFQ69G5FAV' as IdentityId;
+const REAL_CORRELATION = 'cor_w14eg_current_read' as CorrelationId;
+const REAL_DEVICE = 'dvc_01ARZ3NDEKTSV4RRFFQ69G5FAV' as DeviceId;
 
 function trust(
   state: 'ACTIVE' | 'REVOKED' = 'ACTIVE',
@@ -95,8 +99,68 @@ function trust(
   };
 }
 
+function openRealSession(
+  manager: DeviceSessionTrustManager,
+  overrides: { authExpiresAtMs?: number; attestationExpiresAtMs?: number } = {},
+): DeviceSessionTrustSnapshot {
+  const opened = manager.openSession({
+    deviceSessionId: 'device-session-current-read',
+    gatewaySession: {
+      protocolVersion: '1.0',
+      sessionId: 'gateway-current-read',
+      connectionId: 'connection-current-read',
+      generation: 1,
+      state: 'OPEN',
+      tenantId: REAL_TENANT,
+      actorKind: 'HUMAN',
+      actorIdentityId: REAL_ACTOR,
+      correlationId: REAL_CORRELATION,
+      authIssuedAtMs: 900,
+      authExpiresAtMs: overrides.authExpiresAtMs ?? 5_000,
+      openedAtMs: 900,
+      outstandingRequests: 0,
+      authorizesExecution: false,
+    },
+    deviceRecord: {
+      kind: 'DeviceRegistrationRecord',
+      schemaVersion: '1.0.0',
+      ref: {
+        kind: 'AURORA_DEVICE',
+        deviceId: REAL_DEVICE,
+        tenantId: REAL_TENANT,
+        registrationVersion: 1,
+      },
+      boundIdentityId: REAL_ACTOR,
+      state: 'ACTIVE',
+      registeredAt: '2026-09-04T00:00:00Z',
+      updatedAt: '2026-09-04T00:00:00Z',
+      provenance: {
+        source: 'W14_DEVICE_REGISTRATION',
+        reference: 'registration-current-read',
+        observedAt: '2026-09-04T00:00:00Z',
+      },
+      authoritySemantics: 'DEVICE_REGISTRATION_ONLY_NO_ACTION_AUTHORITY',
+      authorizesExecution: false,
+      canGrantPermission: false,
+    },
+    attestation: {
+      kind: 'DEVICE_ATTESTATION_REFERENCE',
+      reference: 'attestation-current-read',
+      provider: 'test',
+      version: '1',
+      state: 'VERIFIED',
+      observedAtMs: 900,
+      expiresAtMs: overrides.attestationExpiresAtMs ?? 4_000,
+    },
+    nowMs: 1_000,
+  });
+  assert.equal(opened.ok, true);
+  if (!opened.ok) throw new Error(opened.error.message);
+  return opened.snapshot;
+}
+
 class SessionTrustPort implements DeviceSessionTrustPort {
-  verifyCalls = 0;
+  getCalls = 0;
   revokeCalls = 0;
   current: DeviceSessionTrustSnapshot;
 
@@ -104,13 +168,36 @@ class SessionTrustPort implements DeviceSessionTrustPort {
     this.current = initial;
   }
 
-  verifyCurrent(request: DeviceSessionCurrentTrustRequest): DeviceSessionCurrentTrustResult {
-    this.verifyCalls += 1;
-    if (request.deviceSession.deviceSessionId !== this.current.deviceSessionId) {
+  getSession(
+    deviceSessionId: string,
+    connectionId: string,
+    nowMs: number,
+  ): DeviceSessionTrustResult {
+    this.getCalls += 1;
+    if (deviceSessionId !== this.current.deviceSessionId) {
       return {
         ok: false,
-        code: 'NOT_FOUND',
-        retryable: false,
+        error: { code: 'SESSION_NOT_FOUND', message: 'Session not found.', retryable: false },
+        authorizesExecution: false,
+        canGrantPermission: false,
+      };
+    }
+    if (connectionId !== this.current.connectionId) {
+      return {
+        ok: false,
+        error: { code: 'CONNECTION_MISMATCH', message: 'Connection mismatch.', retryable: false },
+        authorizesExecution: false,
+        canGrantPermission: false,
+      };
+    }
+    if (
+      this.current.state === 'ACTIVE' &&
+      (nowMs >= this.current.gatewayAuthExpiresAtMs ||
+        nowMs >= this.current.attestation.expiresAtMs)
+    ) {
+      return {
+        ok: false,
+        error: { code: 'SESSION_EXPIRED', message: 'Current trust is stale.', retryable: false },
         authorizesExecution: false,
         canGrantPermission: false,
       };
@@ -118,7 +205,6 @@ class SessionTrustPort implements DeviceSessionTrustPort {
     return {
       ok: true,
       snapshot: this.current,
-      current: true,
       authorizesExecution: false,
       canGrantPermission: false,
     };
@@ -324,6 +410,142 @@ function ingressInput(session = trust()) {
   };
 }
 
+test('W14-E current read returns active trust, enforces binding/freshness and preserves revoked evidence', () => {
+  const manager = new DeviceSessionTrustManager();
+  const active = openRealSession(manager);
+
+  const current = manager.getSession(active.deviceSessionId, active.connectionId, 1_100);
+  assert.equal(current.ok, true);
+  if (current.ok) {
+    assert.equal(current.snapshot.state, 'ACTIVE');
+    assert.equal(current.snapshot.authorizesExecution, false);
+    assert.equal(current.snapshot.canGrantPermission, false);
+  }
+
+  const wrongConnection = manager.getSession(active.deviceSessionId, 'connection-forged', 1_100);
+  assert.equal(wrongConnection.ok, false);
+  if (!wrongConnection.ok) assert.equal(wrongConnection.error.code, 'CONNECTION_MISMATCH');
+
+  const retrograde = manager.getSession(active.deviceSessionId, active.connectionId, 999);
+  assert.equal(retrograde.ok, false);
+  if (!retrograde.ok) assert.equal(retrograde.error.code, 'MALFORMED_REQUEST');
+
+  const attestationExpired = manager.getSession(active.deviceSessionId, active.connectionId, 4_000);
+  assert.equal(attestationExpired.ok, false);
+  if (!attestationExpired.ok) assert.equal(attestationExpired.error.code, 'ATTESTATION_EXPIRED');
+
+  const authExpired = manager.getSession(active.deviceSessionId, active.connectionId, 5_000);
+  assert.equal(authExpired.ok, false);
+  if (!authExpired.ok) assert.equal(authExpired.error.code, 'GATEWAY_AUTH_EXPIRED');
+
+  const revoked = manager.revokeSession({
+    deviceSessionId: active.deviceSessionId,
+    connectionId: active.connectionId,
+    revokedAtMs: 1_500,
+    reasonReference: 'kill-current-read',
+  });
+  assert.equal(revoked.ok, true);
+
+  const revocationEvidence = manager.getSession(
+    active.deviceSessionId,
+    active.connectionId,
+    50_000,
+  );
+  assert.equal(revocationEvidence.ok, true);
+  if (revocationEvidence.ok) {
+    assert.equal(revocationEvidence.snapshot.state, 'REVOKED');
+    assert.equal(revocationEvidence.snapshot.revokedAtMs, 1_500);
+    assert.equal(revocationEvidence.snapshot.executionPreconditionSatisfied, false);
+    assert.equal(revocationEvidence.snapshot.authorizesExecution, false);
+  }
+
+  const bounded = new DeviceSessionTrustManager({ maxSessionAgeMs: 100 });
+  const boundedActive = openRealSession(bounded, {
+    authExpiresAtMs: 10_000,
+    attestationExpiresAtMs: 10_000,
+  });
+  const sessionExpired = bounded.getSession(
+    boundedActive.deviceSessionId,
+    boundedActive.connectionId,
+    1_101,
+  );
+  assert.equal(sessionExpired.ok, false);
+  if (!sessionExpired.ok) assert.equal(sessionExpired.error.code, 'SESSION_EXPIRED');
+});
+
+test('W14-G consumes the real W14-E current read and rejects a stale pre-revocation snapshot', () => {
+  const sessionTrust = new DeviceSessionTrustManager();
+  const active = openRealSession(sessionTrust);
+  const cancellation = new CancellationPort();
+  const authentication = new AuthenticationPort();
+  const durableIngress = new DurableIngressPort();
+  const w07Ingress = new W07IngressPort();
+  const manager = new DeviceReceiptIngressManager({
+    sessionTrust,
+    cancellation,
+    authentication,
+    durableIngress,
+    w07Ingress,
+  });
+
+  const first = manager.ingest({
+    receiptId: RECEIPT,
+    evidenceId: EVIDENCE,
+    tenantId: active.tenantId,
+    correlationId: active.correlationId,
+    commandId: COMMAND,
+    executionId: EXECUTION,
+    deviceRef: active.deviceRef,
+    deviceSessionId: active.deviceSessionId,
+    gatewaySessionId: active.gatewaySessionId,
+    connectionId: active.connectionId,
+    gatewayGeneration: active.gatewayGeneration,
+    deliveryReference: 'w14f:real-current-read',
+    reportedState: 'COMPLETED',
+    sourceReference: 'device-receipt-real-current',
+    proofReference: 'device-proof-real-current',
+    integrityDigest: 'sha256:realcurrentread',
+    capturedAtMs: 1_200,
+    receivedAtMs: 1_300,
+    deviceSession: active,
+  });
+  assert.equal(first.ok, true);
+  if (first.ok) assert.equal(first.value.classification, 'CURRENT_SESSION');
+  assert.equal(w07Ingress.observations.length, 1);
+
+  const revoked = sessionTrust.revokeSession({
+    deviceSessionId: active.deviceSessionId,
+    connectionId: active.connectionId,
+    revokedAtMs: 1_500,
+    reasonReference: 'kill-real-current-read',
+  });
+  assert.equal(revoked.ok, true);
+
+  const staleReplay = manager.ingest({
+    receiptId: 'rcp_01ARZ3NDEKTSV4RRFFQ69G5FAY' as ReceiptId,
+    tenantId: active.tenantId,
+    correlationId: active.correlationId,
+    commandId: COMMAND,
+    executionId: EXECUTION,
+    deviceRef: active.deviceRef,
+    deviceSessionId: active.deviceSessionId,
+    gatewaySessionId: active.gatewaySessionId,
+    connectionId: active.connectionId,
+    gatewayGeneration: active.gatewayGeneration,
+    deliveryReference: 'w14f:stale-current-read',
+    reportedState: 'COMPLETED',
+    sourceReference: 'device-receipt-stale-current',
+    proofReference: 'device-proof-stale-current',
+    integrityDigest: 'sha256:stalecurrentread',
+    capturedAtMs: 1_600,
+    receivedAtMs: 1_700,
+    deviceSession: active,
+  });
+  assert.equal(staleReplay.ok, false);
+  if (!staleReplay.ok) assert.equal(staleReplay.error.code, 'SESSION_NOT_TRUSTED');
+  assert.equal(w07Ingress.observations.length, 1);
+});
+
 test('revoke and kill is monotonic evidence-safe orchestration, not execution proof', () => {
   const { manager, sessionTrust, cancellation } = createHarness();
   const result = manager.revokeAndKill({
@@ -336,7 +558,7 @@ test('revoke and kill is monotonic evidence-safe orchestration, not execution pr
   });
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal(sessionTrust.verifyCalls, 1);
+  assert.equal(sessionTrust.getCalls, 1);
   assert.equal(sessionTrust.revokeCalls, 1);
   assert.equal(cancellation.cancellationCalls, 1);
   assert.equal(result.value.deviceSession.state, 'REVOKED');

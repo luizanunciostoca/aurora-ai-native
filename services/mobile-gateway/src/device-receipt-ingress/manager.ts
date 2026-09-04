@@ -258,20 +258,20 @@ export class DeviceReceiptIngressManager {
     );
     if (trustBlock) return trustBlock;
 
-    const current = this.#dependencies.sessionTrust.verifyCurrent({
-      deviceSession: candidate.deviceSession,
-      nowMs: candidate.revokedAtMs,
-    });
+    const current = this.#dependencies.sessionTrust.getSession(
+      candidate.deviceSession.deviceSessionId,
+      candidate.deviceSession.connectionId,
+      candidate.revokedAtMs,
+    );
     if (!current.ok) {
       return failure(
         'SESSION_NOT_TRUSTED',
-        'Canonical W14-E current session trust could not be verified.',
-        current.retryable,
-        current.code,
+        'Canonical W14-E current session trust could not be read.',
+        current.error.retryable,
+        current.error.code,
       );
     }
     if (
-      current.current !== true ||
       current.authorizesExecution !== false ||
       current.canGrantPermission !== false ||
       !isTrustSnapshotShape(current.snapshot) ||
@@ -376,20 +376,20 @@ export class DeviceReceiptIngressManager {
     );
     if (presentedTrustBlock) return presentedTrustBlock;
 
-    const current = this.#dependencies.sessionTrust.verifyCurrent({
-      deviceSession: presentedTrust,
-      nowMs: candidate.receivedAtMs,
-    });
+    const current = this.#dependencies.sessionTrust.getSession(
+      presentedTrust.deviceSessionId,
+      presentedTrust.connectionId,
+      candidate.receivedAtMs,
+    );
     if (!current.ok) {
       return failure(
         'SESSION_NOT_TRUSTED',
-        'Canonical W14-E current session trust could not be verified.',
-        current.retryable,
-        current.code,
+        'Canonical W14-E current session trust could not be read.',
+        current.error.retryable,
+        current.error.code,
       );
     }
     if (
-      current.current !== true ||
       current.authorizesExecution !== false ||
       current.canGrantPermission !== false ||
       !isTrustSnapshotShape(current.snapshot) ||
