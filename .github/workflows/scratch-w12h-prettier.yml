@@ -1,0 +1,28 @@
+name: Scratch W12-H Prettier
+
+on:
+  push:
+    branches:
+      - scratch/w12h-prettier
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Format exact W12-H file
+        run: npx --no-install prettier --write packages/revenue/test/w12h-meta-ads-reconciliation-acceptance.test.ts
+      - name: Emit formatted content
+        run: |
+          echo W12H_FORMATTED_BASE64_BEGIN
+          base64 -w0 packages/revenue/test/w12h-meta-ads-reconciliation-acceptance.test.ts
+          echo
+          echo W12H_FORMATTED_BASE64_END
