@@ -37,7 +37,33 @@ export interface DeviceReceiptIngressConfig {
   readonly maxIntegrityDigestLength: number;
 }
 
-export interface DeviceSessionRevocationPort {
+export interface DeviceSessionCurrentTrustRequest {
+  readonly deviceSession: DeviceSessionTrustSnapshot;
+  readonly nowMs: number;
+}
+
+export type DeviceSessionCurrentTrustResult =
+  | Readonly<{
+      ok: true;
+      snapshot: DeviceSessionTrustSnapshot;
+      current: true;
+      authorizesExecution: false;
+      canGrantPermission: false;
+    }>
+  | Readonly<{
+      ok: false;
+      code: 'NOT_CURRENT' | 'NOT_FOUND' | 'BINDING_MISMATCH' | 'UNAVAILABLE' | 'MALFORMED';
+      retryable: boolean;
+      authorizesExecution: false;
+      canGrantPermission: false;
+    }>;
+
+/**
+ * Structural compatibility port over W14-E. W14-G consumes current trust and revocation truth;
+ * it does not own or synthesize device-session trust state.
+ */
+export interface DeviceSessionTrustPort {
+  verifyCurrent(request: DeviceSessionCurrentTrustRequest): DeviceSessionCurrentTrustResult;
   revokeSession(input: RevokeDeviceSessionTrustInput): DeviceSessionTrustResult;
 }
 
@@ -88,10 +114,31 @@ export interface W03ReceiptIngressReservationRequest {
   readonly nowMs: number;
 }
 
+export type W03ReceiptIngressStatus = 'inflight' | 'completed';
+
 export type W03ReceiptIngressReservationResult =
   | Readonly<{
       ok: true;
       disposition: 'RESERVED' | 'ALREADY_RESERVED';
+      status: W03ReceiptIngressStatus;
+      durableReference: string;
+      authorizesExecution: false;
+    }>
+  | Readonly<{
+      ok: false;
+      code: 'CONFLICT' | 'UNAVAILABLE' | 'MALFORMED';
+      retryable: boolean;
+      authorizesExecution: false;
+    }>;
+
+export interface W03ReceiptIngressCompletionRequest extends W03ReceiptIngressReservationRequest {
+  readonly durableReference: string;
+}
+
+export type W03ReceiptIngressCompletionResult =
+  | Readonly<{
+      ok: true;
+      status: 'completed';
       durableReference: string;
       authorizesExecution: false;
     }>
@@ -105,6 +152,7 @@ export type W03ReceiptIngressReservationResult =
 /** Compatibility port over W03 durable idempotency/replay ownership. W14-G owns no ledger. */
 export interface W03ReceiptIngressReservationPort {
   reserve(request: W03ReceiptIngressReservationRequest): W03ReceiptIngressReservationResult;
+  complete(request: W03ReceiptIngressCompletionRequest): W03ReceiptIngressCompletionResult;
 }
 
 export interface W07DeviceReceiptEvidenceObservation {
@@ -257,7 +305,7 @@ export type DeviceReceiptIngressResult<T> =
     }>;
 
 export interface DeviceReceiptIngressDependencies {
-  readonly sessionRevocation: DeviceSessionRevocationPort;
+  readonly sessionTrust: DeviceSessionTrustPort;
   readonly cancellation: ProgressCancellationPort;
   readonly authentication: DeviceIngressAuthenticationPort;
   readonly durableIngress: W03ReceiptIngressReservationPort;

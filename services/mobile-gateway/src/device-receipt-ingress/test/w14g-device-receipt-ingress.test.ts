@@ -28,10 +28,16 @@ import type {
   DeviceIngressAuthenticationPort,
   DeviceIngressAuthenticationRequest,
   DeviceIngressAuthenticationResult,
-  DeviceSessionRevocationPort,
+  DeviceReceiptIngressConfig,
+  DeviceSessionCurrentTrustRequest,
+  DeviceSessionCurrentTrustResult,
+  DeviceSessionTrustPort,
+  W03ReceiptIngressCompletionRequest,
+  W03ReceiptIngressCompletionResult,
   W03ReceiptIngressReservationPort,
   W03ReceiptIngressReservationRequest,
   W03ReceiptIngressReservationResult,
+  W03ReceiptIngressStatus,
   W07DeviceReceiptEvidenceIngressPort,
   W07DeviceReceiptEvidenceIngressResult,
   W07DeviceReceiptEvidenceObservation,
@@ -89,12 +95,52 @@ function trust(
   };
 }
 
-class RevocationPort implements DeviceSessionRevocationPort {
-  calls = 0;
+class SessionTrustPort implements DeviceSessionTrustPort {
+  verifyCalls = 0;
+  revokeCalls = 0;
+  current: DeviceSessionTrustSnapshot;
+
+  constructor(initial: DeviceSessionTrustSnapshot) {
+    this.current = initial;
+  }
+
+  verifyCurrent(request: DeviceSessionCurrentTrustRequest): DeviceSessionCurrentTrustResult {
+    this.verifyCalls += 1;
+    if (request.deviceSession.deviceSessionId !== this.current.deviceSessionId) {
+      return {
+        ok: false,
+        code: 'NOT_FOUND',
+        retryable: false,
+        authorizesExecution: false,
+        canGrantPermission: false,
+      };
+    }
+    return {
+      ok: true,
+      snapshot: this.current,
+      current: true,
+      authorizesExecution: false,
+      canGrantPermission: false,
+    };
+  }
 
   revokeSession(input: RevokeDeviceSessionTrustInput): DeviceSessionTrustResult {
-    this.calls += 1;
-    const snapshot = trust('REVOKED', input.connectionId, 2);
+    this.revokeCalls += 1;
+    const snapshot: DeviceSessionTrustSnapshot = {
+      ...trust('REVOKED', input.connectionId, this.current.gatewayGeneration),
+      deviceSessionId: this.current.deviceSessionId,
+      gatewaySessionId: this.current.gatewaySessionId,
+      tenantId: this.current.tenantId,
+      actorIdentityId: this.current.actorIdentityId,
+      correlationId: this.current.correlationId,
+      deviceRef: this.current.deviceRef,
+      attestation: this.current.attestation,
+      gatewayAuthExpiresAtMs: this.current.gatewayAuthExpiresAtMs,
+      revokedAtMs: input.revokedAtMs,
+      lastEvaluatedAtMs: input.revokedAtMs,
+      revocationReasonReference: input.reasonReference,
+    };
+    this.current = snapshot;
     return { ok: true, snapshot, authorizesExecution: false, canGrantPermission: false };
   }
 }
@@ -164,17 +210,41 @@ class AuthenticationPort implements DeviceIngressAuthenticationPort {
 
 class DurableIngressPort implements W03ReceiptIngressReservationPort {
   readonly fingerprints = new Map<string, string>();
+  readonly statuses = new Map<string, W03ReceiptIngressStatus>();
+  completionCalls = 0;
 
   reserve(request: W03ReceiptIngressReservationRequest): W03ReceiptIngressReservationResult {
     const prior = this.fingerprints.get(request.receiptId);
     if (prior !== undefined && prior !== request.fingerprint) {
       return { ok: false, code: 'CONFLICT', retryable: false, authorizesExecution: false };
     }
-    this.fingerprints.set(request.receiptId, request.fingerprint);
+    if (prior === undefined) {
+      this.fingerprints.set(request.receiptId, request.fingerprint);
+      this.statuses.set(request.receiptId, 'inflight');
+    }
     return {
       ok: true,
       disposition: prior === undefined ? 'RESERVED' : 'ALREADY_RESERVED',
+      status: this.statuses.get(request.receiptId) ?? 'inflight',
       durableReference: `w03:${request.receiptId}`,
+      authorizesExecution: false,
+    };
+  }
+
+  complete(request: W03ReceiptIngressCompletionRequest): W03ReceiptIngressCompletionResult {
+    this.completionCalls += 1;
+    const prior = this.fingerprints.get(request.receiptId);
+    if (prior === undefined || prior !== request.fingerprint) {
+      return { ok: false, code: 'CONFLICT', retryable: false, authorizesExecution: false };
+    }
+    if (request.durableReference !== `w03:${request.receiptId}`) {
+      return { ok: false, code: 'CONFLICT', retryable: false, authorizesExecution: false };
+    }
+    this.statuses.set(request.receiptId, 'completed');
+    return {
+      ok: true,
+      status: 'completed',
+      durableReference: request.durableReference,
       authorizesExecution: false,
     };
   }
@@ -182,12 +252,23 @@ class DurableIngressPort implements W03ReceiptIngressReservationPort {
 
 class W07IngressPort implements W07DeviceReceiptEvidenceIngressPort {
   observations: W07DeviceReceiptEvidenceObservation[] = [];
+  failFirst = false;
 
   observe(observation: W07DeviceReceiptEvidenceObservation): W07DeviceReceiptEvidenceIngressResult {
     this.observations.push(observation);
+    if (this.failFirst && this.observations.length === 1) {
+      return {
+        ok: false,
+        code: 'UNAVAILABLE',
+        retryable: true,
+        authorizesExecution: false,
+        provesExecutionSuccess: false,
+        retryAuthorized: false,
+      };
+    }
     return {
       ok: true,
-      disposition: 'OBSERVED',
+      disposition: this.observations.length > 1 ? 'ALREADY_OBSERVED' : 'OBSERVED',
       receiptReference: `w07:${observation.receiptId}`,
       evidenceReference: 'w07:evidence-1',
       authorizesExecution: false,
@@ -197,20 +278,26 @@ class W07IngressPort implements W07DeviceReceiptEvidenceIngressPort {
   }
 }
 
-function createHarness() {
-  const revocation = new RevocationPort();
+function createHarness(
+  initialTrust: DeviceSessionTrustSnapshot = trust(),
+  config: Partial<DeviceReceiptIngressConfig> = {},
+) {
+  const sessionTrust = new SessionTrustPort(initialTrust);
   const cancellation = new CancellationPort();
   const authentication = new AuthenticationPort();
   const durableIngress = new DurableIngressPort();
   const w07Ingress = new W07IngressPort();
-  const manager = new DeviceReceiptIngressManager({
-    sessionRevocation: revocation,
-    cancellation,
-    authentication,
-    durableIngress,
-    w07Ingress,
-  });
-  return { manager, revocation, cancellation, authentication, durableIngress, w07Ingress };
+  const manager = new DeviceReceiptIngressManager(
+    {
+      sessionTrust,
+      cancellation,
+      authentication,
+      durableIngress,
+      w07Ingress,
+    },
+    config,
+  );
+  return { manager, sessionTrust, cancellation, authentication, durableIngress, w07Ingress };
 }
 
 function ingressInput(session = trust()) {
@@ -238,7 +325,7 @@ function ingressInput(session = trust()) {
 }
 
 test('revoke and kill is monotonic evidence-safe orchestration, not execution proof', () => {
-  const { manager, revocation, cancellation } = createHarness();
+  const { manager, sessionTrust, cancellation } = createHarness();
   const result = manager.revokeAndKill({
     deviceSession: trust('ACTIVE', 'connection-1', 2),
     tenantId: TENANT,
@@ -249,7 +336,8 @@ test('revoke and kill is monotonic evidence-safe orchestration, not execution pr
   });
   assert.equal(result.ok, true);
   if (!result.ok) return;
-  assert.equal(revocation.calls, 1);
+  assert.equal(sessionTrust.verifyCalls, 1);
+  assert.equal(sessionTrust.revokeCalls, 1);
   assert.equal(cancellation.cancellationCalls, 1);
   assert.equal(result.value.deviceSession.state, 'REVOKED');
   assert.equal(result.value.cancellationDisposition, 'CANCEL_REQUESTED');
@@ -261,7 +349,7 @@ test('revoke and kill is monotonic evidence-safe orchestration, not execution pr
 });
 
 test('current authenticated receipt is forwarded as evidence input without minting outcome authority', () => {
-  const { manager, w07Ingress } = createHarness();
+  const { manager, durableIngress, w07Ingress } = createHarness();
   const result = manager.ingest(ingressInput());
   assert.equal(result.ok, true);
   if (!result.ok) return;
@@ -269,6 +357,7 @@ test('current authenticated receipt is forwarded as evidence input without minti
   assert.equal(result.value.provesExecutionSuccess, false);
   assert.equal(result.value.retryAuthorized, false);
   assert.equal(w07Ingress.observations.length, 1);
+  assert.equal(durableIngress.statuses.get(RECEIPT), 'completed');
   assert.equal(
     w07Ingress.observations[0]?.authoritySemantics,
     'EVIDENCE_INPUT_ONLY_W07_OWNS_OUTCOME_AND_RETRY',
@@ -293,8 +382,8 @@ test('wrong tenant or device fails before authentication/evidence forwarding', (
 });
 
 test('late receipt after reconnect is accepted only as reconciliable evidence', () => {
-  const { manager, w07Ingress } = createHarness();
   const current = trust('ACTIVE', 'connection-2', 3);
+  const { manager, w07Ingress } = createHarness(current);
   const result = manager.ingest({
     ...ingressInput(current),
     connectionId: 'connection-1',
@@ -308,8 +397,8 @@ test('late receipt after reconnect is accepted only as reconciliable evidence', 
 });
 
 test('late receipt after revoke remains evidence-only and is bounded by the post-revoke window', () => {
-  const { manager } = createHarness();
   const revoked = trust('REVOKED', 'connection-1', 2);
+  const { manager } = createHarness(revoked);
   const accepted = manager.ingest({
     ...ingressInput(revoked),
     capturedAtMs: 1_550,
@@ -332,15 +421,17 @@ test('late receipt after revoke remains evidence-only and is bounded by the post
   if (!stale.ok) assert.equal(stale.error.code, 'RECEIPT_STALE');
 });
 
-test('durable duplicate is not re-forwarded to W07', () => {
-  const { manager, w07Ingress } = createHarness();
+test('durable duplicate is not re-forwarded to W07 after W03 completion', () => {
+  const { manager, durableIngress, w07Ingress } = createHarness();
   const first = manager.ingest(ingressInput());
   assert.equal(first.ok, true);
+  assert.equal(durableIngress.statuses.get(RECEIPT), 'completed');
   const duplicate = manager.ingest(ingressInput());
   assert.equal(duplicate.ok, true);
   if (!duplicate.ok) return;
   assert.equal(duplicate.value.classification, 'DUPLICATE');
   assert.equal(w07Ingress.observations.length, 1);
+  assert.equal(durableIngress.completionCalls, 1);
 });
 
 test('forged session proof fails closed and never reaches W03 or W07', () => {
@@ -350,5 +441,64 @@ test('forged session proof fails closed and never reaches W03 or W07', () => {
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.error.code, 'SESSION_PROOF_REJECTED');
   assert.equal(durableIngress.fingerprints.size, 0);
+  assert.equal(w07Ingress.observations.length, 0);
+});
+
+test('stale pre-revocation ACTIVE trust cannot be replayed after canonical revoke and kill', () => {
+  const staleActive = trust('ACTIVE', 'connection-1', 2);
+  const { manager, w07Ingress } = createHarness(staleActive);
+  const killed = manager.revokeAndKill({
+    deviceSession: staleActive,
+    tenantId: TENANT,
+    correlationId: CORRELATION,
+    commandId: COMMAND,
+    revokedAtMs: 1_500,
+    reasonReference: 'kill-1',
+  });
+  assert.equal(killed.ok, true);
+
+  const result = manager.ingest({
+    ...ingressInput(staleActive),
+    capturedAtMs: 1_600,
+    receivedAtMs: 1_700,
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, 'SESSION_NOT_TRUSTED');
+  assert.equal(w07Ingress.observations.length, 0);
+});
+
+test('W03 inflight reservation retries W07 after a transient observation failure', () => {
+  const { manager, durableIngress, w07Ingress } = createHarness();
+  w07Ingress.failFirst = true;
+
+  const first = manager.ingest(ingressInput());
+  assert.equal(first.ok, false);
+  if (!first.ok) assert.equal(first.error.code, 'W07_INGRESS_REJECTED');
+  assert.equal(durableIngress.statuses.get(RECEIPT), 'inflight');
+  assert.equal(durableIngress.completionCalls, 0);
+  assert.equal(w07Ingress.observations.length, 1);
+
+  const retry = manager.ingest(ingressInput());
+  assert.equal(retry.ok, true);
+  assert.equal(w07Ingress.observations.length, 2);
+  assert.equal(durableIngress.statuses.get(RECEIPT), 'completed');
+  assert.equal(durableIngress.completionCalls, 1);
+});
+
+test('post-revoke late window is bounded by ingress time as well as capture time', () => {
+  const revoked = trust('REVOKED', 'connection-1', 2);
+  const { manager, w07Ingress } = createHarness(revoked, {
+    maxLateAfterRevokeMs: 100,
+    maxReceiptAgeMs: 1_000,
+  });
+
+  const result = manager.ingest({
+    ...ingressInput(revoked),
+    receiptId: 'rcp_01ARZ3NDEKTSV4RRFFQ69G5FAX' as ReceiptId,
+    capturedAtMs: 1_550,
+    receivedAtMs: 1_601,
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.error.code, 'RECEIPT_STALE');
   assert.equal(w07Ingress.observations.length, 0);
 });

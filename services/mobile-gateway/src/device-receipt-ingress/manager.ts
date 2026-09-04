@@ -182,6 +182,30 @@ function trustBindingError<T>(
   return null;
 }
 
+function trustSnapshotMatchesCurrent(
+  presented: DeviceSessionTrustSnapshot,
+  current: DeviceSessionTrustSnapshot,
+): boolean {
+  return (
+    presented.deviceSessionId === current.deviceSessionId &&
+    presented.gatewaySessionId === current.gatewaySessionId &&
+    presented.connectionId === current.connectionId &&
+    presented.gatewayGeneration === current.gatewayGeneration &&
+    presented.tenantId === current.tenantId &&
+    presented.actorIdentityId === current.actorIdentityId &&
+    presented.correlationId === current.correlationId &&
+    deviceRefMatches(presented.deviceRef, current.deviceRef) &&
+    presented.state === current.state &&
+    presented.gatewayAuthExpiresAtMs === current.gatewayAuthExpiresAtMs &&
+    presented.revokedAtMs === current.revokedAtMs &&
+    presented.revocationReasonReference === current.revocationReasonReference &&
+    presented.attestation.reference === current.attestation.reference &&
+    presented.attestation.provider === current.attestation.provider &&
+    presented.attestation.version === current.attestation.version &&
+    presented.attestation.state === current.attestation.state
+  );
+}
+
 function fingerprint(input: DeviceReceiptIngressInput): string {
   return [
     input.tenantId,
@@ -234,14 +258,47 @@ export class DeviceReceiptIngressManager {
     );
     if (trustBlock) return trustBlock;
 
+    const current = this.#dependencies.sessionTrust.verifyCurrent({
+      deviceSession: candidate.deviceSession,
+      nowMs: candidate.revokedAtMs,
+    });
+    if (!current.ok) {
+      return failure(
+        'SESSION_NOT_TRUSTED',
+        'Canonical W14-E current session trust could not be verified.',
+        current.retryable,
+        current.code,
+      );
+    }
+    if (
+      current.current !== true ||
+      current.authorizesExecution !== false ||
+      current.canGrantPermission !== false ||
+      !isTrustSnapshotShape(current.snapshot) ||
+      !trustSnapshotMatchesCurrent(candidate.deviceSession, current.snapshot)
+    ) {
+      return failure(
+        'SESSION_NOT_TRUSTED',
+        'Supplied device-session trust is not the current W14-E trust snapshot.',
+      );
+    }
+
+    const currentTrustBlock = trustBindingError<RevokeAndKillDeviceSessionSuccess>(
+      current.snapshot,
+      candidate.tenantId,
+      candidate.correlationId,
+      candidate.revokedAtMs,
+    );
+    if (currentTrustBlock) return currentTrustBlock;
+
     const gateway = this.#dependencies.cancellation.getSession(
-      candidate.deviceSession.gatewaySessionId,
+      current.snapshot.gatewaySessionId,
       candidate.revokedAtMs,
     );
     if (
       !gateway.ok ||
-      gateway.value.gatewaySessionId !== candidate.deviceSession.gatewaySessionId ||
-      gateway.value.gatewayConnectionId !== candidate.deviceSession.connectionId ||
+      gateway.value.gatewaySessionId !== current.snapshot.gatewaySessionId ||
+      gateway.value.gatewayConnectionId !== current.snapshot.connectionId ||
       gateway.value.tenantId !== candidate.tenantId ||
       gateway.value.correlationId !== candidate.correlationId
     ) {
@@ -253,9 +310,9 @@ export class DeviceReceiptIngressManager {
       );
     }
 
-    const revoked = this.#dependencies.sessionRevocation.revokeSession({
-      deviceSessionId: candidate.deviceSession.deviceSessionId,
-      connectionId: candidate.deviceSession.connectionId,
+    const revoked = this.#dependencies.sessionTrust.revokeSession({
+      deviceSessionId: current.snapshot.deviceSessionId,
+      connectionId: current.snapshot.connectionId,
       revokedAtMs: candidate.revokedAtMs,
       reasonReference: candidate.reasonReference,
     });
@@ -281,8 +338,8 @@ export class DeviceReceiptIngressManager {
     const cancellation = this.#dependencies.cancellation.requestCancellation({
       tenantId: candidate.tenantId,
       correlationId: candidate.correlationId,
-      gatewaySessionId: candidate.deviceSession.gatewaySessionId,
-      gatewayConnectionId: candidate.deviceSession.connectionId,
+      gatewaySessionId: current.snapshot.gatewaySessionId,
+      gatewayConnectionId: current.snapshot.connectionId,
       commandId: candidate.commandId,
       nowMs: candidate.revokedAtMs,
     });
@@ -309,15 +366,49 @@ export class DeviceReceiptIngressManager {
     const parsed = this.#parseIngressInput(input);
     if (!parsed.ok) return parsed.result;
     const candidate = parsed.value;
-    const trust = candidate.deviceSession;
+    const presentedTrust = candidate.deviceSession;
 
-    const trustBlock = trustBindingError<DeviceReceiptIngressSuccess>(
+    const presentedTrustBlock = trustBindingError<DeviceReceiptIngressSuccess>(
+      presentedTrust,
+      candidate.tenantId,
+      candidate.correlationId,
+      candidate.receivedAtMs,
+    );
+    if (presentedTrustBlock) return presentedTrustBlock;
+
+    const current = this.#dependencies.sessionTrust.verifyCurrent({
+      deviceSession: presentedTrust,
+      nowMs: candidate.receivedAtMs,
+    });
+    if (!current.ok) {
+      return failure(
+        'SESSION_NOT_TRUSTED',
+        'Canonical W14-E current session trust could not be verified.',
+        current.retryable,
+        current.code,
+      );
+    }
+    if (
+      current.current !== true ||
+      current.authorizesExecution !== false ||
+      current.canGrantPermission !== false ||
+      !isTrustSnapshotShape(current.snapshot) ||
+      !trustSnapshotMatchesCurrent(presentedTrust, current.snapshot)
+    ) {
+      return failure(
+        'SESSION_NOT_TRUSTED',
+        'Supplied device-session trust is not the current W14-E trust snapshot.',
+      );
+    }
+    const trust = current.snapshot;
+    const currentTrustBlock = trustBindingError<DeviceReceiptIngressSuccess>(
       trust,
       candidate.tenantId,
       candidate.correlationId,
       candidate.receivedAtMs,
     );
-    if (trustBlock) return trustBlock;
+    if (currentTrustBlock) return currentTrustBlock;
+
     if (!deviceRefMatches(candidate.deviceRef, trust.deviceRef)) {
       return failure('DEVICE_MISMATCH', 'Receipt device reference does not match session trust.');
     }
@@ -354,7 +445,8 @@ export class DeviceReceiptIngressManager {
     if (trust.state === 'REVOKED') {
       if (
         trust.revokedAtMs === undefined ||
-        candidate.capturedAtMs > trust.revokedAtMs + this.#config.maxLateAfterRevokeMs
+        candidate.capturedAtMs > trust.revokedAtMs + this.#config.maxLateAfterRevokeMs ||
+        candidate.receivedAtMs > trust.revokedAtMs + this.#config.maxLateAfterRevokeMs
       ) {
         return failure('RECEIPT_STALE', 'Receipt is outside the bounded post-revocation window.');
       }
@@ -400,12 +492,13 @@ export class DeviceReceiptIngressManager {
       );
     }
 
+    const receiptFingerprint = fingerprint(candidate);
     const reservation = this.#dependencies.durableIngress.reserve({
       tenantId: candidate.tenantId,
       receiptId: candidate.receiptId,
       commandId: candidate.commandId,
       executionId: candidate.executionId,
-      fingerprint: fingerprint(candidate),
+      fingerprint: receiptFingerprint,
       nowMs: candidate.receivedAtMs,
     });
     if (!reservation.ok) {
@@ -420,6 +513,8 @@ export class DeviceReceiptIngressManager {
     }
     if (
       reservation.authorizesExecution !== false ||
+      (reservation.status !== 'inflight' && reservation.status !== 'completed') ||
+      (reservation.disposition === 'RESERVED' && reservation.status !== 'inflight') ||
       !isSafeToken(reservation.durableReference, this.#config.maxReferenceLength)
     ) {
       return failure(
@@ -427,7 +522,7 @@ export class DeviceReceiptIngressManager {
         'W03 durable ingress reservation returned an invalid result.',
       );
     }
-    if (reservation.disposition === 'ALREADY_RESERVED') {
+    if (reservation.disposition === 'ALREADY_RESERVED' && reservation.status === 'completed') {
       return success({
         classification: 'DUPLICATE',
         durableReference: reservation.durableReference,
@@ -491,9 +586,40 @@ export class DeviceReceiptIngressManager {
       );
     }
 
+    const completed = this.#dependencies.durableIngress.complete({
+      tenantId: candidate.tenantId,
+      receiptId: candidate.receiptId,
+      commandId: candidate.commandId,
+      executionId: candidate.executionId,
+      fingerprint: receiptFingerprint,
+      durableReference: reservation.durableReference,
+      nowMs: candidate.receivedAtMs,
+    });
+    if (!completed.ok) {
+      return failure(
+        completed.code === 'CONFLICT'
+          ? 'DURABLE_IDEMPOTENCY_CONFLICT'
+          : 'DURABLE_IDEMPOTENCY_UNAVAILABLE',
+        'W03 durable ingress completion did not succeed after W07 observation.',
+        completed.retryable,
+        completed.code,
+      );
+    }
+    if (
+      completed.authorizesExecution !== false ||
+      completed.status !== 'completed' ||
+      completed.durableReference !== reservation.durableReference ||
+      !isSafeToken(completed.durableReference, this.#config.maxReferenceLength)
+    ) {
+      return failure(
+        'DURABLE_IDEMPOTENCY_UNAVAILABLE',
+        'W03 durable ingress completion returned an invalid result.',
+      );
+    }
+
     return success({
       classification,
-      durableReference: reservation.durableReference,
+      durableReference: completed.durableReference,
       receiptReference: observed.receiptReference,
       ...(observed.evidenceReference === undefined
         ? {}
