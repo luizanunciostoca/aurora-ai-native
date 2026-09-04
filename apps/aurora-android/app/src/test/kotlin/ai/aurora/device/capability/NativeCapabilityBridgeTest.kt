@@ -7,39 +7,24 @@ import org.junit.Test
 
 class NativeCapabilityBridgeTest {
     @Test
-    fun `discovery is independent from execution authorization`() {
-        val fixture = fixture()
-        var authorizationCalls = 0
+    fun `ready resolution is a non executable fresh binding projection`() {
+        val bridge = fixture()
 
-        val observation = fixture.bridge.discover(CAPABILITY_ID)
+        val result = bridge.resolve(CAPABILITY_ID)
 
-        assertTrue(observation.isAvailable)
-        assertEquals(0, authorizationCalls)
-
-        val result =
-            fixture.bridge.dispatch(command()) {
-                authorizationCalls += 1
-                ExecutionTargetAuthorizationDecision.AUTHORIZED_DEVICE_TARGET
-            }
-
-        assertTrue(result is NativeDispatchResult.Dispatched)
-        assertEquals(1, authorizationCalls)
-        assertEquals(1, fixture.handlerCalls())
+        assertTrue(result is NativeCapabilityResolution.Ready)
+        result as NativeCapabilityResolution.Ready
+        assertEquals(CAPABILITY_ID, result.binding.capabilityId)
+        assertTrue(result.observation.isAvailable)
+        assertEquals(NativeCapabilityAvailability.AVAILABLE, result.observation.availability)
     }
 
     @Test
-    fun `unknown capability fails closed without probing or dispatch`() {
+    fun `unknown capability fails closed without probing`() {
         var probeCalls = 0
-        var handlerCalls = 0
         val bridge =
             NativeCapabilityBridge(
-                registrations =
-                    listOf(
-                        NativeCapabilityRegistration(binding()) {
-                            handlerCalls += 1
-                            NativeHandlerResult.Success()
-                        },
-                    ),
+                bindings = listOf(binding()),
                 runtimeProbe = NativeRuntimeProbe {
                     probeCalls += 1
                     availableSnapshot()
@@ -48,41 +33,42 @@ class NativeCapabilityBridgeTest {
             )
 
         val observation = bridge.discover("aurora.test.unknown.v1")
-        val dispatch =
-            bridge.dispatch(command("aurora.test.unknown.v1")) {
-                ExecutionTargetAuthorizationDecision.AUTHORIZED_DEVICE_TARGET
-            }
+        val resolution = bridge.resolve("aurora.test.unknown.v1")
 
         assertEquals(NativeCapabilityAvailability.UNKNOWN_CAPABILITY, observation.availability)
-        assertEquals(NativeDispatchRejection.UNKNOWN_CAPABILITY, rejected(dispatch).reason)
+        assertEquals(
+            NativeCapabilityAvailability.UNKNOWN_CAPABILITY,
+            rejected(resolution).observation.availability,
+        )
         assertEquals(0, probeCalls)
-        assertEquals(0, handlerCalls)
     }
 
     @Test
-    fun `stale runtime state fails before target authorization`() {
-        var authorizationCalls = 0
-        val fixture =
-            fixture(
-                snapshot = availableSnapshot(observedAtMs = NOW_MS - MAX_AGE_MS),
-            )
+    fun `stale runtime state rejects resolution at exact expiry boundary`() {
+        val bridge = fixture(snapshot = availableSnapshot(observedAtMs = NOW_MS - MAX_AGE_MS))
 
-        val result =
-            fixture.bridge.dispatch(command()) {
-                authorizationCalls += 1
-                ExecutionTargetAuthorizationDecision.AUTHORIZED_DEVICE_TARGET
-            }
+        val result = bridge.resolve(CAPABILITY_ID)
 
-        assertEquals(NativeDispatchRejection.STALE_RUNTIME_STATE, rejected(result).reason)
-        assertEquals(0, authorizationCalls)
-        assertEquals(0, fixture.handlerCalls())
+        assertEquals(
+            NativeCapabilityAvailability.STALE_RUNTIME_STATE,
+            rejected(result).observation.availability,
+        )
+    }
+
+    @Test
+    fun `runtime state remains available immediately before expiry boundary`() {
+        val bridge = fixture(snapshot = availableSnapshot(observedAtMs = NOW_MS - MAX_AGE_MS + 1))
+
+        val result = bridge.resolve(CAPABILITY_ID)
+
+        assertTrue(result is NativeCapabilityResolution.Ready)
     }
 
     @Test
     fun `future runtime observation fails closed as stale`() {
-        val fixture = fixture(snapshot = availableSnapshot(observedAtMs = NOW_MS + 1))
+        val bridge = fixture(snapshot = availableSnapshot(observedAtMs = NOW_MS + 1))
 
-        val observation = fixture.bridge.discover(CAPABILITY_ID)
+        val observation = bridge.discover(CAPABILITY_ID)
 
         assertEquals(NativeCapabilityAvailability.STALE_RUNTIME_STATE, observation.availability)
         assertFalse(observation.isAvailable)
@@ -99,91 +85,81 @@ class NativeCapabilityBridgeTest {
 
         assertEquals(
             NativeCapabilityAvailability.UNSUPPORTED_API,
-            lowApi.bridge.discover(CAPABILITY_ID).availability,
+            lowApi.discover(CAPABILITY_ID).availability,
         )
-        val featureObservation = missingFeature.bridge.discover(CAPABILITY_ID)
+        val featureObservation = missingFeature.discover(CAPABILITY_ID)
         assertEquals(NativeCapabilityAvailability.UNSUPPORTED_FEATURE, featureObservation.availability)
         assertEquals(setOf(FEATURE_CAMERA), featureObservation.missingFeatures)
     }
 
     @Test
-    fun `missing runtime permission is only a precondition and never dispatches`() {
-        var authorizationCalls = 0
-        val fixture =
+    fun `missing runtime permission is only a precondition`() {
+        val bridge =
             fixture(
                 snapshot = availableSnapshot(grantedPermissions = emptySet()),
                 requiredPermissions = setOf(PERMISSION_CAMERA),
             )
 
-        val observation = fixture.bridge.discover(CAPABILITY_ID)
-        val result =
-            fixture.bridge.dispatch(command()) {
-                authorizationCalls += 1
-                ExecutionTargetAuthorizationDecision.AUTHORIZED_DEVICE_TARGET
-            }
+        val observation = bridge.discover(CAPABILITY_ID)
+        val resolution = bridge.resolve(CAPABILITY_ID)
 
         assertEquals(NativeCapabilityAvailability.PRECONDITION_REQUIRED, observation.availability)
         assertEquals(setOf(PERMISSION_CAMERA), observation.missingPermissions)
-        assertEquals(NativeDispatchRejection.PRECONDITION_REQUIRED, rejected(result).reason)
-        assertEquals(0, authorizationCalls)
-        assertEquals(0, fixture.handlerCalls())
+        assertEquals(
+            NativeCapabilityAvailability.PRECONDITION_REQUIRED,
+            rejected(resolution).observation.availability,
+        )
     }
 
     @Test
-    fun `device target denial cannot be bypassed by available capability`() {
-        val fixture = fixture()
-
-        val result =
-            fixture.bridge.dispatch(command()) {
-                ExecutionTargetAuthorizationDecision.NOT_AUTHORIZED
-            }
-
-        assertEquals(NativeDispatchRejection.TARGET_NOT_AUTHORIZED, rejected(result).reason)
-        assertEquals(0, fixture.handlerCalls())
-    }
-
-    @Test
-    fun `stale ambiguous and wrong target decisions are normalized without dispatch`() {
-        val decisions =
-            listOf(
-                ExecutionTargetAuthorizationDecision.STALE_TARGET to NativeDispatchRejection.TARGET_STALE,
-                ExecutionTargetAuthorizationDecision.AMBIGUOUS_TARGET to NativeDispatchRejection.TARGET_AMBIGUOUS,
-                ExecutionTargetAuthorizationDecision.WRONG_TARGET to NativeDispatchRejection.TARGET_WRONG_KIND,
+    fun `permission drift is re observed on every resolution`() {
+        var granted = true
+        val bridge =
+            NativeCapabilityBridge(
+                bindings = listOf(binding(requiredPermissions = setOf(PERMISSION_CAMERA))),
+                runtimeProbe = NativeRuntimeProbe {
+                    availableSnapshot(
+                        observedAtMs = NOW_MS - 1,
+                        grantedPermissions = if (granted) setOf(PERMISSION_CAMERA) else emptySet(),
+                    )
+                },
+                nowMs = { NOW_MS },
             )
 
-        decisions.forEach { (decision, expected) ->
-            val fixture = fixture()
-            val result = fixture.bridge.dispatch(command()) { decision }
+        assertTrue(bridge.resolve(CAPABILITY_ID) is NativeCapabilityResolution.Ready)
+        granted = false
 
-            assertEquals(expected, rejected(result).reason)
-            assertEquals(0, fixture.handlerCalls())
-        }
+        val afterRevocation = bridge.resolve(CAPABILITY_ID)
+        assertEquals(
+            NativeCapabilityAvailability.PRECONDITION_REQUIRED,
+            rejected(afterRevocation).observation.availability,
+        )
     }
 
     @Test
-    fun `handler failures are normalized without inventing retry authority`() {
-        val fixture = fixture(handlerResult = NativeHandlerResult.Failure("native_busy"))
+    fun `discover all is deterministic by capability id`() {
+        val alpha = binding(capabilityId = "aurora.test.alpha.v1")
+        val camera = binding()
+        val zeta = binding(capabilityId = "aurora.test.zeta.v1")
+        val bridge =
+            NativeCapabilityBridge(
+                bindings = listOf(zeta, camera, alpha),
+                runtimeProbe = NativeRuntimeProbe { availableSnapshot() },
+                nowMs = { NOW_MS },
+            )
 
-        val result =
-            fixture.bridge.dispatch(command()) {
-                ExecutionTargetAuthorizationDecision.AUTHORIZED_DEVICE_TARGET
-            }
-
-        val rejection = rejected(result)
-        assertEquals(NativeDispatchRejection.HANDLER_REJECTED, rejection.reason)
-        assertEquals("native_busy", rejection.handlerCode)
-        assertEquals(1, fixture.handlerCalls())
+        assertEquals(
+            listOf("aurora.test.alpha.v1", CAPABILITY_ID, "aurora.test.zeta.v1"),
+            bridge.discoverAll().map { it.capabilityId },
+        )
     }
 
     @Test
     fun `duplicate capability registration is rejected`() {
-        val first = NativeCapabilityRegistration(binding()) { NativeHandlerResult.Success() }
-        val second = NativeCapabilityRegistration(binding()) { NativeHandlerResult.Success() }
-
         val failure =
             runCatching {
                 NativeCapabilityBridge(
-                    registrations = listOf(first, second),
+                    bindings = listOf(binding(), binding()),
                     runtimeProbe = NativeRuntimeProbe { availableSnapshot() },
                     nowMs = { NOW_MS },
                 )
@@ -197,49 +173,32 @@ class NativeCapabilityBridgeTest {
         minApiLevel: Int = 26,
         requiredFeatures: Set<String> = emptySet(),
         requiredPermissions: Set<String> = emptySet(),
-        handlerResult: NativeHandlerResult = NativeHandlerResult.Success(mapOf("status" to "ok")),
-    ): Fixture {
-        var handlerCalls = 0
-        val registration =
-            NativeCapabilityRegistration(
-                binding =
+    ): NativeCapabilityBridge =
+        NativeCapabilityBridge(
+            bindings =
+                listOf(
                     binding(
                         minApiLevel = minApiLevel,
                         requiredFeatures = requiredFeatures,
                         requiredPermissions = requiredPermissions,
                     ),
-                handler = NativeCapabilityHandler {
-                    handlerCalls += 1
-                    handlerResult
-                },
-            )
-        val bridge =
-            NativeCapabilityBridge(
-                registrations = listOf(registration),
-                runtimeProbe = NativeRuntimeProbe { snapshot },
-                nowMs = { NOW_MS },
-            )
-        return Fixture(bridge) { handlerCalls }
-    }
+                ),
+            runtimeProbe = NativeRuntimeProbe { snapshot },
+            nowMs = { NOW_MS },
+        )
 
     private fun binding(
+        capabilityId: String = CAPABILITY_ID,
         minApiLevel: Int = 26,
         requiredFeatures: Set<String> = emptySet(),
         requiredPermissions: Set<String> = emptySet(),
     ): NativeCapabilityBinding =
         NativeCapabilityBinding(
-            capabilityId = CAPABILITY_ID,
+            capabilityId = capabilityId,
             minApiLevel = minApiLevel,
             requiredFeatures = requiredFeatures,
             requiredPermissions = requiredPermissions,
             maxSnapshotAgeMs = MAX_AGE_MS,
-        )
-
-    private fun command(capabilityId: String = CAPABILITY_ID): NativeCapabilityCommand =
-        NativeCapabilityCommand(
-            requestId = "req-w15c-1",
-            capabilityId = capabilityId,
-            arguments = mapOf("fixture" to "camera"),
         )
 
     private fun availableSnapshot(
@@ -255,15 +214,10 @@ class NativeCapabilityBridgeTest {
             grantedPermissions = grantedPermissions,
         )
 
-    private fun rejected(result: NativeDispatchResult): NativeDispatchResult.Rejected {
-        assertTrue(result is NativeDispatchResult.Rejected)
-        return result as NativeDispatchResult.Rejected
+    private fun rejected(result: NativeCapabilityResolution): NativeCapabilityResolution.Rejected {
+        assertTrue(result is NativeCapabilityResolution.Rejected)
+        return result as NativeCapabilityResolution.Rejected
     }
-
-    private data class Fixture(
-        val bridge: NativeCapabilityBridge,
-        val handlerCalls: () -> Int,
-    )
 
     companion object {
         private const val CAPABILITY_ID = "aurora.test.camera.capture.v1"
