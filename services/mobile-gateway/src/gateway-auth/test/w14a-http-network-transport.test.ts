@@ -331,12 +331,7 @@ test('bounds route, method, content type, malformed JSON and body size before ma
     assert.equal(wrongContentType.statusCode, 415);
     assert.equal(transportCode(wrongContentType), 'CONTENT_TYPE_UNSUPPORTED');
 
-    const malformed = await postRaw(
-      address.port,
-      '/v1/gateway/sessions/open',
-      '{not-json',
-      agent,
-    );
+    const malformed = await postRaw(address.port, '/v1/gateway/sessions/open', '{not-json', agent);
     assert.equal(malformed.statusCode, 400);
     assert.equal(transportCode(malformed), 'BODY_MALFORMED');
 
@@ -352,4 +347,17 @@ test('bounds route, method, content type, malformed JSON and body size before ma
     agent.destroy();
     await transport.stop();
   }
+});
+
+test('refuses plaintext credential transport on non-loopback hosts', () => {
+  const manager = new GatewaySessionManager(new FixtureAuthenticator());
+
+  assert.throws(
+    () => new GatewayHttpNetworkTransport(manager, { host: '0.0.0.0' }),
+    /explicit loopback host/u,
+  );
+  assert.throws(
+    () => new GatewayHttpNetworkTransport(manager, { host: '192.0.2.10' }),
+    /explicit loopback host/u,
+  );
 });
