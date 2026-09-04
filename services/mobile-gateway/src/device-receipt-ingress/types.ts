@@ -101,6 +101,7 @@ export interface W03ReceiptIngressReservationRequest {
   readonly nowMs: number;
 }
 
+/** W03-owned durable state: inflight may retry evidence transport; completed is suppressible replay. */
 export type W03ReceiptIngressDurableStatus = 'inflight' | 'completed';
 
 export type W03ReceiptIngressReservationResult =
