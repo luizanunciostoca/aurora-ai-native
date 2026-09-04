@@ -1,0 +1,31 @@
+name: TEMP W12-G Prettier Artifact
+
+on:
+  push:
+    branches:
+      - wave/12g-meta-ads-optimization
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Apply canonical Prettier
+        run: npx prettier --write packages/revenue/src/meta-ads/optimization.ts packages/revenue/test/w12g-meta-ads-optimization.test.ts
+      - name: Stage formatted artifact
+        run: |
+          mkdir -p w12g-output/packages/revenue/src/meta-ads w12g-output/packages/revenue/test
+          cp packages/revenue/src/meta-ads/optimization.ts w12g-output/packages/revenue/src/meta-ads/optimization.ts
+          cp packages/revenue/test/w12g-meta-ads-optimization.test.ts w12g-output/packages/revenue/test/w12g-meta-ads-optimization.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w12g-prettier-output
+          path: w12g-output
