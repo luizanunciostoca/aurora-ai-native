@@ -40,4 +40,14 @@ class RuntimeEnvironmentConfigTest {
             RuntimeEnvironmentConfig(AuroraEnvironment.LOCAL, "http://example.com", true)
         }
     }
+
+    @Test
+    fun `gateway origin rejects opaque and hostless https uris`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            RuntimeEnvironmentConfig(AuroraEnvironment.STAGING, "https:staging.invalid", false)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            RuntimeEnvironmentConfig(AuroraEnvironment.STAGING, "https:/", false)
+        }
+    }
 }
