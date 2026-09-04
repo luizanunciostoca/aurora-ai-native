@@ -236,7 +236,8 @@ test('W12-D requires paused provider state before metadata or financial changes'
     port({ ok: true, requiresReadback: true }),
   );
   assert.equal(pausedRequired.status, 'BLOCKED');
-  if (pausedRequired.status === 'BLOCKED') assert.equal(pausedRequired.code, 'PAUSED_STATE_REQUIRED');
+  if (pausedRequired.status === 'BLOCKED')
+    assert.equal(pausedRequired.code, 'PAUSED_STATE_REQUIRED');
 });
 
 test('W12-D allows an idempotent PAUSE safety transition from an active resource', async () => {
@@ -309,10 +310,7 @@ test('W12-D delegates rate-limit and duplicate-style conflict retry decisions to
   const seen: MetaAdsW08GovernedWriteRequest[] = [];
   const limited = await executeMetaAdsGovernedOperation(
     input(),
-    port(
-      { ok: false, error: 'RATE_LIMITED', mutationPossible: false, retryAfterMs: 10_000 },
-      seen,
-    ),
+    port({ ok: false, error: 'RATE_LIMITED', mutationPossible: false, retryAfterMs: 10_000 }, seen),
   );
   assert.equal(limited.status, 'FAILED_NOT_EXECUTED');
   if (limited.status !== 'FAILED_NOT_EXECUTED') return;
