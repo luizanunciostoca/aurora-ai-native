@@ -157,14 +157,12 @@ class PermissionConsentBroker(
             when (observation.state) {
                 RuntimePermissionState.GRANTED -> PermissionPromptDecision.ALREADY_GRANTED
                 RuntimePermissionState.PERMANENTLY_DENIED,
-                RuntimePermissionState.REVOKED,
-                -> PermissionPromptDecision.SETTINGS_REQUIRED
+                RuntimePermissionState.REVOKED -> PermissionPromptDecision.SETTINGS_REQUIRED
                 RuntimePermissionState.BACKGROUND_RESTRICTED ->
                     PermissionPromptDecision.BACKGROUND_RESTRICTION_REQUIRES_SETTINGS
                 RuntimePermissionState.STALE_RUNTIME_STATE -> PermissionPromptDecision.STALE_RUNTIME_STATE
                 RuntimePermissionState.NOT_REQUESTED,
-                RuntimePermissionState.DENIED,
-                -> null
+                RuntimePermissionState.DENIED -> null
             }
         if (terminalDecision != null) {
             return PermissionPromptResult(terminalDecision, observation)
@@ -181,13 +179,13 @@ class PermissionConsentBroker(
         }
 
         val previousHistory = historyStore.load(permission)
-        historyStore.save(permission, previousHistory.copy(everRequested = true))
         return try {
+            historyStore.save(permission, previousHistory.copy(everRequested = true))
             promptLauncher.launch(permission)
             PermissionPromptResult(PermissionPromptDecision.PROMPT_LAUNCHED, observation)
         } catch (_: RuntimeException) {
-            historyStore.save(permission, previousHistory)
             promptsInFlight.remove(permission)
+            runCatching { historyStore.save(permission, previousHistory) }
             PermissionPromptResult(PermissionPromptDecision.PROMPT_LAUNCH_FAILED, observation)
         }
     }
