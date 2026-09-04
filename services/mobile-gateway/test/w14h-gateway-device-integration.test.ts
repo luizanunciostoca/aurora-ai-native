@@ -22,10 +22,15 @@ import type {
   DeviceIngressAuthenticationPort,
   DeviceIngressAuthenticationRequest,
   DeviceIngressAuthenticationResult,
-  DeviceSessionRevocationPort,
+  DeviceSessionCurrentTrustRequest,
+  DeviceSessionCurrentTrustResult,
+  DeviceSessionTrustPort,
+  W03ReceiptIngressCompletionRequest,
+  W03ReceiptIngressCompletionResult,
   W03ReceiptIngressReservationPort,
   W03ReceiptIngressReservationRequest,
   W03ReceiptIngressReservationResult,
+  W03ReceiptIngressStatus,
   W07DeviceReceiptEvidenceIngressPort,
   W07DeviceReceiptEvidenceIngressResult,
   W07DeviceReceiptEvidenceObservation,
@@ -87,19 +92,47 @@ function trust(state: 'ACTIVE' | 'REVOKED' = 'ACTIVE'): DeviceSessionTrustSnapsh
   };
 }
 
-class StatefulRevocationPort implements DeviceSessionRevocationPort {
-  revoked = false;
+class StatefulSessionTrustPort implements DeviceSessionTrustPort {
+  verifyCalls = 0;
+  revokeCalls = 0;
+  current: DeviceSessionTrustSnapshot;
+
+  constructor(initial: DeviceSessionTrustSnapshot) {
+    this.current = initial;
+  }
+
+  verifyCurrent(request: DeviceSessionCurrentTrustRequest): DeviceSessionCurrentTrustResult {
+    this.verifyCalls += 1;
+    if (request.deviceSession.deviceSessionId !== this.current.deviceSessionId) {
+      return {
+        ok: false,
+        code: 'NOT_FOUND',
+        retryable: false,
+        authorizesExecution: false,
+        canGrantPermission: false,
+      };
+    }
+    return {
+      ok: true,
+      snapshot: this.current,
+      current: true,
+      authorizesExecution: false,
+      canGrantPermission: false,
+    };
+  }
 
   revokeSession(input: RevokeDeviceSessionTrustInput): DeviceSessionTrustResult {
-    this.revoked = true;
+    this.revokeCalls += 1;
     const snapshot: DeviceSessionTrustSnapshot = {
-      ...trust('REVOKED'),
-      deviceSessionId: input.deviceSessionId,
+      ...this.current,
+      state: 'REVOKED',
       connectionId: input.connectionId,
       revokedAtMs: input.revokedAtMs,
       lastEvaluatedAtMs: input.revokedAtMs,
       revocationReasonReference: input.reasonReference,
+      executionPreconditionSatisfied: false,
     };
+    this.current = snapshot;
     return {
       ok: true,
       snapshot,
@@ -160,6 +193,7 @@ class AuthenticationPort implements DeviceIngressAuthenticationPort {
 
 class DurableIngressPort implements W03ReceiptIngressReservationPort {
   readonly fingerprints = new Map<string, string>();
+  readonly statuses = new Map<string, W03ReceiptIngressStatus>();
 
   reserve(request: W03ReceiptIngressReservationRequest): W03ReceiptIngressReservationResult {
     const prior = this.fingerprints.get(request.receiptId);
@@ -171,11 +205,38 @@ class DurableIngressPort implements W03ReceiptIngressReservationPort {
         authorizesExecution: false,
       };
     }
-    this.fingerprints.set(request.receiptId, request.fingerprint);
+    if (prior === undefined) {
+      this.fingerprints.set(request.receiptId, request.fingerprint);
+      this.statuses.set(request.receiptId, 'inflight');
+    }
     return {
       ok: true,
       disposition: prior === undefined ? 'RESERVED' : 'ALREADY_RESERVED',
+      status: this.statuses.get(request.receiptId) ?? 'inflight',
       durableReference: `w03:${request.receiptId}`,
+      authorizesExecution: false,
+    };
+  }
+
+  complete(request: W03ReceiptIngressCompletionRequest): W03ReceiptIngressCompletionResult {
+    const prior = this.fingerprints.get(request.receiptId);
+    if (
+      prior === undefined ||
+      prior !== request.fingerprint ||
+      request.durableReference !== `w03:${request.receiptId}`
+    ) {
+      return {
+        ok: false,
+        code: 'CONFLICT',
+        retryable: false,
+        authorizesExecution: false,
+      };
+    }
+    this.statuses.set(request.receiptId, 'completed');
+    return {
+      ok: true,
+      status: 'completed',
+      durableReference: request.durableReference,
       authorizesExecution: false,
     };
   }
@@ -199,7 +260,7 @@ class W07IngressPort implements W07DeviceReceiptEvidenceIngressPort {
     }
     return {
       ok: true,
-      disposition: 'OBSERVED',
+      disposition: this.calls > 1 ? 'ALREADY_OBSERVED' : 'OBSERVED',
       receiptReference: `w07:${observation.receiptId}`,
       evidenceReference: 'w07:evidence-1',
       authorizesExecution: false,
@@ -209,15 +270,18 @@ class W07IngressPort implements W07DeviceReceiptEvidenceIngressPort {
   }
 }
 
-function createHarness(config: { maxReceiptAgeMs?: number; maxLateAfterRevokeMs?: number } = {}) {
-  const sessionRevocation = new StatefulRevocationPort();
+function createHarness(
+  initialTrust: DeviceSessionTrustSnapshot = trust(),
+  config: { maxReceiptAgeMs?: number; maxLateAfterRevokeMs?: number } = {},
+) {
+  const sessionTrust = new StatefulSessionTrustPort(initialTrust);
   const cancellation = new CancellationPort();
   const authentication = new AuthenticationPort();
   const durableIngress = new DurableIngressPort();
   const w07Ingress = new W07IngressPort();
   const manager = new DeviceReceiptIngressManager(
     {
-      sessionRevocation,
+      sessionTrust,
       cancellation,
       authentication,
       durableIngress,
@@ -225,7 +289,7 @@ function createHarness(config: { maxReceiptAgeMs?: number; maxLateAfterRevokeMs?
     },
     config,
   );
-  return { manager, sessionRevocation, durableIngress, w07Ingress };
+  return { manager, sessionTrust, durableIngress, w07Ingress };
 }
 
 function ingressInput(
@@ -258,7 +322,7 @@ function ingressInput(
 }
 
 test('DP3 rejects a stale ACTIVE trust snapshot after the same session was revoked and killed', () => {
-  const { manager, sessionRevocation, w07Ingress } = createHarness();
+  const { manager, sessionTrust, w07Ingress } = createHarness();
   const staleActiveSnapshot = trust('ACTIVE');
 
   const killed = manager.revokeAndKill({
@@ -270,7 +334,7 @@ test('DP3 rejects a stale ACTIVE trust snapshot after the same session was revok
     reasonReference: 'kill-1',
   });
   assert.equal(killed.ok, true);
-  assert.equal(sessionRevocation.revoked, true);
+  assert.equal(sessionTrust.current.state, 'REVOKED');
 
   const replayedStaleTrust = manager.ingest(
     ingressInput(staleActiveSnapshot, RECEIPT, 1_600, 1_700),
@@ -283,7 +347,7 @@ test('DP3 rejects a stale ACTIVE trust snapshot after the same session was revok
 });
 
 test('DP3 does not suppress W07 evidence delivery when a W03 reservation is still inflight', () => {
-  const { manager, w07Ingress } = createHarness();
+  const { manager, durableIngress, w07Ingress } = createHarness();
   w07Ingress.failFirst = true;
   const active = trust('ACTIVE');
 
@@ -291,19 +355,21 @@ test('DP3 does not suppress W07 evidence delivery when a W03 reservation is stil
   assert.equal(first.ok, false);
   if (!first.ok) assert.equal(first.error.code, 'W07_INGRESS_REJECTED');
   assert.equal(w07Ingress.calls, 1);
+  assert.equal(durableIngress.statuses.get(RECEIPT), 'inflight');
 
   const retry = manager.ingest(ingressInput(active));
   assert.equal(retry.ok, true);
   assert.equal(w07Ingress.calls, 2);
+  assert.equal(durableIngress.statuses.get(RECEIPT), 'completed');
 });
 
 test('DP3 late-after-revoke window is bounded by ingress time, not only device capture time', () => {
   const maxLateAfterRevokeMs = 5 * 60 * 1000;
-  const { manager, w07Ingress } = createHarness({
+  const revoked = trust('REVOKED');
+  const { manager, w07Ingress } = createHarness(revoked, {
     maxLateAfterRevokeMs,
     maxReceiptAgeMs: 15 * 60 * 1000,
   });
-  const revoked = trust('REVOKED');
   const receivedAfterWindow = REVOKED_AT_MS + maxLateAfterRevokeMs + 1;
 
   const result = manager.ingest(
