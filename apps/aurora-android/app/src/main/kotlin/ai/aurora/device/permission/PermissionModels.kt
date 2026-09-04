@@ -40,6 +40,7 @@ fun interface PermissionPromptLauncher {
 enum class RuntimePermissionState {
     GRANTED,
     NOT_REQUESTED,
+    PROMPT_IN_FLIGHT,
     DENIED,
     PERMANENTLY_DENIED,
     REVOKED,
@@ -136,6 +137,7 @@ class PermissionConsentBroker(
                 snapshot.granted && requirement.requiresBackgroundAccess && snapshot.backgroundRestricted ->
                     RuntimePermissionState.BACKGROUND_RESTRICTED
                 snapshot.granted -> RuntimePermissionState.GRANTED
+                promptsInFlight.contains(requirement.permission) -> RuntimePermissionState.PROMPT_IN_FLIGHT
                 history.everGranted -> RuntimePermissionState.REVOKED
                 history.everRequested && !snapshot.shouldShowRationale ->
                     RuntimePermissionState.PERMANENTLY_DENIED
@@ -175,6 +177,7 @@ class PermissionConsentBroker(
         val terminalDecision =
             when (observation.state) {
                 RuntimePermissionState.GRANTED -> PermissionPromptDecision.ALREADY_GRANTED
+                RuntimePermissionState.PROMPT_IN_FLIGHT -> PermissionPromptDecision.ALREADY_IN_FLIGHT
                 RuntimePermissionState.PERMANENTLY_DENIED,
                 RuntimePermissionState.REVOKED -> PermissionPromptDecision.SETTINGS_REQUIRED
                 RuntimePermissionState.BACKGROUND_RESTRICTED ->
