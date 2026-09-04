@@ -627,6 +627,25 @@ export class RealtimeCommandSessionManager {
     return success(sessionSnapshot(record));
   }
 
+  getCommand(
+    gatewaySessionId: unknown,
+    gatewayConnectionId: unknown,
+    commandId: unknown,
+    nowMs: unknown,
+  ): RealtimeSessionResult<RealtimeCommandSnapshot> {
+    const bound = this.#parseBoundInput({ gatewaySessionId, gatewayConnectionId, nowMs });
+    if (!bound.ok) return bound;
+    const parsedCommandId = parseCanonical<CommandId>(commandId, COMMAND_ID);
+    if (parsedCommandId === null) {
+      return failure('MALFORMED_REQUEST', 'Command identifier is malformed.');
+    }
+    const current = this.#requireBoundSession(bound.value);
+    if (!current.ok) return current;
+    const command = current.value.record.commands.get(parsedCommandId);
+    if (command === undefined) return failure('COMMAND_NOT_FOUND', 'Command does not exist.');
+    return success(commandSnapshot(command));
+  }
+
   #parseOpenInput(
     input: unknown,
     resume: false,
