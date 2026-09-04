@@ -112,10 +112,7 @@ function ratio(numerator: number, denominator: number): number | null {
   return denominator === 0 ? null : numerator / denominator;
 }
 
-function sameScope(
-  first: MetaAdsAnalyticsProjection,
-  second: MetaAdsAnalyticsProjection,
-): boolean {
+function sameScope(first: MetaAdsAnalyticsProjection, second: MetaAdsAnalyticsProjection): boolean {
   return (
     first.tenantId === second.tenantId &&
     first.providerBindingReference === second.providerBindingReference &&
@@ -143,7 +140,8 @@ function candidate(
   confidenceBps: number,
   policy: MetaAdsOptimizationPolicy,
 ): MetaAdsOptimizationCandidate {
-  const estimatedCostImpactMinor = kind === 'REVIEW_COST_EFFICIENCY' ? analytics.metrics.spendMinor : 0;
+  const estimatedCostImpactMinor =
+    kind === 'REVIEW_COST_EFFICIENCY' ? analytics.metrics.spendMinor : 0;
   const evidenceWeak =
     !analytics.optimizationCandidateEligible ||
     analytics.freshness !== 'FRESH' ||
@@ -155,7 +153,11 @@ function candidate(
       : highImpact
         ? 'HUMAN_REVIEW_REQUIRED'
         : 'REVIEW_ONLY';
-  const risk: MetaAdsOptimizationRisk = highImpact ? 'HIGH' : estimatedCostImpactMinor > 0 ? 'MEDIUM' : 'LOW';
+  const risk: MetaAdsOptimizationRisk = highImpact
+    ? 'HIGH'
+    : estimatedCostImpactMinor > 0
+      ? 'MEDIUM'
+      : 'LOW';
   return Object.freeze({
     candidateId: `w12g:${analytics.adAccountExternalId}:${analytics.resourceExternalId}:${kind}`,
     tenantId: analytics.tenantId,
@@ -208,7 +210,9 @@ export function buildMetaAdsOptimizationDecisionSupport(
       analytics.metrics.impressions < input.policy.minImpressions ||
       analytics.metrics.clicks < input.policy.minClicks
     ) {
-      candidates.push(candidate(analytics, 'HOLD_FOR_MORE_EVIDENCE', input.evidenceScoreBps, input.policy));
+      candidates.push(
+        candidate(analytics, 'HOLD_FOR_MORE_EVIDENCE', input.evidenceScoreBps, input.policy),
+      );
       continue;
     }
 
@@ -220,10 +224,7 @@ export function buildMetaAdsOptimizationDecisionSupport(
     if (conversionRate !== null && conversionRate * 10_000 <= input.policy.lowConversionRateBps) {
       kinds.add('REVIEW_CONVERSION_PATH');
     }
-    if (
-      costPerConversion !== null &&
-      costPerConversion >= input.policy.maxCostPerConversionMinor
-    ) {
+    if (costPerConversion !== null && costPerConversion >= input.policy.maxCostPerConversionMinor) {
       kinds.add('REVIEW_COST_EFFICIENCY');
     }
     if (input.adaptiveReasoning) kinds.add(input.adaptiveReasoning.suggestedKind);
