@@ -1,4 +1,8 @@
-import type { ActionIntent, ExternalReference, RestrictedMetadata } from '@aurora/contracts/actions';
+import type {
+  ActionIntent,
+  ExternalReference,
+  RestrictedMetadata,
+} from '@aurora/contracts/actions';
 import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 import type { Evidence } from '@aurora/contracts/evidence';
 import type {
@@ -86,10 +90,7 @@ export interface DeviceReceiptObservation {
   readonly authenticationReference: string;
   readonly capturedAtMs: number;
   readonly receivedAtMs: number;
-  readonly ingressClassification:
-    | 'CURRENT_SESSION'
-    | 'LATE_AFTER_RECONNECT'
-    | 'LATE_AFTER_REVOKE';
+  readonly ingressClassification: 'CURRENT_SESSION' | 'LATE_AFTER_RECONNECT' | 'LATE_AFTER_REVOKE';
   readonly requiresW07Reconciliation: boolean;
   readonly authoritySemantics: 'EVIDENCE_INPUT_ONLY_W07_OWNS_OUTCOME_AND_RETRY';
   readonly authorizesExecution: false;
