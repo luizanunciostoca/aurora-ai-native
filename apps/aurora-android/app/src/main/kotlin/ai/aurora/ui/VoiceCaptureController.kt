@@ -25,6 +25,22 @@ data class VoiceInputAvailability(
     val engineLabel: String,
 )
 
+data class VoiceRecognitionResult(
+    val transcript: String,
+    /**
+     * Android recognizer confidence for the selected transcript when the engine supplies it.
+     * Null means unavailable and must never be replaced by wake-word acoustic confidence.
+     */
+    val confidence: Double?,
+) {
+    init {
+        require(transcript.isNotBlank()) { "transcript must not be blank" }
+        require(confidence == null || (confidence.isFinite() && confidence in 0.0..1.0)) {
+            "confidence must be null or between 0 and 1"
+        }
+    }
+}
+
 private data class RecognizerSelection(
     val recognizer: SpeechRecognizer,
     val label: String,
@@ -36,6 +52,7 @@ class VoiceCaptureController(
     private val onPartial: (String) -> Unit,
     private val onResult: (String) -> Unit,
     private val onError: (String) -> Unit,
+    private val onDetailedResult: ((VoiceRecognitionResult) -> Unit)? = null,
 ) : AutoCloseable {
     private var recognizer: SpeechRecognizer? = null
     private val registryRegistration = VoiceSessionRegistry.register(
@@ -91,7 +108,18 @@ class VoiceCaptureController(
                 if (transcript.isBlank()) {
                     onError("Não consegui obter um transcript utilizável.")
                 } else {
-                    onResult(transcript)
+                    val confidence = firstRecognizerConfidence(results)
+                    val detailedCallback = onDetailedResult
+                    if (detailedCallback != null) {
+                        detailedCallback(
+                            VoiceRecognitionResult(
+                                transcript = transcript,
+                                confidence = confidence,
+                            ),
+                        )
+                    } else {
+                        onResult(transcript)
+                    }
                 }
                 closeRecognizer()
             }
@@ -163,6 +191,13 @@ class VoiceCaptureController(
         }
         return null
     }
+
+    private fun firstRecognizerConfidence(results: Bundle?): Double? =
+        results
+            ?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
+            ?.firstOrNull()
+            ?.toDouble()
+            ?.takeIf { it.isFinite() && it in 0.0..1.0 }
 
     private fun stopForLifecycle() {
         if (recognizer == null) return
