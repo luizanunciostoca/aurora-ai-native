@@ -2,7 +2,8 @@ package ai.aurora.device.wake
 
 /**
  * Coordinates audio ownership without granting Aurora business/action authority.
- * HOTWORD_MONITOR may coexist with TTS only when barge-in is explicitly enabled; STT is exclusive.
+ * HOTWORD_MONITOR may coexist with TTS only when barge-in is explicitly enabled; STT and
+ * ENROLLMENT are exclusive capture owners.
  */
 class AuroraAudioArbiter(
     private var bargeInEnabled: Boolean = true,
@@ -10,6 +11,7 @@ class AuroraAudioArbiter(
     enum class AudioOwner {
         HOTWORD_MONITOR,
         STT,
+        ENROLLMENT,
         TTS,
     }
 
@@ -59,19 +61,23 @@ class AuroraAudioArbiter(
     fun snapshot(): Snapshot = Snapshot(owners.toSet(), bargeInEnabled)
 
     @Synchronized
-    private fun isCompatible(owner: AudioOwner): Boolean = when (owner) {
-        AudioOwner.STT -> owners.isEmpty() || owners == setOf(AudioOwner.STT)
-        AudioOwner.TTS ->
-            AudioOwner.STT !in owners &&
-                (AudioOwner.HOTWORD_MONITOR !in owners || bargeInEnabled)
-        AudioOwner.HOTWORD_MONITOR ->
-            AudioOwner.STT !in owners &&
-                (AudioOwner.TTS !in owners || bargeInEnabled)
-    }
+    private fun isCompatible(owner: AudioOwner): Boolean =
+        when (owner) {
+            AudioOwner.STT -> owners.isEmpty() || owners == setOf(AudioOwner.STT)
+            AudioOwner.ENROLLMENT -> owners.isEmpty() || owners == setOf(AudioOwner.ENROLLMENT)
+            AudioOwner.TTS ->
+                AudioOwner.STT !in owners &&
+                    AudioOwner.ENROLLMENT !in owners &&
+                    (AudioOwner.HOTWORD_MONITOR !in owners || bargeInEnabled)
+            AudioOwner.HOTWORD_MONITOR ->
+                AudioOwner.STT !in owners &&
+                    AudioOwner.ENROLLMENT !in owners &&
+                    (AudioOwner.TTS !in owners || bargeInEnabled)
+        }
 }
 
 /**
- * Single process-local arbitration point for Aurora microphone/STT/TTS ownership.
+ * Single process-local arbitration point for Aurora microphone/STT/TTS/enrollment ownership.
  * This is resource coordination only: it cannot authorize commands, execution, outcomes or retries.
  */
 object AuroraAudioRuntime {
