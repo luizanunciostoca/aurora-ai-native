@@ -90,9 +90,7 @@ function validEntryBindings(entry: PreissuedVoiceAuthorityEntry): boolean {
  * fresh snapshot and uses the resolver-supplied server timestamp. A stale pre-issued token remains
  * stale and will be denied by the separately injected canonical current-authority validator.
  */
-export class PreissuedCurrentPolicyVoiceAuthoritySource
-  implements TrustedVoiceAuthorityMaterialSource
-{
+export class PreissuedCurrentPolicyVoiceAuthoritySource implements TrustedVoiceAuthorityMaterialSource {
   readonly #entries: ReadonlyMap<string, PreissuedVoiceAuthorityEntry>;
   readonly #currentPolicy: TrustedCurrentPolicySnapshotSource;
 

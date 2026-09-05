@@ -6,7 +6,7 @@ import test from 'node:test';
 import type { ActionIntent } from '@aurora/contracts/actions';
 import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 import type { PolicyTokenId } from '@aurora/contracts/ids';
-import type { PolicyEvaluationRequest, PolicySnapshot } from '@aurora/contracts/policy-engine';
+import type { PolicySnapshot } from '@aurora/contracts/policy-engine';
 
 import {
   PreissuedCurrentPolicyVoiceAuthoritySource,
@@ -221,7 +221,8 @@ test('rejects duplicate or internally inconsistent preissued bindings', () => {
     capabilityId: 'camera.capture',
   } satisfies PreissuedVoiceAuthorityEntry;
   assert.throws(
-    () => new PreissuedCurrentPolicyVoiceAuthoritySource([inconsistent], new CapturingPolicySource()),
+    () =>
+      new PreissuedCurrentPolicyVoiceAuthoritySource([inconsistent], new CapturingPolicySource()),
     /bindings are invalid/u,
   );
 });

@@ -88,7 +88,10 @@ export class W15JLocalPhysicalHost {
   readonly #bootstrapServer: GatewayBootstrapHttpExchangeServer;
   #started = false;
 
-  constructor(config: W15JLocalPhysicalHostConfig, dependencies: W15JLocalPhysicalHostDependencies) {
+  constructor(
+    config: W15JLocalPhysicalHostConfig,
+    dependencies: W15JLocalPhysicalHostDependencies,
+  ) {
     const gatewayPort = config.gatewayPort ?? DEFAULT_GATEWAY_PORT;
     const bootstrapPort = config.bootstrapPort ?? DEFAULT_BOOTSTRAP_PORT;
     if (!validPort(gatewayPort) || !validPort(bootstrapPort)) {
