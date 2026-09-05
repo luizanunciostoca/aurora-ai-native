@@ -17,7 +17,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.aurora.device.AuroraApplication
 import ai.aurora.ui.model.AuroraUiIntent
@@ -41,8 +44,9 @@ private enum class VoiceCapturePurpose {
 
 @Composable
 fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
-    val state by viewModel.state.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val activity = context as? FragmentActivity
     val application = context.applicationContext as? AuroraApplication
     val hapticsController = remember(context) { AuroraHapticsController(context) }
@@ -326,10 +330,12 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            viewModel.refreshRuntime()
-            delay(1_000)
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                viewModel.refreshRuntime()
+                delay(1_000)
+            }
         }
     }
 
