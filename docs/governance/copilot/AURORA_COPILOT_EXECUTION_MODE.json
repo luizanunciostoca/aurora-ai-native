@@ -1,14 +1,14 @@
 {
   "schemaVersion": 5,
-  "mode": "FREE_ACTIONS_CLI",
-  "activationState": "PRO_PLUS_REALITY_GATE_BOOTSTRAP",
+  "mode": "PRO_PLUS_ACTIONS_FABRIC",
+  "activationState": "ACTIVE_MEASURED",
   "cloudAgentEnabled": false,
-  "proPlusActionsFabricEnabled": false,
+  "proPlusActionsFabricEnabled": true,
   "freeActionsCliEnabled": true,
   "fallbackPhysicalBuildSlots": 2,
   "prebuildWorkerEnabled": false,
-  "maxParallelTasks": 2,
-  "physicalBuildSlots": 2,
+  "maxParallelTasks": 3,
+  "physicalBuildSlots": 3,
   "maxLogicalLanes": 64,
   "maxPrebuildArtifactLanes": 48,
   "copilotModel": "auto",
@@ -17,7 +17,7 @@
     "failurePolicy": "FAIL_CLOSED_TO_FREE_FALLBACK",
     "requiredForProPlus": true,
     "attestationPath": "docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json",
-    "minimumObservedConcurrentSessions": 4,
+    "minimumObservedConcurrentSessions": 3,
     "attestationMaxAgeMinutes": 1440,
     "signals": ["MEASURED_COPILOT_CLI_SUCCESS", "MEASURED_CONCURRENT_JOB_OVERLAP", "EXACT_WORKFLOW_RUN_ID", "EXACT_CANDIDATE_SHA", "ATTESTATION_EXPIRY"]
   },
@@ -51,12 +51,12 @@
     "runningTaskActivationPolicy": "NON_RETROACTIVE",
     "handoffFormat": "AURORA_COMPACT_V1"
   },
-  "upgradeTarget": "PRO_PLUS_ACTIONS_FABRIC",
+  "upgradeTarget": "PRO_PLUS_ACTIONS_FABRIC_DYNAMIC",
   "authority": "Operational execution mode only. Live main, exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual, ADRs and owning wave governance remain authoritative.",
   "notes": [
-    "This bootstrap keeps physical BUILD concurrency at the accepted Free-compatible ceiling while installing the measured PRO+ Reality Gate.",
-    "PRO_PLUS_ACTIONS_FABRIC may be activated only after a fresh VERIFIED runtime attestation proves concurrent Copilot CLI capacity.",
-    "Unknown or expired PRO+ evidence never widens capacity.",
+    "PRO_PLUS_ACTIONS_FABRIC is activated at 3 physical BUILD slots because the bounded Reality Gate measured a peak of 3 simultaneous Copilot CLI sessions while all 4 probes succeeded.",
+    "The controller must not assume 4 slots until a future fresh Reality Gate measures 4-way overlap.",
+    "Missing, expired or invalid attestation automatically reduces runtime to the accepted 2-slot Free-compatible fallback.",
     "Increasing measured safe BUILD capacity never weakens dependency, path, shared-surface, exact-head, Risk Gate, review or acceptance barriers."
   ]
 }
