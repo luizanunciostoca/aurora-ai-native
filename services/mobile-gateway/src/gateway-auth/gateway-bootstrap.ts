@@ -88,7 +88,9 @@ interface GrantRecord {
   readonly credential: string;
   readonly gatewaySessionId: string;
   readonly tenantId: TenantId;
+  readonly actorKind: GatewayActorBinding['kind'];
   readonly actorIdentityId: IdentityId;
+  readonly correlationId: CorrelationId;
   readonly issuedAtMs: number;
   readonly expiresAtMs: number;
 }
@@ -217,7 +219,9 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
       credential: generated.credential,
       gatewaySessionId: generated.gatewaySessionId,
       tenantId: principal.tenantId,
+      actorKind: principal.actor.kind,
       actorIdentityId: principal.actor.identityId,
+      correlationId: principal.correlationId,
       issuedAtMs: nowMs,
       expiresAtMs,
     };
@@ -260,6 +264,9 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
       issuedAtMs: record.issuedAtMs,
       expiresAtMs: record.expiresAtMs,
       authVersion: AUTH_VERSION,
+      gatewaySessionId: record.gatewaySessionId,
+      actorKind: record.actorKind,
+      correlationId: record.correlationId,
     };
   }
 
