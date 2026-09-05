@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "1.0",
+  "status": "INCOMPLETE_PHYSICAL_EVIDENCE_REQUIRED",
+  "authorityInvariant": "INTELLIGENCE != AUTHORITY != EXECUTION",
+  "candidate": {
+    "gitSha": null,
+    "apkSha256": null,
+    "apkVariant": null,
+    "applicationId": null,
+    "versionCode": null,
+    "versionName": null
+  },
+  "device": {
+    "manufacturer": null,
+    "model": null,
+    "product": null,
+    "serialSha256": null,
+    "buildFingerprint": null,
+    "apiLevel": null,
+    "physicalDeviceVerified": false
+  },
+  "runtime": {
+    "assistantRoleHolder": null,
+    "recordAudioPermission": null,
+    "wakeModelVersion": null,
+    "sensitivity": null,
+    "privacyMode": null,
+    "foregroundServiceState": null,
+    "audioRoute": null,
+    "batteryOptimizationState": null
+  },
+  "governedProjection": {
+    "w04RegistryVersion": null,
+    "w04SourceRef": null,
+    "w04ContentSha256": null,
+    "w15gVocabularyVersion": null,
+    "w15gSourceRef": null,
+    "w15gContentSha256": null,
+    "w07IngressReference": null
+  },
+  "operator": {
+    "operatorId": null,
+    "startedAtUtc": null,
+    "finishedAtUtc": null,
+    "attestationReference": null,
+    "independentReviewReference": null
+  },
+  "scenarios": [
+    {"id":"WAKE-ACC-001","name":"100 deliberate wake attempts across representative matrix","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-ACC-002","name":"passive long-idle false-activation observation","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-LIFE-001","name":"foreground background foreground lifecycle","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-LIFE-002","name":"process stop restart and safe rearm","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-LIFE-003","name":"assistant service lifecycle and role removal","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-LIFE-004","name":"reboot locked screen battery saver long idle","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-AUDIO-001","name":"hotword to bounded STT ownership handoff","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-AUDIO-002","name":"enrollment exclusive audio ownership","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-AUDIO-003","name":"STT timeout error releases audio and rearms safely","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-AUDIO-004","name":"Aurora TTS self-wake suppression and genuine barge-in","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-BOUNDARY-001","name":"no governed projection fails closed to conversation","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-BOUNDARY-002","name":"stale registry vocabulary or native capability fails closed","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-BOUNDARY-003","name":"tenant mismatch or non-DEVICE target unavailable","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-BOUNDARY-004","name":"non-LOW W04 risk escalates before W07 ingress","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-BOUNDARY-005","name":"permission privacy capability denial blocks fast path","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-BOUNDARY-006","name":"ambiguous unknown or low-confidence transcript escalates","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-BOUNDARY-007","name":"W07 ingress unavailable produces safe fallback","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-BOUNDARY-008","name":"valid LOW-risk deterministic candidate reaches only W07 evaluation","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-BOUNDARY-009","name":"speech and wake confidence never become action authority","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-RACE-001","name":"wake during pending approval does not approve or dispatch","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-RACE-002","name":"wake during active execution does not duplicate side effect","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-RACE-003","name":"wake during EXECUTION_UNCERTAIN does not authorize retry","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-SEC-001","name":"recorded replay external speaker and media keyword abuse","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-SEC-002","name":"local model tamper integrity failure fails closed","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-SEC-003","name":"permission revocation and privacy toggle while armed","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]},
+    {"id":"WAKE-RESOURCE-001","name":"battery PSS CPU thermal FGS and rearm latency observations","mandatory":true,"status":"NOT_RUN","observedAtUtc":null,"evidenceReferences":[]}
+  ],
+  "riskGates": {
+    "A": {"status":"NOT_RUN","evidenceReferences":[]},
+    "B": {"status":"NOT_RUN","evidenceReferences":[]},
+    "C": {"status":"NOT_RUN","evidenceReferences":[]},
+    "D": {"status":"NOT_RUN","evidenceReferences":[]}
+  },
+  "rawEvidence": {
+    "directory": null,
+    "sha256Manifest": null
+  }
+}
