@@ -1,0 +1,79 @@
+name: Prototype Aurora Native Capability UI V1
+
+on:
+  push:
+    branches:
+      - prototype/aurora-native-capability-ui-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-native-capability-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '9.4.1'
+          cache-read-only: true
+      - name: Validate inherited wake evidence tooling
+        shell: bash
+        run: |
+          bash -n apps/aurora-android/physical/wake/collect-wake-physical-evidence.sh
+          python3 -m json.tool apps/aurora-android/physical/wake/WAKE_EVIDENCE_TEMPLATE.json >/dev/null
+          test -x apps/aurora-android/physical/wake/collect-wake-physical-evidence.sh
+      - name: Install stable Android SDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+      - name: Test and assemble Native Capability UI
+        shell: bash
+        env:
+          AURORA_BUILD_SHA: ${{ github.sha }}
+        run: |
+          gradle --no-daemon --console=plain -p apps/aurora-android \
+            :app:testLocalDebugUnitTest \
+            :app:assembleLocalDebug
+          APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+          ARTIFACT_DIR=/tmp/aurora-native-capability-ui-v1
+          mkdir -p "$ARTIFACT_DIR"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-Native-Capability-UI-V1.apk"
+          (
+            cd "$ARTIFACT_DIR"
+            sha256sum Aurora-Native-Capability-UI-V1.apk > SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt
+          )
+          BUILD_UTC="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
+          prototype_head=${{ github.sha }}
+          runtime_ui_checkpoint=656b771fd17fe6a52c7c9020cd3382d77af26001
+          source_wake_checkpoint=343b839a6425cef9493619da7ff622b7a29bfb66
+          w15j_candidate=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
+          ui_profile=RUNTIME_UI_INTEGRATION_V1
+          native_capability_projection=w15c-aggregate-read-only
+          capability_ids_exposed=false
+          authority_from_ui=none
+          physical_acceptance=not_implied
+          build_utc=${BUILD_UTC}
+          EOF
+      - name: Upload Native Capability UI APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-native-capability-ui-v1
+          path: /tmp/aurora-native-capability-ui-v1
+          if-no-files-found: error
+          retention-days: 14
