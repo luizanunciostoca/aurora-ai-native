@@ -31,10 +31,17 @@ private class AuroraVoiceInteractionSession(context: Context) : VoiceInteraction
             }
         runCatching { startAssistantActivity(intent) }
             .onFailure { failure ->
-                WakeRuntimeStatusStore(context).update(
+                val status = WakeRuntimeStatusStore(context)
+                status.update(
                     "WAKE_PLATFORM_BLOCKED",
                     lastError = "assistant activity handoff failed: ${failure.javaClass.simpleName}",
                 )
+                if (!AuroraWakeForegroundService.rearmIfConfigured(context)) {
+                    status.update(
+                        "WAKE_PLATFORM_BLOCKED",
+                        lastError = "assistant activity handoff failed and wake re-arm was rejected",
+                    )
+                }
             }
         setUiEnabled(false)
     }
