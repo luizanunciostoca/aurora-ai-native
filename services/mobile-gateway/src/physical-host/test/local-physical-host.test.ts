@@ -10,6 +10,10 @@ import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids'
 import type { W07DeviceReceiptEvidenceIngressPort } from '../../device-receipt-ingress/types.js';
 import type { VoiceCandidateIntakePort } from '../../gateway-auth/voice-candidate-network.js';
 import type { AuthenticatedGatewayBootstrapPrincipal } from '../../gateway-auth/gateway-bootstrap.js';
+import {
+  W14CurrentDeviceTargetBindingSource,
+  type LocalCurrentVoiceTargetBindingSource,
+} from '../current-device-target-source.js';
 import type { W14LocalGovernedDeviceDispatchPort } from '../governed-device-dispatch.js';
 import { W15JLocalPhysicalHost } from '../local-physical-host.js';
 import type { LocalW07IdempotencyFencePort } from '../w03-execution-fence.js';
@@ -149,9 +153,10 @@ test('starts loopback gateway and bootstrap listeners and opens W14 session from
   }
 });
 
-test('builds W07 voice intake only after exact host-owned W14 dispatch and W03 fence exist', () => {
+test('builds W07 voice intake only after exact host-owned W14 dispatch W03 fence and W14 target source exist', () => {
   let capturedDispatch: W14LocalGovernedDeviceDispatchPort | null = null;
   let capturedFence: LocalW07IdempotencyFencePort | null = null;
+  let capturedTargets: LocalCurrentVoiceTargetBindingSource | null = null;
   const host = new W15JLocalPhysicalHost(
     {
       databaseUrl: 'postgresql://unused.invalid/aurora_physical',
@@ -160,9 +165,10 @@ test('builds W07 voice intake only after exact host-owned W14 dispatch and W03 f
       clock: () => NOW,
     },
     {
-      createVoiceIntake: (dispatch, idempotencyFence) => {
+      createVoiceIntake: (dispatch, idempotencyFence, targetBindings) => {
         capturedDispatch = dispatch;
         capturedFence = idempotencyFence;
+        capturedTargets = targetBindings;
         return voiceIntake;
       },
       receiptEvidenceIngress,
@@ -173,6 +179,8 @@ test('builds W07 voice intake only after exact host-owned W14 dispatch and W03 f
   assert.equal(host.governedDeviceDispatch instanceof Object, true);
   assert.notEqual(capturedFence, null);
   assert.equal(typeof capturedFence?.reserve, 'function');
+  assert.equal(capturedTargets instanceof W14CurrentDeviceTargetBindingSource, true);
+  assert.equal(typeof capturedTargets?.resolve, 'function');
 });
 
 test('voice intake factory failure aborts host construction fail closed', () => {
