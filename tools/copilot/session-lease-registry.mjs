@@ -9,6 +9,12 @@ const ACTIVE_LABELS = new Set([
   'aurora:copilot-pro-plus-running',
 ]);
 
+const SESSION_CONSUMING_LABELS = new Set([
+  'aurora:copilot-dispatched',
+  'aurora:copilot-free-running',
+  'aurora:copilot-pro-plus-running',
+]);
+
 function taskIdFromIssue(issue) {
   const marker = issue.body?.match(/<!--\s*AURORA_TASK_ID:\s*([^\s]+)\s*-->/i);
   if (marker) return marker[1];
@@ -34,6 +40,7 @@ export function projectActiveSessionLeases(issues, tasks) {
       issueNumber: issue.number,
       allowedPaths: task.allowedPaths || [],
       sharedWriteSurfaces: task.sharedWriteSurfaces || [],
+      consumesBuildSession: [...SESSION_CONSUMING_LABELS].some((label) => labels.has(label)),
       observedAt: issue.updated_at || null,
       failClosedUntilReconciled: true,
       authority: false,
