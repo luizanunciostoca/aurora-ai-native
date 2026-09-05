@@ -19,6 +19,8 @@
     "attestationPath": "docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json",
     "minimumObservedConcurrentSessions": 3,
     "attestationMaxAgeMinutes": 1440,
+    "renewalCadenceHours": 6,
+    "liveArtifactWorkflow": "Aurora PRO+ Reality Gate",
     "signals": [
       "MEASURED_COPILOT_CLI_SUCCESS",
       "MEASURED_CONCURRENT_JOB_OVERLAP",
@@ -41,7 +43,7 @@
   },
   "developmentTelemetry": {
     "enabled": true,
-    "schema": "aurora.pro_plus.development_telemetry.v1",
+    "schema": "aurora.pro_plus.development_telemetry.v2",
     "canonicalAuthority": false
   },
   "scheduler": {
@@ -60,9 +62,11 @@
   "upgradeTarget": "PRO_PLUS_ACTIONS_FABRIC_DYNAMIC",
   "authority": "Operational execution mode only. Live main, exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual, ADRs and owning wave governance remain authoritative.",
   "notes": [
-    "PRO_PLUS_ACTIONS_FABRIC is activated at 3 physical BUILD slots because the bounded Reality Gate measured a peak of 3 simultaneous Copilot CLI sessions while all 4 probes succeeded.",
-    "The controller must not assume 4 slots until a future fresh Reality Gate measures 4-way overlap.",
-    "Missing, expired or invalid attestation automatically reduces runtime to the accepted 2-slot Free-compatible fallback.",
+    "PRO_PLUS_ACTIONS_FABRIC is activated at 3 physical BUILD slots because repeated bounded Reality Gates proved at least 3 simultaneous Copilot CLI sessions while all four probes succeeded.",
+    "The controller must not assume 4 sustained slots until a separate stability promotion proves that capacity across the required observation window.",
+    "Reality evidence is renewed every 6 hours; the BUILD claimant may consume only the latest successful canonical-main Reality Gate artifact.",
+    "The live artifact is never auto-committed to main and remains non-authoritative, run/SHA/time/TTL-bound evidence only.",
+    "Missing, expired, invalid or unavailable live evidence falls back to the committed bootstrap attestation and ultimately to the accepted 2-slot Free-compatible capacity.",
     "Increasing measured safe BUILD capacity never weakens dependency, path, shared-surface, exact-head, Risk Gate, review or acceptance barriers."
   ]
 }
