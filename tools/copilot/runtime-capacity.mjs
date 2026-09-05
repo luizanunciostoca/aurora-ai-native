@@ -99,7 +99,8 @@ export function calculateDynamicSafeBuildCapacity({
   const capacity = Math.max(0, Math.min(...dimensions));
 
   const reasons = [];
-  if (capacity === 0 && active >= runtime.isolatedSessionCapacity) reasons.push('SESSION_CAPACITY_EXHAUSTED');
+  if (capacity === 0 && active >= runtime.isolatedSessionCapacity)
+    reasons.push('SESSION_CAPACITY_EXHAUSTED');
   if (ready === 0) reasons.push('NO_BUILD_READY_CANDIDATES');
   if (independent === 0) reasons.push('NO_PATH_INDEPENDENT_CANDIDATES');
   if (capacity > 0) reasons.push('MINIMUM_SAFE_DIMENSION');
