@@ -47,7 +47,7 @@ jobs:
           grep -q 'runtimeCapabilityDiscovery' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
           grep -q 'MINIMUM_SAFE_DIMENSION' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
           grep -q 'FAIL_CLOSED_UNTIL_RECONCILED' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
-          grep -q 'aurora.pro_plus.development_telemetry.v1' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'aurora.pro_plus.development_telemetry.v2' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
           grep -q 'maxLogicalLanes' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
           grep -q 'ARTIFACT_ONLY_UNTIL_DEPENDENCIES_ACCEPTED' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
           grep -q 'REQUIRED_BEFORE_BUILD_PROMOTION' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
