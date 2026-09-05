@@ -16,6 +16,8 @@ on:
       - 'docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json'
       - 'tools/copilot/**'
   workflow_dispatch:
+  schedule:
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: read
@@ -33,9 +35,10 @@ jobs:
       contents: read
       copilot-requests: write
     steps:
-      - name: Checkout candidate
+      - name: Checkout canonical probe target
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Install current Copilot CLI
         run: npm install --global @github/copilot@latest
@@ -87,9 +90,10 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout candidate
+      - name: Checkout canonical attestation evaluator
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Download all probe evidence
         uses: actions/download-artifact@v4
@@ -99,7 +103,7 @@ jobs:
           merge-multiple: true
       - name: Evaluate measured concurrent capacity
         env:
-          AURORA_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AURORA_CANDIDATE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           AURORA_ATTESTATION_MAX_AGE_MINUTES: 1440
         run: node tools/copilot/evaluate-pro-plus-reality.mjs /tmp/aurora-pro-plus-probes 3 | tee /tmp/aurora-pro-plus-attestation.json
       - name: Upload runtime attestation candidate
