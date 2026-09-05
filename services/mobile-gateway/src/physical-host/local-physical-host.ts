@@ -38,12 +38,29 @@ const DEFAULT_GATEWAY_PORT = 8080;
 const DEFAULT_BOOTSTRAP_PORT = 8081;
 const MAX_DATE_MS = 8_640_000_000_000_000;
 
-export interface W15JLocalPhysicalHostDependencies {
-  /** Concrete W07 voice intake; identity/policy/current-authority material stays outside W14. */
-  readonly voiceIntake: VoiceCandidateIntakePort;
+interface W15JLocalPhysicalHostDependencyBase {
   /** Concrete W07 Receipt/Evidence observer. W14 never decides outcome or retry. */
   readonly receiptEvidenceIngress: W07DeviceReceiptEvidenceIngressPort;
 }
+
+export type W15JLocalPhysicalHostDependencies = W15JLocalPhysicalHostDependencyBase &
+  (
+    | Readonly<{
+        /** Compatibility/evaluation-only intake. Canonical voice execution should use the factory. */
+        voiceIntake: VoiceCandidateIntakePort;
+        createVoiceIntake?: never;
+      }>
+    | Readonly<{
+        /**
+         * W07-owned immutable factory invoked only after current W14 managers/dispatch port exist.
+         * It resolves the construction cycle without a mutable setter or second network stack.
+         */
+        createVoiceIntake: (
+          governedDeviceDispatch: W14LocalGovernedDeviceDispatchPort,
+        ) => VoiceCandidateIntakePort;
+        voiceIntake?: never;
+      }>
+  );
 
 export interface W15JLocalPhysicalHostConfig {
   readonly databaseUrl: string;
@@ -72,6 +89,25 @@ function currentTime(clock: () => number): number {
     throw new Error('W15-J LOCAL host clock returned an invalid timestamp.');
   }
   return nowMs;
+}
+
+function resolveVoiceIntake(
+  dependencies: W15JLocalPhysicalHostDependencies,
+  dispatch: W14LocalGovernedDeviceDispatchPort,
+): VoiceCandidateIntakePort {
+  if ('createVoiceIntake' in dependencies && dependencies.createVoiceIntake !== undefined) {
+    let intake: VoiceCandidateIntakePort;
+    try {
+      intake = dependencies.createVoiceIntake(dispatch);
+    } catch {
+      throw new Error('W15-J W07 voice intake factory failed.');
+    }
+    if (intake === null || typeof intake !== 'object' || typeof intake.evaluate !== 'function') {
+      throw new Error('W15-J W07 voice intake factory returned an invalid port.');
+    }
+    return intake;
+  }
+  return dependencies.voiceIntake;
 }
 
 /**
@@ -143,7 +179,8 @@ export class W15JLocalPhysicalHost {
       deliveries,
     });
 
-    const voiceCandidates = new VoiceCandidateNetworkBoundary(dependencies.voiceIntake);
+    const voiceIntake = resolveVoiceIntake(dependencies, this.governedDeviceDispatch);
+    const voiceCandidates = new VoiceCandidateNetworkBoundary(voiceIntake);
     const devicePlane = new GatewayVoiceDevicePlaneNetworkHandler(
       {
         devices,
