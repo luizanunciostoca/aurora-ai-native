@@ -40,12 +40,12 @@ export function discoverRuntimeCapabilities(mode, env = process.env) {
 
   const proPlusReady = Boolean(
     proPlusMode &&
-      mode?.cloudAgentEnabled &&
-      cloudAgentAvailable &&
-      accountPlanObserved &&
-      isolatedSessionCapacity &&
-      ciParallelCapacity &&
-      creditSlotBudget,
+    mode?.cloudAgentEnabled &&
+    cloudAgentAvailable &&
+    accountPlanObserved &&
+    isolatedSessionCapacity &&
+    ciParallelCapacity &&
+    creditSlotBudget,
   );
 
   return {
