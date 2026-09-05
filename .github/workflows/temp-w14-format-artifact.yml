@@ -1,0 +1,46 @@
+name: TEMP W14 Format Artifact
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/temp-w14-format-artifact.yml'
+      - 'services/mobile-gateway/src/gateway-auth/device-key-proof-verifier.ts'
+      - 'services/mobile-gateway/src/gateway-auth/device-plane-network.ts'
+      - 'services/mobile-gateway/src/gateway-auth/test/w14-device-plane-network.test.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  format-artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Format exact W14 files
+        run: >-
+          npx prettier --write
+          services/mobile-gateway/src/gateway-auth/device-key-proof-verifier.ts
+          services/mobile-gateway/src/gateway-auth/device-plane-network.ts
+          services/mobile-gateway/src/gateway-auth/test/w14-device-plane-network.test.ts
+      - name: Stage formatted evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w14-formatted/services/mobile-gateway/src/gateway-auth/test
+          cp services/mobile-gateway/src/gateway-auth/device-key-proof-verifier.ts /tmp/w14-formatted/services/mobile-gateway/src/gateway-auth/
+          cp services/mobile-gateway/src/gateway-auth/device-plane-network.ts /tmp/w14-formatted/services/mobile-gateway/src/gateway-auth/
+          cp services/mobile-gateway/src/gateway-auth/test/w14-device-plane-network.test.ts /tmp/w14-formatted/services/mobile-gateway/src/gateway-auth/test/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w14-formatted-canonical
+          path: /tmp/w14-formatted
+          if-no-files-found: error
+          retention-days: 1
