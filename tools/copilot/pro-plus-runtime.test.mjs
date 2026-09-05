@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { calculateDynamicSafeBuildCapacity, discoverRuntimeCapabilities } from './runtime-capacity.mjs';
+import {
+  calculateDynamicSafeBuildCapacity,
+  discoverRuntimeCapabilities,
+} from './runtime-capacity.mjs';
 import {
   filterCandidatesAgainstActiveLeases,
   projectActiveSessionLeases,
