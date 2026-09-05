@@ -1,4 +1,4 @@
-name: Prototype Aurora Tablet UI V1
+name: Prototype Aurora Tablet UI V2
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  android-ui-v1:
+  android-ui-v2:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -33,7 +33,7 @@ jobs:
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - name: Test and assemble Aurora Tablet UI V1
+      - name: Test and assemble Aurora Tablet UI V2
         shell: bash
         env:
           AURORA_BUILD_SHA: ${{ github.sha }}
@@ -43,19 +43,20 @@ jobs:
             :app:assembleLocalDebug
           APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
           test -n "$APK"
-          mkdir -p /tmp/aurora-tablet-ui-v1
-          cp "$APK" /tmp/aurora-tablet-ui-v1/Aurora-Tablet-UI-V1.apk
-          sha256sum /tmp/aurora-tablet-ui-v1/Aurora-Tablet-UI-V1.apk > /tmp/aurora-tablet-ui-v1/SHA256SUMS.txt
-          cat > /tmp/aurora-tablet-ui-v1/BUILD_IDENTITY.txt <<EOF
+          mkdir -p /tmp/aurora-tablet-ui-v2
+          cp "$APK" /tmp/aurora-tablet-ui-v2/Aurora-Tablet-UI-V2.apk
+          sha256sum /tmp/aurora-tablet-ui-v2/Aurora-Tablet-UI-V2.apk > /tmp/aurora-tablet-ui-v2/SHA256SUMS.txt
+          cat > /tmp/aurora-tablet-ui-v2/BUILD_IDENTITY.txt <<EOF
           prototype_head=${{ github.sha }}
           w15j_base=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
-          ui_profile=TABLET_UI_V1
+          ui_profile=TABLET_UI_V2
+          app_version=0.16.0-alpha.2-local
           variant=localDebug
           EOF
-      - name: Upload Aurora Tablet UI V1 APK
+      - name: Upload Aurora Tablet UI V2 APK
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-tablet-ui-v1
-          path: /tmp/aurora-tablet-ui-v1
+          name: aurora-tablet-ui-v2
+          path: /tmp/aurora-tablet-ui-v2
           if-no-files-found: error
           retention-days: 14
