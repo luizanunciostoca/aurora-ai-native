@@ -1,0 +1,470 @@
+{
+  "schemaVersion": "1.2.0",
+  "wave": "W15-J",
+  "dp4Status": "OPEN",
+  "dp4PublicationReference": "issue:115#issuecomment-5547053471",
+  "dp5Status": "CLOSED_PHYSICAL_EVIDENCE_INCOMPLETE",
+  "candidateSha": "REQUIRED_40_HEX",
+  "apk": {
+    "applicationId": "REQUIRED",
+    "variant": "REQUIRED",
+    "versionCode": "REQUIRED",
+    "versionName": "REQUIRED",
+    "sha256": "REQUIRED"
+  },
+  "device": {
+    "serialSha256": "REQUIRED",
+    "manufacturer": "REQUIRED",
+    "model": "REQUIRED",
+    "product": "REQUIRED",
+    "apiLevel": "REQUIRED",
+    "buildFingerprint": "REQUIRED",
+    "physicalDeviceVerified": false
+  },
+  "environment": {
+    "gatewayIdentity": "REQUIRED",
+    "gatewayVersion": "REQUIRED",
+    "gatewayTransport": "LOCAL_ADB_REVERSE_ONLY",
+    "adbReversePort": "REQUIRED",
+    "operator": "REQUIRED",
+    "preflightObservedAtUtc": "REQUIRED",
+    "finalizedAtUtc": "REQUIRED"
+  },
+  "recordContract": {
+    "scenarioStatusValues": ["NOT_RUN", "PASS", "FAIL", "BLOCKED"],
+    "threatStatusValues": ["NOT_RUN", "PASS", "FAIL", "BLOCKED", "HANDED_OFF"],
+    "resourceStatusValues": ["NOT_OBSERVED", "OBSERVED", "BLOCKED"],
+    "riskGateStatusValues": ["NOT_EVALUATED", "PASS", "FAIL", "BLOCKED"],
+    "passRule": "Every mandatory scenario with PASS must have observedAtUtc and at least one evidence reference. FAIL/BLOCKED must also identify evidence or a blocker reference. DP5 cannot close while any mandatory scenario is NOT_RUN/FAIL/BLOCKED."
+  },
+  "scenarios": {
+    "lifecycleAndProcessRestart": {
+      "coldLaunchFromStoppedProcess": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "foregroundBackgroundForeground": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "forcedProcessStopAndRelaunch": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "processDeathWithSafeDeferredWork": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "processDeathAfterNativeDispatchBoundaryReconciliationOnly": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      }
+    },
+    "deviceIdentityRegistrationAndSession": {
+      "keystoreRegistrationOverRealSameSocketGateway": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "sessionBoundToCurrentDeviceRef": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "freshSocketReconnectAndSessionResume": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "sessionRotation": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "expiredSessionRejected": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "revokedSessionRejected": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "compromisedReinstalledKeyInvalidatedRecovery": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "staleRegistrationOrSessionFailsClosed": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "clientAuthorityFieldsAbsentOrRejected": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      }
+    },
+    "capabilityAndPermissionPreconditions": {
+      "freshSupportedCapabilityAvailable": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "staleCapabilityFailsClosed": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "runtimePermissionDenied": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "permissionRevokedAfterGrant": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "backgroundRestrictionApplied": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "permissionNeverGrantsAuroraAuthority": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      }
+    },
+    "installedAppIntegration": {
+      "expectedPackagePresent": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "appMissing": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "wrongOrReplacedPackageSignatureMismatch": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "invalidOrUntrustedIntentDeepLink": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "supportedGovernedLaunchOrAction": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "osAppReadbackEvidence": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      }
+    },
+    "governedNativeExecution": {
+      "currentDeviceAuthorizationDispatchesExactlyOnce": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "missingOrStaleAuthorityBlocksDispatch": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "killSwitchBeforeDispatchBlocks": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "cancellationBeforeDispatchBlocks": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "cancelKillRaceAfterDispatchIsUncertain": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "ambiguousNativeResultIsUncertain": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "verifiedOutcomeProducesEvidenceWithoutRetryAuthority": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      }
+    },
+    "offlineReconnectDedupeAndLateEvidence": {
+      "prolongedOfflineSafeDeferredOnly": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "freshSocketReconnectPreservesPreviousConnectionEvidence": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "duplicateCommandIdempotencyAcrossReconnect": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "processRestartWithQueuedWork": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "staleOrExpiredAuthorityDoesNotReplay": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "w03InflightOrUncertainIsReconciliationOnly": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "lateReceiptBoundToPriorConnectionGeneration": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "crashFencedReconciliationRequiredDoesNotAutoDispatch": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "postWriteTransportLossIsUncertainNoAutoRetry": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      }
+    },
+    "voiceAndPresence": {
+      "validDeterministicCommonCommand": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "falseWakeDoesNotDispatch": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "ambiguousTranscriptEscalates": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "lifecyclePrivacyRestrictionBlocksFastPath": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "permissionCapabilityDenialBlocksFastPath": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      },
+      "confidenceNeverBecomesAuthority": {
+        "status": "NOT_RUN",
+        "observedAtUtc": null,
+        "evidenceReferences": []
+      }
+    }
+  },
+  "threatReview": {
+    "packageImpersonationOrConfusion": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "secretOrKeystoreLeakage": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "gatewayCredentialOrProofLeakage": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "staleOrRevokedSessionReuse": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "replayAfterProcessDeathOrReconnect": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "lateOrForgedReceiptEvidence": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "sameSocketBindingBypassOrRebinding": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "permissionDriftOrPrivilegeEscalation": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "deviceOwnerLauncherPrivilege": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "uiAutomationAccessibilityFallback": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "localStorageCorruptionOrTampering": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "debugTestBuildMisuse": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    },
+    "localCleartextAdbReverseEscape": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "downstreamOwner": null
+    }
+  },
+  "resourceObservations": {
+    "coldStartup": {
+      "status": "NOT_OBSERVED",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "warmStartup": {
+      "status": "NOT_OBSERVED",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "gatewayReconnect": {
+      "status": "NOT_OBSERVED",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "batteryWindow": {
+      "status": "NOT_OBSERVED",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "cpu": {
+      "status": "NOT_OBSERVED",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "memory": {
+      "status": "NOT_OBSERVED",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "storage": {
+      "status": "NOT_OBSERVED",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "foregroundService": {
+      "status": "NOT_OBSERVED",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    }
+  },
+  "riskGates": {
+    "A_AUTHORITY": {
+      "status": "NOT_EVALUATED",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "blockers": []
+    },
+    "B_RUNTIME_RECONCILIATION": {
+      "status": "NOT_EVALUATED",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "blockers": []
+    },
+    "C_REPLAY_IDEMPOTENCY": {
+      "status": "NOT_EVALUATED",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "blockers": []
+    },
+    "D_EVIDENCE_OBSERVABILITY": {
+      "status": "NOT_EVALUATED",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "blockers": []
+    }
+  },
+  "collectorEvidence": {
+    "rawDirectory": "REQUIRED",
+    "preflightMetadata": "REQUIRED",
+    "finalizeMetadata": "REQUIRED",
+    "sha256Manifest": "REQUIRED",
+    "adbReverseCleanup": "REQUIRED"
+  },
+  "handoffs": {
+    "w17Telemetry": [],
+    "w19SecurityHardening": [],
+    "w20ReleaseRollout": []
+  },
+  "evidenceReferences": [],
+  "finalization": {
+    "mandatoryScenarioMatrixComplete": false,
+    "resourceObservationsComplete": false,
+    "riskGatesComplete": false,
+    "operatorAttestationReference": "REQUIRED",
+    "independentReviewReference": "REQUIRED"
+  },
+  "notes": [
+    "This file is an evidence template only and grants no execution authority.",
+    "CI, emulator and in-process mocks cannot close DP5.",
+    "LOCAL ADB reverse transport is for the controlled physical acceptance window only.",
+    "Do not replace per-scenario evidence with group-level PASS. Every mandatory scenario requires its own structured record."
+  ]
+}
