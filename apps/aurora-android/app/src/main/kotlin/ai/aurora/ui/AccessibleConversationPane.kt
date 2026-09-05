@@ -31,6 +31,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.aurora.ui.model.AuroraPresenceMode
 import ai.aurora.ui.model.AuroraUiIntent
 import ai.aurora.ui.model.AuroraUiState
 import ai.aurora.ui.model.ConversationRole
@@ -65,7 +66,7 @@ internal fun AccessibleConversationPane(
             AuroraCore(state.presence, state.settings.reducedMotion, 68.dp)
             Column(modifier = Modifier.weight(1f)) {
                 Text(presenceHeadline(state.presence), fontWeight = FontWeight.SemiBold, fontSize = 17.sp)
-                Text(presenceSubhead(state), color = TextSecondary, fontSize = 12.sp)
+                Text(accessiblePresenceSubhead(state), color = TextSecondary, fontSize = 12.sp)
             }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -103,6 +104,23 @@ internal fun AccessibleConversationPane(
         AccessibleCommandInput(state, onIntent, onVoice)
     }
 }
+
+private fun accessiblePresenceSubhead(state: AuroraUiState): String =
+    when (state.presence) {
+        AuroraPresenceMode.OFFLINE -> "Offline · local-only e queue-safe continuam distinguíveis."
+        AuroraPresenceMode.LISTENING -> if (state.settings.captionsEnabled) {
+            state.partialTranscript.ifBlank { "Captando voz com captions ativas." }
+        } else {
+            "Captando voz · captions desativadas."
+        }
+        AuroraPresenceMode.UNDERSTANDING -> "Interpretando a intenção sem conceder authority."
+        AuroraPresenceMode.RETRIEVING_CONTEXT -> "Recuperando contexto com freshness/provenance visíveis."
+        AuroraPresenceMode.REASONING -> "Preparando resposta sem expor private chain-of-thought."
+        AuroraPresenceMode.WAITING_APPROVAL -> "Aguardando decisão humana governada."
+        AuroraPresenceMode.EXECUTION_UNCERTAIN -> "Outcome inconclusivo · reconciliation antes de retry."
+        AuroraPresenceMode.DEGRADED -> "Modo degradado · limites permanecem explícitos."
+        else -> "Conversa primeiro. Workspace aparece somente quando ajuda."
+    }
 
 @Composable
 private fun AccessibleConversationBubble(turn: ConversationTurn) {
