@@ -350,8 +350,15 @@ object WorkspaceNavigator {
             listOf("grafo", "dependência", "dependencia", "caminho crítico", "caminho critico").any(normalized::contains) ->
                 WorkspaceViewType.GOAL_GRAPH
             listOf("tarefa", "task").any(normalized::contains) -> WorkspaceViewType.TASK_DETAIL
-            listOf("capability", "capabilities", "o que pode", "o que consegue").any(normalized::contains) ->
-                WorkspaceViewType.CAPABILITY_CATALOG
+            listOf(
+                "capability",
+                "capabilities",
+                "o que pode",
+                "o que consegue",
+                "consegue fazer",
+                "pode fazer",
+                "o que a aurora consegue",
+            ).any(normalized::contains) -> WorkspaceViewType.CAPABILITY_CATALOG
             listOf("agente", "worker", "workforce").any(normalized::contains) -> WorkspaceViewType.WORKFORCE
             listOf("marketing", "campanha", "conteúdo", "conteudo").any(normalized::contains) ->
                 WorkspaceViewType.MARKETING_OVERVIEW
