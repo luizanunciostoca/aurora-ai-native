@@ -1,5 +1,5 @@
 import type { ActionIntent } from '@aurora/contracts/actions';
-import type { CommandId, ExecutionId } from '@aurora/contracts/ids';
+import type { CausationId, CommandId, ExecutionId } from '@aurora/contracts/ids';
 
 import type { FailureContainmentResult } from '../failure-containment/types.js';
 import type { ExecutionSafeguardResult } from '../safeguards/types.js';
@@ -8,11 +8,16 @@ import type { TargetResolutionResult } from '../target-resolution/types.js';
 import type { AuthenticatedVoiceEvaluationContext } from '../voice-intake/types.js';
 
 const MAX_DATE_MS = 8_640_000_000_000_000;
+const COMMAND_ID = /^cmd_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const EXECUTION_ID = /^exe_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const CAUSATION_ID = /^cau_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const SAFE_REFERENCE = /^[A-Za-z0-9._:/+-]{1,512}$/u;
+const SHA256 = /^sha256:[a-f0-9]{64}$/u;
 
 export interface GovernedDeviceCommandMaterial {
   readonly commandId: CommandId;
   readonly executionId: ExecutionId;
+  readonly causationId: CausationId;
   readonly actionIntent: ActionIntent;
   readonly canonicalPayloadHash: string;
   readonly authorizesExecution: false;
@@ -61,6 +66,14 @@ export interface GovernedDeviceDispatchRequest {
   readonly gates: GovernedDeviceDispatchGateBundle;
 }
 
+type GovernedDeviceDispatchErrorCode =
+  | 'GATE_REJECTED'
+  | 'CONTEXT_MISMATCH'
+  | 'MATERIAL_MISMATCH'
+  | 'W14_UNAVAILABLE'
+  | 'W14_REJECTED'
+  | 'W14_PROTOCOL_VIOLATION';
+
 export type GovernedDeviceDispatchResult =
   | Readonly<{
       ok: true;
@@ -73,13 +86,7 @@ export type GovernedDeviceDispatchResult =
     }>
   | Readonly<{
       ok: false;
-      code:
-        | 'GATE_REJECTED'
-        | 'CONTEXT_MISMATCH'
-        | 'MATERIAL_MISMATCH'
-        | 'W14_UNAVAILABLE'
-        | 'W14_REJECTED'
-        | 'W14_PROTOCOL_VIOLATION';
+      code: GovernedDeviceDispatchErrorCode;
       retryable: boolean;
       authorizesExecution: false;
       provesExecutionSuccess: false;
@@ -87,11 +94,7 @@ export type GovernedDeviceDispatchResult =
     }>;
 
 function rejected(
-  code: GovernedDeviceDispatchResult extends infer Result
-    ? Result extends { readonly ok: false; readonly code: infer Code }
-      ? Code
-      : never
-    : never,
+  code: GovernedDeviceDispatchErrorCode,
   retryable = false,
 ): GovernedDeviceDispatchResult {
   return {
@@ -104,7 +107,10 @@ function rejected(
   };
 }
 
-function sameDeviceTarget(actionIntent: ActionIntent, context: AuthenticatedVoiceEvaluationContext): boolean {
+function sameDeviceTarget(
+  actionIntent: ActionIntent,
+  context: AuthenticatedVoiceEvaluationContext,
+): boolean {
   const target = actionIntent.executionTarget;
   return (
     target?.kind === 'DEVICE' &&
@@ -119,28 +125,40 @@ function materialMatches(command: GovernedDeviceCommandMaterial): boolean {
   const intent = command.actionIntent;
   return (
     command.authorizesExecution === false &&
-    typeof command.commandId === 'string' &&
-    command.commandId.length > 0 &&
-    typeof command.executionId === 'string' &&
-    command.executionId.length > 0 &&
-    SAFE_REFERENCE.test(command.canonicalPayloadHash) &&
+    COMMAND_ID.test(command.commandId) &&
+    EXECUTION_ID.test(command.executionId) &&
+    CAUSATION_ID.test(command.causationId) &&
+    SHA256.test(command.canonicalPayloadHash) &&
     intent.kind === 'ACTION_INTENT' &&
-    intent.executionTarget?.kind === 'DEVICE'
+    intent.executionTarget?.kind === 'DEVICE' &&
+    intent.idempotency.mode === 'REQUIRED' &&
+    SAFE_REFERENCE.test(intent.idempotency.key)
   );
 }
 
-function gatesAllow(command: GovernedDeviceCommandMaterial, gates: GovernedDeviceDispatchGateBundle): boolean {
+function gatesAllow(
+  command: GovernedDeviceCommandMaterial,
+  gates: GovernedDeviceDispatchGateBundle,
+): boolean {
   const actionIntentId = command.actionIntent.actionIntentId;
+  const executionTarget = command.actionIntent.executionTarget;
+  if (executionTarget?.kind !== 'DEVICE') return false;
+
+  const resolvedTarget = gates.target.target;
+  if (resolvedTarget.kind !== 'DEVICE') return false;
+  if (resolvedTarget.bindingReference !== executionTarget.bindingReference) return false;
+  if (!gates.target.resolved) return false;
+  if (gates.target.binding.target.kind !== 'DEVICE') return false;
+  if (gates.target.binding.target.bindingReference !== executionTarget.bindingReference) return false;
+
   return (
     gates.authority.kind === 'EXECUTOR_AUTHORITY_GATE' &&
     gates.authority.actionIntentId === actionIntentId &&
     gates.authority.executionEligible === true &&
+    gates.authority.currentAuthorityValidated === true &&
     gates.authority.authorizesExecution === false &&
     gates.target.kind === 'EXECUTION_TARGET_RESOLUTION' &&
-    gates.target.resolved === true &&
     gates.target.authorizesExecution === false &&
-    gates.target.target.kind === 'DEVICE' &&
-    gates.target.target.bindingReference === command.actionIntent.executionTarget?.bindingReference &&
     gates.safeguards.kind === 'EXECUTION_SAFEGUARD_RESULT' &&
     gates.safeguards.actionIntentId === actionIntentId &&
     gates.safeguards.safeToInvokeExternal === true &&
