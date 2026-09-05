@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.fragment.app.FragmentActivity
 import ai.aurora.ui.AuroraRoot
 import ai.aurora.ui.PrivacyCapturePolicy
+import ai.aurora.ui.VoiceSessionRegistry
 
 class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceChangeListener {
     private lateinit var uiPreferences: SharedPreferences
@@ -26,13 +27,22 @@ class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceCha
         applyPrivacyCapturePolicy()
     }
 
+    override fun onStop() {
+        VoiceSessionRegistry.stopAllForBackground()
+        super.onStop()
+    }
+
     override fun onDestroy() {
         uiPreferences.unregisterOnSharedPreferenceChangeListener(this)
         super.onDestroy()
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-        if (key == KEY_PRIVACY_MODE) applyPrivacyCapturePolicy()
+        if (key != KEY_PRIVACY_MODE) return
+        applyPrivacyCapturePolicy()
+        if (uiPreferences.getBoolean(KEY_PRIVACY_MODE, false)) {
+            VoiceSessionRegistry.stopAllForPrivacy()
+        }
     }
 
     private fun applyPrivacyCapturePolicy() {
