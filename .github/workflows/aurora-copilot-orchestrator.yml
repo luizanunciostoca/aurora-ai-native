@@ -36,6 +36,8 @@ jobs:
         run: node tools/copilot/load-task-graph.mjs
       - name: Validate Puzzle execution mode
         run: node tools/copilot/validate-execution-mode.mjs
+      - name: Validate PRO+ runtime capacity, leases and telemetry
+        run: node --test tools/copilot/pro-plus-runtime.test.mjs
       - name: Validate Puzzle scheduling policy
         run: node tools/copilot/puzzle-policy.test.mjs
       - name: Validate PREBUILD artifact authority boundary
