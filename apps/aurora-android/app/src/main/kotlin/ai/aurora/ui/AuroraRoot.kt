@@ -5,7 +5,6 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -13,8 +12,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -30,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.aurora.ui.model.AuroraUiIntent
 import ai.aurora.ui.model.AuroraUiState
 import ai.aurora.ui.model.UiSurface
+import ai.aurora.ui.model.VoiceOutputState
 import kotlinx.coroutines.delay
 
 @Composable
@@ -45,15 +43,46 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
             onError = { viewModel.onIntent(AuroraUiIntent.VoiceError(it)) },
         )
     }
-    DisposableEffect(voiceController) {
-        onDispose { voiceController.close() }
+    val outputController = remember(context, viewModel) {
+        VoiceOutputController(
+            context = context,
+            onAvailability = { available, engine, route ->
+                viewModel.onIntent(AuroraUiIntent.VoiceOutputAvailability(available, engine, route))
+            },
+            onStarted = { viewModel.onIntent(AuroraUiIntent.VoiceOutputStarted(it)) },
+            onCompleted = { viewModel.onIntent(AuroraUiIntent.VoiceOutputCompleted(it)) },
+            onError = { id, message -> viewModel.onIntent(AuroraUiIntent.VoiceOutputError(id, message)) },
+        )
     }
+
+    DisposableEffect(voiceController, outputController) {
+        onDispose {
+            voiceController.close()
+            outputController.close()
+        }
+    }
+
+    LaunchedEffect(state.settings.preferOfflineRecognition) {
+        val availability = voiceController.availability(state.settings.preferOfflineRecognition)
+        viewModel.onIntent(AuroraUiIntent.VoiceInputAvailability(availability.available, availability.engineLabel))
+    }
+
+    LaunchedEffect(state.voice.pendingSpeak?.id) {
+        val request = state.voice.pendingSpeak ?: return@LaunchedEffect
+        outputController.speak(request.text, state.settings, request.id)
+    }
+
     val microphoneLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
         if (granted) {
             viewModel.onIntent(AuroraUiIntent.StartVoice)
-            voiceController.start()
+            voiceController.start(
+                VoiceRecognitionConfig(
+                    languageTag = state.settings.voiceLanguageTag,
+                    preferOffline = state.settings.preferOfflineRecognition,
+                ),
+            )
         } else {
             viewModel.onIntent(
                 AuroraUiIntent.VoiceError(
@@ -62,6 +91,7 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
             )
         }
     }
+
     val startVoice: () -> Unit = {
         when {
             state.settings.privacyMode ->
@@ -70,12 +100,35 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
                         "Voice está bloqueado enquanto o modo de privacidade estiver ativo.",
                     ),
                 )
-            context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> {
-                viewModel.onIntent(AuroraUiIntent.StartVoice)
-                voiceController.start()
+            state.voice.outputState == VoiceOutputState.SPEAKING && !state.settings.bargeInEnabled ->
+                viewModel.onIntent(
+                    AuroraUiIntent.VoiceError(
+                        "A Aurora está falando. Ative barge-in ou pare a saída de voz antes de iniciar o microfone.",
+                    ),
+                )
+            else -> {
+                if (state.voice.outputState == VoiceOutputState.SPEAKING && state.settings.bargeInEnabled) {
+                    outputController.stop()
+                    viewModel.onIntent(AuroraUiIntent.StopVoiceOutput)
+                }
+                if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    viewModel.onIntent(AuroraUiIntent.StartVoice)
+                    voiceController.start(
+                        VoiceRecognitionConfig(
+                            languageTag = state.settings.voiceLanguageTag,
+                            preferOffline = state.settings.preferOfflineRecognition,
+                        ),
+                    )
+                } else {
+                    microphoneLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
             }
-            else -> microphoneLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
+    }
+
+    val stopVoiceOutput: () -> Unit = {
+        outputController.stop()
+        viewModel.onIntent(AuroraUiIntent.StopVoiceOutput)
     }
 
     LaunchedEffect(Unit) {
@@ -99,6 +152,7 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
                         state = state,
                         onIntent = viewModel::onIntent,
                         onVoice = startVoice,
+                        onStopVoiceOutput = stopVoiceOutput,
                     )
                 }
             }
@@ -111,6 +165,7 @@ private fun AuroraShell(
     state: AuroraUiState,
     onIntent: (AuroraUiIntent) -> Unit,
     onVoice: () -> Unit,
+    onStopVoiceOutput: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(state, onIntent)
@@ -141,7 +196,7 @@ private fun AuroraShell(
                             .weight(1f)
                             .fillMaxHeight(),
                     ) {
-                        MainSurfaceContent(state, onIntent, onVoice)
+                        MainSurfaceContent(state, onIntent, onVoice, onStopVoiceOutput)
                     }
                     if (extraWideLayout && state.workspaceOpen && state.manifest != null) {
                         VerticalRule()
@@ -164,7 +219,7 @@ private fun AuroraShell(
                             modifier = Modifier.fillMaxSize(),
                         )
                     } else {
-                        MainSurfaceContent(state, onIntent, onVoice)
+                        MainSurfaceContent(state, onIntent, onVoice, onStopVoiceOutput)
                     }
                 }
             }
@@ -178,6 +233,7 @@ private fun MainSurfaceContent(
     state: AuroraUiState,
     onIntent: (AuroraUiIntent) -> Unit,
     onVoice: () -> Unit,
+    onStopVoiceOutput: () -> Unit,
 ) {
     when (state.surface) {
         UiSurface.PRESENCE,
@@ -186,7 +242,7 @@ private fun MainSurfaceContent(
         UiSurface.WORKSPACE -> WorkspacePane(state, onIntent)
         UiSurface.HUMAN_CONTROL -> HumanControlPane(state, onIntent)
         UiSurface.EVIDENCE -> EvidencePane(state, onIntent)
-        UiSurface.SETTINGS -> SettingsPane(state, onIntent, onVoice)
+        UiSurface.SETTINGS -> VoiceAndSystemSettingsPane(state, onIntent, onVoice, onStopVoiceOutput)
     }
 }
 
