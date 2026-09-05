@@ -305,9 +305,7 @@ export class W03PostgresDeviceReservationAdapter
     this.#sql = sql;
   }
 
-  reserve(
-    request: W03DurableDeliveryReservationRequest,
-  ): W03DurableDeliveryReservationResult;
+  reserve(request: W03DurableDeliveryReservationRequest): W03DurableDeliveryReservationResult;
   reserve(request: W03ReceiptIngressReservationRequest): W03ReceiptIngressReservationResult;
   reserve(
     request: W03DurableDeliveryReservationRequest | W03ReceiptIngressReservationRequest,
