@@ -1,6 +1,9 @@
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val auroraBuildSha = providers.environmentVariable("AURORA_BUILD_SHA").orElse("prototype-local").get()
 
 android {
     namespace = "ai.aurora.device"
@@ -11,7 +14,9 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "0.15.0-alpha.1"
+        versionName = "0.16.0-alpha.1"
+        buildConfigField("String", "AURORA_BUILD_SHA", "\"$auroraBuildSha\"")
+        buildConfigField("String", "AURORA_UI_PROFILE", "\"TABLET_UI_V1\"")
     }
 
     flavorDimensions += "environment"
@@ -45,6 +50,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        compose = true
     }
 
     compileOptions {
@@ -60,5 +66,23 @@ android {
 }
 
 dependencies {
+    val composeBom = platform("androidx.compose:compose-bom:2026.04.01")
+    implementation(composeBom)
+    testImplementation(composeBom)
+    androidTestImplementation(composeBom)
+
+    implementation("androidx.activity:activity-compose:1.12.4")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.runtime:runtime")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.4")
+
+    debugImplementation("androidx.compose.ui:ui-tooling")
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
+
     testImplementation("junit:junit:4.13.2")
 }
