@@ -2,7 +2,13 @@
 
 Status: `PHYSICAL_EVIDENCE_REQUIRED`
 
-This protocol implements the terminal W15-J evidence contract for DP5. Passing CI, JVM tests, an Android emulator, or an in-process gateway mock is useful prerequisite evidence but **cannot** close DP5. The final evidence set must be collected on representative physical Android tablet hardware.
+This protocol implements the terminal W15-J evidence contract for DP5. Passing CI, JVM tests, an Android emulator, or an in-process gateway mock is prerequisite evidence only and **cannot** close DP5. The final evidence set must be collected on representative physical Android tablet hardware.
+
+## Device Plane barrier state
+
+`DP4 OPEN` is the positive published state defined by the Device Plane dependency matrix. It means the W15 Android capability/precondition/DEVICE-executor core has been accepted for downstream W15 integration. The canonical publication is recorded on W15-00 issue #115 (`issuecomment-5547053471`).
+
+DP4 being open does **not** imply DP5 acceptance. DP5 remains closed until this physical protocol and final integrated Risk Gates are complete.
 
 ## Authority boundary
 
@@ -15,7 +21,7 @@ Physical acceptance must preserve the accepted ownership chain:
 - W15-C/E expose local capability and permission preconditions only.
 - W15-F is the concrete Android DEVICE side-effect boundary.
 - W15-H may defer only safe work and must never blindly replay stale, cancelled, expired, or `EXECUTION_UNCERTAIN` work.
-- W15-J owns only the Android-side physical integration/acceptance adapter and evidence protocol. It cannot mint policy, authority, trust, outcome, or retry decisions.
+- W15-J owns the Android-side physical integration/acceptance adapter and evidence protocol. It cannot mint policy, authority, trust, outcome, or retry decisions.
 
 No physical observation may be interpreted as a PolicyToken, OwnerDecision, approval, or retry authorization.
 
@@ -29,7 +35,7 @@ For controlled physical acceptance, the supported transport in this candidate is
 adb -s <serial> reverse tcp:8080 tcp:8080
 ```
 
-The Android client connects to `127.0.0.1:8080` only when the runtime configuration is explicitly `LOCAL` with cleartext enabled. The host-side W14 transport remains loopback-bound. Staging/production TLS deployment is not claimed by W15-J and remains fail-closed until separately governed.
+The Android client connects to `127.0.0.1:8080` only when runtime configuration is explicitly `LOCAL` with cleartext enabled. The host-side W14 transport remains loopback-bound. Staging/production TLS deployment is not claimed by W15-J and remains fail-closed until separately governed.
 
 The app manifest includes `android.permission.INTERNET`; this is a transport capability only and grants no Aurora execution authority.
 
@@ -39,25 +45,30 @@ Registration, attestation, and receipt proofs use the existing W15-B Android Key
 
 The client must never self-assert tenant/actor authority, current trust, current command truth, server time, or retry permission. Receipt `integrityDigest` is computed locally only as the canonical value covered by the signed W14 receipt-proof message; it is **not** sent as a client-authoritative wire field because W14 recomputes the digest server-side.
 
-## Build identity
+## Build identity and structured evidence
 
-Record all of the following before testing:
+The tested APK must be traceable to one exact candidate. Before the physical window, record:
 
-- Aurora Git commit SHA and PR/candidate SHA;
-- APK variant and application ID;
-- Android app versionCode/versionName;
+- exact Aurora candidate SHA;
+- APK SHA-256, variant, application ID, versionCode and versionName;
 - tablet manufacturer/model/product/serial hash;
 - Android API level/build fingerprint;
-- whether the device is physical (`ro.kernel.qemu != 1`);
-- date/time and operator;
+- physical-device proof (`ro.kernel.qemu != 1` and non-emulator serial);
+- operator and observation timestamps;
 - gateway/test-environment identity and version;
-- ADB reverse mapping used for the LOCAL physical gateway path.
+- ADB reverse port/mapping.
 
-The evidence is invalid if the tested APK cannot be traced to the exact candidate being accepted.
+`W15J_EVIDENCE_TEMPLATE.json` schema v1.2 records every mandatory subscenario individually. A group-level PASS is insufficient. Every mandatory scenario record must contain:
+
+- `status`: `PASS`, `FAIL`, `BLOCKED`, or `NOT_RUN`;
+- `observedAtUtc`;
+- at least one concrete `evidenceReferences` entry for PASS, FAIL, or BLOCKED.
+
+DP5 cannot close while any mandatory scenario is `NOT_RUN`, `FAIL`, or `BLOCKED`. Threat items may be `HANDED_OFF` only when the downstream owner and evidence/reference are explicit and the item is not a W15-owned DP5 blocker.
+
+Resource observations and Risk Gates have their own structured records. The final evidence must also bind the raw collector directory, preflight/finalize metadata, SHA-256 manifest, ADB-reverse cleanup evidence, operator attestation reference, and independent review reference.
 
 ## Mandatory physical scenarios
-
-Each scenario must be recorded as `PASS`, `FAIL`, or `BLOCKED`, with a timestamp and evidence reference. `NOT_RUN` or missing evidence cannot close DP5.
 
 ### Lifecycle and process restart
 
@@ -71,7 +82,7 @@ Each scenario must be recorded as `PASS`, `FAIL`, or `BLOCKED`, with a timestamp
 
 1. registration with non-exportable Keystore key material over the real W14 same-socket gateway path;
 2. session establishment bound to the current W14 DeviceRef;
-3. reconnect onto a newer gateway generation and W14 session resume;
+3. reconnect on a fresh TCP socket, rebind the same accepted DeviceId/DeviceRef, then W14 session resume with previous-connection evidence;
 4. session rotation;
 5. expired session rejection;
 6. revoked session rejection;
@@ -116,14 +127,14 @@ Accessibility/computer-use fallback is not implicitly authorized by this protoco
 ### Offline, reconnect, dedupe, and late evidence
 
 1. prolonged offline period with only explicitly safe-to-defer work;
-2. reconnect on a **fresh TCP socket** using W14 gateway reconnect + device-session resume while preserving the previous connection evidence;
+2. reconnect on a **fresh TCP socket** using W14 gateway reconnect, same-DeviceRef rebind and device-session resume while preserving previous-connection evidence;
 3. duplicate command/idempotency key across reconnect;
 4. process restart with queued work;
 5. stale/expired authority must not replay;
 6. W03 `INFLIGHT`/uncertain state remains reconciliation-only;
-7. late Receipt/Evidence is signed against the reported prior connection/generation and classified without causing blind replay;
+7. late Receipt/Evidence is signed against the reported prior connection/generation and classified without blind replay;
 8. crash-fenced `RECONCILIATION_REQUIRED` work never auto-dispatches after restart;
-9. a transport failure after request write is recorded as `TRANSPORT_UNCERTAIN` and must not auto-retry.
+9. transport failure after request write is `TRANSPORT_UNCERTAIN` and must not auto-retry.
 
 ### Voice and presence
 
@@ -156,45 +167,93 @@ Security-hardening items not owned by W15-J must be handed to W19 rather than si
 
 ## Performance, battery, and resource observations
 
-Use `collect-w15j-physical-evidence.sh` on the representative tablet and retain raw outputs. At minimum record:
+Retain raw collector outputs and populate the corresponding structured evidence records. At minimum record:
 
-- cold/warm startup timing;
-- gateway reconnect timing through the real W14 physical acceptance path;
-- battery state before and after the governed scenario window;
+- cold and warm startup timing;
+- gateway reconnect timing through the real W14 physical path;
+- battery state spanning the governed scenario window;
 - process memory (`dumpsys meminfo`);
-- CPU snapshot (`dumpsys cpuinfo`);
+- CPU snapshots (`dumpsys cpuinfo`);
 - app/data storage footprint;
 - foreground-service state, if one is actually used by the accepted build.
 
+Collector raw captures include a companion `.exit-code` file. A non-zero optional capture is evidence of an observation blocker, not a successful observation, and must be reflected as `BLOCKED` until resolved or explicitly handed off where allowed.
+
 These are **W15 device observations**, not production SLOs. Production telemetry/SLO ownership remains W17.
+
+## Two-phase physical collector
+
+The collector intentionally brackets the entire governed scenario window so battery/resource evidence and ADB-reverse cleanup are not falsely captured only during preflight.
+
+### 1. Preflight
+
+Use one exact LOCAL APK built from the candidate and one evidence directory:
+
+```bash
+AURORA_CANDIDATE_SHA=<40-hex-candidate> \
+AURORA_APK=<path-to-exact-local-apk> \
+AURORA_APK_VARIANT=<variant> \
+AURORA_OPERATOR=<operator-id> \
+AURORA_GATEWAY_IDENTITY=<test-gateway-id> \
+AURORA_GATEWAY_VERSION=<test-gateway-version> \
+AURORA_EVIDENCE_DIR=<evidence-directory> \
+./apps/aurora-android/physical/collect-w15j-physical-evidence.sh
+```
+
+Preflight fails closed unless exactly one authorized physical ADB device is present, candidate SHA/APK metadata are supplied, the APK installs, INTERNET permission is present, and the required LOCAL reverse mapping is observed. Critical capture failures stop collection. If the script created the reverse mapping and preflight fails, it removes that mapping automatically.
+
+A successful preflight deliberately leaves the reverse mapping active only for the governed physical scenario window.
+
+### 2. Execute the mandatory scenario matrix
+
+Run every mandatory scenario above against the same installed candidate/device/gateway identity and populate `W15J_EVIDENCE_TEMPLATE.json` per scenario. Keep gateway credentials out of shell history, collector variables, evidence files and repository content.
+
+### 3. Finalize
+
+After all scenarios, rerun the same collector with the same candidate/APK/device/gateway and evidence directory:
+
+```bash
+AURORA_EVIDENCE_MODE=finalize \
+AURORA_CANDIDATE_SHA=<same-40-hex-candidate> \
+AURORA_APK=<same-exact-local-apk> \
+AURORA_APK_VARIANT=<same-variant> \
+AURORA_OPERATOR=<operator-id> \
+AURORA_GATEWAY_IDENTITY=<same-test-gateway-id> \
+AURORA_GATEWAY_VERSION=<same-test-gateway-version> \
+AURORA_EVIDENCE_DIR=<same-evidence-directory> \
+./apps/aurora-android/physical/collect-w15j-physical-evidence.sh
+```
+
+Finalize verifies candidate SHA, APK hash, physical device hash, package and gateway identity/version against preflight, captures after-window resource evidence, removes the ADB reverse mapping, verifies the mapping is absent, and writes `evidence-manifest.sha256` over the raw evidence files.
+
+The collector itself never changes DP5 to accepted. `acceptance-status.txt` remains `INCOMPLETE_UNTIL_SCENARIO_MATRIX_SIGNED` until the structured matrix and integrated Risk Gates are independently reviewed.
 
 ## CI and physical-evidence boundary
 
-The W15-J candidate now includes:
+The W15-J candidate includes:
 
 - Android `INTERNET` permission;
-- a bounded persistent HTTP/1.1 channel that preserves the W14 same-TCP-socket requirement;
+- a bounded persistent HTTP/1.1 channel preserving the W14 same-TCP-socket requirement;
 - exact W14 ES256 proof construction using the W15-B Keystore key;
 - gateway open/reconnect plus device register/activate/session open/resume;
+- reconnect rebind of the same canonical DeviceRef before session resume;
 - command claim/ack and authenticated receipt ingress;
 - deterministic tests for same-socket sequencing, authority-field exclusion, receipt proof binding, reconnect, and post-write uncertainty.
 
 These automated tests are acceptance prerequisites only. They must not be promoted to DP5 physical evidence.
 
-## Physical setup
-
-1. Build/install the exact candidate LOCAL APK on one authorized representative physical tablet.
-2. Start the accepted W14 gateway composition on host loopback port 8080 (or record the explicitly selected port).
-3. Configure ADB reverse for that same port.
-4. Run the collector and preserve its raw output directory.
-5. Execute every mandatory scenario and reference raw evidence in `W15J_EVIDENCE_TEMPLATE.json` or its signed successor.
-6. Remove the ADB reverse mapping after the governed physical test window.
-
-No gateway credential should appear in shell history, collector output, logcat capture, evidence templates, or repository files.
-
 ## DP5 close rule
 
-DP5 may be opened only when all W15 nodes are `aurora:accepted`, DP4 remains valid, every mandatory physical scenario above has genuine representative-device evidence, Risk Gates A-D pass at the integrated boundary, physical resource observations are recorded, and remaining telemetry/security/release work is explicitly handed to W17/W19/W20.
+DP5 may open only when:
+
+1. all required W15 nodes remain canonical `aurora:accepted` and DP4 remains valid/open;
+2. the tested APK is bound to the exact W15-J candidate;
+3. every mandatory physical subscenario is individually PASS with timestamp and concrete evidence reference;
+4. physical resource observations are complete or any legitimate downstream handoff is explicit and non-blocking;
+5. Risk Gates A-D pass at the integrated physical boundary;
+6. collector preflight/finalize evidence is internally consistent, SHA-256 manifested, and the LOCAL ADB reverse mapping is proven removed;
+7. remaining telemetry/security/release work is handed to W17/W19/W20;
+8. operator attestation and independent review references are recorded.
 
 Until then the only valid status is:
 
