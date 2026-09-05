@@ -55,14 +55,14 @@ interface ParsedProof {
 }
 
 type DeviceKeyProofFailureCode =
-  | 'MALFORMED'
-  | 'PROOF_INVALID'
-  | 'UNSUPPORTED_KEY'
-  | 'BINDING_MISMATCH'
-  | 'STALE_PROOF';
+  'MALFORMED' | 'PROOF_INVALID' | 'UNSUPPORTED_KEY' | 'BINDING_MISMATCH' | 'STALE_PROOF';
 
 type DeviceKeyProofResult<T extends object> =
-  | ({ readonly ok: true; readonly authorizesExecution: false; readonly canGrantPermission: false } & T)
+  | ({
+      readonly ok: true;
+      readonly authorizesExecution: false;
+      readonly canGrantPermission: false;
+    } & T)
   | Readonly<{
       ok: false;
       error: Readonly<{ code: DeviceKeyProofFailureCode; retryable: false }>;
@@ -152,7 +152,11 @@ function decodeCanonicalBase64Url(value: unknown, maxBytes: number): Uint8Array 
   }
   try {
     const decoded = Buffer.from(value, 'base64url');
-    if (decoded.length === 0 || decoded.length > maxBytes || decoded.toString('base64url') !== value) {
+    if (
+      decoded.length === 0 ||
+      decoded.length > maxBytes ||
+      decoded.toString('base64url') !== value
+    ) {
       return null;
     }
     return decoded;
@@ -467,10 +471,7 @@ export class DeviceKeyProofVerifier {
     if (message === null || !safeToken(input.proofReference, 512)) {
       return authFailure('MALFORMED');
     }
-    if (
-      receivedAtMs < capturedAtMs ||
-      receivedAtMs - capturedAtMs > this.#config.maxProofAgeMs
-    ) {
+    if (receivedAtMs < capturedAtMs || receivedAtMs - capturedAtMs > this.#config.maxProofAgeMs) {
       return authFailure('STALE_PROOF');
     }
     const parsed = parseProof(input.proofReference);

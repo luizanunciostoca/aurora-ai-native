@@ -97,7 +97,9 @@ function devicePlaneCode(value: PostedResponse): string {
   if (!isRecord(value.body) || value.body.ok !== false || !isRecord(value.body.devicePlaneError)) {
     return '';
   }
-  return typeof value.body.devicePlaneError.code === 'string' ? value.body.devicePlaneError.code : '';
+  return typeof value.body.devicePlaneError.code === 'string'
+    ? value.body.devicePlaneError.code
+    : '';
 }
 
 function transportCode(value: PostedResponse): string {
@@ -438,9 +440,7 @@ function createFixture() {
   return { devices, sessions, deliveries, receipts, verifier, handler };
 }
 
-async function openAuthenticatedSocket(
-  handler?: GatewayDevicePlaneNetworkHandler,
-): Promise<{
+async function openAuthenticatedSocket(handler?: GatewayDevicePlaneNetworkHandler): Promise<{
   transport: GatewayHttpNetworkTransport;
   port: number;
   agent: AgentLike;
@@ -530,7 +530,10 @@ test('same authenticated socket derives registration/session bindings and reject
       assert.equal(fakes.sessions.lastOpen.gatewaySession.tenantId, TENANT);
       assert.equal(fakes.sessions.lastOpen.gatewaySession.actorIdentityId, ACTOR);
       assert.equal(fakes.sessions.lastOpen.gatewaySession.correlationId, CORRELATION);
-      assert.equal(fakes.sessions.lastOpen.gatewaySession.connectionId, fixture.session.connectionId);
+      assert.equal(
+        fakes.sessions.lastOpen.gatewaySession.connectionId,
+        fixture.session.connectionId,
+      );
     }
     assert.equal(isRecord(fakes.sessions.lastOpen?.attestation), true);
     if (isRecord(fakes.sessions.lastOpen?.attestation)) {

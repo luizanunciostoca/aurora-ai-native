@@ -352,12 +352,16 @@ export class GatewayDevicePlaneNetworkHandler {
       return devicePlaneError(400, 'BODY_MALFORMED');
     }
 
-    const verified = await invokeAsync(this.#dependencies.deviceProofVerifier, 'verifyRegistration', {
-      deviceId: input.body.deviceId,
-      gatewaySession: input.gatewaySession,
-      proof: input.body.proof,
-      nowMs: input.nowMs,
-    });
+    const verified = await invokeAsync(
+      this.#dependencies.deviceProofVerifier,
+      'verifyRegistration',
+      {
+        deviceId: input.body.deviceId,
+        gatewaySession: input.gatewaySession,
+        proof: input.body.proof,
+        nowMs: input.nowMs,
+      },
+    );
     if (!resultOk(verified) || !safeReference(verified.proofReference, 256)) {
       return devicePlaneError(403, 'DEVICE_PROOF_REJECTED', resultErrorCode(verified));
     }
@@ -443,14 +447,18 @@ export class GatewayDevicePlaneNetworkHandler {
     deviceSessionId: string,
     previousConnectionId?: string,
   ): Promise<Record<string, unknown> | null> {
-    const verified = await invokeAsync(this.#dependencies.deviceProofVerifier, 'verifyAttestation', {
-      deviceRecord,
-      gatewaySession: input.gatewaySession,
-      deviceSessionId,
-      ...(previousConnectionId === undefined ? {} : { previousConnectionId }),
-      proof,
-      nowMs: input.nowMs,
-    });
+    const verified = await invokeAsync(
+      this.#dependencies.deviceProofVerifier,
+      'verifyAttestation',
+      {
+        deviceRecord,
+        gatewaySession: input.gatewaySession,
+        deviceSessionId,
+        ...(previousConnectionId === undefined ? {} : { previousConnectionId }),
+        proof,
+        nowMs: input.nowMs,
+      },
+    );
     if (!resultOk(verified) || !isPlainRecord(verified.attestation)) return null;
     const attestation = verified.attestation;
     if (
