@@ -2,6 +2,8 @@ package ai.aurora.device.network
 
 import ai.aurora.device.session.W14DeviceRegistrationView
 import ai.aurora.device.session.W14DeviceSessionTrustView
+import ai.aurora.device.voice.GovernedVoiceCandidateSubmission
+import ai.aurora.device.voice.GovernedVoiceCandidateTransportResult
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -93,6 +95,94 @@ class GatewayDevicePlaneClientTest {
     }
 
     @Test
+    fun `voice candidate reuses authenticated device channel without client authority context`() {
+        val channel = FakeChannel(
+            gatewayResponse("conn-1", generation = 1),
+            registrationResponse("REGISTERED", version = 1),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-1", generation = 1, version = 2),
+        )
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory { channel },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = RecordingAcceptance(),
+            nowMs = { 500 },
+        )
+        assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
+        channel.enqueue(GatewayHttpResponse(202, voiceAcceptedResponse()))
+
+        val result = client.submit(voiceCandidate()) as GovernedVoiceCandidateTransportResult.Delivered
+        assertTrue(result.acceptedForEvaluation)
+        assertFalse(result.authorizesExecution)
+        assertFalse(result.provesExecutionSuccess)
+        assertFalse(result.retryAuthorized)
+
+        assertEquals(5, channel.requests.size)
+        val request = channel.requests.last()
+        assertEquals("/v1/device/voice/candidates/evaluate", request.first)
+        assertTrue(request.second.contains("\"commandId\":\"cmd_voice_1\""))
+        assertTrue(request.second.contains("\"requiresW07Authorization\":true"))
+        assertTrue(request.second.contains("\"authorizesExecution\":false"))
+        assertFalse(request.second.contains("tenantId"))
+        assertFalse(request.second.contains("actorIdentityId"))
+        assertFalse(request.second.contains("correlationId"))
+        assertFalse(request.second.contains("deviceSessionId"))
+        assertFalse(request.second.contains("registrationVersion"))
+        assertFalse(request.second.contains("policy"))
+        assertFalse(request.second.contains("retryAuthorized"))
+    }
+
+    @Test
+    fun `voice candidate rejects authority-bearing acknowledgement`() {
+        val channel = FakeChannel(
+            gatewayResponse("conn-1", generation = 1),
+            registrationResponse("REGISTERED", version = 1),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-1", generation = 1, version = 2),
+        )
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory { channel },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = RecordingAcceptance(),
+            nowMs = { 500 },
+        )
+        assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
+        channel.enqueue(
+            GatewayHttpResponse(
+                202,
+                """{"ok":true,"acceptedForEvaluation":true,"authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false,"authorityToken":"forbidden"}""",
+            ),
+        )
+
+        val result = client.submit(voiceCandidate()) as GovernedVoiceCandidateTransportResult.Unavailable
+        assertFalse(result.deliveryUncertain)
+        assertFalse(result.retryAuthorized)
+    }
+
+    @Test
+    fun `voice candidate post-write loss is uncertain and never authorizes retry`() {
+        val channel = FakeChannel(
+            gatewayResponse("conn-1", generation = 1),
+            registrationResponse("REGISTERED", version = 1),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-1", generation = 1, version = 2),
+        )
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory { channel },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = RecordingAcceptance(),
+            nowMs = { 500 },
+        )
+        assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
+        channel.failureAtRequest = channel.requests.size
+
+        val result = client.submit(voiceCandidate()) as GovernedVoiceCandidateTransportResult.Unavailable
+        assertTrue(result.deliveryUncertain)
+        assertFalse(result.retryAuthorized)
+        assertEquals(4, channel.requests.size)
+    }
+
+    @Test
     fun `reconnect opens a fresh channel and resumes using previous connection evidence`() {
         val initial = FakeChannel(
             gatewayResponse("conn-1", generation = 1),
@@ -165,11 +255,22 @@ class GatewayDevicePlaneClientTest {
             credentialProvider = GatewayCredentialProvider { "credential-1" },
         )
 
+    private fun voiceCandidate() =
+        GovernedVoiceCandidateSubmission(
+            commandId = "cmd_voice_1",
+            capabilityId = "workspace.open",
+            normalizedTranscript = "open dashboard",
+        )
+
     private class FakeChannel(vararg responses: String) : GatewayHttpChannel {
         private val responses = ArrayDeque(responses.map { GatewayHttpResponse(200, it) })
         val requests = mutableListOf<Pair<String, String>>()
         var failureAtRequest: Int? = null
         var closed = false
+
+        fun enqueue(response: GatewayHttpResponse) {
+            responses.addLast(response)
+        }
 
         override fun post(path: String, body: String): GatewayHttpResponse {
             if (failureAtRequest == requests.size) {
@@ -222,4 +323,7 @@ class GatewayDevicePlaneClientTest {
 
     private fun receiptResponse(classification: String, requiresReconciliation: Boolean): String =
         """{"ok":true,"value":{"classification":"$classification","durableReference":"durable:1","receiptReference":"receipt:1","requiresW07Reconciliation":$requiresReconciliation,"authoritySemantics":"EVIDENCE_INPUT_ONLY_W07_OWNS_OUTCOME_AND_RETRY","authorizesExecution":false,"canGrantPermission":false,"provesExecutionSuccess":false,"retryAuthorized":false},"authorizesExecution":false,"retryAuthorized":false}"""
+
+    private fun voiceAcceptedResponse(): String =
+        """{"ok":true,"acceptedForEvaluation":true,"authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false}"""
 }
