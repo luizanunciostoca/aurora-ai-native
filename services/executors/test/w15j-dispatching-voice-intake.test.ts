@@ -289,7 +289,7 @@ function runtime(authorized = true) {
   return { intake, source, fence, w14 };
 }
 
-test('current W07 authority target containment safeguards and W03 fence precede W14 dispatch', () => {
+test('current W07 authority target safeguards W03 containment and W14 dispatch follow accepted W07-H order', () => {
   const { intake, source, fence, w14 } = runtime(true);
   const result = intake.evaluate({ candidate, context });
 
@@ -318,40 +318,45 @@ test('current authority denial prevents state lookup W03 reservation and W14 dis
   assert.equal(w14.calls.length, 0);
 });
 
-test('unavailable target and active kill switch both block before W03 reservation', () => {
-  for (const state of [
-    healthyState({
-      targetBindings: healthyState().targetBindings.map((binding) => ({
-        ...binding,
-        state: 'UNAVAILABLE' as const,
-      })),
-    }),
-    healthyState({
-      containment: {
-        ...healthyState().containment,
-        killSwitch: {
-          state: 'ACTIVE',
-          changedAt:
-            '2026-09-05T19:20:00.000Z' as TrustedVoiceExecutionState['containment']['killSwitch']['changedAt'],
-        },
-      },
-    }),
-  ]) {
-    const { intake, source, fence, w14 } = runtime(true);
-    source.state = state;
-    const result = intake.evaluate({ candidate, context });
-    assert.equal(result.ok, true);
-    assert.equal(fence.calls, 0);
-    assert.equal(w14.calls.length, 0);
-    assert.equal(
-      result.dispatch.disposition === 'NOT_ATTEMPTED_TARGET_REJECTED' ||
-        result.dispatch.disposition === 'NOT_ATTEMPTED_CONTAINMENT_REJECTED',
-      true,
-    );
-  }
+test('unavailable target blocks before W03 reservation and W14 dispatch', () => {
+  const { intake, source, fence, w14 } = runtime(true);
+  source.state = healthyState({
+    targetBindings: healthyState().targetBindings.map((binding) => ({
+      ...binding,
+      state: 'UNAVAILABLE' as const,
+    })),
+  });
+
+  const result = intake.evaluate({ candidate, context });
+  assert.equal(result.ok, true);
+  assert.equal(result.dispatch.disposition, 'NOT_ATTEMPTED_TARGET_REJECTED');
+  assert.equal(fence.calls, 0);
+  assert.equal(w14.calls.length, 0);
 });
 
-test('W03 idempotency conflict blocks W14 and never becomes retry authority', () => {
+test('active kill switch is evaluated after W03 safeguard reservation but still blocks W14 and retry authority', () => {
+  const { intake, source, fence, w14 } = runtime(true);
+  source.state = healthyState({
+    containment: {
+      ...healthyState().containment,
+      killSwitch: {
+        state: 'ACTIVE',
+        changedAt:
+          '2026-09-05T19:20:00.000Z' as TrustedVoiceExecutionState['containment']['killSwitch']['changedAt'],
+      },
+    },
+  });
+
+  const result = intake.evaluate({ candidate, context });
+  assert.equal(result.ok, true);
+  assert.equal(result.dispatch.disposition, 'NOT_ATTEMPTED_CONTAINMENT_REJECTED');
+  assert.equal(fence.calls, 1);
+  assert.equal(w14.calls.length, 0);
+  assert.equal(result.dispatch.retryAuthorized, false);
+  assert.equal(result.retryAuthorized, false);
+});
+
+test('W03 idempotency conflict blocks before containment/W14 and never becomes retry authority', () => {
   const { intake, fence, w14 } = runtime(true);
   fence.decision = { kind: 'CONFLICT', reason: 'existing different payload' };
   const result = intake.evaluate({ candidate, context });
