@@ -44,7 +44,7 @@ Validate built-in route, Bluetooth, supported wired/USB route, TTS active + user
 
 ## Security / abuse cases
 
-Exercise recorded replay, external speaker playback, remote media containing the keyword, accidental conversation, distorted/adversarial audio, rapid duplicate hotwords, permission revocation, Privacy Mode, service restart and local model integrity failure. Record results without claiming liveness/anti-spoofing protection beyond what the prototype actually demonstrates.
+Exercise recorded replay, external speaker playback, remote media containing the keyword, accidental conversation, distorted/adversarial audio, rapid duplicate hotwords, permission revocation, Privacy Mode, service restart and local model integrity failure. When suitable test equipment and the device audio path make it applicable, include ultrasonic or near-ultrasonic modulated “Aurora” injection. Treat a non-trigger only as device-specific physical evidence; do not infer general anti-spoofing or liveness protection from inaudibility, microphone/front-end filtering or one hardware result. Record results without claiming liveness/anti-spoofing protection beyond what the prototype actually demonstrates.
 
 ## Authority race cases
 
