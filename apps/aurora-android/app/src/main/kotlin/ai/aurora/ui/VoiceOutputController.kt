@@ -1,6 +1,7 @@
 package ai.aurora.ui
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
 import android.media.AudioFocusRequest
@@ -21,6 +22,15 @@ class VoiceOutputController(
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
     private val utteranceGuard = VoiceUtteranceGuard()
+    private val uiPreferences = appContext.getSharedPreferences(UI_PREFERENCES_NAME, Context.MODE_PRIVATE)
+    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { preferences, key ->
+        when {
+            key == KEY_VOICE_OUTPUT && !preferences.getBoolean(KEY_VOICE_OUTPUT, true) ->
+                stopForLifecycle("Saída de voz interrompida porque a preferência de voz foi desativada.")
+            key == KEY_PRIVACY_MODE && preferences.getBoolean(KEY_PRIVACY_MODE, false) ->
+                stopForLifecycle("Saída de voz interrompida pelo modo de privacidade.")
+        }
+    }
     private var tts: TextToSpeech? = null
     private var initialized = false
     private var focusRequest: AudioFocusRequest? = null
@@ -30,6 +40,7 @@ class VoiceOutputController(
     )
 
     init {
+        uiPreferences.registerOnSharedPreferenceChangeListener(preferenceListener)
         tts = TextToSpeech(appContext) { status ->
             initialized = status == TextToSpeech.SUCCESS
             val engine = if (initialized) {
@@ -152,6 +163,7 @@ class VoiceOutputController(
     }
 
     override fun close() {
+        uiPreferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         registryRegistration.close()
         stop()
         initialized = false
@@ -217,6 +229,9 @@ class VoiceOutputController(
     }
 
     companion object {
+        private const val UI_PREFERENCES_NAME = "aurora.ui.v1"
+        private const val KEY_VOICE_OUTPUT = "voice_output"
+        private const val KEY_PRIVACY_MODE = "privacy_mode"
         private const val MAX_SPEAK_CHARS = 4_000
     }
 }
