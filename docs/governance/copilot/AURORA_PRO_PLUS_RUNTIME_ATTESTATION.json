@@ -1,18 +1,18 @@
 {
   "schema": "aurora.pro_plus.runtime_attestation.v1",
-  "state": "PENDING",
+  "state": "VERIFIED",
   "executionMode": "PRO_PLUS_ACTIONS_FABRIC",
-  "candidateSha": null,
-  "workflowRunId": null,
-  "observedAt": null,
-  "expiresAt": null,
+  "candidateSha": "ffa2902c146d00de283b2f7036a535de4a241b5d",
+  "workflowRunId": 33938149662,
+  "observedAt": "2026-09-05T02:07:26.000Z",
+  "expiresAt": "2026-09-06T02:07:26.000Z",
   "probeConcurrency": 4,
-  "observedConcurrentSessions": 0,
-  "successfulCopilotSessions": 0,
+  "observedConcurrentSessions": 3,
+  "successfulCopilotSessions": 4,
   "failedCopilotSessions": 0,
   "allSessionsNoTool": true,
   "repositorySideEffects": 0,
   "providerSideEffects": 0,
   "authority": false,
-  "notes": "Pending bounded GitHub Actions + Copilot CLI Reality Gate evidence. Until VERIFIED and fresh, Program Control must use the Free-compatible fallback capacity."
+  "notes": "Reality Gate run 33938149662 proved all four bounded Copilot CLI sessions succeeded and measured peak simultaneous overlap of 3. Aurora activates only the measured 3-slot capacity; 4-slot promotion remains prohibited until separately observed."
 }
