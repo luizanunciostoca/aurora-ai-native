@@ -1,20 +1,4 @@
-import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
-
-import type {
-  DeviceId,
-  DeviceRef,
-  DeviceRegistrationRequest,
-  DeviceRegistrationResult,
-  DeviceResolutionResult,
-  DeviceTransitionRequest,
-  DeviceTransitionResult,
-  ResolveDeviceRequest,
-} from '../device/types.js';
-import type {
-  DeviceAttestationReference,
-  DeviceSessionTrustResult,
-} from '../device-session/types.js';
-import type { GatewayProtocolResult, GatewaySessionSnapshot } from './types.js';
+import type { GatewaySessionSnapshot } from './types.js';
 
 const DEVICE_ROUTES = new Set([
   '/v1/device/registrations/register',
@@ -27,18 +11,24 @@ const DEVICE_ROUTES = new Set([
   '/v1/device/receipts/ingest',
 ]);
 
-const REGISTER_KEYS = new Set(['deviceId', 'proof']);
-const ACTIVATE_KEYS = new Set(['deviceRef']);
-const SESSION_OPEN_KEYS = new Set(['deviceSessionId', 'deviceRef', 'proof']);
-const SESSION_RESUME_KEYS = new Set([
-  'deviceSessionId',
-  'previousConnectionId',
-  'deviceRef',
-  'proof',
-]);
-const SESSION_REVOKE_KEYS = new Set(['deviceSessionId', 'reasonReference']);
-const COMMAND_CLAIM_KEYS = new Set(['commandId']);
-const COMMAND_ACK_KEYS = new Set(['commandId', 'deliveryReference', 'ackReference']);
+const DEVICE_ID = /^dvc_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const COMMAND_ID = /^cmd_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const EXECUTION_ID = /^exe_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const RECEIPT_ID = /^rcp_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const EVIDENCE_ID = /^evd_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const SAFE_REFERENCE = /^[A-Za-z0-9._:/+-]+$/u;
+const OPAQUE_PROOF = /^[A-Za-z0-9+/=_-]+$/u;
+const MAX_PROOF_LENGTH = 24 * 1024;
+const MAX_REFERENCE_LENGTH = 512;
+const MAX_DATE_MS = 8_640_000_000_000_000;
+
+const REGISTER_KEYS = new Set(['deviceId', 'proof', 'expectedVersion']);
+const EMPTY_KEYS = new Set<string>();
+const OPEN_SESSION_KEYS = new Set(['deviceSessionId', 'proof']);
+const RESUME_SESSION_KEYS = new Set(['deviceSessionId', 'previousConnectionId', 'proof']);
+const REVOKE_SESSION_KEYS = new Set(['reasonReference']);
+const CLAIM_KEYS = new Set(['commandId']);
+const ACK_KEYS = new Set(['commandId', 'deliveryReference', 'ackReference']);
 const RECEIPT_KEYS = new Set([
   'receiptId',
   'evidenceId',
@@ -53,189 +43,54 @@ const RECEIPT_KEYS = new Set([
   'integrityDigest',
   'capturedAtMs',
 ]);
-const DEVICE_REF_KEYS = new Set(['kind', 'deviceId', 'tenantId', 'registrationVersion']);
 
-const DEVICE_ID = /^dvc_[0-9A-HJKMNP-TV-Z]{26}$/u;
-const TENANT_ID = /^ten_[0-9A-HJKMNP-TV-Z]{26}$/u;
-const SAFE_TOKEN = /^[A-Za-z0-9._:/+-]+$/u;
-const REPORTED_STATES = new Set(['COMPLETED', 'FAILED', 'UNCERTAIN']);
-
-export interface GatewayDevicePlaneBinding {
+export interface GatewayDevicePlaneSocketBinding {
   readonly sessionId: string;
   readonly connectionId: string;
-  readonly tenantId: TenantId;
-  readonly actorIdentityId: IdentityId;
-  readonly correlationId: CorrelationId;
+  readonly tenantId: GatewaySessionSnapshot['tenantId'];
+  readonly actorIdentityId: GatewaySessionSnapshot['actorIdentityId'];
+  readonly correlationId: GatewaySessionSnapshot['correlationId'];
 }
 
-interface DeviceRegistryPort {
-  register(request: DeviceRegistrationRequest): DeviceRegistrationResult;
-  transition(transition: 'ACTIVATE', request: DeviceTransitionRequest): DeviceTransitionResult;
-  resolve(request: ResolveDeviceRequest): DeviceResolutionResult;
+interface BoundDeviceRef {
+  readonly kind: 'AURORA_DEVICE';
+  readonly deviceId: string;
+  readonly tenantId: string;
+  readonly registrationVersion: number;
 }
 
-interface DeviceSessionTrustPort {
-  openSession(input: unknown): DeviceSessionTrustResult;
-  resumeSession(input: unknown): DeviceSessionTrustResult;
-  getSession(deviceSessionId: string, connectionId: string, nowMs: number): DeviceSessionTrustResult;
-  revokeSession(input: unknown): DeviceSessionTrustResult;
-}
-
-interface RealtimeCommandReaderPort {
-  getCommand(
-    gatewaySessionId: unknown,
-    gatewayConnectionId: unknown,
-    commandId: unknown,
-    nowMs: unknown,
-  ): DevicePlanePortResult;
-}
-
-interface DeviceDeliveryPort {
-  claim(input: unknown): DevicePlanePortResult;
-  acknowledge(input: unknown): DevicePlanePortResult;
-}
-
-interface DeviceReceiptPort {
-  ingest(input: unknown): DevicePlanePortResult;
-}
-
-interface DevicePlanePortResult {
-  readonly ok: boolean;
-  readonly value?: unknown;
-  readonly error?: {
-    readonly code?: unknown;
-    readonly message?: unknown;
-    readonly retryable?: unknown;
-  };
-  readonly authorizesExecution?: unknown;
-  readonly retryAuthorized?: unknown;
-}
-
-export interface DeviceRegistrationProofRequest {
-  readonly deviceId: DeviceId;
-  readonly tenantId: TenantId;
-  readonly actorIdentityId: IdentityId;
-  readonly opaqueProof: string;
-  readonly nowMs: number;
-}
-
-export interface DeviceAttestationProofRequest {
-  readonly deviceSessionId: string;
-  readonly deviceRef: DeviceRef;
-  readonly gatewaySession: GatewaySessionSnapshot;
-  readonly opaqueProof: string;
-  readonly nowMs: number;
-}
-
-export type DeviceRegistrationProofResult =
-  | Readonly<{
-      ok: true;
-      verificationReference: string;
-      authorizesExecution: false;
-      canGrantPermission: false;
-    }>
-  | Readonly<{
-      ok: false;
-      code: string;
-      retryable: boolean;
-      authorizesExecution: false;
-      canGrantPermission: false;
-    }>;
-
-export type DeviceAttestationProofResult =
-  | Readonly<{
-      ok: true;
-      attestation: DeviceAttestationReference;
-      authorizesExecution: false;
-      canGrantPermission: false;
-    }>
-  | Readonly<{
-      ok: false;
-      code: string;
-      retryable: boolean;
-      authorizesExecution: false;
-      canGrantPermission: false;
-    }>;
-
-/**
- * Server-side proof verifier. The network client only sends opaque proof material;
- * it can never submit an attestation verdict/state or a trusted registration reference.
- */
-export interface GatewayDeviceProofVerifier {
-  verifyRegistration(request: DeviceRegistrationProofRequest): DeviceRegistrationProofResult;
-  verifyAttestation(request: DeviceAttestationProofRequest): DeviceAttestationProofResult;
-}
-
-export interface GatewayDevicePlaneNetworkDependencies {
-  readonly gatewaySessions: {
-    getSession(
-      sessionId: unknown,
-      nowMs: unknown,
-    ): GatewayProtocolResult<GatewaySessionSnapshot>;
-  };
-  readonly devices: DeviceRegistryPort;
-  readonly sessionTrust: DeviceSessionTrustPort;
-  readonly realtimeCommands: RealtimeCommandReaderPort;
-  readonly delivery: DeviceDeliveryPort;
-  readonly receipts: DeviceReceiptPort;
-  readonly proofVerifier: GatewayDeviceProofVerifier;
-}
-
-export type GatewayDevicePlaneNetworkResult =
-  | Readonly<{
-      ok: true;
-      value: unknown;
-      authorizesExecution: false;
-      canGrantPermission: false;
-      retryAuthorized: false;
-    }>
-  | Readonly<{
-      ok: false;
-      error: {
-        code: string;
-        message: string;
-        retryable: boolean;
-      };
-      authorizesExecution: false;
-      canGrantPermission: false;
-      retryAuthorized: false;
-    }>;
-
-export interface GatewayDevicePlaneNetworkRequest {
-  readonly path: string;
-  readonly body: Record<string, unknown>;
-  readonly gatewayBinding: GatewayDevicePlaneBinding;
-  readonly socket: object;
-  readonly nowMs: number;
-}
-
-interface DeviceSocketBinding {
-  deviceRef?: DeviceRef;
+export interface GatewayDevicePlaneConnectionState {
+  deviceRef?: BoundDeviceRef;
+  registrationProofReference?: string;
   deviceSessionId?: string;
 }
 
-function success(value: unknown): GatewayDevicePlaneNetworkResult {
-  return {
-    ok: true,
-    value,
-    authorizesExecution: false,
-    canGrantPermission: false,
-    retryAuthorized: false,
-  };
+export interface GatewayDevicePlaneResponse {
+  readonly statusCode: number;
+  readonly body: unknown;
 }
 
-function failure(
-  code: string,
-  message: string,
-  retryable = false,
-): GatewayDevicePlaneNetworkResult {
-  return {
-    ok: false,
-    error: { code, message, retryable },
-    authorizesExecution: false,
-    canGrantPermission: false,
-    retryAuthorized: false,
-  };
+/**
+ * Composition-only ports. Existing W14 owners remain the source of truth; this
+ * adapter intentionally owns no registration, trust, command, delivery, or
+ * receipt ledger.
+ */
+export interface GatewayDevicePlaneDependencies {
+  readonly devices: object;
+  readonly deviceSessions: object;
+  readonly realtimeCommands: object;
+  readonly deliveries: object;
+  readonly receiptIngress: object;
+  readonly deviceProofVerifier: object;
+}
+
+export interface GatewayDevicePlaneHandleInput {
+  readonly path: string;
+  readonly body: Readonly<Record<string, unknown>>;
+  readonly gatewaySession: GatewaySessionSnapshot;
+  readonly socketBinding: GatewayDevicePlaneSocketBinding;
+  readonly connectionState: GatewayDevicePlaneConnectionState;
+  readonly nowMs: number;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -243,8 +98,7 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   try {
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return false;
-    const descriptors = Object.getOwnPropertyDescriptors(value);
-    return Object.values(descriptors).every(
+    return Object.values(Object.getOwnPropertyDescriptors(value)).every(
       (descriptor) => descriptor.get === undefined && descriptor.set === undefined,
     );
   } catch {
@@ -252,102 +106,191 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   }
 }
 
-function hasOnlyKeys(value: Record<string, unknown>, allowed: ReadonlySet<string>): boolean {
+function hasOnlyKeys(value: Readonly<Record<string, unknown>>, allowed: ReadonlySet<string>): boolean {
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
-function isSafeToken(value: unknown, maximum = 512): value is string {
+function safeReference(value: unknown, maxLength = MAX_REFERENCE_LENGTH): value is string {
   return (
     typeof value === 'string' &&
     value.length > 0 &&
-    value.length <= maximum &&
-    SAFE_TOKEN.test(value)
+    value.length <= maxLength &&
+    SAFE_REFERENCE.test(value)
   );
 }
 
-function isOpaqueProof(value: unknown): value is string {
+function opaqueProof(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     value.length > 0 &&
-    value.length <= 8192 &&
-    !/[\u0000-\u001F\u007F]/u.test(value)
+    value.length <= MAX_PROOF_LENGTH &&
+    OPAQUE_PROOF.test(value)
   );
 }
 
-function isNonNegativeInteger(value: unknown): value is number {
+function safeNonNegativeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
-function isPositiveInteger(value: unknown): value is number {
+function positiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
-function parseDeviceRef(value: unknown): DeviceRef | null {
-  if (!isPlainRecord(value) || !hasOnlyKeys(value, DEVICE_REF_KEYS)) return null;
-  if (
-    value.kind !== 'AURORA_DEVICE' ||
-    typeof value.deviceId !== 'string' ||
-    !DEVICE_ID.test(value.deviceId) ||
-    typeof value.tenantId !== 'string' ||
-    !TENANT_ID.test(value.tenantId) ||
-    !isPositiveInteger(value.registrationVersion)
-  ) {
-    return null;
-  }
-  return Object.freeze({
-    kind: 'AURORA_DEVICE' as const,
-    deviceId: value.deviceId as DeviceId,
-    tenantId: value.tenantId as TenantId,
-    registrationVersion: value.registrationVersion,
+function response(statusCode: number, body: unknown): GatewayDevicePlaneResponse {
+  return { statusCode, body };
+}
+
+function devicePlaneError(
+  statusCode: number,
+  code: string,
+  upstreamCode?: string,
+): GatewayDevicePlaneResponse {
+  return response(statusCode, {
+    ok: false,
+    devicePlaneError: {
+      code,
+      ...(upstreamCode === undefined ? {} : { upstreamCode }),
+    },
+    authorizesExecution: false,
+    canGrantPermission: false,
   });
 }
 
-function sameDeviceRef(left: DeviceRef, right: DeviceRef): boolean {
+function safeUpstreamCode(value: unknown): string | undefined {
+  return safeReference(value, 128) ? value : undefined;
+}
+
+function resultErrorCode(result: unknown): string | undefined {
+  if (!isPlainRecord(result)) return undefined;
+  const direct = result.error;
+  if (typeof direct === 'string') return safeUpstreamCode(direct);
+  if (!isPlainRecord(direct)) return undefined;
+  return safeUpstreamCode(direct.code);
+}
+
+function nonAuthorityResult(result: unknown): boolean {
+  if (!isPlainRecord(result)) return false;
+  return result.authorizesExecution === false && result.canGrantPermission !== true;
+}
+
+function resultOk(result: unknown): result is Record<string, unknown> & { ok: true } {
+  return isPlainRecord(result) && result.ok === true && nonAuthorityResult(result);
+}
+
+function invoke(port: object, method: string, ...args: readonly unknown[]): unknown {
+  const candidate = (port as Record<string, unknown>)[method];
+  if (typeof candidate !== 'function') {
+    throw new Error(`Required W14 composition method is unavailable: ${method}`);
+  }
+  return Reflect.apply(candidate, port, args);
+}
+
+async function invokeAsync(port: object, method: string, ...args: readonly unknown[]): Promise<unknown> {
+  return Promise.resolve(invoke(port, method, ...args));
+}
+
+function parseDeviceRef(value: unknown): BoundDeviceRef | null {
+  if (
+    !isPlainRecord(value) ||
+    !hasOnlyKeys(value, new Set(['kind', 'deviceId', 'tenantId', 'registrationVersion'])) ||
+    value.kind !== 'AURORA_DEVICE' ||
+    typeof value.deviceId !== 'string' ||
+    !DEVICE_ID.test(value.deviceId) ||
+    !safeReference(value.tenantId, 128) ||
+    !positiveInteger(value.registrationVersion)
+  ) {
+    return null;
+  }
+  return {
+    kind: 'AURORA_DEVICE',
+    deviceId: value.deviceId,
+    tenantId: value.tenantId,
+    registrationVersion: value.registrationVersion,
+  };
+}
+
+function resultRecord(result: unknown): Record<string, unknown> | null {
+  if (!resultOk(result) || !isPlainRecord(result.record)) return null;
+  return result.record;
+}
+
+function resultSnapshot(result: unknown): Record<string, unknown> | null {
+  if (!resultOk(result) || !isPlainRecord(result.snapshot)) return null;
+  return result.snapshot;
+}
+
+function canonicalDeviceRefFromRecord(result: unknown): BoundDeviceRef | null {
+  const record = resultRecord(result);
+  return record === null ? null : parseDeviceRef(record.ref);
+}
+
+function canonicalRegistrationProofReference(result: unknown): string | null {
+  const record = resultRecord(result);
+  if (record === null || !isPlainRecord(record.provenance)) return null;
+  const reference = record.provenance.reference;
+  return safeReference(reference, 256) ? reference : null;
+}
+
+function validGatewayBinding(
+  gateway: GatewaySessionSnapshot,
+  binding: GatewayDevicePlaneSocketBinding,
+  nowMs: number,
+): boolean {
   return (
-    left.kind === right.kind &&
-    left.deviceId === right.deviceId &&
-    left.tenantId === right.tenantId &&
-    left.registrationVersion === right.registrationVersion
+    gateway.state === 'OPEN' &&
+    gateway.authorizesExecution === false &&
+    gateway.sessionId === binding.sessionId &&
+    gateway.connectionId === binding.connectionId &&
+    gateway.tenantId === binding.tenantId &&
+    gateway.actorIdentityId === binding.actorIdentityId &&
+    gateway.correlationId === binding.correlationId &&
+    gateway.generation > 0 &&
+    nowMs < gateway.authExpiresAtMs
   );
 }
 
-function normalizePortResult(result: DevicePlanePortResult): GatewayDevicePlaneNetworkResult {
-  if (result.authorizesExecution !== false) {
-    return failure(
-      'UPSTREAM_PROTOCOL_VIOLATION',
-      'Device-plane dependency returned an authoritative or malformed result.',
-    );
+function managerResponse(result: unknown): GatewayDevicePlaneResponse {
+  if (!isPlainRecord(result) || result.authorizesExecution !== false) {
+    return devicePlaneError(503, 'UPSTREAM_PROTOCOL_VIOLATION');
   }
-  if (result.ok) return success(result.value);
-  const code = typeof result.error?.code === 'string' ? result.error.code : 'UPSTREAM_REJECTED';
-  const message =
-    typeof result.error?.message === 'string'
-      ? result.error.message
-      : 'Device-plane dependency rejected the request.';
-  return failure(code, message, result.error?.retryable === true);
+  return response(200, result);
 }
 
-function registrationFailure(result: Exclude<DeviceRegistrationResult, { ok: true }>) {
-  return failure(result.error, 'Canonical device registration rejected the request.');
+function trustSnapshot(result: unknown): Record<string, unknown> | null {
+  const snapshot = resultSnapshot(result);
+  if (
+    snapshot === null ||
+    snapshot.authorizesExecution !== false ||
+    snapshot.canGrantPermission !== false ||
+    !safeReference(snapshot.deviceSessionId) ||
+    !safeReference(snapshot.connectionId) ||
+    !safeReference(snapshot.gatewaySessionId) ||
+    !positiveInteger(snapshot.gatewayGeneration) ||
+    !isPlainRecord(snapshot.deviceRef)
+  ) {
+    return null;
+  }
+  return snapshot;
 }
 
-function transitionFailure(result: Exclude<DeviceTransitionResult, { ok: true }>) {
-  return failure(result.error, 'Canonical device lifecycle rejected the transition.');
+function commandFromResult(result: unknown): Record<string, unknown> | null {
+  if (!resultOk(result) || !isPlainRecord(result.value)) return null;
+  const command = result.value;
+  if (
+    command.authorizesExecution !== false ||
+    command.provesExecutionSuccess !== false ||
+    typeof command.commandId !== 'string' ||
+    !COMMAND_ID.test(command.commandId)
+  ) {
+    return null;
+  }
+  return command;
 }
 
-function trustFailure(result: Exclude<DeviceSessionTrustResult, { ok: true }>) {
-  return failure(result.error.code, result.error.message, result.error.retryable);
-}
+export class GatewayDevicePlaneNetworkHandler {
+  readonly #dependencies: GatewayDevicePlaneDependencies;
 
-/**
- * W14-owned same-socket composition only. This class owns no authority, trust ledger,
- * command ledger, delivery ledger, receipt ledger or retry decision.
- */
-export class GatewayDevicePlaneNetwork {
-  readonly #dependencies: GatewayDevicePlaneNetworkDependencies;
-  readonly #socketBindings = new WeakMap<object, DeviceSocketBinding>();
-
-  constructor(dependencies: GatewayDevicePlaneNetworkDependencies) {
+  constructor(dependencies: GatewayDevicePlaneDependencies) {
     this.#dependencies = dependencies;
   }
 
@@ -355,489 +298,410 @@ export class GatewayDevicePlaneNetwork {
     return DEVICE_ROUTES.has(path);
   }
 
-  releaseSocket(socket: object): void {
-    this.#socketBindings.delete(socket);
-  }
-
-  handle(request: GatewayDevicePlaneNetworkRequest): GatewayDevicePlaneNetworkResult {
-    if (!this.isRoute(request.path) || !isNonNegativeInteger(request.nowMs)) {
-      return failure('MALFORMED_REQUEST', 'Device-plane network request is malformed.');
-    }
-    const gateway = this.#currentGateway(request.gatewayBinding, request.nowMs);
-    if (!gateway.ok) return gateway.result;
-
-    if (request.path === '/v1/device/registrations/register') {
-      return this.#register(request, gateway.snapshot);
-    }
-    if (request.path === '/v1/device/registrations/activate') {
-      return this.#activate(request, gateway.snapshot);
-    }
-    if (request.path === '/v1/device/sessions/open') {
-      return this.#openSession(request, gateway.snapshot);
-    }
-    if (request.path === '/v1/device/sessions/resume') {
-      return this.#resumeSession(request, gateway.snapshot);
-    }
-    if (request.path === '/v1/device/sessions/revoke') {
-      return this.#revokeSession(request, gateway.snapshot);
-    }
-    if (request.path === '/v1/device/commands/claim') {
-      return this.#claim(request, gateway.snapshot);
-    }
-    if (request.path === '/v1/device/commands/acknowledge') {
-      return this.#acknowledge(request, gateway.snapshot);
-    }
-    return this.#ingestReceipt(request, gateway.snapshot);
-  }
-
-  #currentGateway(
-    binding: GatewayDevicePlaneBinding,
-    nowMs: number,
-  ):
-    | { ok: true; snapshot: GatewaySessionSnapshot }
-    | { ok: false; result: GatewayDevicePlaneNetworkResult } {
-    const current = this.#dependencies.gatewaySessions.getSession(binding.sessionId, nowMs);
-    if (!current.ok) {
-      return {
-        ok: false,
-        result: failure(
-          current.error.code,
-          'Authenticated gateway session is no longer current.',
-          current.error.retryable,
-        ),
-      };
-    }
-    const snapshot = current.value;
+  async handle(input: GatewayDevicePlaneHandleInput): Promise<GatewayDevicePlaneResponse> {
+    if (!this.isRoute(input.path)) return devicePlaneError(404, 'ROUTE_NOT_FOUND');
     if (
-      snapshot.state !== 'OPEN' ||
-      snapshot.connectionId !== binding.connectionId ||
-      snapshot.tenantId !== binding.tenantId ||
-      snapshot.actorIdentityId !== binding.actorIdentityId ||
-      snapshot.correlationId !== binding.correlationId ||
-      snapshot.authorizesExecution !== false
+      !Number.isSafeInteger(input.nowMs) ||
+      input.nowMs < 0 ||
+      input.nowMs > MAX_DATE_MS ||
+      !validGatewayBinding(input.gatewaySession, input.socketBinding, input.nowMs)
     ) {
-      return {
-        ok: false,
-        result: failure(
-          'GATEWAY_BINDING_MISMATCH',
-          'Socket binding does not match current authenticated gateway state.',
-        ),
-      };
+      return devicePlaneError(409, 'GATEWAY_BINDING_NOT_CURRENT');
     }
-    return { ok: true, snapshot };
+
+    try {
+      switch (input.path) {
+        case '/v1/device/registrations/register':
+          return await this.#register(input);
+        case '/v1/device/registrations/activate':
+          return this.#activate(input);
+        case '/v1/device/sessions/open':
+          return await this.#openSession(input);
+        case '/v1/device/sessions/resume':
+          return await this.#resumeSession(input);
+        case '/v1/device/sessions/revoke':
+          return this.#revokeSession(input);
+        case '/v1/device/commands/claim':
+          return this.#claim(input);
+        case '/v1/device/commands/acknowledge':
+          return this.#acknowledge(input);
+        case '/v1/device/receipts/ingest':
+          return this.#ingestReceipt(input);
+      }
+      return devicePlaneError(404, 'ROUTE_NOT_FOUND');
+    } catch {
+      return devicePlaneError(503, 'DEVICE_PLANE_DEPENDENCY_UNAVAILABLE');
+    }
   }
 
-  #register(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-  ): GatewayDevicePlaneNetworkResult {
+  async #register(input: GatewayDevicePlaneHandleInput): Promise<GatewayDevicePlaneResponse> {
     if (
-      !hasOnlyKeys(request.body, REGISTER_KEYS) ||
-      typeof request.body.deviceId !== 'string' ||
-      !DEVICE_ID.test(request.body.deviceId) ||
-      !isOpaqueProof(request.body.proof)
+      !hasOnlyKeys(input.body, REGISTER_KEYS) ||
+      typeof input.body.deviceId !== 'string' ||
+      !DEVICE_ID.test(input.body.deviceId) ||
+      !opaqueProof(input.body.proof) ||
+      (input.body.expectedVersion !== undefined && !positiveInteger(input.body.expectedVersion))
     ) {
-      return failure('MALFORMED_REQUEST', 'Device registration body is invalid.');
+      return devicePlaneError(400, 'BODY_MALFORMED');
     }
-    const deviceId = request.body.deviceId as DeviceId;
-    const verified = this.#dependencies.proofVerifier.verifyRegistration({
-      deviceId,
-      tenantId: gateway.tenantId,
-      actorIdentityId: gateway.actorIdentityId,
-      opaqueProof: request.body.proof,
-      nowMs: request.nowMs,
+
+    const verified = await invokeAsync(this.#dependencies.deviceProofVerifier, 'verifyRegistration', {
+      deviceId: input.body.deviceId,
+      gatewaySession: input.gatewaySession,
+      proof: input.body.proof,
+      nowMs: input.nowMs,
     });
-    if (
-      !verified.ok ||
-      verified.authorizesExecution !== false ||
-      verified.canGrantPermission !== false ||
-      !isSafeToken(verified.verificationReference)
-    ) {
-      return failure(
-        verified.ok ? 'PROOF_PROTOCOL_VIOLATION' : verified.code,
-        'Server-side device registration proof verification failed.',
-        verified.ok ? false : verified.retryable,
-      );
+    if (!resultOk(verified) || !safeReference(verified.proofReference, 256)) {
+      return devicePlaneError(403, 'DEVICE_PROOF_REJECTED', resultErrorCode(verified));
     }
-    const observedAt = new Date(request.nowMs).toISOString();
-    const result = this.#dependencies.devices.register({
-      deviceId,
-      tenantId: gateway.tenantId,
-      boundIdentityId: gateway.actorIdentityId,
+
+    const observedAt = new Date(input.nowMs).toISOString();
+    const registered = invoke(this.#dependencies.devices, 'register', {
+      deviceId: input.body.deviceId,
+      tenantId: input.gatewaySession.tenantId,
+      boundIdentityId: input.gatewaySession.actorIdentityId,
       registeredAt: observedAt,
       provenance: {
         source: 'W14_DEVICE_REGISTRATION',
-        reference: verified.verificationReference,
+        reference: verified.proofReference,
+        observedAt,
+      },
+      ...(input.body.expectedVersion === undefined
+        ? {}
+        : { expectedVersion: input.body.expectedVersion }),
+    });
+    if (!resultOk(registered)) return managerResponse(registered);
+
+    const deviceRef = canonicalDeviceRefFromRecord(registered);
+    const proofReference = canonicalRegistrationProofReference(registered);
+    if (
+      deviceRef === null ||
+      proofReference === null ||
+      deviceRef.tenantId !== input.gatewaySession.tenantId
+    ) {
+      return devicePlaneError(503, 'UPSTREAM_PROTOCOL_VIOLATION');
+    }
+    input.connectionState.deviceRef = deviceRef;
+    input.connectionState.registrationProofReference = proofReference;
+    delete input.connectionState.deviceSessionId;
+    return managerResponse(registered);
+  }
+
+  #activate(input: GatewayDevicePlaneHandleInput): GatewayDevicePlaneResponse {
+    if (!hasOnlyKeys(input.body, EMPTY_KEYS)) return devicePlaneError(400, 'BODY_MALFORMED');
+    const deviceRef = input.connectionState.deviceRef;
+    if (deviceRef === undefined) return devicePlaneError(409, 'DEVICE_BINDING_REQUIRED');
+
+    const current = invoke(this.#dependencies.devices, 'resolve', {
+      ref: deviceRef,
+      boundIdentityId: input.gatewaySession.actorIdentityId,
+    });
+    if (resultOk(current)) return managerResponse(current);
+
+    const proofReference = input.connectionState.registrationProofReference;
+    if (proofReference === undefined) return devicePlaneError(409, 'DEVICE_BINDING_REQUIRED');
+    const observedAt = new Date(input.nowMs).toISOString();
+    const activated = invoke(this.#dependencies.devices, 'transition', 'ACTIVATE', {
+      ref: deviceRef,
+      expectedVersion: deviceRef.registrationVersion,
+      transitionedAt: observedAt,
+      provenance: {
+        source: 'W14_DEVICE_REGISTRATION',
+        reference: proofReference,
         observedAt,
       },
     });
-    if (!result.ok) return registrationFailure(result);
-    this.#socketBindings.set(request.socket, { deviceRef: result.record.ref });
-    return success({ disposition: result.disposition, device: result.record });
+    if (!resultOk(activated)) return managerResponse(activated);
+    const nextRef = canonicalDeviceRefFromRecord(activated);
+    if (nextRef === null || nextRef.tenantId !== input.gatewaySession.tenantId) {
+      return devicePlaneError(503, 'UPSTREAM_PROTOCOL_VIOLATION');
+    }
+    input.connectionState.deviceRef = nextRef;
+    return managerResponse(activated);
   }
 
-  #activate(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-  ): GatewayDevicePlaneNetworkResult {
-    if (!hasOnlyKeys(request.body, ACTIVATE_KEYS)) {
-      return failure('MALFORMED_REQUEST', 'Device activation body is invalid.');
-    }
-    const deviceRef = parseDeviceRef(request.body.deviceRef);
-    const socketBinding = this.#socketBindings.get(request.socket);
-    if (
-      deviceRef === null ||
-      deviceRef.tenantId !== gateway.tenantId ||
-      socketBinding?.deviceRef === undefined ||
-      !sameDeviceRef(socketBinding.deviceRef, deviceRef)
-    ) {
-      return failure(
-        'DEVICE_BINDING_MISMATCH',
-        'Device activation must use the registration verified on this authenticated socket.',
-      );
-    }
-    const transitionedAt = new Date(request.nowMs).toISOString();
-    const transition = this.#dependencies.devices.transition('ACTIVATE', {
+  #resolveActiveDevice(input: GatewayDevicePlaneHandleInput): unknown {
+    const deviceRef = input.connectionState.deviceRef;
+    if (deviceRef === undefined) return null;
+    return invoke(this.#dependencies.devices, 'resolve', {
       ref: deviceRef,
-      expectedVersion: deviceRef.registrationVersion,
-      transitionedAt,
-      provenance: {
-        source: 'W14_DEVICE_REGISTRATION',
-        reference: `network-activation:${deviceRef.deviceId}:${deviceRef.registrationVersion}`,
-        observedAt: transitionedAt,
-      },
+      boundIdentityId: input.gatewaySession.actorIdentityId,
     });
-    if (!transition.ok) return transitionFailure(transition);
-    this.#socketBindings.set(request.socket, { deviceRef: transition.record.ref });
-    return success({ transition: transition.transition, device: transition.record });
   }
 
-  #resolveActiveDevice(
-    deviceRef: DeviceRef,
-    gateway: GatewaySessionSnapshot,
-  ):
-    | { ok: true; record: Extract<DeviceResolutionResult, { ok: true }>['record'] }
-    | { ok: false; result: GatewayDevicePlaneNetworkResult } {
-    if (deviceRef.tenantId !== gateway.tenantId) {
-      return { ok: false, result: failure('CROSS_TENANT', 'Device belongs to another tenant.') };
-    }
-    const resolved = this.#dependencies.devices.resolve({
-      ref: deviceRef,
-      boundIdentityId: gateway.actorIdentityId,
-    });
-    if (!resolved.ok) {
-      return {
-        ok: false,
-        result: failure(resolved.error, 'Canonical device resolution rejected the request.'),
-      };
-    }
-    if (
-      resolved.authorizesExecution !== false ||
-      resolved.canGrantPermission !== false ||
-      resolved.record.state !== 'ACTIVE'
-    ) {
-      return {
-        ok: false,
-        result: failure('DEVICE_NOT_ACTIVE', 'Resolved device is not an active non-authoritative binding.'),
-      };
-    }
-    return { ok: true, record: resolved.record };
-  }
-
-  #verifiedAttestation(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-    deviceRef: DeviceRef,
+  async #verifiedAttestation(
+    input: GatewayDevicePlaneHandleInput,
+    proof: string,
+    deviceRecord: Record<string, unknown>,
     deviceSessionId: string,
-  ):
-    | { ok: true; attestation: DeviceAttestationReference }
-    | { ok: false; result: GatewayDevicePlaneNetworkResult } {
-    const resolved = this.#resolveActiveDevice(deviceRef, gateway);
-    if (!resolved.ok) return resolved;
-    const proof = request.body.proof;
-    if (!isOpaqueProof(proof)) {
-      return { ok: false, result: failure('MALFORMED_REQUEST', 'Attestation proof is malformed.') };
-    }
-    const verified = this.#dependencies.proofVerifier.verifyAttestation({
+    previousConnectionId?: string,
+  ): Promise<Record<string, unknown> | null> {
+    const verified = await invokeAsync(this.#dependencies.deviceProofVerifier, 'verifyAttestation', {
+      deviceRecord,
+      gatewaySession: input.gatewaySession,
       deviceSessionId,
-      deviceRef: resolved.record.ref,
-      gatewaySession: gateway,
-      opaqueProof: proof,
-      nowMs: request.nowMs,
+      ...(previousConnectionId === undefined ? {} : { previousConnectionId }),
+      proof,
+      nowMs: input.nowMs,
     });
+    if (!resultOk(verified) || !isPlainRecord(verified.attestation)) return null;
+    const attestation = verified.attestation;
     if (
-      !verified.ok ||
-      verified.authorizesExecution !== false ||
-      verified.canGrantPermission !== false ||
-      verified.attestation.state !== 'VERIFIED'
+      attestation.kind !== 'DEVICE_ATTESTATION_REFERENCE' ||
+      attestation.state !== 'VERIFIED' ||
+      !safeReference(attestation.reference) ||
+      !safeReference(attestation.provider, 128) ||
+      !safeReference(attestation.version, 64) ||
+      !safeNonNegativeInteger(attestation.observedAtMs) ||
+      !safeNonNegativeInteger(attestation.expiresAtMs) ||
+      attestation.observedAtMs > input.nowMs ||
+      attestation.expiresAtMs <= input.nowMs
     ) {
-      return {
-        ok: false,
-        result: failure(
-          verified.ok ? 'ATTESTATION_PROTOCOL_VIOLATION' : verified.code,
-          'Server-side device attestation verification failed.',
-          verified.ok ? false : verified.retryable,
-        ),
-      };
+      return null;
     }
-    return { ok: true, attestation: verified.attestation };
+    return attestation;
   }
 
-  #openSession(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-  ): GatewayDevicePlaneNetworkResult {
-    if (!hasOnlyKeys(request.body, SESSION_OPEN_KEYS) || !isSafeToken(request.body.deviceSessionId)) {
-      return failure('MALFORMED_REQUEST', 'Device session-open body is invalid.');
+  async #openSession(input: GatewayDevicePlaneHandleInput): Promise<GatewayDevicePlaneResponse> {
+    if (
+      !hasOnlyKeys(input.body, OPEN_SESSION_KEYS) ||
+      !safeReference(input.body.deviceSessionId) ||
+      !opaqueProof(input.body.proof)
+    ) {
+      return devicePlaneError(400, 'BODY_MALFORMED');
     }
-    const deviceRef = parseDeviceRef(request.body.deviceRef);
-    if (deviceRef === null) return failure('MALFORMED_REQUEST', 'Device reference is invalid.');
-    const resolved = this.#resolveActiveDevice(deviceRef, gateway);
-    if (!resolved.ok) return resolved.result;
-    const attestation = this.#verifiedAttestation(
-      request,
-      gateway,
-      resolved.record.ref,
-      request.body.deviceSessionId,
+    const device = this.#resolveActiveDevice(input);
+    const deviceRecord = resultRecord(device);
+    if (deviceRecord === null) return managerResponse(device);
+    const attestation = await this.#verifiedAttestation(
+      input,
+      input.body.proof,
+      deviceRecord,
+      input.body.deviceSessionId,
     );
-    if (!attestation.ok) return attestation.result;
-    const result = this.#dependencies.sessionTrust.openSession({
-      deviceSessionId: request.body.deviceSessionId,
-      gatewaySession: gateway,
-      deviceRecord: resolved.record,
-      attestation: attestation.attestation,
-      nowMs: request.nowMs,
+    if (attestation === null) return devicePlaneError(403, 'ATTESTATION_PROOF_REJECTED');
+
+    const opened = invoke(this.#dependencies.deviceSessions, 'openSession', {
+      deviceSessionId: input.body.deviceSessionId,
+      gatewaySession: input.gatewaySession,
+      deviceRecord,
+      attestation,
+      nowMs: input.nowMs,
     });
-    if (!result.ok) return trustFailure(result);
+    const snapshot = trustSnapshot(opened);
+    if (snapshot === null) return managerResponse(opened);
     if (
-      result.authorizesExecution !== false ||
-      result.canGrantPermission !== false ||
-      result.snapshot.connectionId !== gateway.connectionId ||
-      !sameDeviceRef(result.snapshot.deviceRef, resolved.record.ref)
+      snapshot.deviceSessionId !== input.body.deviceSessionId ||
+      snapshot.connectionId !== input.gatewaySession.connectionId
     ) {
-      return failure('SESSION_PROTOCOL_VIOLATION', 'W14-E returned an invalid device-session binding.');
+      return devicePlaneError(503, 'UPSTREAM_PROTOCOL_VIOLATION');
     }
-    this.#socketBindings.set(request.socket, {
-      deviceRef: result.snapshot.deviceRef,
-      deviceSessionId: result.snapshot.deviceSessionId,
-    });
-    return success({ deviceSession: result.snapshot });
+    input.connectionState.deviceSessionId = input.body.deviceSessionId;
+    return managerResponse(opened);
   }
 
-  #resumeSession(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-  ): GatewayDevicePlaneNetworkResult {
+  async #resumeSession(input: GatewayDevicePlaneHandleInput): Promise<GatewayDevicePlaneResponse> {
     if (
-      !hasOnlyKeys(request.body, SESSION_RESUME_KEYS) ||
-      !isSafeToken(request.body.deviceSessionId) ||
-      !isSafeToken(request.body.previousConnectionId)
+      !hasOnlyKeys(input.body, RESUME_SESSION_KEYS) ||
+      !safeReference(input.body.deviceSessionId) ||
+      !safeReference(input.body.previousConnectionId) ||
+      !opaqueProof(input.body.proof) ||
+      input.body.previousConnectionId === input.gatewaySession.connectionId
     ) {
-      return failure('MALFORMED_REQUEST', 'Device session-resume body is invalid.');
+      return devicePlaneError(400, 'BODY_MALFORMED');
     }
-    const deviceRef = parseDeviceRef(request.body.deviceRef);
-    if (deviceRef === null) return failure('MALFORMED_REQUEST', 'Device reference is invalid.');
-    const resolved = this.#resolveActiveDevice(deviceRef, gateway);
-    if (!resolved.ok) return resolved.result;
-    const attestation = this.#verifiedAttestation(
-      request,
-      gateway,
-      resolved.record.ref,
-      request.body.deviceSessionId,
+    const device = this.#resolveActiveDevice(input);
+    const deviceRecord = resultRecord(device);
+    if (deviceRecord === null) return managerResponse(device);
+    const attestation = await this.#verifiedAttestation(
+      input,
+      input.body.proof,
+      deviceRecord,
+      input.body.deviceSessionId,
+      input.body.previousConnectionId,
     );
-    if (!attestation.ok) return attestation.result;
-    const result = this.#dependencies.sessionTrust.resumeSession({
-      deviceSessionId: request.body.deviceSessionId,
-      previousConnectionId: request.body.previousConnectionId,
-      gatewaySession: gateway,
-      deviceRecord: resolved.record,
-      attestation: attestation.attestation,
-      nowMs: request.nowMs,
+    if (attestation === null) return devicePlaneError(403, 'ATTESTATION_PROOF_REJECTED');
+
+    const resumed = invoke(this.#dependencies.deviceSessions, 'resumeSession', {
+      deviceSessionId: input.body.deviceSessionId,
+      previousConnectionId: input.body.previousConnectionId,
+      gatewaySession: input.gatewaySession,
+      deviceRecord,
+      attestation,
+      nowMs: input.nowMs,
     });
-    if (!result.ok) return trustFailure(result);
+    const snapshot = trustSnapshot(resumed);
+    if (snapshot === null) return managerResponse(resumed);
     if (
-      result.authorizesExecution !== false ||
-      result.canGrantPermission !== false ||
-      result.snapshot.connectionId !== gateway.connectionId ||
-      result.snapshot.gatewayGeneration !== gateway.generation
+      snapshot.deviceSessionId !== input.body.deviceSessionId ||
+      snapshot.connectionId !== input.gatewaySession.connectionId
     ) {
-      return failure('SESSION_PROTOCOL_VIOLATION', 'W14-E returned an invalid resumed binding.');
+      return devicePlaneError(503, 'UPSTREAM_PROTOCOL_VIOLATION');
     }
-    this.#socketBindings.set(request.socket, {
-      deviceRef: result.snapshot.deviceRef,
-      deviceSessionId: result.snapshot.deviceSessionId,
-    });
-    return success({ deviceSession: result.snapshot });
+    input.connectionState.deviceSessionId = input.body.deviceSessionId;
+    return managerResponse(resumed);
   }
 
-  #currentDeviceTrust(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-  ):
-    | { ok: true; snapshot: Extract<DeviceSessionTrustResult, { ok: true }>['snapshot'] }
-    | { ok: false; result: GatewayDevicePlaneNetworkResult } {
-    const socketBinding = this.#socketBindings.get(request.socket);
-    if (socketBinding?.deviceSessionId === undefined) {
-      return {
-        ok: false,
-        result: failure('DEVICE_SESSION_BINDING_REQUIRED', 'Socket has no current device-session binding.'),
-      };
-    }
-    const current = this.#dependencies.sessionTrust.getSession(
-      socketBinding.deviceSessionId,
-      gateway.connectionId,
-      request.nowMs,
+  #currentTrust(input: GatewayDevicePlaneHandleInput): unknown {
+    const deviceSessionId = input.connectionState.deviceSessionId;
+    if (deviceSessionId === undefined) return null;
+    return invoke(
+      this.#dependencies.deviceSessions,
+      'getSession',
+      deviceSessionId,
+      input.gatewaySession.connectionId,
+      input.nowMs,
     );
-    if (!current.ok) return { ok: false, result: trustFailure(current) };
-    if (
-      current.snapshot.state !== 'ACTIVE' ||
-      !current.snapshot.executionPreconditionSatisfied ||
-      current.snapshot.gatewaySessionId !== gateway.sessionId ||
-      current.snapshot.connectionId !== gateway.connectionId ||
-      current.snapshot.gatewayGeneration !== gateway.generation ||
-      current.snapshot.tenantId !== gateway.tenantId ||
-      current.snapshot.actorIdentityId !== gateway.actorIdentityId ||
-      current.snapshot.correlationId !== gateway.correlationId ||
-      current.authorizesExecution !== false ||
-      current.canGrantPermission !== false
-    ) {
-      return {
-        ok: false,
-        result: failure('SESSION_NOT_TRUSTED', 'Current W14-E device-session trust is not usable.'),
-      };
-    }
-    return { ok: true, snapshot: current.snapshot };
   }
 
-  #revokeSession(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-  ): GatewayDevicePlaneNetworkResult {
+  #revokeSession(input: GatewayDevicePlaneHandleInput): GatewayDevicePlaneResponse {
     if (
-      !hasOnlyKeys(request.body, SESSION_REVOKE_KEYS) ||
-      !isSafeToken(request.body.deviceSessionId) ||
-      !isSafeToken(request.body.reasonReference)
+      !hasOnlyKeys(input.body, REVOKE_SESSION_KEYS) ||
+      !safeReference(input.body.reasonReference)
     ) {
-      return failure('MALFORMED_REQUEST', 'Device session-revoke body is invalid.');
+      return devicePlaneError(400, 'BODY_MALFORMED');
     }
-    const socketBinding = this.#socketBindings.get(request.socket);
-    if (socketBinding?.deviceSessionId !== request.body.deviceSessionId) {
-      return failure('DEVICE_SESSION_BINDING_REQUIRED', 'Socket does not own this device session.');
+    const deviceSessionId = input.connectionState.deviceSessionId;
+    if (deviceSessionId === undefined) {
+      return devicePlaneError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
     }
-    const current = this.#currentDeviceTrust(request, gateway);
-    if (!current.ok) return current.result;
-    const revoked = this.#dependencies.sessionTrust.revokeSession({
-      deviceSessionId: current.snapshot.deviceSessionId,
-      connectionId: gateway.connectionId,
-      revokedAtMs: request.nowMs,
-      reasonReference: request.body.reasonReference,
-    });
-    if (!revoked.ok) return trustFailure(revoked);
-    this.#socketBindings.set(request.socket, { deviceRef: current.snapshot.deviceRef });
-    return success({ deviceSession: revoked.snapshot });
-  }
-
-  #claim(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-  ): GatewayDevicePlaneNetworkResult {
-    if (!hasOnlyKeys(request.body, COMMAND_CLAIM_KEYS) || !isSafeToken(request.body.commandId)) {
-      return failure('MALFORMED_REQUEST', 'Device command-claim body is invalid.');
-    }
-    const trust = this.#currentDeviceTrust(request, gateway);
-    if (!trust.ok) return trust.result;
-    const command = this.#dependencies.realtimeCommands.getCommand(
-      gateway.sessionId,
-      gateway.connectionId,
-      request.body.commandId,
-      request.nowMs,
-    );
-    if (!command.ok) return normalizePortResult(command);
-    const delivery = this.#dependencies.delivery.claim({
-      command: command.value,
-      deviceSession: trust.snapshot,
-      nowMs: request.nowMs,
-    });
-    return normalizePortResult(delivery);
-  }
-
-  #acknowledge(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-  ): GatewayDevicePlaneNetworkResult {
-    if (
-      !hasOnlyKeys(request.body, COMMAND_ACK_KEYS) ||
-      !isSafeToken(request.body.commandId) ||
-      !isSafeToken(request.body.deliveryReference) ||
-      !isSafeToken(request.body.ackReference)
-    ) {
-      return failure('MALFORMED_REQUEST', 'Device command-acknowledgement body is invalid.');
-    }
-    const trust = this.#currentDeviceTrust(request, gateway);
-    if (!trust.ok) return trust.result;
-    const command = this.#dependencies.realtimeCommands.getCommand(
-      gateway.sessionId,
-      gateway.connectionId,
-      request.body.commandId,
-      request.nowMs,
-    );
-    if (!command.ok) return normalizePortResult(command);
-    return normalizePortResult(
-      this.#dependencies.delivery.acknowledge({
-        command: command.value,
-        deviceSession: trust.snapshot,
-        deliveryReference: request.body.deliveryReference,
-        ackReference: request.body.ackReference,
-        observedAtMs: request.nowMs,
+    return managerResponse(
+      invoke(this.#dependencies.deviceSessions, 'revokeSession', {
+        deviceSessionId,
+        connectionId: input.gatewaySession.connectionId,
+        revokedAtMs: input.nowMs,
+        reasonReference: input.body.reasonReference,
       }),
     );
   }
 
-  #ingestReceipt(
-    request: GatewayDevicePlaneNetworkRequest,
-    gateway: GatewaySessionSnapshot,
-  ): GatewayDevicePlaneNetworkResult {
+  #currentCommand(input: GatewayDevicePlaneHandleInput, commandId: string): unknown {
+    return invoke(
+      this.#dependencies.realtimeCommands,
+      'getCommand',
+      input.gatewaySession.sessionId,
+      input.gatewaySession.connectionId,
+      commandId,
+      input.nowMs,
+    );
+  }
+
+  #claim(input: GatewayDevicePlaneHandleInput): GatewayDevicePlaneResponse {
     if (
-      !hasOnlyKeys(request.body, RECEIPT_KEYS) ||
-      !isSafeToken(request.body.receiptId) ||
-      (request.body.evidenceId !== undefined && !isSafeToken(request.body.evidenceId)) ||
-      !isSafeToken(request.body.commandId) ||
-      !isSafeToken(request.body.executionId) ||
-      !isSafeToken(request.body.connectionId) ||
-      !isPositiveInteger(request.body.gatewayGeneration) ||
-      !isSafeToken(request.body.deliveryReference) ||
-      typeof request.body.reportedState !== 'string' ||
-      !REPORTED_STATES.has(request.body.reportedState) ||
-      !isSafeToken(request.body.sourceReference) ||
-      !isSafeToken(request.body.proofReference) ||
-      !isSafeToken(request.body.integrityDigest) ||
-      !isNonNegativeInteger(request.body.capturedAtMs)
+      !hasOnlyKeys(input.body, CLAIM_KEYS) ||
+      typeof input.body.commandId !== 'string' ||
+      !COMMAND_ID.test(input.body.commandId)
     ) {
-      return failure('MALFORMED_REQUEST', 'Device receipt body is invalid.');
+      return devicePlaneError(400, 'BODY_MALFORMED');
     }
-    const trust = this.#currentDeviceTrust(request, gateway);
-    if (!trust.ok) return trust.result;
-    return normalizePortResult(
-      this.#dependencies.receipts.ingest({
-        receiptId: request.body.receiptId,
-        ...(request.body.evidenceId === undefined ? {} : { evidenceId: request.body.evidenceId }),
-        tenantId: gateway.tenantId,
-        correlationId: gateway.correlationId,
-        commandId: request.body.commandId,
-        executionId: request.body.executionId,
-        deviceRef: trust.snapshot.deviceRef,
-        deviceSessionId: trust.snapshot.deviceSessionId,
-        gatewaySessionId: gateway.sessionId,
-        connectionId: request.body.connectionId,
-        gatewayGeneration: request.body.gatewayGeneration,
-        deliveryReference: request.body.deliveryReference,
-        reportedState: request.body.reportedState,
-        sourceReference: request.body.sourceReference,
-        proofReference: request.body.proofReference,
-        integrityDigest: request.body.integrityDigest,
-        capturedAtMs: request.body.capturedAtMs,
-        receivedAtMs: request.nowMs,
-        deviceSession: trust.snapshot,
+    if (input.connectionState.deviceSessionId === undefined) {
+      return devicePlaneError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
+    }
+    const currentTrust = this.#currentTrust(input);
+    const trust = trustSnapshot(currentTrust);
+    if (trust === null) return managerResponse(currentTrust);
+    const currentCommand = this.#currentCommand(input, input.body.commandId);
+    const command = commandFromResult(currentCommand);
+    if (command === null) return managerResponse(currentCommand);
+    return managerResponse(
+      invoke(this.#dependencies.deliveries, 'claim', {
+        command,
+        deviceSession: trust,
+        nowMs: input.nowMs,
+      }),
+    );
+  }
+
+  #acknowledge(input: GatewayDevicePlaneHandleInput): GatewayDevicePlaneResponse {
+    if (
+      !hasOnlyKeys(input.body, ACK_KEYS) ||
+      typeof input.body.commandId !== 'string' ||
+      !COMMAND_ID.test(input.body.commandId) ||
+      !safeReference(input.body.deliveryReference) ||
+      !safeReference(input.body.ackReference, 256)
+    ) {
+      return devicePlaneError(400, 'BODY_MALFORMED');
+    }
+    if (input.connectionState.deviceSessionId === undefined) {
+      return devicePlaneError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
+    }
+    const currentTrust = this.#currentTrust(input);
+    const trust = trustSnapshot(currentTrust);
+    if (trust === null) return managerResponse(currentTrust);
+    const currentCommand = this.#currentCommand(input, input.body.commandId);
+    const command = commandFromResult(currentCommand);
+    if (command === null) return managerResponse(currentCommand);
+    return managerResponse(
+      invoke(this.#dependencies.deliveries, 'acknowledge', {
+        command,
+        deviceSession: trust,
+        deliveryReference: input.body.deliveryReference,
+        ackReference: input.body.ackReference,
+        observedAtMs: input.nowMs,
+      }),
+    );
+  }
+
+  #ingestReceipt(input: GatewayDevicePlaneHandleInput): GatewayDevicePlaneResponse {
+    if (
+      !hasOnlyKeys(input.body, RECEIPT_KEYS) ||
+      typeof input.body.receiptId !== 'string' ||
+      !RECEIPT_ID.test(input.body.receiptId) ||
+      (input.body.evidenceId !== undefined &&
+        (typeof input.body.evidenceId !== 'string' || !EVIDENCE_ID.test(input.body.evidenceId))) ||
+      typeof input.body.commandId !== 'string' ||
+      !COMMAND_ID.test(input.body.commandId) ||
+      typeof input.body.executionId !== 'string' ||
+      !EXECUTION_ID.test(input.body.executionId) ||
+      !safeReference(input.body.connectionId) ||
+      !positiveInteger(input.body.gatewayGeneration) ||
+      !safeReference(input.body.deliveryReference) ||
+      !['COMPLETED', 'FAILED', 'UNCERTAIN'].includes(String(input.body.reportedState)) ||
+      !safeReference(input.body.sourceReference) ||
+      !safeReference(input.body.proofReference) ||
+      !safeReference(input.body.integrityDigest, 256) ||
+      !safeNonNegativeInteger(input.body.capturedAtMs)
+    ) {
+      return devicePlaneError(400, 'BODY_MALFORMED');
+    }
+    if (input.connectionState.deviceSessionId === undefined) {
+      return devicePlaneError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
+    }
+    const currentTrust = this.#currentTrust(input);
+    const trust = trustSnapshot(currentTrust);
+    if (trust === null) return managerResponse(currentTrust);
+    const deviceRef = parseDeviceRef(trust.deviceRef);
+    if (
+      deviceRef === null ||
+      typeof trust.tenantId !== 'string' ||
+      typeof trust.correlationId !== 'string' ||
+      typeof trust.deviceSessionId !== 'string' ||
+      typeof trust.gatewaySessionId !== 'string'
+    ) {
+      return devicePlaneError(503, 'UPSTREAM_PROTOCOL_VIOLATION');
+    }
+
+    return managerResponse(
+      invoke(this.#dependencies.receiptIngress, 'ingest', {
+        receiptId: input.body.receiptId,
+        ...(input.body.evidenceId === undefined ? {} : { evidenceId: input.body.evidenceId }),
+        tenantId: trust.tenantId,
+        correlationId: trust.correlationId,
+        commandId: input.body.commandId,
+        executionId: input.body.executionId,
+        deviceRef,
+        deviceSessionId: trust.deviceSessionId,
+        gatewaySessionId: trust.gatewaySessionId,
+        connectionId: input.body.connectionId,
+        gatewayGeneration: input.body.gatewayGeneration,
+        deliveryReference: input.body.deliveryReference,
+        reportedState: input.body.reportedState,
+        sourceReference: input.body.sourceReference,
+        proofReference: input.body.proofReference,
+        integrityDigest: input.body.integrityDigest,
+        capturedAtMs: input.body.capturedAtMs,
+        receivedAtMs: input.nowMs,
+        deviceSession: trust,
       }),
     );
   }

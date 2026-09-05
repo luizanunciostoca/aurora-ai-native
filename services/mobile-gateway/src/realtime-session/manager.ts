@@ -610,6 +610,30 @@ export class RealtimeCommandSessionManager {
     return success({ disposition, command: commandSnapshot(command) });
   }
 
+  getCommand(
+    gatewaySessionId: unknown,
+    gatewayConnectionId: unknown,
+    commandId: unknown,
+    nowMs: unknown,
+  ): RealtimeSessionResult<RealtimeCommandSnapshot> {
+    if (
+      !isSafeToken(gatewaySessionId) ||
+      !isSafeToken(gatewayConnectionId) ||
+      !isFiniteNonNegativeInteger(nowMs)
+    ) {
+      return failure('MALFORMED_REQUEST', 'Current-command lookup context is malformed.');
+    }
+    const canonicalCommandId = parseCanonical<CommandId>(commandId, COMMAND_ID);
+    if (canonicalCommandId === null) {
+      return failure('MALFORMED_REQUEST', 'Current-command lookup identifier is malformed.');
+    }
+    const bound = this.#requireBoundSession({ gatewaySessionId, gatewayConnectionId, nowMs });
+    if (!bound.ok) return bound;
+    const command = bound.value.record.commands.get(canonicalCommandId);
+    if (command === undefined) return failure('COMMAND_NOT_FOUND', 'Command does not exist.');
+    return success(commandSnapshot(command));
+  }
+
   getSession(
     gatewaySessionId: unknown,
     nowMs: unknown,
@@ -625,25 +649,6 @@ export class RealtimeCommandSessionManager {
       this.#closeRecord(record, nowMs);
     }
     return success(sessionSnapshot(record));
-  }
-
-  getCommand(
-    gatewaySessionId: unknown,
-    gatewayConnectionId: unknown,
-    commandId: unknown,
-    nowMs: unknown,
-  ): RealtimeSessionResult<RealtimeCommandSnapshot> {
-    const bound = this.#parseBoundInput({ gatewaySessionId, gatewayConnectionId, nowMs });
-    if (!bound.ok) return bound;
-    const parsedCommandId = parseCanonical<CommandId>(commandId, COMMAND_ID);
-    if (parsedCommandId === null) {
-      return failure('MALFORMED_REQUEST', 'Command identifier is malformed.');
-    }
-    const current = this.#requireBoundSession(bound.value);
-    if (!current.ok) return current;
-    const command = current.value.record.commands.get(parsedCommandId);
-    if (command === undefined) return failure('COMMAND_NOT_FOUND', 'Command does not exist.');
-    return success(commandSnapshot(command));
   }
 
   #parseOpenInput(
