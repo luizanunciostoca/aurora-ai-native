@@ -26,6 +26,12 @@ jobs:
         with:
           gradle-version: '9.4.1'
           cache-read-only: true
+      - name: Validate wake evidence tooling
+        shell: bash
+        run: |
+          bash -n apps/aurora-android/physical/wake/collect-wake-physical-evidence.sh
+          python3 -m json.tool apps/aurora-android/physical/wake/WAKE_EVIDENCE_TEMPLATE.json >/dev/null
+          test -x apps/aurora-android/physical/wake/collect-wake-physical-evidence.sh
       - name: Install stable Android SDK
         shell: bash
         run: |

@@ -48,9 +48,9 @@ mapfile -t DEVICES < <(adb devices | awk 'NR>1 && $2=="device" {print $1}')
 SERIAL="${DEVICES[0]}"
 ADB=(adb -s "$SERIAL")
 
-qemu="$(${ADB[@]} shell getprop ro.kernel.qemu 2>/dev/null | tr -d '\r')"
-hardware="$(${ADB[@]} shell getprop ro.hardware 2>/dev/null | tr -d '\r')"
-product="$(${ADB[@]} shell getprop ro.product.name 2>/dev/null | tr -d '\r')"
+qemu="$("${ADB[@]}" shell getprop ro.kernel.qemu 2>/dev/null | tr -d '\r')"
+hardware="$("${ADB[@]}" shell getprop ro.hardware 2>/dev/null | tr -d '\r')"
+product="$("${ADB[@]}" shell getprop ro.product.name 2>/dev/null | tr -d '\r')"
 if [[ "$qemu" == "1" || "$hardware" =~ (goldfish|ranchu|qemu) || "$product" =~ (sdk|emulator) ]]; then
   echo "Emulators are rejected for wake physical evidence." >&2
   exit 4
@@ -112,24 +112,24 @@ if [[ "$PHASE" == "preflight" ]]; then
   printf '%s\n' "$EXPECTED_HEAD" > "$OUT/GIT_HEAD.txt"
   "${ADB[@]}" install -r "$APK" > "$OUT/install.txt"
 
-  PACKAGE_DUMP="$(${ADB[@]} shell dumpsys package "$PACKAGE" 2>/dev/null || true)"
+  PACKAGE_DUMP="$("${ADB[@]}" shell dumpsys package "$PACKAGE" 2>/dev/null || true)"
   [[ -n "$PACKAGE_DUMP" ]] || { echo "Installed package $PACKAGE not found" >&2; exit 6; }
   VERSION_NAME="$(printf '%s\n' "$PACKAGE_DUMP" | sed -n 's/^[[:space:]]*versionName=//p' | head -n1 | tr -d '\r')"
   VERSION_CODE="$(printf '%s\n' "$PACKAGE_DUMP" | sed -n 's/^[[:space:]]*versionCode=\([0-9][0-9]*\).*/\1/p' | head -n1)"
   MIC_PERMISSION="$(printf '%s\n' "$PACKAGE_DUMP" | grep -A1 -F 'android.permission.RECORD_AUDIO' | head -n2 | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g' || true)"
-  ANDROID_VERSION="$(${ADB[@]} shell getprop ro.build.version.release | tr -d '\r')"
-  SDK_INT="$(${ADB[@]} shell getprop ro.build.version.sdk | tr -d '\r')"
-  MANUFACTURER="$(${ADB[@]} shell getprop ro.product.manufacturer | tr -d '\r')"
-  MODEL="$(${ADB[@]} shell getprop ro.product.model | tr -d '\r')"
-  FINGERPRINT="$(${ADB[@]} shell getprop ro.build.fingerprint | tr -d '\r')"
+  ANDROID_VERSION="$("${ADB[@]}" shell getprop ro.build.version.release | tr -d '\r')"
+  SDK_INT="$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r')"
+  MANUFACTURER="$("${ADB[@]}" shell getprop ro.product.manufacturer | tr -d '\r')"
+  MODEL="$("${ADB[@]}" shell getprop ro.product.model | tr -d '\r')"
+  FINGERPRINT="$("${ADB[@]}" shell getprop ro.build.fingerprint | tr -d '\r')"
   SERIAL_HASH="$(printf '%s' "$SERIAL" | sha256sum | awk '{print $1}')"
-  ASSISTANT_HOLDER="$(${ADB[@]} shell cmd role get-role-holders android.app.role.ASSISTANT 2>/dev/null | tr -d '\r' | paste -sd ',' - || true)"
+  ASSISTANT_HOLDER="$("${ADB[@]}" shell cmd role get-role-holders android.app.role.ASSISTANT 2>/dev/null | tr -d '\r' | paste -sd ',' - || true)"
   WAKE_STATE="$(read_pref 'aurora.wake.runtime.v1' 'state')"
   WAKE_ENGINE="$(read_pref 'aurora.wake.runtime.v1' 'engine')"
   WAKE_MODEL="$(read_pref 'aurora.wake.runtime.v1' 'model_version')"
   WAKE_SENSITIVITY="$(read_pref 'aurora.ui.v1' 'wake_sensitivity')"
   PRIVACY_MODE="$(read_pref 'aurora.ui.v1' 'privacy_mode')"
-  BATTERY_EXEMPT="$(${ADB[@]} shell dumpsys deviceidle whitelist 2>/dev/null | grep -F "$PACKAGE" >/dev/null && echo true || echo false)"
+  BATTERY_EXEMPT="$("${ADB[@]}" shell dumpsys deviceidle whitelist 2>/dev/null | grep -F "$PACKAGE" >/dev/null && echo true || echo false)"
   CAPTURED_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
   cp "$TEMPLATE" "$EVIDENCE"
@@ -201,9 +201,14 @@ capture "role-assistant" cmd role get-role-holders android.app.role.ASSISTANT
   printf 'privacy_mode=%s\n' "$(read_pref 'aurora.ui.v1' 'privacy_mode')"
 } > "$OUT/${PHASE}-wake-runtime.txt"
 
-find "$OUT" -maxdepth 1 -type f -print0 \
+CHECKSUM_TMP="$OUT/.${PHASE}-SHA256SUMS.tmp"
+find "$OUT" -maxdepth 1 -type f \
+  ! -name '*-SHA256SUMS.txt' \
+  ! -name '.*-SHA256SUMS.tmp' \
+  -print0 \
   | sort -z \
-  | xargs -0 sha256sum > "$OUT/${PHASE}-SHA256SUMS.txt"
+  | xargs -0 sha256sum > "$CHECKSUM_TMP"
+mv "$CHECKSUM_TMP" "$OUT/${PHASE}-SHA256SUMS.txt"
 
 if [[ "$PHASE" == "finalize" ]]; then
   python3 - "$EVIDENCE" <<'PY'
