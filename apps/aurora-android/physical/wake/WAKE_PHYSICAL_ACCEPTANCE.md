@@ -18,7 +18,7 @@ This plan validates the real chain `idle -> local hotword -> confirmed WakeCandi
 Evidence must bind one exact tuple:
 
 1. git HEAD;
-2. `Aurora-Tablet-UI-V4-Wake-Governed-Provenance.apk` SHA-256;
+2. `Aurora-Tablet-UI-V4-Wake-Governed-Diagnostics.apk` SHA-256;
 3. package/versionName/versionCode;
 4. Android version + SDK;
 5. manufacturer/model + hashed device serial + build fingerprint;
@@ -28,6 +28,8 @@ Evidence must bind one exact tuple:
 9. battery-optimization state and audio route;
 10. operator timestamps;
 11. when a governed fast-path projection is actually supplied, the W04 registry version/sourceRef/content SHA-256 and W15-G vocabulary version/sourceRef/content SHA-256 used by that run.
+
+The CI artifact container is named `aurora-tablet-ui-v4-wake-governed-diagnostics`; use the APK and checksum files from the exact-head artifact only. Never substitute an APK produced from another commit or local workspace when binding physical evidence.
 
 If any tuple element changes materially, start a new evidence set. Projection content hashes are provenance/integrity references only: they are not signatures, `PolicyToken`, `OwnerDecision`, W07 authority or proof of execution success.
 
