@@ -1,10 +1,10 @@
-import type { CurrentAuthorityValidator } from '../sdk/types.js';
-import type { IdempotencyFencePort, PreconditionEvaluator } from '../safeguards/types.js';
 import type { W14GovernedDeviceDispatchPort } from '../device-dispatch/governed-device-dispatch.js';
 import {
   W07DeviceReceiptObservationAdapter,
   type TrustedDeviceExecutionMaterialSource,
 } from '../readback/device-receipt-observer.js';
+import type { IdempotencyFencePort, PreconditionEvaluator } from '../safeguards/types.js';
+import type { CurrentAuthorityValidator } from '../sdk/types.js';
 import {
   W15JDispatchingVoiceCandidateIntake,
   type TrustedVoiceExecutionStateSource,
@@ -38,6 +38,7 @@ export interface W15JPhysicalHostW07Ports {
 export interface W15JDispatchingPhysicalHostW07Ports {
   readonly createVoiceIntake: (
     w14Dispatch: W14GovernedDeviceDispatchPort,
+    idempotencyFence: IdempotencyFencePort,
   ) => W15JPhysicalHostVoiceIntakePort;
   readonly receiptEvidenceIngress: W07DeviceReceiptObservationAdapter;
 }
@@ -57,8 +58,6 @@ export interface W15JDispatchingPhysicalHostW07PortConfig extends W15JPhysicalHo
   readonly executionStateSource: TrustedVoiceExecutionStateSource;
   /** Current W07 precondition evaluator; Android cannot supply precondition truth. */
   readonly evaluatePrecondition: PreconditionEvaluator;
-  /** W03-owned durable business idempotency fence consumed by W07-C. */
-  readonly idempotencyFence: IdempotencyFencePort;
 }
 
 function buildResolver(config: W15JPhysicalHostW07PortConfig): TrustedServerVoiceAuthorityResolver {
@@ -95,10 +94,11 @@ export function createW15JPhysicalHostW07Ports(
 /**
  * W07-owned dispatching adapter bundle for the controlled W15-J physical host.
  *
- * The factory receives the structural W14 transport port only after the host has created current
- * gateway/device/session managers. Authority, target resolution, containment and safeguards remain
- * W07-owned; W14 only revalidates transport/device trust and prepares delivery. No raw credential,
- * verified outcome or retry permission crosses this factory boundary.
+ * The factory receives both structural runtime ports only after the host has created them: W14
+ * transport dispatch plus the W03-backed W07-C business idempotency fence. Authority, target
+ * resolution, containment and safeguards remain W07-owned; W14 only revalidates transport/device
+ * trust and prepares delivery. No raw credential, verified outcome or retry permission crosses the
+ * factory boundary.
  */
 export function createW15JDispatchingPhysicalHostW07Ports(
   config: W15JDispatchingPhysicalHostW07PortConfig,
@@ -108,12 +108,13 @@ export function createW15JDispatchingPhysicalHostW07Ports(
 
   const createVoiceIntake = (
     w14Dispatch: W14GovernedDeviceDispatchPort,
+    idempotencyFence: IdempotencyFencePort,
   ): W15JPhysicalHostVoiceIntakePort =>
     new W15JDispatchingVoiceCandidateIntake({
       resolver,
       executionStateSource: config.executionStateSource,
       evaluatePrecondition: config.evaluatePrecondition,
-      idempotencyFence: config.idempotencyFence,
+      idempotencyFence,
       w14Dispatch,
       ...(config.clock === undefined ? {} : { clock: config.clock }),
     });
