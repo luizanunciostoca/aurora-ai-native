@@ -33,6 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import ai.aurora.device.AuroraApplication
+import ai.aurora.device.BuildConfig
+import ai.aurora.device.offline.AndroidOfflineExecutionQueueStore
+import ai.aurora.device.offline.OfflineQueueState
 import ai.aurora.device.voice.GovernedVoiceCatalogResult
 import ai.aurora.device.voice.GovernedVoiceCommandCatalog
 
@@ -47,6 +50,7 @@ class WakeSetupActivity : FragmentActivity() {
     private var assistantStatus by mutableStateOf("Verificando…")
     private var voiceGovernanceStatus by mutableStateOf("Verificando…")
     private var voiceGovernanceDetail by mutableStateOf("Reconciliando W04/W15-C/W15-G…")
+    private var runtimeDiagnostics by mutableStateOf<List<String>>(emptyList())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,6 +58,7 @@ class WakeSetupActivity : FragmentActivity() {
         modelStore = AuroraWakeModelStore(this)
         refreshAssistantStatus()
         refreshVoiceGovernanceStatus()
+        refreshRuntimeDiagnostics()
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -67,6 +72,7 @@ class WakeSetupActivity : FragmentActivity() {
         super.onResume()
         refreshAssistantStatus()
         refreshVoiceGovernanceStatus()
+        refreshRuntimeDiagnostics()
     }
 
     override fun onDestroy() {
@@ -84,12 +90,14 @@ class WakeSetupActivity : FragmentActivity() {
                 status = "WAKE_PERMISSION_BLOCKED"
                 detail = "Sem permissão de microfone, a Aurora não pode treinar nem armar o wake word."
             }
+            refreshRuntimeDiagnostics()
         }
         val assistantRoleLauncher = rememberLauncherForActivityResult(
             ActivityResultContracts.StartActivityForResult(),
         ) {
             refreshAssistantStatus()
             refreshVoiceGovernanceStatus()
+            refreshRuntimeDiagnostics()
         }
 
         Column(
@@ -113,6 +121,22 @@ class WakeSetupActivity : FragmentActivity() {
                     Text("Engine: AudioRecord local · 16 kHz · modelo pt-BR por enrollment")
                     Text("Fast path governado: $voiceGovernanceStatus")
                     Text(voiceGovernanceDetail)
+                }
+            }
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Runtime real integrado", style = MaterialTheme.typography.titleMedium)
+                    runtimeDiagnostics.forEach { line -> Text(line) }
+                    Text(
+                        "Estes estados são projeções/readbacks locais. Presence, session, capability e queue não são authority e não provam sucesso de side effect.",
+                    )
+                    OutlinedButton(onClick = {
+                        refreshVoiceGovernanceStatus()
+                        refreshRuntimeDiagnostics()
+                    }) {
+                        Text("Atualizar runtime real")
+                    }
                 }
             }
 
@@ -150,6 +174,7 @@ class WakeSetupActivity : FragmentActivity() {
                         } else {
                             refreshAssistantStatus()
                             refreshVoiceGovernanceStatus()
+                            refreshRuntimeDiagnostics()
                         }
                     } else {
                         detail = "Nesta versão do Android, selecione a Aurora como assistente pelas configurações do sistema quando disponível."
@@ -177,6 +202,7 @@ class WakeSetupActivity : FragmentActivity() {
                             status = "DISABLED"
                             detail = "Wake word desativado e enrollment local removido."
                             refreshVoiceGovernanceStatus()
+                            refreshRuntimeDiagnostics()
                         },
                     ) { Text("Desativar e apagar modelo") }
                 }
@@ -209,11 +235,13 @@ class WakeSetupActivity : FragmentActivity() {
                 } else {
                     "Amostra aceita. Grave mais ${REQUIRED_SAMPLES - sampleCount}."
                 }
+                refreshRuntimeDiagnostics()
             },
             onError = { message ->
                 recording = false
                 status = "DEGRADED"
                 detail = message
+                refreshRuntimeDiagnostics()
             },
         )
     }
@@ -248,9 +276,11 @@ class WakeSetupActivity : FragmentActivity() {
                 "Wake word armado. Para handoff global sem toque, selecione também a Aurora como assistente Android."
             }
             refreshVoiceGovernanceStatus()
+            refreshRuntimeDiagnostics()
         }.onFailure { throwable ->
             status = "WAKE_ERROR"
             detail = "Não foi possível armar o wake word: ${throwable.javaClass.simpleName}"
+            refreshRuntimeDiagnostics()
         }
     }
 
@@ -290,6 +320,43 @@ class WakeSetupActivity : FragmentActivity() {
                     "Sem projeção governada atual, nenhuma fala usa o fast path; a interação segue para Conversation. W07 mobile ingress: NOT_COMPOSED."
             }
         }
+    }
+
+    private fun refreshRuntimeDiagnostics() {
+        val aurora = application as AuroraApplication
+        val now = System.currentTimeMillis()
+        val presence = aurora.presenceSnapshot()
+        val session = runCatching { aurora.deviceSessionClient().sessionAvailability(now).name }
+            .getOrElse { "UNREADABLE_FAIL_CLOSED" }
+        val offlineRecords = runCatching { AndroidOfflineExecutionQueueStore(this).loadAll() }
+        val offlineSummary = offlineRecords.fold(
+            onSuccess = { records ->
+                val deferred = records.count { it.state == OfflineQueueState.DEFERRED }
+                val reconcile = records.count { it.state == OfflineQueueState.RECONCILIATION_REQUIRED }
+                val terminal = records.size - deferred - reconcile
+                "W15-H queue: ${records.size} total · $deferred deferred · $reconcile reconcile · $terminal terminal/stale"
+            },
+            onFailure = { "W15-H queue: UNREADABLE_FAIL_CLOSED" },
+        )
+        val governed = GovernedVoiceCommandCatalog(
+            projectionProvider = { aurora.voiceProjectionStore().current() },
+            nowMs = { now },
+        ).snapshot()
+        val governedLine = when (governed) {
+            is GovernedVoiceCatalogResult.Ready ->
+                "W04/W15-G: READY · registry=${governed.snapshot.registryVersion} · vocabulary=${governed.snapshot.vocabularyVersion} · deviceCaps=${governed.snapshot.availableCapabilityIds.size}"
+            is GovernedVoiceCatalogResult.Rejected ->
+                "W04/W15-G: FAIL_CLOSED · ${governed.reason.name}"
+        }
+        runtimeDiagnostics = listOf(
+            "Build: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.AURORA_BUILD_SHA.take(12)}",
+            "Environment: ${aurora.environmentConfig.environment.name}",
+            "Presence: ${presence.visibility.name} · processGeneration=${presence.processGeneration} · localService=${presence.localServicePhase.name}",
+            "W14 session: $session",
+            governedLine,
+            "W07 voice ingress: NOT_COMPOSED",
+            offlineSummary,
+        )
     }
 
     companion object {
