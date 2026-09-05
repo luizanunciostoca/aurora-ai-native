@@ -105,10 +105,7 @@ test('rejects invalid, expired and stale upstream authentication without issuing
     now,
   );
   const future = broker.issue(principal({ authenticatedAtMs: now + 1 }), now);
-  const authoritative = broker.issue(
-    { ...principal(), authorizesExecution: true } as unknown,
-    now,
-  );
+  const authoritative = broker.issue({ ...principal(), authorizesExecution: true } as unknown, now);
 
   assert.equal(expired.ok ? '' : expired.error.code, 'PRINCIPAL_EXPIRED');
   assert.equal(stale.ok ? '' : stale.error.code, 'PRINCIPAL_STALE');
