@@ -31,6 +31,7 @@ internal fun EvidenceV2Pane(
     deviceKeyState: DeviceKeyUiState,
     onIntent: (AuroraUiIntent) -> Unit,
 ) {
+    val runtime = state.device.runtimeIntegration
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -84,6 +85,23 @@ internal fun EvidenceV2Pane(
                 KeyValue("Local service", state.device.localServicePhase)
                 KeyValue("Network", state.connectivity.label)
                 KeyValue("Device session", state.device.registrationStatus)
+                HorizontalDivider(color = Outline)
+                Text("Governed runtime projections", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                KeyValue("Voice projection", runtime.governedVoiceStatus)
+                KeyValue("W04 registry", runtime.w04RegistryVersion)
+                KeyValue("W15-G vocabulary", runtime.w15gVocabularyVersion)
+                KeyValue("Current DEVICE capabilities", runtime.currentDeviceCapabilities.toString())
+                KeyValue("Deterministic voice commands", runtime.deterministicVoiceCommands.toString())
+                KeyValue("W07 voice ingress", runtime.w07VoiceIngressStatus)
+                KeyValue(
+                    "Offline queue",
+                    "${runtime.offlineQueueStatus} · total=${runtime.offlineQueueTotal} · deferred=${runtime.offlineQueueDeferred} · reconcile=${runtime.offlineQueueReconciliationRequired}",
+                )
+                LuminousCallout(
+                    "RUNTIME PROJECTION ≠ CANONICAL EVIDENCE",
+                    "W04/W15 read models exibidos aqui são diagnóstico de disponibilidade/frescor. Eles não são EvidenceRecord W17, não são authority, não provam side effect e não autorizam retry.",
+                    if (runtime.offlineQueueReconciliationRequired > 0) SemanticTone.CRITICAL else SemanticTone.INFO,
+                )
                 HorizontalDivider(color = Outline)
                 KeyValue("Device key", deviceKeyState.status.name)
                 if (deviceKeyState.status == DeviceKeyUiStatus.READY) {
