@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   REQUIRED_DP5_SCENARIO_PATHS,
@@ -124,7 +125,7 @@ const preflight = {
 };
 
 function clone(value) {
-  return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
 }
 
 test('validates the canonical W15-J evidence contract', () => {
@@ -174,7 +175,7 @@ test('requires timestamp and concrete evidence references on scenarios', () => {
 
 test('requires threat review, resources, canonical risk gates, and attestations', () => {
   const missingThreat = canonicalDossier();
-  delete missingThreat.threatReview[REQUIRED_THREAT_REVIEW_KEYS[0]];
+  delete missingThreat.threatReview.packageImpersonationOrConfusion;
   assert.throws(
     () => validateW15JPreflight(missingThreat, preflight),
     /threatReview\.packageImpersonationOrConfusion is required/,
@@ -261,13 +262,13 @@ test('CLI requires a trusted preflight file and validates both inputs', () => {
   const preflightPath = join(directory, 'preflight.json');
   writeFileSync(dossierPath, JSON.stringify(canonicalDossier()));
   writeFileSync(preflightPath, JSON.stringify(preflight));
-  const modulePath = new URL('./w15j-preflight.mjs', import.meta.url);
-  const missing = spawnSync(process.execPath, [modulePath.pathname, dossierPath], {
+  const modulePath = fileURLToPath(import.meta.resolve('./w15j-preflight.mjs'));
+  const missing = spawnSync(process.execPath, [modulePath, dossierPath], {
     encoding: 'utf8',
   });
   assert.equal(missing.status, 2);
   assert.match(missing.stderr, /Usage: .*trusted-preflight\.json/);
-  const output = execFileSync(process.execPath, [modulePath.pathname, dossierPath, preflightPath], {
+  const output = execFileSync(process.execPath, [modulePath, dossierPath, preflightPath], {
     encoding: 'utf8',
   });
   assert.match(output, /W15J_PREFLIGHT_READY candidate=/);
