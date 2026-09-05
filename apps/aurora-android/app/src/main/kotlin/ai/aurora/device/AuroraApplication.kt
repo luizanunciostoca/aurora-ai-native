@@ -10,6 +10,7 @@ import ai.aurora.device.security.AndroidKeystoreSigningKeyStore
 import ai.aurora.device.session.AndroidDeviceSessionMetadataStore
 import ai.aurora.device.session.SecureDeviceSessionClient
 import ai.aurora.device.session.SessionLifecycleHooks
+import ai.aurora.device.voice.GovernedVoiceProjectionStore
 
 class AuroraApplication : Application() {
     lateinit var environmentConfig: RuntimeEnvironmentConfig
@@ -18,6 +19,7 @@ class AuroraApplication : Application() {
     private lateinit var presenceEngine: PresenceEngine
     private lateinit var presenceCoordinator: AndroidPresenceCoordinator
     private lateinit var secureDeviceSessionClient: SecureDeviceSessionClient
+    private val governedVoiceProjectionStore = GovernedVoiceProjectionStore()
 
     override fun onCreate() {
         super.onCreate()
@@ -48,4 +50,13 @@ class AuroraApplication : Application() {
     fun presenceSnapshot(): PresenceSnapshot = presenceEngine.snapshot
 
     fun deviceSessionClient(): SecureDeviceSessionClient = secureDeviceSessionClient
+
+    /**
+     * Atomic read-only composition store for reconciled W04/W15-C/W15-G voice projections.
+     *
+     * The application never populates this store from local guesses. Until a governed upstream
+     * adapter supplies a reconciled bundle, the store is empty and wake voice routing falls back to
+     * Conversation. The store never contains PolicyToken/OwnerDecision/W07 execution authority.
+     */
+    fun voiceProjectionStore(): GovernedVoiceProjectionStore = governedVoiceProjectionStore
 }
