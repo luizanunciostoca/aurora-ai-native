@@ -36,8 +36,10 @@ import ai.aurora.device.AuroraApplication
 import ai.aurora.device.BuildConfig
 import ai.aurora.device.offline.AndroidOfflineExecutionQueueStore
 import ai.aurora.device.offline.OfflineQueueState
+import ai.aurora.device.session.AndroidDeviceSessionMetadataStore
 import ai.aurora.device.voice.GovernedVoiceCatalogResult
 import ai.aurora.device.voice.GovernedVoiceCommandCatalog
+import ai.aurora.ui.DeviceTrustDiagnostics
 
 class WakeSetupActivity : FragmentActivity() {
     private lateinit var recorder: AuroraWakeEnrollmentRecorder
@@ -328,6 +330,21 @@ class WakeSetupActivity : FragmentActivity() {
         val presence = aurora.presenceSnapshot()
         val session = runCatching { aurora.deviceSessionClient().sessionAvailability(now).name }
             .getOrElse { "UNREADABLE_FAIL_CLOSED" }
+        val trust = runCatching {
+            DeviceTrustDiagnostics.sanitize(
+                AndroidDeviceSessionMetadataStore(this).load(),
+                now,
+            )
+        }.getOrNull()
+        val trustLines = if (trust == null) {
+            listOf("W15-B/W14 trust metadata: UNREADABLE_FAIL_CLOSED")
+        } else {
+            listOf(
+                "W15-B key metadata: ${trust.keyState} · generation=${trust.keyGeneration ?: "—"} · boundRegistration=${trust.boundRegistrationVersion ?: "—"}",
+                "W14 registration metadata: ${trust.registrationState} · version=${trust.registrationVersion ?: "—"}",
+                "W14 session metadata: ${trust.sessionState} · remaining=${trust.sessionRemainingSeconds?.let { "${it}s" } ?: "—"}",
+            )
+        }
         val offlineRecords = runCatching { AndroidOfflineExecutionQueueStore(this).loadAll() }
         val offlineSummary = offlineRecords.fold(
             onSuccess = { records ->
@@ -348,15 +365,16 @@ class WakeSetupActivity : FragmentActivity() {
             is GovernedVoiceCatalogResult.Rejected ->
                 "W04/W15-G: FAIL_CLOSED · ${governed.reason.name}"
         }
-        runtimeDiagnostics = listOf(
-            "Build: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.AURORA_BUILD_SHA.take(12)}",
-            "Environment: ${aurora.environmentConfig.environment.name}",
-            "Presence: ${presence.visibility.name} · processGeneration=${presence.processGeneration} · localService=${presence.localServicePhase.name}",
-            "W14 session: $session",
-            governedLine,
-            "W07 voice ingress: NOT_COMPOSED",
-            offlineSummary,
-        )
+        runtimeDiagnostics = buildList {
+            add("Build: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.AURORA_BUILD_SHA.take(12)}")
+            add("Environment: ${aurora.environmentConfig.environment.name}")
+            add("Presence: ${presence.visibility.name} · processGeneration=${presence.processGeneration} · localService=${presence.localServicePhase.name}")
+            add("W14 session availability: $session")
+            addAll(trustLines)
+            add(governedLine)
+            add("W07 voice ingress: NOT_COMPOSED")
+            add(offlineSummary)
+        }
     }
 
     companion object {
