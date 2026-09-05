@@ -24,6 +24,10 @@ class WakeSetupActivity : Activity() {
     private lateinit var statusView: TextView
     private var enrollment: AuroraWakeEnrollmentRecorder? = null
     private val enrollmentSamples = mutableListOf<WakeFeatureVector>()
+    private var enrollmentStartAttempts = 0
+    private var wakeRearmAttempts = 0
+    private val enrollmentStartRunnable = Runnable(::startEnrollmentWhenAudioIdle)
+    private val wakeRearmRunnable = Runnable(::rearmWakeWhenAudioIdle)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -67,6 +71,10 @@ class WakeSetupActivity : Activity() {
     }
 
     override fun onDestroy() {
+        if (::statusView.isInitialized) {
+            statusView.removeCallbacks(enrollmentStartRunnable)
+            statusView.removeCallbacks(wakeRearmRunnable)
+        }
         enrollment?.close()
         enrollment = null
         super.onDestroy()
@@ -88,9 +96,32 @@ class WakeSetupActivity : Activity() {
         }
         disableWakeServiceOnly()
         enrollment?.close()
-        enrollment = AuroraWakeEnrollmentRecorder(this)
+        enrollment = null
         enrollmentSamples.clear()
-        captureNextEnrollmentSample()
+        enrollmentStartAttempts = 0
+        startEnrollmentWhenAudioIdle()
+    }
+
+    private fun startEnrollmentWhenAudioIdle() {
+        if (isFinishing || isDestroyed) return
+        val owners = AuroraAudioRuntime.arbiter.snapshot().owners
+        if (owners.isEmpty()) {
+            enrollment = AuroraWakeEnrollmentRecorder(this)
+            captureNextEnrollmentSample()
+            return
+        }
+        if (enrollmentStartAttempts >= MAX_ENROLLMENT_START_ATTEMPTS) {
+            statusStore.update(
+                "ENROLLMENT_AUDIO_BUSY",
+                lastError = "audio ownership did not release before bounded enrollment timeout",
+            )
+            scheduleWakeRearmIfEnabled()
+            refresh()
+            return
+        }
+        enrollmentStartAttempts += 1
+        statusView.text = "Aguardando liberação segura do áudio para treinamento"
+        statusView.postDelayed(enrollmentStartRunnable, AUDIO_TRANSITION_RETRY_MS)
     }
 
     private fun captureNextEnrollmentSample() {
@@ -109,6 +140,7 @@ class WakeSetupActivity : Activity() {
                     statusStore.update("ENROLLMENT_READY", model.modelVersion)
                     enrollment?.close()
                     enrollment = null
+                    scheduleWakeRearmIfEnabled()
                     refresh()
                 } else {
                     statusView.postDelayed(::captureNextEnrollmentSample, 600L)
@@ -118,6 +150,7 @@ class WakeSetupActivity : Activity() {
                 statusStore.update("ENROLLMENT_FAILED", lastError = message)
                 enrollment?.close()
                 enrollment = null
+                scheduleWakeRearmIfEnabled()
                 refresh()
             },
         )
@@ -139,6 +172,51 @@ class WakeSetupActivity : Activity() {
             return
         }
         preferences.setWakeEnabled(true)
+        scheduleWakeRearmIfEnabled()
+        refresh()
+    }
+
+    private fun disableWake() {
+        preferences.setWakeEnabled(false)
+        statusView.removeCallbacks(wakeRearmRunnable)
+        wakeRearmAttempts = 0
+        disableWakeServiceOnly()
+        statusStore.update("DISABLED")
+        refresh()
+    }
+
+    private fun disableWakeServiceOnly() {
+        // The service/engine owns the HOTWORD lease. Stopping the service is asynchronous, so this
+        // Activity must never erase that lease before AudioRecord has actually been released.
+        stopService(Intent(this, AuroraWakeForegroundService::class.java))
+    }
+
+    private fun scheduleWakeRearmIfEnabled() {
+        statusView.removeCallbacks(wakeRearmRunnable)
+        wakeRearmAttempts = 0
+        statusView.post(wakeRearmRunnable)
+    }
+
+    private fun rearmWakeWhenAudioIdle() {
+        if (isFinishing || isDestroyed) return
+        if (!preferences.wakeEnabled() || preferences.privacyModeEnabled()) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        if (!modelStore.hasValidModel()) return
+
+        if (AuroraAudioRuntime.arbiter.snapshot().owners.isNotEmpty()) {
+            if (wakeRearmAttempts >= MAX_WAKE_REARM_ATTEMPTS) {
+                statusStore.update(
+                    "WAKE_PLATFORM_BLOCKED",
+                    lastError = "audio ownership did not release before bounded wake re-arm timeout",
+                )
+                refresh()
+                return
+            }
+            wakeRearmAttempts += 1
+            statusView.postDelayed(wakeRearmRunnable, AUDIO_TRANSITION_RETRY_MS)
+            return
+        }
+
         runCatching {
             startForegroundService(
                 Intent(this, AuroraWakeForegroundService::class.java).setAction(
@@ -151,19 +229,6 @@ class WakeSetupActivity : Activity() {
                 lastError = "wake start failed: ${failure.javaClass.simpleName}",
             )
         }
-        refresh()
-    }
-
-    private fun disableWake() {
-        preferences.setWakeEnabled(false)
-        disableWakeServiceOnly()
-        statusStore.update("DISABLED")
-        refresh()
-    }
-
-    private fun disableWakeServiceOnly() {
-        stopService(Intent(this, AuroraWakeForegroundService::class.java))
-        AuroraAudioRuntime.arbiter.release(AuroraAudioArbiter.AudioOwner.HOTWORD_MONITOR)
     }
 
     private fun requestMicrophonePermission() {
@@ -222,5 +287,8 @@ class WakeSetupActivity : Activity() {
         private const val REQUEST_ASSISTANT_ROLE = 1502
         private const val ENROLLMENT_SAMPLES = 3
         private const val MODEL_VERSION = "aurora-wake-local-v1"
+        private const val AUDIO_TRANSITION_RETRY_MS = 100L
+        private const val MAX_ENROLLMENT_START_ATTEMPTS = 15
+        private const val MAX_WAKE_REARM_ATTEMPTS = 15
     }
 }
