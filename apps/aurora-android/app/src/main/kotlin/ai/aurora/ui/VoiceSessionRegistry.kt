@@ -4,36 +4,44 @@ package ai.aurora.ui
  * Process-local registry for bounded voice resources.
  *
  * This registry owns no conversation, permission, business authority, or execution truth. It only
- * provides a single fail-closed stop point for STT/TTS when the Activity leaves foreground or
- * Privacy Mode becomes active.
+ * provides fail-closed stop points for STT/TTS when the Activity leaves foreground or Privacy Mode
+ * becomes active. Privacy may additionally purge presentation-only voice content.
  */
 object VoiceSessionRegistry {
+    private data class Hooks(
+        val background: () -> Unit,
+        val privacy: () -> Unit,
+    )
+
     private val lock = Any()
     private var sequence = 0L
-    private val stoppers = LinkedHashMap<Long, () -> Unit>()
+    private val hooks = LinkedHashMap<Long, Hooks>()
 
-    fun register(stopper: () -> Unit): AutoCloseable {
+    fun register(
+        onBackground: () -> Unit,
+        onPrivacy: () -> Unit = onBackground,
+    ): AutoCloseable {
         val token = synchronized(lock) {
             sequence += 1
-            sequence.also { stoppers[it] = stopper }
+            sequence.also { hooks[it] = Hooks(onBackground, onPrivacy) }
         }
         return AutoCloseable {
-            synchronized(lock) { stoppers.remove(token) }
+            synchronized(lock) { hooks.remove(token) }
         }
     }
 
-    fun stopAllForBackground() = stopAll()
+    fun stopAllForBackground() = dispatch { it.background }
 
-    fun stopAllForPrivacy() = stopAll()
+    fun stopAllForPrivacy() = dispatch { it.privacy }
 
-    internal fun registeredCountForTest(): Int = synchronized(lock) { stoppers.size }
+    internal fun registeredCountForTest(): Int = synchronized(lock) { hooks.size }
 
     internal fun clearForTest() {
-        synchronized(lock) { stoppers.clear() }
+        synchronized(lock) { hooks.clear() }
     }
 
-    private fun stopAll() {
-        val snapshot = synchronized(lock) { stoppers.values.toList() }
+    private fun dispatch(selector: (Hooks) -> () -> Unit) {
+        val snapshot = synchronized(lock) { hooks.values.map(selector) }
         snapshot.forEach { stopper -> runCatching { stopper() } }
     }
 }
