@@ -1,6 +1,13 @@
 name: Aurora PRO+ Reality Gate
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/aurora-pro-plus-reality-gate.yml'
+      - 'docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json'
+      - 'docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json'
+      - 'tools/copilot/**'
   pull_request:
     paths:
       - '.github/workflows/aurora-pro-plus-reality-gate.yml'
