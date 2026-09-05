@@ -1,5 +1,6 @@
 export * from './device-key-proof-verifier.js';
 export * from './device-plane-network.js';
+export * from './gateway-bootstrap-delivery.js';
 export * from './gateway-bootstrap.js';
 export * from './http-network-transport.js';
 export * from './session-manager.js';
