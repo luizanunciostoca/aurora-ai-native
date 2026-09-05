@@ -187,6 +187,37 @@ object VoicePresentationPolicy {
 
 data class ConnectivityUiState(val online: Boolean = false, val label: String = "Verificando rede")
 
+/**
+ * Read-only aggregation of already-owned runtime projections exposed to the UI.
+ *
+ * This state can describe availability/currentness but can never authorize execution, approve a
+ * decision, prove a side effect succeeded, or authorize retry. Any executable path still belongs to
+ * W02/W07/W15-F and must revalidate its own current preconditions.
+ */
+data class RuntimeIntegrationUiState(
+    val governedVoiceStatus: String = "FAIL_CLOSED",
+    val w04RegistryVersion: String = "—",
+    val w15gVocabularyVersion: String = "—",
+    val currentDeviceCapabilities: Int = 0,
+    val deterministicVoiceCommands: Int = 0,
+    val w07VoiceIngressStatus: String = "NOT_COMPOSED",
+    val offlineQueueStatus: String = "EMPTY",
+    val offlineQueueTotal: Int = 0,
+    val offlineQueueDeferred: Int = 0,
+    val offlineQueueReconciliationRequired: Int = 0,
+    val authorizesExecution: Boolean = false,
+) {
+    init {
+        require(currentDeviceCapabilities >= 0)
+        require(deterministicVoiceCommands >= 0)
+        require(offlineQueueTotal >= 0)
+        require(offlineQueueDeferred >= 0)
+        require(offlineQueueReconciliationRequired >= 0)
+        require(offlineQueueDeferred + offlineQueueReconciliationRequired <= offlineQueueTotal)
+        require(!authorizesExecution) { "UI runtime projection must never authorize execution" }
+    }
+}
+
 data class DeviceUiState(
     val environment: String = "UNKNOWN",
     val buildSha: String = "unknown",
@@ -196,6 +227,7 @@ data class DeviceUiState(
     val localServicePhase: String = "STOPPED",
     val devicePlaneAdapterAvailable: Boolean = true,
     val registrationStatus: String = "Não provisionado para sessão remota",
+    val runtimeIntegration: RuntimeIntegrationUiState = RuntimeIntegrationUiState(),
 )
 
 data class HumanControlUiState(
