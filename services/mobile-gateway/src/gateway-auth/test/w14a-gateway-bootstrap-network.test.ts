@@ -57,7 +57,7 @@ async function post(
         method: 'POST',
         headers: {
           'content-type': contentType,
-          'content-length': Buffer.byteLength(body),
+          'content-length': new TextEncoder().encode(body).byteLength,
         },
       },
       (response: { statusCode?: number; on(event: string, listener: (chunk?: unknown) => void): void }) => {
