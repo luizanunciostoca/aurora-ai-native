@@ -2,7 +2,7 @@
 
 Status: PROTOTYPE / PHYSICAL EVIDENCE REQUIRED
 
-This plan validates the real chain `idle -> local hotword -> confirmed WakeCandidate -> AWAKEN -> bounded STT -> Conversation -> response -> optional TTS -> rearm` on representative Android hardware. It does not close W15-J/DP5 by itself and does not grant canonical acceptance to the prototype branch.
+This plan validates the real chain `idle -> local hotword -> confirmed WakeCandidate -> AWAKEN -> bounded STT -> governed W04/W15-C/W15-G fast-path evaluation or Conversation fallback -> response -> optional TTS -> rearm` on representative Android hardware. It does not close W15-J/DP5 by itself and does not grant canonical acceptance to the prototype branch.
 
 ## Invariants
 
@@ -18,7 +18,7 @@ This plan validates the real chain `idle -> local hotword -> confirmed WakeCandi
 Evidence must bind one exact tuple:
 
 1. git HEAD;
-2. `Aurora-Tablet-UI-V4-Wake.apk` SHA-256;
+2. `Aurora-Tablet-UI-V4-Wake-Governed.apk` SHA-256;
 3. package/versionName/versionCode;
 4. Android version + SDK;
 5. manufacturer/model + hashed device serial + build fingerprint;
@@ -45,6 +45,19 @@ Validate built-in route, Bluetooth, supported wired/USB route, TTS active + user
 ## Security / abuse cases
 
 Exercise recorded replay, external speaker playback, remote media containing the keyword, accidental conversation, distorted/adversarial audio, rapid duplicate hotwords, permission revocation, Privacy Mode, service restart and local model integrity failure. When suitable test equipment and the device audio path make it applicable, include ultrasonic or near-ultrasonic modulated “Aurora” injection. Treat a non-trigger only as device-specific physical evidence; do not infer general anti-spoofing or liveness protection from inaudibility, microphone/front-end filtering or one hardware result. Record results without claiming liveness/anti-spoofing protection beyond what the prototype actually demonstrates.
+
+## Governed fast-path boundary
+
+The physical run must validate the same fail-closed chain covered by deterministic tests:
+
+- no W04 governed voice projection, stale registry or stale vocabulary -> Conversation fallback;
+- tenant mismatch, non-DEVICE target or non-current W04 capability -> capability cannot enter the available fast-path set;
+- W15-C native capability observation missing/stale/unavailable -> W15-G cannot produce a usable dispatch candidate;
+- W04 `MEDIUM`, `HIGH` or `CRITICAL` risk -> conservative `HIGH` voice handling and escalation before W07 ingress;
+- W07 mobile ingress unavailable -> candidate returns to Conversation; no local side effect, success claim or retry permission;
+- only a current LOW-risk deterministic candidate may be submitted for W07 evaluation, and submission is not authorization or execution.
+
+Do not populate a fake W04 capability registry or a fake W07 authorization service solely to make a scenario pass. If the canonical mobile ingress remains unavailable, record the expected fail-closed fallback honestly.
 
 ## Authority race cases
 
