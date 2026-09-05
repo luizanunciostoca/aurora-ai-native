@@ -44,6 +44,23 @@ jobs:
             s = s.replace(from, to);
             fs.writeFileSync(p, s);
           }
+          {
+            const p = 'services/executors/test/w15j-owner-backed-execution-state-source.test.ts';
+            let s = fs.readFileSync(p, 'utf8');
+            const importAnchor = `import type { FailureContainmentSnapshot } from '../src/failure-containment/types.js';`;
+            const importLine = `${importAnchor}\nimport type { ExecutableTargetBinding } from '../src/target-resolution/types.js';`;
+            if (!s.includes(`import type { ExecutableTargetBinding }`)) {
+              if (!s.includes(importAnchor)) throw new Error('owner-backed target binding import anchor not found');
+              s = s.replace(importAnchor, importLine);
+            }
+            const signatureFrom = `  resolve(request: Parameters<CurrentVoiceTargetBindingSource['resolve']>[0]) {`;
+            const signatureTo = `  resolve(\n    request: Parameters<CurrentVoiceTargetBindingSource['resolve']>[0],\n  ): readonly ExecutableTargetBinding[] | null {`;
+            if (s.includes(signatureFrom)) s = s.replace(signatureFrom, signatureTo);
+            const objectEndFrom = `        preconditionsSatisfied: true,\n      },\n    ];`;
+            const objectEndTo = `        preconditionsSatisfied: true,\n      } as unknown as ExecutableTargetBinding,\n    ];`;
+            if (s.includes(objectEndFrom)) s = s.replace(objectEndFrom, objectEndTo);
+            fs.writeFileSync(p, s);
+          }
           NODE
       - name: Apply canonical Prettier to new W15-J surfaces
         run: |
