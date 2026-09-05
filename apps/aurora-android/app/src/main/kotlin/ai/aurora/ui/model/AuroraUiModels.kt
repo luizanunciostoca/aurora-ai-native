@@ -227,7 +227,7 @@ data class DeviceUiState(
     val localServicePhase: String = "STOPPED",
     val devicePlaneAdapterAvailable: Boolean = true,
     val registrationStatus: String = "Não provisionado para sessão remota",
-    val runtimeIntegration: RuntimeIntegrationUiState = RuntimeIntegrationUiState(),
+    val runtimeIntegration: RuntimeIntegrationUiState = RuntimeIntegrationUiRegistry.snapshot(),
 )
 
 data class HumanControlUiState(
