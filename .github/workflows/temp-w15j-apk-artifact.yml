@@ -1,0 +1,51 @@
+name: TEMP W15-J APK Artifact
+
+on:
+  push:
+    branches:
+      - artifact/w15j-local-apk-6c247d23
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '9.4.1'
+          cache-read-only: true
+      - name: Install stable Android SDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+      - name: Build exact LocalDebug APK
+        shell: bash
+        run: |
+          gradle --no-daemon --console=plain -p apps/aurora-android :app:testLocalDebugUnitTest :app:assembleLocalDebug
+          APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+          mkdir -p /tmp/w15j-apk
+          cp "$APK" /tmp/w15j-apk/Aurora-W15J-LocalDebug-6c247d23.apk
+          sha256sum /tmp/w15j-apk/Aurora-W15J-LocalDebug-6c247d23.apk > /tmp/w15j-apk/SHA256SUMS.txt
+          printf '%s\n' 'candidate_sha=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d' > /tmp/w15j-apk/BUILD_IDENTITY.txt
+      - name: Upload exact APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-w15j-local-apk-6c247d23
+          path: /tmp/w15j-apk
+          if-no-files-found: error
+          retention-days: 7
