@@ -42,9 +42,14 @@ data class GovernedProjectionProvenance(
 ) {
     init {
         require(sourceRef.isNotBlank()) { "projection sourceRef must not be blank" }
+        require(sourceRef.length <= MAX_SOURCE_REF_LENGTH) { "projection sourceRef is too long" }
         require(SHA256_HEX.matches(contentSha256)) {
             "projection contentSha256 must be lowercase 64-hex SHA-256"
         }
+    }
+
+    companion object {
+        private const val MAX_SOURCE_REF_LENGTH = 512
     }
 }
 
@@ -135,23 +140,30 @@ data class GovernedVoiceProjectionBundle(
 ) {
     init {
         require(activeTenantId.isNotBlank()) { "activeTenantId must not be blank" }
+        require(activeTenantId.length <= 256) { "activeTenantId is too long" }
     }
 }
 
-/** Thread-safe composition point. It stores projections only and never stores authority tokens. */
+/**
+ * Thread-safe composition point. It stores projections only and never stores authority tokens.
+ *
+ * Both write and read boundaries make defensive deep copies of collection fields. A producer or
+ * consumer therefore cannot mutate a previously accepted atomic snapshot by retaining a mutable
+ * List/Set reference after [replace] or [current].
+ */
 class GovernedVoiceProjectionStore {
     @Volatile
     private var bundle: GovernedVoiceProjectionBundle? = null
 
     fun replace(projection: GovernedVoiceProjectionBundle) {
-        bundle = projection
+        bundle = projection.frozenCopy()
     }
 
     fun clear() {
         bundle = null
     }
 
-    fun current(): GovernedVoiceProjectionBundle? = bundle
+    fun current(): GovernedVoiceProjectionBundle? = bundle?.frozenCopy()
 }
 
 data class GovernedVoiceCatalogSnapshot(
@@ -281,7 +293,7 @@ class GovernedVoiceCommandCatalog(
                 val capability = checkNotNull(entriesById[binding.capabilityId])
                 VoiceCommandDefinition(
                     commandId = binding.commandId,
-                    phrases = binding.phrases,
+                    phrases = binding.phrases.toSet(),
                     capabilityId = binding.capabilityId,
                     risk =
                         if (capability.riskClass == W04VoiceCapabilityRiskClass.LOW) {
@@ -301,8 +313,8 @@ class GovernedVoiceCommandCatalog(
                 vocabularyVersion = vocabulary.vocabularyVersion,
                 vocabularySourceRef = vocabulary.provenance.sourceRef,
                 vocabularyContentSha256 = vocabulary.provenance.contentSha256,
-                commands = commands,
-                availableCapabilityIds = availableIds,
+                commands = commands.toList(),
+                availableCapabilityIds = availableIds.toSet(),
             ),
         )
     }
@@ -312,3 +324,28 @@ class GovernedVoiceCommandCatalog(
 
     private fun hasDuplicates(values: List<String>): Boolean = values.toSet().size != values.size
 }
+
+private fun GovernedVoiceProjectionBundle.frozenCopy(): GovernedVoiceProjectionBundle =
+    copy(
+        registry =
+            registry.copy(
+                entries =
+                    registry.entries.map { entry ->
+                        entry.copy(supportedTargetKinds = entry.supportedTargetKinds.toSet())
+                    },
+            ),
+        vocabulary =
+            vocabulary.copy(
+                bindings =
+                    vocabulary.bindings.map { binding ->
+                        binding.copy(phrases = binding.phrases.toSet())
+                    },
+            ),
+        nativeCapabilityObservations =
+            nativeCapabilityObservations.map { observation ->
+                observation.copy(
+                    missingFeatures = observation.missingFeatures.toSet(),
+                    missingPermissions = observation.missingPermissions.toSet(),
+                )
+            },
+    )
