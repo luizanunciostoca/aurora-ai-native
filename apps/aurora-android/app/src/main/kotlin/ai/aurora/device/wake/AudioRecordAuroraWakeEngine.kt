@@ -9,6 +9,7 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
+import ai.aurora.device.wake.AuroraAudioArbiter.AudioOwner
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.concurrent.Executors
@@ -27,6 +28,7 @@ class AudioRecordAuroraWakeEngine(
 ) : AutoCloseable {
     private val appContext = context.applicationContext
     private val running = AtomicBoolean(false)
+    private val audioLeaseHeld = AtomicBoolean(false)
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "AuroraWakeAudio").apply { priority = Thread.NORM_PRIORITY }
     }
@@ -48,6 +50,13 @@ class AudioRecordAuroraWakeEngine(
             onState(WakeState.PERMISSION_REQUIRED)
             return false
         }
+        if (!AuroraAudioRuntime.arbiter.tryAcquire(AudioOwner.HOTWORD_MONITOR)) {
+            running.set(false)
+            onState(WakeState.ENGINE_UNAVAILABLE)
+            onError("Wake audio ownership unavailable while another exclusive voice capture is active")
+            return false
+        }
+        audioLeaseHeld.set(true)
         return runCatching {
             val audioRecord = createAudioRecord()
             recorder = audioRecord
@@ -173,6 +182,9 @@ class AudioRecordAuroraWakeEngine(
         val current = recorder
         recorder = null
         runCatching { current?.release() }
+        if (audioLeaseHeld.compareAndSet(true, false)) {
+            AuroraAudioRuntime.arbiter.release(AudioOwner.HOTWORD_MONITOR)
+        }
     }
 
     private fun fingerprint(vector: WakeFeatureVector): String {

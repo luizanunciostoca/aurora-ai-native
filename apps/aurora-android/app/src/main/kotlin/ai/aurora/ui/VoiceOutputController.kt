@@ -9,9 +9,12 @@ import android.media.AudioManager
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import ai.aurora.device.wake.AuroraAudioArbiter.AudioOwner
+import ai.aurora.device.wake.AuroraAudioRuntime
 import ai.aurora.device.wake.WakePlaybackAwareness
 import ai.aurora.ui.model.AuroraSettings
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 class VoiceOutputController(
     context: Context,
@@ -23,6 +26,7 @@ class VoiceOutputController(
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
     private val utteranceGuard = VoiceUtteranceGuard()
+    private val ttsLeaseHeld = AtomicBoolean(false)
     private val uiPreferences = appContext.getSharedPreferences(UI_PREFERENCES_NAME, Context.MODE_PRIVATE)
     private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { preferences, key ->
         when {
@@ -64,6 +68,7 @@ class VoiceOutputController(
                         if (!utteranceGuard.completeIfCurrent(id)) return
                         WakePlaybackAwareness.onTtsStopped()
                         abandonAudioFocus()
+                        releaseTtsLease()
                         onCompleted(id)
                     }
 
@@ -117,10 +122,16 @@ class VoiceOutputController(
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build(),
         )
+        if (!AuroraAudioRuntime.arbiter.tryAcquire(AudioOwner.TTS)) {
+            onError(requestId, "Saída de voz aguardou: uma captura STT exclusiva ainda possui o áudio.")
+            return
+        }
+        ttsLeaseHeld.set(true)
 
         utteranceGuard.begin(requestId)
         if (!requestAudioFocus(requestId)) {
             utteranceGuard.completeIfCurrent(requestId)
+            releaseTtsLease()
             onError(requestId, "Audio focus não foi concedido; a Aurora não iniciou a fala.")
             return
         }
@@ -140,6 +151,7 @@ class VoiceOutputController(
         if (result == TextToSpeech.ERROR && utteranceGuard.completeIfCurrent(requestId)) {
             WakePlaybackAwareness.onTtsStopped()
             abandonAudioFocus()
+            releaseTtsLease()
             onError(requestId, "O mecanismo TTS recusou a solicitação de fala.")
         }
     }
@@ -149,6 +161,7 @@ class VoiceOutputController(
         runCatching { tts?.stop() }
         WakePlaybackAwareness.onTtsStopped()
         abandonAudioFocus()
+        releaseTtsLease()
     }
 
     fun currentAudioRouteLabel(): String {
@@ -182,6 +195,7 @@ class VoiceOutputController(
         runCatching { tts?.stop() }
         WakePlaybackAwareness.onTtsStopped()
         abandonAudioFocus()
+        releaseTtsLease()
         if (interruptedId != null) onError(interruptedId, message)
     }
 
@@ -214,6 +228,7 @@ class VoiceOutputController(
         runCatching { tts?.stop() }
         WakePlaybackAwareness.onTtsStopped()
         abandonAudioFocus()
+        releaseTtsLease()
         onError(requestId, "Saída de voz interrompida por perda de audio focus.")
     }
 
@@ -229,13 +244,21 @@ class VoiceOutputController(
             if (!utteranceGuard.completeIfCurrent(id)) return
             WakePlaybackAwareness.onTtsStopped()
             abandonAudioFocus()
+            releaseTtsLease()
             onError(id, message)
             return
         }
         val current = utteranceGuard.clear() ?: return
         WakePlaybackAwareness.onTtsStopped()
         abandonAudioFocus()
+        releaseTtsLease()
         onError(current, message)
+    }
+
+    private fun releaseTtsLease() {
+        if (ttsLeaseHeld.compareAndSet(true, false)) {
+            AuroraAudioRuntime.arbiter.release(AudioOwner.TTS)
+        }
     }
 
     companion object {

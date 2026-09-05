@@ -7,6 +7,9 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import ai.aurora.device.wake.AuroraAudioArbiter.AudioOwner
+import ai.aurora.device.wake.AuroraAudioRuntime
+import java.util.concurrent.atomic.AtomicBoolean
 
 data class VoiceRecognitionConfig(
     val languageTag: String = "pt-BR",
@@ -55,6 +58,7 @@ class VoiceCaptureController(
     private val onDetailedResult: ((VoiceRecognitionResult) -> Unit)? = null,
 ) : AutoCloseable {
     private var recognizer: SpeechRecognizer? = null
+    private val sttLeaseHeld = AtomicBoolean(false)
     private val registryRegistration = VoiceSessionRegistry.register(
         onBackground = { stopForLifecycle() },
         onPrivacy = { purgeForPrivacy() },
@@ -77,9 +81,16 @@ class VoiceCaptureController(
             onError("Reconhecimento de voz não está disponível neste dispositivo.")
             return status
         }
+        if (!AuroraAudioRuntime.arbiter.tryAcquire(AudioOwner.STT)) {
+            val unavailable = VoiceInputAvailability(false, "Áudio ocupado pelo wake word ou saída de voz")
+            onError("A captura STT não iniciou porque outro fluxo de áudio da Aurora ainda possui o recurso.")
+            return unavailable
+        }
+        sttLeaseHeld.set(true)
 
         val selection = createRecognizer(config)
         if (selection == null) {
+            closeRecognizer()
             val unavailable = VoiceInputAvailability(false, "Reconhecimento indisponível")
             onError("Não foi possível iniciar nenhum mecanismo de reconhecimento de voz.")
             return unavailable
@@ -95,8 +106,9 @@ class VoiceCaptureController(
             override fun onEndOfSpeech() = Unit
 
             override fun onError(error: Int) {
-                onError(errorMessage(error))
+                val message = errorMessage(error)
                 closeRecognizer()
+                onError(message)
             }
 
             override fun onResults(results: Bundle?) {
@@ -105,23 +117,21 @@ class VoiceCaptureController(
                     ?.firstOrNull()
                     ?.trim()
                     .orEmpty()
+                val confidence = firstRecognizerConfidence(results)
+                val detailedCallback = onDetailedResult
+                closeRecognizer()
                 if (transcript.isBlank()) {
                     onError("Não consegui obter um transcript utilizável.")
+                } else if (detailedCallback != null) {
+                    detailedCallback(
+                        VoiceRecognitionResult(
+                            transcript = transcript,
+                            confidence = confidence,
+                        ),
+                    )
                 } else {
-                    val confidence = firstRecognizerConfidence(results)
-                    val detailedCallback = onDetailedResult
-                    if (detailedCallback != null) {
-                        detailedCallback(
-                            VoiceRecognitionResult(
-                                transcript = transcript,
-                                confidence = confidence,
-                            ),
-                        )
-                    } else {
-                        onResult(transcript)
-                    }
+                    onResult(transcript)
                 }
-                closeRecognizer()
             }
 
             override fun onPartialResults(partialResults: Bundle?) {
@@ -148,8 +158,8 @@ class VoiceCaptureController(
             instance.startListening(intent)
             true
         }.getOrElse {
-            onError("O serviço de voz recusou a solicitação.")
             closeRecognizer()
+            onError("O serviço de voz recusou a solicitação.")
             false
         }
         return if (started) {
@@ -200,14 +210,14 @@ class VoiceCaptureController(
             ?.takeIf { it.isFinite() && it in 0.0..1.0 }
 
     private fun stopForLifecycle() {
-        if (recognizer == null) return
+        if (recognizer == null && !sttLeaseHeld.get()) return
         runCatching { recognizer?.cancel() }
         closeRecognizer()
         onError("Captura de voz interrompida porque a Aurora saiu do primeiro plano.")
     }
 
     private fun purgeForPrivacy() {
-        val wasActive = recognizer != null
+        val wasActive = recognizer != null || sttLeaseHeld.get()
         if (wasActive) {
             runCatching { recognizer?.cancel() }
             closeRecognizer()
@@ -225,9 +235,12 @@ class VoiceCaptureController(
     }
 
     private fun closeRecognizer() {
-        val current = recognizer ?: return
+        val current = recognizer
         recognizer = null
-        runCatching { current.destroy() }
+        runCatching { current?.destroy() }
+        if (sttLeaseHeld.compareAndSet(true, false)) {
+            AuroraAudioRuntime.arbiter.release(AudioOwner.STT)
+        }
     }
 
     private fun errorMessage(error: Int): String = when (error) {

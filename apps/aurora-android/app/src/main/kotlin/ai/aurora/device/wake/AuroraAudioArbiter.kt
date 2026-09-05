@@ -69,3 +69,11 @@ class AuroraAudioArbiter(
                 (AudioOwner.TTS !in owners || bargeInEnabled)
     }
 }
+
+/**
+ * Single process-local arbitration point for Aurora microphone/STT/TTS ownership.
+ * This is resource coordination only: it cannot authorize commands, execution, outcomes or retries.
+ */
+object AuroraAudioRuntime {
+    val arbiter = AuroraAudioArbiter()
+}

@@ -35,4 +35,22 @@ class AuroraAudioArbiterTest {
         assertTrue(AudioOwner.HOTWORD_MONITOR in arbiter.snapshot().owners)
         assertFalse(AudioOwner.STT in arbiter.snapshot().owners)
     }
+
+    @Test
+    fun `released hotword lease allows exclusive stt capture`() {
+        val arbiter = AuroraAudioArbiter()
+        assertTrue(arbiter.tryAcquire(AudioOwner.HOTWORD_MONITOR))
+        assertFalse(arbiter.tryAcquire(AudioOwner.STT))
+        arbiter.release(AudioOwner.HOTWORD_MONITOR)
+        assertTrue(arbiter.tryAcquire(AudioOwner.STT))
+    }
+
+    @Test
+    fun `stt blocks tts until exclusive lease is released`() {
+        val arbiter = AuroraAudioArbiter()
+        assertTrue(arbiter.tryAcquire(AudioOwner.STT))
+        assertFalse(arbiter.tryAcquire(AudioOwner.TTS))
+        arbiter.release(AudioOwner.STT)
+        assertTrue(arbiter.tryAcquire(AudioOwner.TTS))
+    }
 }
