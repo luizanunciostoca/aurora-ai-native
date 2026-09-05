@@ -12,8 +12,8 @@ const files = fs
   .filter((name) => name.endsWith('.json'))
   .sort();
 const probes = files.map((name) => JSON.parse(fs.readFileSync(path.join(directory, name), 'utf8')));
-if (probes.length !== required)
-  throw new Error(`expected ${required} probe records, got ${probes.length}`);
+if (probes.length < required)
+  throw new Error(`expected at least ${required} probe records, got ${probes.length}`);
 
 for (const probe of probes) {
   if (
@@ -53,7 +53,7 @@ const result = {
   workflowRunId: Number(process.env.GITHUB_RUN_ID || 0),
   observedAt: new Date(observedAtMs).toISOString(),
   expiresAt: new Date(observedAtMs + maxAgeMinutes * 60_000).toISOString(),
-  probeConcurrency: required,
+  probeConcurrency: probes.length,
   observedConcurrentSessions: peak,
   successfulCopilotSessions: probes.length,
   failedCopilotSessions: 0,
