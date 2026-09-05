@@ -286,10 +286,7 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
       if (!OPAQUE_CREDENTIAL.test(credential) || !GATEWAY_SESSION_ID.test(gatewaySessionId)) {
         continue;
       }
-      if (
-        this.#grants.has(credential) ||
-        this.#credentialByGatewaySession.has(gatewaySessionId)
-      ) {
+      if (this.#grants.has(credential) || this.#credentialByGatewaySession.has(gatewaySessionId)) {
         continue;
       }
       return { credential, gatewaySessionId };
