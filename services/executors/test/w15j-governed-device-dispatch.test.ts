@@ -50,6 +50,8 @@ function command(): GovernedDeviceCommandMaterial {
     commandId: 'cmd_01ARZ3NDEKTSV4RRFFQ69G5FAV' as CommandId,
     executionId: 'exe_01ARZ3NDEKTSV4RRFFQ69G5FAV' as ExecutionId,
     causationId: 'cau_01ARZ3NDEKTSV4RRFFQ69G5FAV' as CausationId,
+    orderingKey: 'device:camera',
+    orderingSequence: 1,
     actionIntent: actionIntent(),
     canonicalPayloadHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     authorizesExecution: false,
@@ -150,6 +152,8 @@ test('hands a governed device command to W14 only after all W07 gates pass', () 
   assert.equal(port.calls.length, 1);
   assert.equal(port.calls[0]?.dispatchedAtMs, 1_788_633_600_000);
   assert.equal(port.calls[0]?.command.causationId, 'cau_01ARZ3NDEKTSV4RRFFQ69G5FAV');
+  assert.equal(port.calls[0]?.command.orderingKey, 'device:camera');
+  assert.equal(port.calls[0]?.command.orderingSequence, 1);
   assert.equal(port.calls[0]?.command.actionIntent.executionTarget?.kind, 'DEVICE');
   assert.equal(result.authorizesExecution, false);
   assert.equal(result.provesExecutionSuccess, false);
@@ -202,17 +206,19 @@ test('authenticated W14 context must match canonical action target tenant actor 
   }
 });
 
-test('malformed server-owned command identifiers fail closed before W14', () => {
-  const port = new CapturingW14Port();
-  const adapter = new W07GovernedDeviceDispatchAdapter(port);
-  const malformed = {
-    ...command(),
-    causationId: 'not-a-causation-id' as CausationId,
-  };
-  const result = adapter.dispatch({ command: malformed, context: context(), gates: gates() });
-  assert.equal(result.ok, false);
-  if (!result.ok) assert.equal(result.code, 'MATERIAL_MISMATCH');
-  assert.equal(port.calls.length, 0);
+test('malformed server-owned command identifiers and ordering fail closed before W14', () => {
+  for (const malformed of [
+    { ...command(), causationId: 'not-a-causation-id' as CausationId },
+    { ...command(), orderingKey: '' },
+    { ...command(), orderingSequence: 0 },
+  ]) {
+    const port = new CapturingW14Port();
+    const adapter = new W07GovernedDeviceDispatchAdapter(port);
+    const result = adapter.dispatch({ command: malformed, context: context(), gates: gates() });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.code, 'MATERIAL_MISMATCH');
+    assert.equal(port.calls.length, 0);
+  }
 });
 
 test('W14 failure or protocol violation never becomes authority success outcome or retry permission', () => {
