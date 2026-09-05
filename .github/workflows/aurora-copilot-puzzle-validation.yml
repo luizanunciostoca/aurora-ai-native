@@ -6,6 +6,7 @@ on:
       - '.github/agents/**'
       - '.github/workflows/aurora-copilot-puzzle-validation.yml'
       - '.github/workflows/aurora-copilot-orchestrator.yml'
+      - '.github/workflows/aurora-copilot-free-worker.yml'
       - 'docs/governance/copilot/**'
       - 'tools/copilot/**'
   push:
@@ -14,6 +15,7 @@ on:
       - '.github/agents/**'
       - '.github/workflows/aurora-copilot-puzzle-validation.yml'
       - '.github/workflows/aurora-copilot-orchestrator.yml'
+      - '.github/workflows/aurora-copilot-free-worker.yml'
       - 'docs/governance/copilot/**'
       - 'tools/copilot/**'
 
@@ -27,8 +29,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate 166-task graph and Puzzle metadata
         run: node tools/copilot/load-task-graph.mjs
-      - name: Validate physical and logical execution capacities
+      - name: Validate physical, logical and runtime execution capacities
         run: node tools/copilot/validate-execution-mode.mjs
+      - name: Validate PRO+ runtime capacity, leases and telemetry
+        run: node --test tools/copilot/pro-plus-runtime.test.mjs
       - name: Validate canonical BUILD frontier safety
         run: node tools/copilot/frontier-policy.test.mjs
       - name: Validate Puzzle scheduling semantics
@@ -40,11 +44,15 @@ jobs:
         run: |
           set -euo pipefail
           grep -q 'PUZZLE_FRONTIER' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
-          grep -q 'physicalBuildSlots' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'runtimeCapabilityDiscovery' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'MINIMUM_SAFE_DIMENSION' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'FAIL_CLOSED_UNTIL_RECONCILED' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'aurora.pro_plus.development_telemetry.v1' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
           grep -q 'maxLogicalLanes' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
           grep -q 'ARTIFACT_ONLY_UNTIL_DEPENDENCIES_ACCEPTED' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
           grep -q 'REQUIRED_BEFORE_BUILD_PROMOTION' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
-          grep -q 'aurora:puzzle-build-ready' tools/copilot/claim-free-ready.mjs
+          grep -q 'projectActiveSessionLeases' tools/copilot/claim-free-ready.mjs
+          grep -q 'calculateDynamicSafeBuildCapacity' tools/copilot/claim-free-ready.mjs
           grep -q 'aurora:puzzle-prebuild' tools/copilot/materialize-ready.mjs
           grep -q 'aurora:puzzle-readiness' tools/copilot/materialize-ready.mjs
           grep -q 'canonicalAuthority must be false' tools/copilot/puzzle-prebuild-artifact.mjs

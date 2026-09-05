@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "mode": "FREE_ACTIONS_CLI",
   "cloudAgentEnabled": false,
   "freeActionsCliEnabled": true,
@@ -9,6 +9,35 @@
   "maxLogicalLanes": 32,
   "maxPrebuildArtifactLanes": 24,
   "copilotModel": "auto",
+  "runtimeCapabilityDiscovery": {
+    "enabled": true,
+    "failurePolicy": "FAIL_CLOSED",
+    "requiredForProPlus": true,
+    "signals": [
+      "AURORA_CLOUD_AGENT_AVAILABLE",
+      "AURORA_ACCOUNT_PLAN",
+      "AURORA_ISOLATED_SESSION_CAPACITY",
+      "AURORA_CI_PARALLEL_CAPACITY",
+      "AURORA_AI_CREDIT_SLOT_BUDGET"
+    ]
+  },
+  "capacityController": {
+    "strategy": "MINIMUM_SAFE_DIMENSION",
+    "subtractActiveSessionLeases": true,
+    "respectWriterLeases": true,
+    "unknownCapacityPolicy": "ZERO_CAPACITY"
+  },
+  "sessionLeaseRegistry": {
+    "source": "LIVE_GITHUB_ISSUE_TASK_PROJECTION",
+    "lockDimensions": ["allowedPaths", "sharedWriteSurfaces"],
+    "staleLeasePolicy": "FAIL_CLOSED_UNTIL_RECONCILED",
+    "prOpenConsumesBuildSession": false
+  },
+  "developmentTelemetry": {
+    "enabled": true,
+    "schema": "aurora.pro_plus.development_telemetry.v1",
+    "canonicalAuthority": false
+  },
   "scheduler": {
     "strategy": "PUZZLE_FRONTIER",
     "optimizeFor": "MINIMUM_SAFE_CRITICAL_PATH",
@@ -25,15 +54,17 @@
   "upgradeTarget": "PRO_PLUS_CLOUD_AGENT",
   "authority": "Operational execution mode only. Live main, exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual, ADRs and owning wave governance remain authoritative.",
   "notes": [
+    "Copilot Pro+ governance is active; physical Pro+ execution remains capability-gated until the runtime proves plan, cloud-agent, isolated-session, CI and AI-credit capacity.",
     "Physical build slots and logical puzzle lanes are independent capacities.",
     "Copilot Free canonical BUILD concurrency remains capped by Aurora at 2 physicalBuildSlots.",
     "Logical lanes may span multiple waves simultaneously and may perform READINESS or governed PREBUILD without consuming canonical BUILD authority.",
     "A missing dependency blocks canonical BUILD/integration, not all preparatory work.",
     "PREBUILD is non-authoritative and artifact-only until every canonical dependency is accepted and contract reconciliation succeeds.",
     "ISOLATED_PATCH prebuild is permitted only when a task explicitly declares prebuildAllowedPaths; path ownership is never guessed.",
-    "Future-wave coordination nodes may prepare governance artifacts early, but they cannot freeze or publish canonical wave authority before their dependencies are accepted.",
-    "The Free Actions CLI BUILD worker may claim only PUZZLE BUILD_READY nodes, never PREBUILD or READINESS nodes.",
+    "Active writer leases block colliding allowedPaths/sharedWriteSurfaces even when they do not consume a physical BUILD slot.",
+    "Only running/dispatched leases consume physical session capacity; an open canonical PR retains its writer lock without consuming a worker slot.",
+    "Unknown Pro+ runtime, CI or credit capacity resolves to zero additional BUILD capacity.",
     "A task already running when this standard is activated keeps its original accepted base/contract and is not invalidated retroactively.",
-    "Increasing physicalBuildSlots later requires reviewed execution-mode governance; it never weakens dependency, path, shared-surface, exact-head or acceptance gates."
+    "Increasing safe BUILD capacity never weakens dependency, path, shared-surface, exact-head or acceptance gates."
   ]
 }

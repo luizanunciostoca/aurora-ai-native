@@ -7,8 +7,8 @@ const allowed = new Set(['FREE_ACTIONS_CLI', 'PRO_PLUS_CLOUD_AGENT']);
 if (!allowed.has(mode.mode)) {
   throw new Error(`Unsupported Aurora Copilot execution mode: ${mode.mode}`);
 }
-if ((mode.schemaVersion || 1) < 3) {
-  throw new Error('Puzzle execution requires execution-mode schemaVersion >= 3');
+if ((mode.schemaVersion || 1) < 4) {
+  throw new Error('PRO+ runtime orchestration requires execution-mode schemaVersion >= 4');
 }
 
 if (!Number.isInteger(mode.physicalBuildSlots) || mode.physicalBuildSlots < 1) {
@@ -32,6 +32,47 @@ if (
 }
 if (typeof mode.prebuildWorkerEnabled !== 'boolean') {
   throw new Error('prebuildWorkerEnabled must be boolean');
+}
+
+const discovery = mode.runtimeCapabilityDiscovery || {};
+if (
+  discovery.enabled !== true ||
+  discovery.failurePolicy !== 'FAIL_CLOSED' ||
+  discovery.requiredForProPlus !== true ||
+  !Array.isArray(discovery.signals) ||
+  discovery.signals.length < 5
+) {
+  throw new Error('PRO+ runtime capability discovery must be enabled and fail closed');
+}
+
+const capacityController = mode.capacityController || {};
+if (
+  capacityController.strategy !== 'MINIMUM_SAFE_DIMENSION' ||
+  capacityController.subtractActiveSessionLeases !== true ||
+  capacityController.respectWriterLeases !== true ||
+  capacityController.unknownCapacityPolicy !== 'ZERO_CAPACITY'
+) {
+  throw new Error('Dynamic BUILD capacity controller policy is invalid');
+}
+
+const leaseRegistry = mode.sessionLeaseRegistry || {};
+if (
+  leaseRegistry.source !== 'LIVE_GITHUB_ISSUE_TASK_PROJECTION' ||
+  leaseRegistry.staleLeasePolicy !== 'FAIL_CLOSED_UNTIL_RECONCILED' ||
+  leaseRegistry.prOpenConsumesBuildSession !== false ||
+  !Array.isArray(leaseRegistry.lockDimensions) ||
+  !leaseRegistry.lockDimensions.includes('allowedPaths') ||
+  !leaseRegistry.lockDimensions.includes('sharedWriteSurfaces')
+) {
+  throw new Error('Session lease registry policy is invalid');
+}
+
+if (
+  mode.developmentTelemetry?.enabled !== true ||
+  mode.developmentTelemetry?.schema !== 'aurora.pro_plus.development_telemetry.v1' ||
+  mode.developmentTelemetry?.canonicalAuthority !== false
+) {
+  throw new Error('PRO+ development telemetry must be enabled and non-authoritative');
 }
 
 const scheduler = mode.scheduler || {};
@@ -94,6 +135,10 @@ console.log(
       physicalBuildSlots: mode.physicalBuildSlots,
       maxLogicalLanes: mode.maxLogicalLanes,
       maxPrebuildArtifactLanes: mode.maxPrebuildArtifactLanes,
+      runtimeCapabilityDiscovery: discovery,
+      capacityController,
+      sessionLeaseRegistry: leaseRegistry,
+      developmentTelemetry: mode.developmentTelemetry,
       scheduler,
       upgradeTarget: mode.upgradeTarget || null,
     },
