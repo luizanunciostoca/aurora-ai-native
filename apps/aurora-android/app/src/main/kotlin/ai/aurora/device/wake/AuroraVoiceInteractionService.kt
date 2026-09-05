@@ -1,7 +1,6 @@
 package ai.aurora.device.wake
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -42,16 +41,10 @@ class AuroraVoiceInteractionService : VoiceInteractionService() {
         }
         if (!AuroraWakeModelStore(this).hasValidModel()) return status.update("USER_SETUP_REQUIRED")
 
-        runCatching {
-            startForegroundService(
-                Intent(this, AuroraWakeForegroundService::class.java).setAction(
-                    AuroraWakeForegroundService.ACTION_ARM,
-                ),
-            )
-        }.onFailure { failure ->
+        if (!AuroraWakeForegroundService.rearmIfConfigured(this)) {
             status.update(
                 "WAKE_PLATFORM_BLOCKED",
-                lastError = "assistant lifecycle re-arm failed: ${failure.javaClass.simpleName}",
+                lastError = "assistant lifecycle wake re-arm was rejected by the platform",
             )
         }
     }
@@ -59,6 +52,7 @@ class AuroraVoiceInteractionService : VoiceInteractionService() {
     companion object {
         private const val EXTRA_WAKE_ID = "ai.aurora.extra.WAKE_ID"
         private const val EXTRA_WAKE_CONFIDENCE = "ai.aurora.extra.WAKE_CONFIDENCE"
+        private const val HANDOFF_RECOVERY_MS = 1_800L
 
         @Volatile
         private var active: WeakReference<AuroraVoiceInteractionService>? = null
@@ -73,10 +67,23 @@ class AuroraVoiceInteractionService : VoiceInteractionService() {
             Handler(Looper.getMainLooper()).post {
                 runCatching { service.showSession(args, 0) }
                     .onFailure { failure ->
-                        WakeRuntimeStatusStore(service).update(
+                        val status = WakeRuntimeStatusStore(service)
+                        status.update(
                             "WAKE_PLATFORM_BLOCKED",
                             lastError =
                                 "assistant wake-session handoff failed: ${failure.javaClass.simpleName}",
+                        )
+                        Handler(Looper.getMainLooper()).postDelayed(
+                            {
+                                if (!AuroraWakeForegroundService.rearmIfConfigured(service)) {
+                                    status.update(
+                                        "WAKE_PLATFORM_BLOCKED",
+                                        lastError =
+                                            "assistant wake-session handoff failed and re-arm was rejected",
+                                    )
+                                }
+                            },
+                            HANDOFF_RECOVERY_MS,
                         )
                     }
             }
