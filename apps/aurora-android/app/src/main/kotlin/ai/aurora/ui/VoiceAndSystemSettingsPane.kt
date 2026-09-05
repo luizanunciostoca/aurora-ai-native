@@ -36,6 +36,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.aurora.device.AuroraApplication
+import ai.aurora.device.voice.GovernedVoiceCatalogResult
+import ai.aurora.device.voice.GovernedVoiceCommandCatalog
 import ai.aurora.device.wake.AuroraVoiceInteractionService
 import ai.aurora.device.wake.AuroraWakeForegroundService
 import ai.aurora.device.wake.AuroraWakeModelStore
@@ -76,6 +79,13 @@ internal fun VoiceAndSystemSettingsPane(
     val batteryOptimizationExempt = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
     val processPssMb = Debug.getPss().toDouble() / 1024.0
     val processCpuMs = android.os.Process.getElapsedCpuTime()
+    val auroraApplication = context.applicationContext as? AuroraApplication
+    val governedVoiceCatalogResult =
+        auroraApplication?.let { app ->
+            GovernedVoiceCommandCatalog(
+                projectionProvider = { app.voiceProjectionStore().current() },
+            ).snapshot()
+        }
 
     Column(
         modifier = Modifier
@@ -233,6 +243,39 @@ internal fun VoiceAndSystemSettingsPane(
                 "Wake latency, battery delta/hour, thermal e false-activation rate exigem coleta física representativa; esta UI não fabrica esses números.",
                 color = TextSecondary,
                 fontSize = 12.sp,
+            )
+        }
+
+        SettingsCard("Governed Voice Fast Path") {
+            when (val result = governedVoiceCatalogResult) {
+                is GovernedVoiceCatalogResult.Ready -> {
+                    val snapshot = result.snapshot
+                    KeyValue("Estado", "PROJECTION READY / NON-AUTHORITATIVE")
+                    KeyValue("W04 registry", snapshot.registryVersion)
+                    KeyValue("W04 source", compactProjectionRef(snapshot.registrySourceRef))
+                    KeyValue("W04 SHA-256", compactProjectionHash(snapshot.registryContentSha256))
+                    KeyValue("W15-G vocabulary", snapshot.vocabularyVersion)
+                    KeyValue("W15-G source", compactProjectionRef(snapshot.vocabularySourceRef))
+                    KeyValue("W15-G SHA-256", compactProjectionHash(snapshot.vocabularyContentSha256))
+                    KeyValue("DEVICE capabilities atuais", snapshot.availableCapabilityIds.size.toString())
+                    SmallBadge("PROJECTION CURRENT", SemanticTone.VERIFIED)
+                }
+                is GovernedVoiceCatalogResult.Rejected -> {
+                    KeyValue("Estado", "FAIL CLOSED")
+                    KeyValue("Motivo", result.reason.name)
+                    SmallBadge("CONVERSATION FALLBACK", SemanticTone.APPROVAL)
+                }
+                null -> {
+                    KeyValue("Estado", "FAIL CLOSED")
+                    KeyValue("Motivo", "APPLICATION PROJECTION STORE UNAVAILABLE")
+                    SmallBadge("CONVERSATION FALLBACK", SemanticTone.CRITICAL)
+                }
+            }
+            KeyValue("W07 mobile ingress", "UNCOMPOSED / FAIL CLOSED")
+            LuminousCallout(
+                "W04 + W15-C + W15-G ≠ AUTHORITY",
+                "Registry/vocabulary provenance e capability availability apenas habilitam avaliação determinística. SourceRef/hash são integridade auditável, não assinatura nem authority. Sem ingress móvel W07 owner-published, qualquer candidate retorna para Conversation e nenhum side effect é executado.",
+                SemanticTone.INFO,
             )
         }
 
@@ -439,5 +482,11 @@ private fun engineTone(availability: VoiceEngineAvailability): SemanticTone = wh
     VoiceEngineAvailability.UNKNOWN -> SemanticTone.INFO
     VoiceEngineAvailability.UNAVAILABLE -> SemanticTone.CRITICAL
 }
+
+private fun compactProjectionHash(value: String): String =
+    if (value.length <= 16) value else "${value.take(12)}…${value.takeLast(4)}"
+
+private fun compactProjectionRef(value: String): String =
+    if (value.length <= 96) value else "${value.take(92)}…"
 
 private const val UI_PREFERENCES_NAME = "aurora.ui.v1"
