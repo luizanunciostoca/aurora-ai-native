@@ -38,6 +38,8 @@ jobs:
     outputs:
       matrix: ${{ steps.claim.outputs.matrix }}
       count: ${{ steps.claim.outputs.count }}
+      parallelism: ${{ steps.claim.outputs.parallelism }}
+      telemetry: ${{ steps.claim.outputs.telemetry }}
     steps:
       - name: Checkout canonical main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -48,11 +50,17 @@ jobs:
         id: base
         shell: bash
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - name: Claim at most two READY Free tasks
+      - name: Discover runtime, locks and claim safe BUILD frontier
         id: claim
         env:
           GITHUB_TOKEN: ${{ github.token }}
           AURORA_BASE_SHA: ${{ steps.base.outputs.sha }}
+          AURORA_CLOUD_AGENT_AVAILABLE: ${{ vars.AURORA_CLOUD_AGENT_AVAILABLE }}
+          AURORA_ACCOUNT_PLAN: ${{ vars.AURORA_ACCOUNT_PLAN }}
+          AURORA_ISOLATED_SESSION_CAPACITY: ${{ vars.AURORA_ISOLATED_SESSION_CAPACITY }}
+          AURORA_CI_PARALLEL_CAPACITY: ${{ vars.AURORA_CI_PARALLEL_CAPACITY }}
+          AURORA_AI_CREDIT_SLOT_BUDGET: ${{ vars.AURORA_AI_CREDIT_SLOT_BUDGET }}
+          AURORA_FLEET_SUBAGENT_CAP: ${{ vars.AURORA_FLEET_SUBAGENT_CAP }}
         run: node tools/copilot/claim-free-ready.mjs
 
   worker:
@@ -60,7 +68,7 @@ jobs:
     if: ${{ needs.claim.outputs.count != '0' }}
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: ${{ fromJSON(needs.claim.outputs.parallelism) }}
       matrix: ${{ fromJSON(needs.claim.outputs.matrix) }}
     runs-on: ubuntu-latest
     permissions:
@@ -89,12 +97,12 @@ jobs:
           '${{ matrix.issue }}'
           '${{ matrix.baseSha }}'
           > /tmp/aurora-copilot-prompt.txt
-      - name: Run Copilot Free candidate worker
+      - name: Run capability-gated Copilot candidate worker
         id: copilot
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          COPILOT_SUBAGENT_MAX_CONCURRENT: '2'
+          COPILOT_SUBAGENT_MAX_CONCURRENT: ${{ matrix.fleetSubagentCap }}
         run: |
           set +e
           copilot \
@@ -188,7 +196,7 @@ jobs:
     if: ${{ always() && needs.claim.outputs.count != '0' }}
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: ${{ fromJSON(needs.claim.outputs.parallelism) }}
       matrix: ${{ fromJSON(needs.claim.outputs.matrix) }}
     runs-on: ubuntu-latest
     permissions:
@@ -217,7 +225,7 @@ jobs:
         shell: bash
         run: |
           gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --add-label 'aurora:copilot-free-failed' || true
-          gh issue comment '${{ matrix.issue }}' --body 'Copilot Free worker infrastructure failed before producing a candidate artifact. No branch or PR was created; task remains unaccepted.'
+          gh issue comment '${{ matrix.issue }}' --body 'Copilot worker infrastructure failed before producing a candidate artifact. No branch or PR was created; task remains unaccepted.'
       - name: Classify Copilot result
         id: classify
         if: ${{ steps.artifact.outcome == 'success' }}
@@ -239,7 +247,7 @@ jobs:
         shell: bash
         run: |
           gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --add-label 'aurora:copilot-free-failed' || true
-          gh issue comment '${{ matrix.issue }}' --body 'Copilot Free CLI exited unsuccessfully. No branch or PR was published. Inspect the workflow artifact/output before retrying; task remains unaccepted.'
+          gh issue comment '${{ matrix.issue }}' --body 'Copilot CLI exited unsuccessfully. No branch or PR was published. Inspect the workflow artifact/output before retrying; task remains unaccepted.'
       - name: Record no-change result
         if: ${{ steps.classify.outputs.state == 'no-change' }}
         env:
@@ -247,7 +255,7 @@ jobs:
         shell: bash
         run: |
           gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --add-label 'aurora:copilot-free-no-change' || true
-          gh issue comment '${{ matrix.issue }}' --body 'Copilot Free CLI completed without a candidate patch after generated-output filtering. No acceptance is implied. Review whether the task is already satisfied or requires manual/retry handling.'
+          gh issue comment '${{ matrix.issue }}' --body 'Copilot CLI completed without a candidate patch after generated-output filtering. No acceptance is implied. Review whether the task is already satisfied or requires manual/retry handling.'
       - name: Publish isolated candidate branch
         if: ${{ steps.classify.outputs.state == 'patch' }}
         id: publish
@@ -262,7 +270,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -c "$branch"
           git apply --index --3way /tmp/aurora-free-artifact/candidate.patch
-          git commit -m "feat(${{ matrix.taskId }}): Copilot Free candidate"
+          git commit -m "feat(${{ matrix.taskId }}): Copilot candidate"
           git push --set-upstream origin "$branch"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
 
@@ -270,8 +278,8 @@ jobs:
           pr_url="$(gh pr create \
             --base main \
             --head "$branch" \
-            --title "[Copilot Free] ${{ matrix.taskId }} candidate" \
-            --body "Automated Copilot Free CLI candidate for issue #${{ matrix.issue }}. Base SHA: ${{ matrix.baseSha }}. The AI worker had read-only repository permission; this deterministic publisher applied the path-fenced patch. This PR is NOT accepted and must pass Aurora exact-head gates and independent acceptance before merge." 2>/tmp/aurora-pr-create-error.txt)"
+            --title "[Copilot] ${{ matrix.taskId }} candidate" \
+            --body "Automated capability-gated Copilot CLI candidate for issue #${{ matrix.issue }}. Base SHA: ${{ matrix.baseSha }}. The AI worker had read-only repository permission; this deterministic publisher applied the path-fenced patch. This PR is NOT accepted and must pass Aurora exact-head gates and independent acceptance before merge." 2>/tmp/aurora-pr-create-error.txt)"
           pr_status=$?
           set -e
 
@@ -300,7 +308,7 @@ jobs:
         shell: bash
         run: |
           gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --remove-label 'aurora:copilot-free-ready' --remove-label 'aurora:copilot-free-branch-ready' --add-label 'aurora:copilot-free-pr-open' || true
-          gh issue comment '${{ matrix.issue }}' --body "Copilot Free candidate published: ${{ steps.publish.outputs.pr_url }}. Quality, Test Build and Security were explicitly dispatched against branch ${{ steps.publish.outputs.branch }}. No merge/acceptance is automatic."
+          gh issue comment '${{ matrix.issue }}' --body "Copilot candidate published: ${{ steps.publish.outputs.pr_url }}. Quality, Test Build and Security were explicitly dispatched against branch ${{ steps.publish.outputs.branch }}. No merge/acceptance is automatic."
       - name: Hand branch-only candidate to Program Control
         if: ${{ steps.classify.outputs.state == 'patch' && steps.publish.outputs.pr_published != 'true' }}
         env:
@@ -308,4 +316,4 @@ jobs:
         shell: bash
         run: |
           gh issue edit '${{ matrix.issue }}' --remove-label 'aurora:copilot-free-running' --remove-label 'aurora:copilot-free-ready' --add-label 'aurora:copilot-free-branch-ready' || true
-          gh issue comment '${{ matrix.issue }}' --body "Copilot Free candidate branch `${{ steps.publish.outputs.branch }}` was created and Quality/Test Build/Security were dispatched. Repository policy prevented GitHub Actions from opening the PR, so Program Control must publish this branch as a PR. No acceptance is implied."
+          gh issue comment '${{ matrix.issue }}' --body "Copilot candidate branch `${{ steps.publish.outputs.branch }}` was created and Quality/Test Build/Security were dispatched. Repository policy prevented GitHub Actions from opening the PR, so Program Control must publish this branch as a PR. No acceptance is implied."
