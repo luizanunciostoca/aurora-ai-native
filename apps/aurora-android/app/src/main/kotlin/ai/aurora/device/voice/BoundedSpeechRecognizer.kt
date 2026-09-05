@@ -61,8 +61,11 @@ class BoundedSpeechRecognizer(
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
     private val active = AtomicBoolean(false)
+    private val sttLeaseHeld = AtomicBoolean(false)
     private var recognizer: SpeechRecognizer? = null
     private var timeoutRunnable: Runnable? = null
+    private var audioAcquireAttempts = 0
+    private val audioAcquireRunnable = Runnable(::attemptAcquireSttAudio)
     private var resultCallback: ((BoundedSpeechRecognitionResult) -> Unit)? = null
     private var failureCallback: ((BoundedSpeechRecognitionFailure) -> Unit)? = null
 
@@ -105,12 +108,46 @@ class BoundedSpeechRecognizer(
             release(BoundedSpeechRecognitionFailure.RECOGNIZER_UNAVAILABLE)
             return
         }
-        if (!AuroraAudioRuntime.arbiter.handoffToStt()) {
+        audioAcquireAttempts = 0
+        attemptAcquireSttAudio()
+    }
+
+    private fun attemptAcquireSttAudio() {
+        if (!active.get()) return
+        if (privacyBlocked()) {
+            release(BoundedSpeechRecognitionFailure.PRIVACY_BLOCKED)
+            return
+        }
+        if (
+            appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            release(BoundedSpeechRecognitionFailure.MICROPHONE_PERMISSION_REQUIRED)
+            return
+        }
+        if (AuroraAudioRuntime.arbiter.handoffToStt()) {
+            sttLeaseHeld.set(true)
+            startRecognizerWithLease()
+            return
+        }
+        if (audioAcquireAttempts >= MAX_AUDIO_ACQUIRE_ATTEMPTS) {
             release(BoundedSpeechRecognitionFailure.AUDIO_OWNERSHIP_UNAVAILABLE)
             return
         }
+        audioAcquireAttempts += 1
+        handler.postDelayed(audioAcquireRunnable, AUDIO_ACQUIRE_RETRY_MS)
+    }
 
-        val localRecognizer = SpeechRecognizer.createSpeechRecognizer(appContext)
+    private fun startRecognizerWithLease() {
+        if (!active.get()) {
+            release(invokeFailure = null)
+            return
+        }
+        val localRecognizer =
+            runCatching { SpeechRecognizer.createSpeechRecognizer(appContext) }.getOrElse {
+                release(BoundedSpeechRecognitionFailure.RECOGNIZER_ERROR)
+                return
+            }
         recognizer = localRecognizer
         localRecognizer.setRecognitionListener(listener)
         val timeout =
@@ -192,13 +229,17 @@ class BoundedSpeechRecognizer(
 
     private fun release(invokeFailure: BoundedSpeechRecognitionFailure?) {
         if (!active.compareAndSet(true, false)) return
+        handler.removeCallbacks(audioAcquireRunnable)
+        audioAcquireAttempts = 0
         timeoutRunnable?.let(handler::removeCallbacks)
         timeoutRunnable = null
         val localRecognizer = recognizer
         recognizer = null
         runCatching { localRecognizer?.cancel() }
         runCatching { localRecognizer?.destroy() }
-        AuroraAudioRuntime.arbiter.release(AudioOwner.STT)
+        if (sttLeaseHeld.compareAndSet(true, false)) {
+            AuroraAudioRuntime.arbiter.release(AudioOwner.STT)
+        }
         val failure = failureCallback
         resultCallback = null
         failureCallback = null
@@ -207,5 +248,7 @@ class BoundedSpeechRecognizer(
 
     companion object {
         const val DEFAULT_TIMEOUT_MS = 8_000L
+        private const val AUDIO_ACQUIRE_RETRY_MS = 50L
+        private const val MAX_AUDIO_ACQUIRE_ATTEMPTS = 10
     }
 }
