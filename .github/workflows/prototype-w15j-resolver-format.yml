@@ -1,0 +1,28 @@
+name: Temporary W15-J Resolver Formatter
+
+on:
+  push:
+    branches:
+      - wave/15j-real-local-physical-host
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - run: npx prettier --write services/executors/test/w15j-trusted-voice-authority-resolver.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w15j-resolver-test-formatted
+          path: services/executors/test/w15j-trusted-voice-authority-resolver.test.ts
+          retention-days: 1
