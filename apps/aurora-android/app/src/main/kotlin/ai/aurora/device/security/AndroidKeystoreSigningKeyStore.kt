@@ -1,7 +1,10 @@
 package ai.aurora.device.security
 
+import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
+import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.MessageDigest
@@ -9,6 +12,27 @@ import java.security.PrivateKey
 import java.security.Signature
 import java.security.spec.ECGenParameterSpec
 import java.util.Base64
+
+enum class AndroidKeystoreSecurityLevel {
+    UNKNOWN,
+    UNKNOWN_SECURE,
+    SOFTWARE,
+    TRUSTED_ENVIRONMENT,
+    STRONGBOX,
+    LEGACY_SECURE_HARDWARE,
+    LEGACY_SOFTWARE,
+}
+
+data class AndroidKeystoreKeySecurityInfo(
+    val level: AndroidKeystoreSecurityLevel,
+    val secureHardwareBacked: Boolean?,
+) {
+    val authorizesExecution: Boolean
+        get() = false
+
+    val establishesRemoteTrust: Boolean
+        get() = false
+}
 
 class AndroidKeystoreSigningKeyStore : DeviceSigningKeyStore {
     override fun ensureKey(alias: String): PublicDeviceKeyMaterial {
@@ -42,6 +66,35 @@ class AndroidKeystoreSigningKeyStore : DeviceSigningKeyStore {
         val keyStore = loadKeyStore()
         if (keyStore.containsAlias(alias)) {
             keyStore.deleteEntry(alias)
+        }
+    }
+
+    fun securityInfo(alias: String): AndroidKeystoreKeySecurityInfo {
+        require(alias.isNotBlank()) { "key alias must not be blank" }
+        val privateKey = loadKeyStore().getKey(alias, null) as? PrivateKey
+            ?: throw MissingDeviceSigningKeyException(alias)
+        val keyInfo = KeyFactory
+            .getInstance(privateKey.algorithm, ANDROID_KEY_STORE)
+            .getKeySpec(privateKey, KeyInfo::class.java)
+        return if (Build.VERSION.SDK_INT >= 31) {
+            when (keyInfo.securityLevel) {
+                KeyProperties.SECURITY_LEVEL_STRONGBOX ->
+                    AndroidKeystoreKeySecurityInfo(AndroidKeystoreSecurityLevel.STRONGBOX, true)
+                KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT ->
+                    AndroidKeystoreKeySecurityInfo(AndroidKeystoreSecurityLevel.TRUSTED_ENVIRONMENT, true)
+                KeyProperties.SECURITY_LEVEL_UNKNOWN_SECURE ->
+                    AndroidKeystoreKeySecurityInfo(AndroidKeystoreSecurityLevel.UNKNOWN_SECURE, true)
+                KeyProperties.SECURITY_LEVEL_SOFTWARE ->
+                    AndroidKeystoreKeySecurityInfo(AndroidKeystoreSecurityLevel.SOFTWARE, false)
+                else -> AndroidKeystoreKeySecurityInfo(AndroidKeystoreSecurityLevel.UNKNOWN, null)
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            if (keyInfo.isInsideSecureHardware) {
+                AndroidKeystoreKeySecurityInfo(AndroidKeystoreSecurityLevel.LEGACY_SECURE_HARDWARE, true)
+            } else {
+                AndroidKeystoreKeySecurityInfo(AndroidKeystoreSecurityLevel.LEGACY_SOFTWARE, false)
+            }
         }
     }
 
