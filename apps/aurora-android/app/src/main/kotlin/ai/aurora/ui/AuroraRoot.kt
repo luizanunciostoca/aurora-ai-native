@@ -254,7 +254,13 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
         Surface(modifier = Modifier.fillMaxSize(), color = Night) {
             AuroraBackdrop {
                 if (!state.onboardingComplete) {
-                    OnboardingFlow(state = state, onIntent = viewModel::onIntent, onVoice = startVoice)
+                    OnboardingV2Flow(
+                        state = state,
+                        deviceKeyState = deviceKeyState,
+                        onIntent = viewModel::onIntent,
+                        onVoice = startVoice,
+                        onPrepareDeviceKey = prepareDeviceKey,
+                    )
                 } else {
                     AuroraShell(
                         state = state,
