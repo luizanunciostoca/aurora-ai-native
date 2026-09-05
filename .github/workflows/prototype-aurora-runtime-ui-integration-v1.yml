@@ -63,7 +63,8 @@ jobs:
           source_wake_checkpoint=343b839a6425cef9493619da7ff622b7a29bfb66
           w15j_candidate=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
           ui_profile=RUNTIME_UI_INTEGRATION_V1
-          app_version=0.17.0-alpha.3-local
+          app_version=0.18.0-alpha.1-local
+          version_code=7
           variant=localDebug
           target_sdk=36
           runtime_sources=presence+w14-session+w04-w15g-projection+w15h-offline-queue
