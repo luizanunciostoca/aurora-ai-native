@@ -33,6 +33,7 @@ class VoiceCaptureController(
     private val onError: (String) -> Unit,
 ) : AutoCloseable {
     private var recognizer: SpeechRecognizer? = null
+    private val registryRegistration = VoiceSessionRegistry.register { cancel() }
 
     fun availability(preferOffline: Boolean): VoiceInputAvailability {
         val standard = SpeechRecognizer.isRecognitionAvailable(context)
@@ -124,7 +125,10 @@ class VoiceCaptureController(
         closeRecognizer()
     }
 
-    override fun close() = closeRecognizer()
+    override fun close() {
+        registryRegistration.close()
+        closeRecognizer()
+    }
 
     private fun closeRecognizer() {
         val current = recognizer ?: return
