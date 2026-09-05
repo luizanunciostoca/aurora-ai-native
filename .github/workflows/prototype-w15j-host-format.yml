@@ -1,0 +1,38 @@
+name: Temporary W15-J Host Formatter
+
+on:
+  push:
+    branches:
+      - wave/15j-real-local-physical-host-clean
+    paths:
+      - '.github/workflows/prototype-w15j-host-format.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Remove diagnosed unused type import
+        run: |
+          node -e "const fs=require('fs'); const p='services/executors/test/w15j-preissued-current-policy-source.test.ts'; let s=fs.readFileSync(p,'utf8'); s=s.replace(\"import type { PolicyEvaluationRequest, PolicySnapshot } from '@aurora/contracts/policy-engine';\", \"import type { PolicySnapshot } from '@aurora/contracts/policy-engine';\"); fs.writeFileSync(p,s);"
+      - name: Apply canonical Prettier
+        run: npx prettier --write services/executors/src/voice-intake/preissued-authority-source.ts services/executors/test/w15j-preissued-current-policy-source.test.ts services/mobile-gateway/src/physical-host/local-physical-host.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w15j-host-formatted
+          path: |
+            services/executors/src/voice-intake/preissued-authority-source.ts
+            services/executors/test/w15j-preissued-current-policy-source.test.ts
+            services/mobile-gateway/src/physical-host/local-physical-host.ts
+          if-no-files-found: error
+          retention-days: 1
