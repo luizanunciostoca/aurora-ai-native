@@ -13,10 +13,10 @@ android {
         applicationId = "ai.aurora.device"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.17.0-alpha.3"
+        versionCode = 7
+        versionName = "0.18.0-alpha.1"
         buildConfigField("String", "AURORA_BUILD_SHA", "\"$auroraBuildSha\"")
-        buildConfigField("String", "AURORA_UI_PROFILE", "\"TABLET_UI_V4_WAKE_GOVERNED_PROVENANCE\"")
+        buildConfigField("String", "AURORA_UI_PROFILE", "\"RUNTIME_UI_INTEGRATION_V1\"")
     }
 
     flavorDimensions += "environment"
