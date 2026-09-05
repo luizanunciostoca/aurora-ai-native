@@ -98,10 +98,7 @@ test(
 test('requires the canonical negative authority flags from W15 candidate', () => {
   const boundary = new VoiceCandidateNetworkBoundary({ evaluate: () => null });
   const authorityInjected = boundary.evaluate({ ...candidate, authorizesExecution: true }, context);
-  const w07Bypass = boundary.evaluate(
-    { ...candidate, requiresW07Authorization: false },
-    context,
-  );
+  const w07Bypass = boundary.evaluate({ ...candidate, requiresW07Authorization: false }, context);
   assert.equal(authorityInjected.statusCode, 400);
   assert.equal(w07Bypass.statusCode, 400);
 });
