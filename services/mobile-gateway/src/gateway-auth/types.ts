@@ -36,6 +36,12 @@ export interface GatewayAuthClaims {
   readonly issuedAtMs: number;
   readonly expiresAtMs: number;
   readonly authVersion: string;
+  /** Optional W14 transport binding. When present, the session manager must enforce it exactly. */
+  readonly gatewaySessionId?: string;
+  /** Optional W14 actor-kind binding. This is transport identity metadata, never business authority. */
+  readonly actorKind?: GatewayActorBinding['kind'];
+  /** Optional W14 correlation binding. This carries trace/session context only. */
+  readonly correlationId?: CorrelationId;
 }
 
 export interface GatewayAuthenticator {
