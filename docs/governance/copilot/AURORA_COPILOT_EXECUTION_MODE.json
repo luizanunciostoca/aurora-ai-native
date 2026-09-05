@@ -1,14 +1,14 @@
 {
   "schemaVersion": 5,
-  "mode": "PRO_PLUS_ACTIONS_FABRIC",
-  "activationState": "PENDING_REALITY_GATE",
+  "mode": "FREE_ACTIONS_CLI",
+  "activationState": "PRO_PLUS_REALITY_GATE_BOOTSTRAP",
   "cloudAgentEnabled": false,
-  "proPlusActionsFabricEnabled": true,
+  "proPlusActionsFabricEnabled": false,
   "freeActionsCliEnabled": true,
   "fallbackPhysicalBuildSlots": 2,
   "prebuildWorkerEnabled": false,
-  "maxParallelTasks": 4,
-  "physicalBuildSlots": 4,
+  "maxParallelTasks": 2,
+  "physicalBuildSlots": 2,
   "maxLogicalLanes": 64,
   "maxPrebuildArtifactLanes": 48,
   "copilotModel": "auto",
@@ -19,13 +19,7 @@
     "attestationPath": "docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json",
     "minimumObservedConcurrentSessions": 4,
     "attestationMaxAgeMinutes": 1440,
-    "signals": [
-      "MEASURED_COPILOT_CLI_SUCCESS",
-      "MEASURED_CONCURRENT_JOB_OVERLAP",
-      "EXACT_WORKFLOW_RUN_ID",
-      "EXACT_CANDIDATE_SHA",
-      "ATTESTATION_EXPIRY"
-    ]
+    "signals": ["MEASURED_COPILOT_CLI_SUCCESS", "MEASURED_CONCURRENT_JOB_OVERLAP", "EXACT_WORKFLOW_RUN_ID", "EXACT_CANDIDATE_SHA", "ATTESTATION_EXPIRY"]
   },
   "capacityController": {
     "strategy": "MINIMUM_SAFE_DIMENSION",
@@ -36,13 +30,12 @@
   "sessionLeaseRegistry": {
     "source": "LIVE_GITHUB_ISSUE_TASK_PROJECTION",
     "lockDimensions": ["allowedPaths", "sharedWriteSurfaces"],
-    "staleLeasePolicy": "PRESERVE_WRITER_LOCK_RELEASE_SESSION_AFTER_TTL",
-    "sessionLeaseTtlMinutes": 60,
+    "staleLeasePolicy": "FAIL_CLOSED_UNTIL_RECONCILED",
     "prOpenConsumesBuildSession": false
   },
   "developmentTelemetry": {
     "enabled": true,
-    "schema": "aurora.pro_plus.development_telemetry.v2",
+    "schema": "aurora.pro_plus.development_telemetry.v1",
     "canonicalAuthority": false
   },
   "scheduler": {
@@ -58,16 +51,12 @@
     "runningTaskActivationPolicy": "NON_RETROACTIVE",
     "handoffFormat": "AURORA_COMPACT_V1"
   },
-  "upgradeTarget": "PRO_PLUS_CLOUD_AGENT_OPTIONAL",
+  "upgradeTarget": "PRO_PLUS_ACTIONS_FABRIC",
   "authority": "Operational execution mode only. Live main, exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual, ADRs and owning wave governance remain authoritative.",
   "notes": [
-    "PRO_PLUS_ACTIONS_FABRIC is the active target mode and uses measured GitHub Actions plus Copilot CLI concurrency instead of guessing subscription or cloud-agent capability.",
-    "Until the bounded Reality Gate attestation is VERIFIED and fresh, canonical BUILD execution automatically falls back to at most 2 Free-compatible physical slots.",
-    "Physical build slots and logical puzzle lanes are independent capacities.",
-    "Logical lanes may perform READINESS or governed PREBUILD without consuming canonical BUILD authority.",
-    "Active writer leases block colliding allowedPaths/sharedWriteSurfaces even when they do not consume a physical BUILD slot.",
-    "A stale running lease releases only its physical session reservation after TTL; its writer lock remains fail-closed until reconciliation.",
-    "PREBUILD remains non-authoritative and artifact-only until every canonical dependency is accepted and contract reconciliation succeeds.",
+    "This bootstrap keeps physical BUILD concurrency at the accepted Free-compatible ceiling while installing the measured PRO+ Reality Gate.",
+    "PRO_PLUS_ACTIONS_FABRIC may be activated only after a fresh VERIFIED runtime attestation proves concurrent Copilot CLI capacity.",
+    "Unknown or expired PRO+ evidence never widens capacity.",
     "Increasing measured safe BUILD capacity never weakens dependency, path, shared-surface, exact-head, Risk Gate, review or acceptance barriers."
   ]
 }
