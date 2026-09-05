@@ -22,6 +22,26 @@ Before changing code, revalidate the current `main`, `docs/governance/CURRENT_PR
 - Never create parallel canonical IDs, enums, policy vocabularies, registries or sources of truth.
 - Do not implement future-wave scope opportunistically.
 
+## Copilot Pro+ parallel execution
+
+Aurora uses two different forms of AI parallelism. They MUST NOT be confused:
+
+1. **Separate canonical tasks** use separate isolated Copilot sessions/workspaces/worktrees/branches. Each task retains one issue, one canonical owner, one branch and one PR unless Program Control explicitly records a remediation/supersession.
+2. **One canonical task** may use Copilot CLI `/fleet` only for genuinely independent intra-task subtasks. The parent session remains the sole task/branch integrator. For Copilot Pro/Pro+, current GitHub product guidance documents a default maximum of four concurrent CLI subagents per session tree; this is execution capacity, never Aurora authority.
+
+Parallelism rules:
+
+- Program Control dynamically computes safe BUILD concurrency from live `BUILD_READY` nodes, ownership/path isolation, shared-write surfaces, available isolated sessions, CI capacity and current account/runtime limits. Historical Free-mode `physicalBuildSlots=2` is not a current fixed Pro+ cap.
+- Do not open another write session merely to increase agent count. Every write lane needs an independent path/semantic owner and must reduce real critical-path time.
+- Prefer read-only parallel agents for exploration, contract reconnaissance, red-team/code review, dependency analysis and performance analysis.
+- Within one `/fleet`, prefer differentiated roles: read-only explore/contract recon, bounded implementation, bounded test/failure work on disjoint paths, and read-only red-team/code review.
+- A subagent cannot claim another canonical issue, create an independent canonical PR, self-accept, merge, or take coordinator-owned shared/root/publication surfaces.
+- If two active writers collide on one semantic source-of-truth surface, freeze writes and return ownership resolution to Program Control; never merge competing truths.
+- Puzzle `READINESS`/`PREBUILD` lanes may run broadly in parallel but remain non-authoritative, cannot satisfy dependencies and require expected-vs-accepted contract reconciliation before BUILD promotion.
+- Integration, Red Team, Performance and Acceptance may inspect one immutable candidate in parallel; any required code change creates a new candidate HEAD and invalidates old CI evidence.
+
+Reusable Pro+ invocations live in `.github/prompts/*.prompt.md` on supported Copilot surfaces. Repository instructions and custom agents remain the source for always-on invariants so long prompts do not need to be recopied into every session.
+
 ## Branch / PR / acceptance
 
 - One task = one isolated branch/workspace = one PR unless the task explicitly says otherwise.
