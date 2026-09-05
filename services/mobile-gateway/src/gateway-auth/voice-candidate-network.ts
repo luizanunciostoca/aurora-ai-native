@@ -62,7 +62,10 @@ function boundedText(value: unknown, maximum = MAX_IDENTIFIER_LENGTH): value is 
   );
 }
 
-function hasOnlyKeys(value: Readonly<Record<string, unknown>>, allowed: ReadonlySet<string>): boolean {
+function hasOnlyKeys(
+  value: Readonly<Record<string, unknown>>,
+  allowed: ReadonlySet<string>,
+): boolean {
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
@@ -147,20 +150,32 @@ export class VoiceCandidateNetworkBoundary {
     try {
       result = this.#intake.evaluate({ candidate, context });
     } catch {
-      return { statusCode: 503, body: nonAuthorityBody(false, false, 'W07_INGRESS_UNAVAILABLE') };
+      return {
+        statusCode: 503,
+        body: nonAuthorityBody(false, false, 'W07_INGRESS_UNAVAILABLE'),
+      };
     }
     if (!isPlainRecord(result)) {
-      return { statusCode: 503, body: nonAuthorityBody(false, false, 'W07_PROTOCOL_VIOLATION') };
+      return {
+        statusCode: 503,
+        body: nonAuthorityBody(false, false, 'W07_PROTOCOL_VIOLATION'),
+      };
     }
     if (
       result.authorizesExecution !== false ||
       result.provesExecutionSuccess !== false ||
       result.retryAuthorized !== false
     ) {
-      return { statusCode: 503, body: nonAuthorityBody(false, false, 'W07_PROTOCOL_VIOLATION') };
+      return {
+        statusCode: 503,
+        body: nonAuthorityBody(false, false, 'W07_PROTOCOL_VIOLATION'),
+      };
     }
     if (result.ok !== true || result.acceptedForEvaluation !== true) {
-      return { statusCode: 409, body: nonAuthorityBody(false, false, 'W07_EVALUATION_REJECTED') };
+      return {
+        statusCode: 409,
+        body: nonAuthorityBody(false, false, 'W07_EVALUATION_REJECTED'),
+      };
     }
 
     return { statusCode: 202, body: nonAuthorityBody(true, true) };
