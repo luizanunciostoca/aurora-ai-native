@@ -18,7 +18,7 @@ This plan validates the real chain `idle -> local hotword -> confirmed WakeCandi
 Evidence must bind one exact tuple:
 
 1. git HEAD;
-2. `Aurora-Tablet-UI-V4-Wake-Governed.apk` SHA-256;
+2. `Aurora-Tablet-UI-V4-Wake-Governed-Provenance.apk` SHA-256;
 3. package/versionName/versionCode;
 4. Android version + SDK;
 5. manufacturer/model + hashed device serial + build fingerprint;
@@ -26,9 +26,10 @@ Evidence must bind one exact tuple:
 7. RECORD_AUDIO permission;
 8. wake runtime engine/model/sensitivity/privacy state;
 9. battery-optimization state and audio route;
-10. operator timestamps.
+10. operator timestamps;
+11. when a governed fast-path projection is actually supplied, the W04 registry version/sourceRef/content SHA-256 and W15-G vocabulary version/sourceRef/content SHA-256 used by that run.
 
-If any tuple element changes materially, start a new evidence set.
+If any tuple element changes materially, start a new evidence set. Projection content hashes are provenance/integrity references only: they are not signatures, `PolicyToken`, `OwnerDecision`, W07 authority or proof of execution success.
 
 ## Accuracy / false wake matrix
 
@@ -51,13 +52,14 @@ Exercise recorded replay, external speaker playback, remote media containing the
 The physical run must validate the same fail-closed chain covered by deterministic tests:
 
 - no W04 governed voice projection, stale registry or stale vocabulary -> Conversation fallback;
+- projection payload without a non-empty source reference and valid lowercase SHA-256 content digest must be rejected before it can become governed fast-path input;
 - tenant mismatch, non-DEVICE target or non-current W04 capability -> capability cannot enter the available fast-path set;
 - W15-C native capability observation missing/stale/unavailable -> W15-G cannot produce a usable dispatch candidate;
 - W04 `MEDIUM`, `HIGH` or `CRITICAL` risk -> conservative `HIGH` voice handling and escalation before W07 ingress;
 - W07 mobile ingress unavailable -> candidate returns to Conversation; no local side effect, success claim or retry permission;
 - only a current LOW-risk deterministic candidate may be submitted for W07 evaluation, and submission is not authorization or execution.
 
-Do not populate a fake W04 capability registry or a fake W07 authorization service solely to make a scenario pass. If the canonical mobile ingress remains unavailable, record the expected fail-closed fallback honestly.
+Do not populate a fake W04 capability registry, fake provenance or a fake W07 authorization service solely to make a scenario pass. If the canonical mobile ingress remains unavailable, record the expected fail-closed fallback honestly.
 
 ## Authority race cases
 
