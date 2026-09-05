@@ -366,7 +366,7 @@ private fun MainSurfaceContent(
         -> PresenceFocus(state, onIntent, onVoice)
         UiSurface.WORKSPACE -> WorkspacePane(state, onIntent)
         UiSurface.HUMAN_CONTROL -> HumanControlV2Pane(state, stepUpState, onIntent, onStepUp)
-        UiSurface.EVIDENCE -> EvidencePane(state, onIntent)
+        UiSurface.EVIDENCE -> EvidenceV2Pane(state, stepUpState, deviceKeyState, onIntent)
         UiSurface.SETTINGS -> VoiceAndSystemSettingsPane(
             state = state,
             deviceKeyState = deviceKeyState,
