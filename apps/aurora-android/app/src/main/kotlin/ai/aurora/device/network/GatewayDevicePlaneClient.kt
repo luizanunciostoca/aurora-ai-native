@@ -292,10 +292,41 @@ class GatewayDevicePlaneClient internal constructor(
         }
         gateway = nextGateway
 
+        // W14 device bindings are socket-local. Rebind the already-accepted canonical DeviceRef
+        // on the fresh authenticated socket before asking W14-E to resume trust. This call cannot
+        // create a new local identity: any state/version drift fails closed.
+        val rebindProof = proofFactory.sign(registrationMessage(nextGateway, currentContext.deviceId))
+        val rebindResponse = post(
+            "/v1/device/registrations/register",
+            StrictJson.encodeObject(
+                listOf(
+                    "deviceId" to currentContext.deviceId,
+                    "proof" to rebindProof,
+                ),
+            ),
+        ) ?: run {
+            close()
+            return transportRejected()
+        }
+        val rebindResult = parseRegistration(rebindResponse)
+        if (rebindResult is GatewayDevicePlaneResult.Rejected) {
+            close()
+            return rebindResult
+        }
+        val reboundRegistration = (rebindResult as GatewayDevicePlaneResult.Success).value
+        if (
+            reboundRegistration.state != W14DeviceLifecycleState.ACTIVE ||
+            reboundRegistration.ref != currentRegistration.ref
+        ) {
+            close()
+            return rejected(GatewayDevicePlaneClientError.PROTOCOL_MALFORMED)
+        }
+        registration = reboundRegistration
+
         val proof = proofFactory.sign(
             attestationMessage(
                 nextGateway,
-                currentRegistration,
+                reboundRegistration,
                 currentDeviceSession.deviceSessionId,
                 previousGateway.connectionId,
             ),

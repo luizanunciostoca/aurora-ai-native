@@ -102,6 +102,7 @@ class GatewayDevicePlaneClientTest {
         )
         val resumed = FakeChannel(
             gatewayResponse("conn-2", generation = 2),
+            registrationResponse("ACTIVE", version = 2),
             sessionResponse("conn-2", generation = 2, version = 2),
         )
         val channels = ArrayDeque(listOf(initial, resumed))
@@ -125,7 +126,12 @@ class GatewayDevicePlaneClientTest {
         assertEquals("conn-2", result.value.gateway.connectionId)
         assertEquals(2, result.value.gateway.generation)
         assertTrue(resumed.requests[0].second.contains("\"previousConnectionId\":\"conn-1\""))
-        assertTrue(resumed.requests[1].second.contains("\"previousConnectionId\":\"conn-1\""))
+        assertEquals("/v1/device/registrations/register", resumed.requests[1].first)
+        assertTrue(resumed.requests[1].second.contains("\"deviceId\":\"dvc_01J00000000000000000000000\""))
+        assertFalse(resumed.requests[1].second.contains("tenantId"))
+        assertEquals("/v1/device/sessions/resume", resumed.requests[2].first)
+        assertTrue(resumed.requests[2].second.contains("\"previousConnectionId\":\"conn-1\""))
+        assertTrue(proofs.messages[proofs.messages.lastIndex - 1].startsWith("AURORA_DEVICE_REGISTRATION_V1\n"))
         assertTrue(proofs.messages.last().endsWith("\nconn-1"))
     }
 
