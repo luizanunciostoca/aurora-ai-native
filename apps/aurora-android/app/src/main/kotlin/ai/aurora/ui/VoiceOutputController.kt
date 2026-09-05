@@ -20,9 +20,9 @@ class VoiceOutputController(
 ) : AutoCloseable {
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
+    private val utteranceGuard = VoiceUtteranceGuard()
     private var tts: TextToSpeech? = null
     private var initialized = false
-    private var currentRequestId: Long? = null
     private var focusRequest: AudioFocusRequest? = null
     private val registryRegistration = VoiceSessionRegistry.register(
         onBackground = { stopForLifecycle("Saída de voz interrompida porque a Aurora saiu do primeiro plano.") },
@@ -44,13 +44,12 @@ class VoiceOutputController(
                 object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {
                         val id = utteranceId?.toLongOrNull() ?: return
-                        currentRequestId = id
-                        onStarted(id)
+                        if (utteranceGuard.owns(id)) onStarted(id)
                     }
 
                     override fun onDone(utteranceId: String?) {
                         val id = utteranceId?.toLongOrNull() ?: return
-                        currentRequestId = null
+                        if (!utteranceGuard.completeIfCurrent(id)) return
                         abandonAudioFocus()
                         onCompleted(id)
                     }
@@ -91,36 +90,46 @@ class VoiceOutputController(
             onError(requestId, "O mecanismo TTS não suporta ${settings.voiceLanguageTag}.")
             return
         }
-        engine.setSpeechRate(settings.voiceSpeechRate)
-        engine.setPitch(settings.voicePitch)
+        if (engine.setSpeechRate(settings.voiceSpeechRate) == TextToSpeech.ERROR) {
+            onError(requestId, "O mecanismo TTS recusou a velocidade configurada.")
+            return
+        }
+        if (engine.setPitch(settings.voicePitch) == TextToSpeech.ERROR) {
+            onError(requestId, "O mecanismo TTS recusou o tom configurado.")
+            return
+        }
         engine.setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ASSISTANT)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build(),
         )
-        currentRequestId = requestId
-        if (!requestAudioFocus()) {
-            currentRequestId = null
+
+        utteranceGuard.begin(requestId)
+        if (!requestAudioFocus(requestId)) {
+            utteranceGuard.completeIfCurrent(requestId)
             onError(requestId, "Audio focus não foi concedido; a Aurora não iniciou a fala.")
             return
         }
-        onAvailability(true, runCatching { engine.defaultEngine }.getOrNull().orEmpty().ifBlank { "Android TTS" }, currentAudioRouteLabel())
+        onAvailability(
+            true,
+            runCatching { engine.defaultEngine }.getOrNull().orEmpty().ifBlank { "Android TTS" },
+            currentAudioRouteLabel(),
+        )
         val result = engine.speak(
             text.take(MAX_SPEAK_CHARS),
             TextToSpeech.QUEUE_FLUSH,
             Bundle(),
             requestId.toString(),
         )
-        if (result == TextToSpeech.ERROR) {
-            currentRequestId = null
+        if (result == TextToSpeech.ERROR && utteranceGuard.completeIfCurrent(requestId)) {
             abandonAudioFocus()
             onError(requestId, "O mecanismo TTS recusou a solicitação de fala.")
         }
     }
 
     fun stop() {
-        currentRequestId = null
+        utteranceGuard.clear()
         runCatching { tts?.stop() }
         abandonAudioFocus()
     }
@@ -133,12 +142,12 @@ class VoiceOutputController(
         return when (preferred?.type) {
             AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
             AudioDeviceInfo.TYPE_BLE_HEADSET,
-            -> "Bluetooth"
+            -> "Bluetooth disponível"
             AudioDeviceInfo.TYPE_WIRED_HEADSET,
             AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-            -> "Headset"
-            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Alto-falante"
-            else -> "Sistema"
+            -> "Headset disponível"
+            AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Alto-falante disponível"
+            else -> "Rota do sistema"
         }
     }
 
@@ -151,16 +160,15 @@ class VoiceOutputController(
     }
 
     private fun stopForLifecycle(message: String) {
-        val interruptedId = currentRequestId ?: return
-        currentRequestId = null
+        val interruptedId = utteranceGuard.clear() ?: return
         runCatching { tts?.stop() }
         abandonAudioFocus()
         onError(interruptedId, message)
     }
 
-    private fun requestAudioFocus(): Boolean {
+    private fun requestAudioFocus(requestId: Long): Boolean {
         abandonAudioFocus()
-        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+        val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_ASSISTANT)
@@ -169,7 +177,7 @@ class VoiceOutputController(
             )
             .setOnAudioFocusChangeListener { change ->
                 if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                    interruptForAudioFocus()
+                    interruptForAudioFocus(requestId)
                 }
             }
             .build()
@@ -182,12 +190,11 @@ class VoiceOutputController(
         return true
     }
 
-    private fun interruptForAudioFocus() {
-        val interruptedId = currentRequestId ?: return
-        currentRequestId = null
+    private fun interruptForAudioFocus(requestId: Long) {
+        if (!utteranceGuard.completeIfCurrent(requestId)) return
         runCatching { tts?.stop() }
         abandonAudioFocus()
-        onError(interruptedId, "Saída de voz interrompida por perda de audio focus.")
+        onError(requestId, "Saída de voz interrompida por perda de audio focus.")
     }
 
     private fun abandonAudioFocus() {
@@ -198,9 +205,15 @@ class VoiceOutputController(
 
     private fun failUtterance(utteranceId: String?, message: String) {
         val id = utteranceId?.toLongOrNull()
-        currentRequestId = null
+        if (id != null) {
+            if (!utteranceGuard.completeIfCurrent(id)) return
+            abandonAudioFocus()
+            onError(id, message)
+            return
+        }
+        val current = utteranceGuard.clear() ?: return
         abandonAudioFocus()
-        onError(id, message)
+        onError(current, message)
     }
 
     companion object {
