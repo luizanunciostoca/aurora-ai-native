@@ -134,7 +134,7 @@ class GatewayVoiceRuntimeCompositionTest {
                     GatewayBootstrapClientResult.Rejected(GatewayBootstrapClientError.TRANSPORT_UNCERTAIN)
                 },
                 bindingProvider = { LocalGatewayBinding.FreshInstall },
-                connector = GatewayVoiceRuntimeConnector { _, _ -> fail("connector must not run") },
+                connector = GatewayVoiceRuntimeConnector { _, _ -> error("connector must not run") },
                 clearRuntime = { clearCount += 1 },
             ).compose()
         assertTrue(bootstrapRejected is GatewayVoiceRuntimeCompositionResult.Rejected)
