@@ -52,22 +52,14 @@ internal fun VoiceAndSystemSettingsPane(
             KeyValue("Síntese", state.voice.outputEngineLabel)
             KeyValue("Rota de áudio", state.voice.audioRouteLabel)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SmallBadge(
-                    "STT ${state.voice.inputAvailability.name}",
-                    engineTone(state.voice.inputAvailability),
-                )
-                SmallBadge(
-                    "TTS ${state.voice.outputAvailability.name}",
-                    engineTone(state.voice.outputAvailability),
-                )
+                SmallBadge("STT ${state.voice.inputAvailability.name}", engineTone(state.voice.inputAvailability))
+                SmallBadge("TTS ${state.voice.outputAvailability.name}", engineTone(state.voice.outputAvailability))
                 SmallBadge(
                     state.voice.outputState.name,
                     if (state.voice.outputState == VoiceOutputState.ERROR) SemanticTone.CRITICAL else SemanticTone.INFO,
                 )
             }
-            state.voice.lastError?.let {
-                LuminousCallout("VOICE STATUS", it, SemanticTone.CRITICAL)
-            }
+            state.voice.lastError?.let { LuminousCallout("VOICE STATUS", it, SemanticTone.CRITICAL) }
         }
 
         SettingsCard("Entrada de voz / STT") {
@@ -77,15 +69,10 @@ internal fun VoiceAndSystemSettingsPane(
                 state.settings.preferOfflineRecognition,
             ) { onIntent(AuroraUiIntent.SetPreferOfflineRecognition(it)) }
             LanguageSelector(state, onIntent)
-            OutlinedButton(
-                onClick = onVoice,
-                enabled = !state.settings.privacyMode,
-            ) {
+            OutlinedButton(onClick = onVoice, enabled = !state.settings.privacyMode) {
                 Text(if (state.voice.listening) "Ouvindo…" else "Testar microfone")
             }
-            if (state.voice.lastTranscript.isNotBlank()) {
-                KeyValue("Último transcript", state.voice.lastTranscript)
-            }
+            if (state.voice.lastTranscript.isNotBlank()) KeyValue("Último transcript", state.voice.lastTranscript)
         }
 
         SettingsCard("Saída de voz / TTS") {
@@ -104,18 +91,12 @@ internal fun VoiceAndSystemSettingsPane(
                 "Ao tocar para falar durante TTS, interrompe a fala atual antes de iniciar STT.",
                 state.settings.bargeInEnabled,
             ) { onIntent(AuroraUiIntent.SetBargeIn(it)) }
-            VoiceSlider(
-                title = "Velocidade",
-                value = state.settings.voiceSpeechRate,
-                range = 0.5f..1.5f,
-                label = "${"%.2f".format(state.settings.voiceSpeechRate)}×",
-            ) { onIntent(AuroraUiIntent.SetVoiceSpeechRate(it)) }
-            VoiceSlider(
-                title = "Tom",
-                value = state.settings.voicePitch,
-                range = 0.5f..2.0f,
-                label = "${"%.2f".format(state.settings.voicePitch)}×",
-            ) { onIntent(AuroraUiIntent.SetVoicePitch(it)) }
+            VoiceSlider("Velocidade", state.settings.voiceSpeechRate, 0.5f..1.5f, "${"%.2f".format(state.settings.voiceSpeechRate)}×") {
+                onIntent(AuroraUiIntent.SetVoiceSpeechRate(it))
+            }
+            VoiceSlider("Tom", state.settings.voicePitch, 0.5f..2.0f, "${"%.2f".format(state.settings.voicePitch)}×") {
+                onIntent(AuroraUiIntent.SetVoicePitch(it))
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = { onIntent(AuroraUiIntent.TestVoiceOutput) },
@@ -153,6 +134,11 @@ internal fun VoiceAndSystemSettingsPane(
                 state.settings.captionsEnabled,
             ) { onIntent(AuroraUiIntent.SetCaptions(it)) }
             SettingToggleV2(
+                "Haptics",
+                "Feedback tátil curto para listening, acknowledgement e warnings; nunca representa autorização.",
+                state.settings.hapticsEnabled,
+            ) { onIntent(AuroraUiIntent.SetHaptics(it)) }
+            SettingToggleV2(
                 "Reduced motion",
                 "Mesma semântica sem depender de animação espacial.",
                 state.settings.reducedMotion,
@@ -162,6 +148,24 @@ internal fun VoiceAndSystemSettingsPane(
                 "Aumenta contraste de surfaces e labels.",
                 state.settings.highContrast,
             ) { onIntent(AuroraUiIntent.SetHighContrast(it)) }
+        }
+
+        SettingsCard("Offline behavior") {
+            LuminousCallout(
+                "LOCAL_ONLY",
+                "Presence, navegação local, settings e TTS permanecem disponíveis. STT também pode permanecer local quando o recognizer on-device estiver disponível.",
+                SemanticTone.VERIFIED,
+            )
+            LuminousCallout(
+                "QUEUE_SAFE",
+                "A UI não cria fila de side effects por conta própria. Queueing só será habilitado quando o owner declarar replay/idempotency seguros.",
+                SemanticTone.APPROVAL,
+            )
+            LuminousCallout(
+                "UNAVAILABLE",
+                "Workspaces remotos, approvals, providers e writes ficam indisponíveis sem projections/bindings atuais. Nenhuma authority é inferida offline.",
+                SemanticTone.CRITICAL,
+            )
         }
 
         SettingsCard("Device & Session") {
@@ -201,11 +205,7 @@ private fun LanguageSelector(state: AuroraUiState, onIntent: (AuroraUiIntent) ->
             fontSize = 12.sp,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(
-                "pt-BR" to "Português (BR)",
-                "en-US" to "English (US)",
-                "es-ES" to "Español",
-            ).forEach { (tag, label) ->
+            listOf("pt-BR" to "Português (BR)", "en-US" to "English (US)", "es-ES" to "Español").forEach { (tag, label) ->
                 if (state.settings.voiceLanguageTag == tag) {
                     Button(onClick = { onIntent(AuroraUiIntent.SetVoiceLanguage(tag)) }) { Text(label) }
                 } else {
@@ -244,10 +244,7 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
         border = androidx.compose.foundation.BorderStroke(1.dp, Outline),
         shape = RoundedCornerShape(22.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(title, fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
             content()
         }
