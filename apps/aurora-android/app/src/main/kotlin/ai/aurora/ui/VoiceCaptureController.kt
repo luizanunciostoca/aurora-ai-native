@@ -25,6 +25,11 @@ data class VoiceInputAvailability(
     val engineLabel: String,
 )
 
+private data class RecognizerSelection(
+    val recognizer: SpeechRecognizer,
+    val label: String,
+)
+
 class VoiceCaptureController(
     private val context: Context,
     private val onListening: () -> Unit,
@@ -42,33 +47,28 @@ class VoiceCaptureController(
         val standard = SpeechRecognizer.isRecognitionAvailable(context)
         val onDevice = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
         return when {
-            preferOffline && onDevice -> VoiceInputAvailability(true, "Android on-device")
+            preferOffline && onDevice -> VoiceInputAvailability(true, "Android speech · preferência on-device")
             standard -> VoiceInputAvailability(true, if (onDevice) "Android speech · on-device disponível" else "Android speech")
             else -> VoiceInputAvailability(false, "Reconhecimento indisponível")
         }
     }
 
-    fun start(config: VoiceRecognitionConfig) {
+    fun start(config: VoiceRecognitionConfig): VoiceInputAvailability {
         closeRecognizer()
         val status = availability(config.preferOffline)
         if (!status.available) {
             onError("Reconhecimento de voz não está disponível neste dispositivo.")
-            return
+            return status
         }
-        val instance = runCatching {
-            if (
-                config.preferOffline &&
-                Build.VERSION.SDK_INT >= 31 &&
-                SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
-            ) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(context)
-            }
-        }.getOrElse {
-            onError("Não foi possível iniciar o reconhecimento de voz.")
-            return
+
+        val selection = createRecognizer(config)
+        if (selection == null) {
+            val unavailable = VoiceInputAvailability(false, "Reconhecimento indisponível")
+            onError("Não foi possível iniciar nenhum mecanismo de reconhecimento de voz.")
+            return unavailable
         }
+
+        val instance = selection.recognizer
         recognizer = instance
         instance.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) = onListening()
@@ -116,11 +116,19 @@ class VoiceCaptureController(
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, config.preferOffline)
             putExtra(RecognizerIntent.EXTRA_PROMPT, "Fale com a Aurora")
         }
-        runCatching { instance.startListening(intent) }
-            .onFailure {
-                onError("O serviço de voz recusou a solicitação.")
-                closeRecognizer()
-            }
+        val started = runCatching {
+            instance.startListening(intent)
+            true
+        }.getOrElse {
+            onError("O serviço de voz recusou a solicitação.")
+            closeRecognizer()
+            false
+        }
+        return if (started) {
+            VoiceInputAvailability(true, selection.label)
+        } else {
+            VoiceInputAvailability(false, "Falha ao iniciar ${selection.label}")
+        }
     }
 
     fun cancel() {
@@ -131,6 +139,29 @@ class VoiceCaptureController(
     override fun close() {
         registryRegistration.close()
         closeRecognizer()
+    }
+
+    private fun createRecognizer(config: VoiceRecognitionConfig): RecognizerSelection? {
+        val standardAvailable = SpeechRecognizer.isRecognitionAvailable(context)
+        val onDeviceAvailable = Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+
+        if (config.preferOffline && onDeviceAvailable) {
+            val onDevice = runCatching { SpeechRecognizer.createOnDeviceSpeechRecognizer(context) }.getOrNull()
+            if (onDevice != null) return RecognizerSelection(onDevice, "Android on-device")
+        }
+
+        if (standardAvailable) {
+            val standard = runCatching { SpeechRecognizer.createSpeechRecognizer(context) }.getOrNull()
+            if (standard != null) {
+                val label = if (config.preferOffline && onDeviceAvailable) {
+                    "Android speech · fallback do on-device"
+                } else {
+                    "Android speech"
+                }
+                return RecognizerSelection(standard, label)
+            }
+        }
+        return null
     }
 
     private fun stopForLifecycle() {
