@@ -1,14 +1,51 @@
 {
-  "schemaVersion": 3,
-  "mode": "FREE_ACTIONS_CLI",
+  "schemaVersion": 5,
+  "mode": "PRO_PLUS_ACTIONS_FABRIC",
+  "activationState": "ACTIVE_MEASURED",
   "cloudAgentEnabled": false,
+  "proPlusActionsFabricEnabled": true,
   "freeActionsCliEnabled": true,
+  "fallbackPhysicalBuildSlots": 2,
   "prebuildWorkerEnabled": false,
-  "maxParallelTasks": 2,
-  "physicalBuildSlots": 2,
-  "maxLogicalLanes": 32,
-  "maxPrebuildArtifactLanes": 24,
+  "maxParallelTasks": 3,
+  "physicalBuildSlots": 3,
+  "maxLogicalLanes": 64,
+  "maxPrebuildArtifactLanes": 48,
   "copilotModel": "auto",
+  "runtimeCapabilityDiscovery": {
+    "enabled": true,
+    "failurePolicy": "FAIL_CLOSED_TO_FREE_FALLBACK",
+    "requiredForProPlus": true,
+    "attestationPath": "docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json",
+    "minimumObservedConcurrentSessions": 3,
+    "attestationMaxAgeMinutes": 1440,
+    "renewalCadenceHours": 6,
+    "liveArtifactWorkflow": "Aurora PRO+ Reality Gate",
+    "signals": [
+      "MEASURED_COPILOT_CLI_SUCCESS",
+      "MEASURED_CONCURRENT_JOB_OVERLAP",
+      "EXACT_WORKFLOW_RUN_ID",
+      "EXACT_CANDIDATE_SHA",
+      "ATTESTATION_EXPIRY"
+    ]
+  },
+  "capacityController": {
+    "strategy": "MINIMUM_SAFE_DIMENSION",
+    "subtractActiveSessionLeases": true,
+    "respectWriterLeases": true,
+    "unknownCapacityPolicy": "FREE_FALLBACK_ONLY"
+  },
+  "sessionLeaseRegistry": {
+    "source": "LIVE_GITHUB_ISSUE_TASK_PROJECTION",
+    "lockDimensions": ["allowedPaths", "sharedWriteSurfaces"],
+    "staleLeasePolicy": "FAIL_CLOSED_UNTIL_RECONCILED",
+    "prOpenConsumesBuildSession": false
+  },
+  "developmentTelemetry": {
+    "enabled": true,
+    "schema": "aurora.pro_plus.development_telemetry.v2",
+    "canonicalAuthority": false
+  },
   "scheduler": {
     "strategy": "PUZZLE_FRONTIER",
     "optimizeFor": "MINIMUM_SAFE_CRITICAL_PATH",
@@ -22,18 +59,14 @@
     "runningTaskActivationPolicy": "NON_RETROACTIVE",
     "handoffFormat": "AURORA_COMPACT_V1"
   },
-  "upgradeTarget": "PRO_PLUS_CLOUD_AGENT",
+  "upgradeTarget": "PRO_PLUS_ACTIONS_FABRIC_DYNAMIC",
   "authority": "Operational execution mode only. Live main, exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual, ADRs and owning wave governance remain authoritative.",
   "notes": [
-    "Physical build slots and logical puzzle lanes are independent capacities.",
-    "Copilot Free canonical BUILD concurrency remains capped by Aurora at 2 physicalBuildSlots.",
-    "Logical lanes may span multiple waves simultaneously and may perform READINESS or governed PREBUILD without consuming canonical BUILD authority.",
-    "A missing dependency blocks canonical BUILD/integration, not all preparatory work.",
-    "PREBUILD is non-authoritative and artifact-only until every canonical dependency is accepted and contract reconciliation succeeds.",
-    "ISOLATED_PATCH prebuild is permitted only when a task explicitly declares prebuildAllowedPaths; path ownership is never guessed.",
-    "Future-wave coordination nodes may prepare governance artifacts early, but they cannot freeze or publish canonical wave authority before their dependencies are accepted.",
-    "The Free Actions CLI BUILD worker may claim only PUZZLE BUILD_READY nodes, never PREBUILD or READINESS nodes.",
-    "A task already running when this standard is activated keeps its original accepted base/contract and is not invalidated retroactively.",
-    "Increasing physicalBuildSlots later requires reviewed execution-mode governance; it never weakens dependency, path, shared-surface, exact-head or acceptance gates."
+    "PRO_PLUS_ACTIONS_FABRIC is activated at 3 physical BUILD slots because repeated bounded Reality Gates proved at least 3 simultaneous Copilot CLI sessions while all four probes succeeded.",
+    "The controller must not assume 4 sustained slots until a separate stability promotion proves that capacity across the required observation window.",
+    "Reality evidence is renewed every 6 hours; the BUILD claimant may consume only the latest successful canonical-main Reality Gate artifact.",
+    "The live artifact is never auto-committed to main and remains non-authoritative, run/SHA/time/TTL-bound evidence only.",
+    "Missing, expired, invalid or unavailable live evidence falls back to the committed bootstrap attestation and ultimately to the accepted 2-slot Free-compatible capacity.",
+    "Increasing measured safe BUILD capacity never weakens dependency, path, shared-surface, exact-head, Risk Gate, review or acceptance barriers."
   ]
 }
