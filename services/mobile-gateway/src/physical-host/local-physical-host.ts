@@ -29,6 +29,10 @@ import { GatewayVoiceDevicePlaneNetworkHandler } from '../gateway-auth/voice-dev
 import { RealtimeCommandSessionManager } from '../realtime-session/manager.js';
 import { W14LocalGovernedDeviceDispatchPort } from './governed-device-dispatch.js';
 import {
+  W03PostgresExecutionIdempotencyFence,
+  type LocalW07IdempotencyFencePort,
+} from './w03-execution-fence.js';
+import {
   PsqlW03SyncExecutor,
   W03PostgresDeviceReservationAdapter,
 } from './w03-postgres-reservations.js';
@@ -52,11 +56,12 @@ export type W15JLocalPhysicalHostDependencies = W15JLocalPhysicalHostDependencyB
       }>
     | Readonly<{
         /**
-         * W07-owned immutable factory invoked only after current W14 managers/dispatch port exist.
-         * It resolves the construction cycle without a mutable setter or second network stack.
+         * W07-owned immutable factory invoked only after current W14 managers/dispatch and W03-C
+         * business idempotency ports exist. It resolves composition without mutable setters.
          */
         createVoiceIntake: (
           governedDeviceDispatch: W14LocalGovernedDeviceDispatchPort,
+          idempotencyFence: LocalW07IdempotencyFencePort,
         ) => VoiceCandidateIntakePort;
         voiceIntake?: never;
       }>
@@ -94,11 +99,12 @@ function currentTime(clock: () => number): number {
 function resolveVoiceIntake(
   dependencies: W15JLocalPhysicalHostDependencies,
   dispatch: W14LocalGovernedDeviceDispatchPort,
+  idempotencyFence: LocalW07IdempotencyFencePort,
 ): VoiceCandidateIntakePort {
   if ('createVoiceIntake' in dependencies && dependencies.createVoiceIntake !== undefined) {
     let intake: VoiceCandidateIntakePort;
     try {
-      intake = dependencies.createVoiceIntake(dispatch);
+      intake = dependencies.createVoiceIntake(dispatch, idempotencyFence);
     } catch {
       throw new Error('W15-J W07 voice intake factory failed.');
     }
@@ -115,9 +121,9 @@ function resolveVoiceIntake(
  *
  * W14 owns gateway/device/session/trust/transport state. W03 owns durable idempotency through the
  * accepted Postgres schema. W07 ports are injected as already-composed owner adapters. The host
- * exposes a W14 transport dispatch port for W07 to call only after its own authority, target,
- * safeguard and containment gates; the host itself never bypasses W07, promotes a receipt to
- * VERIFIED, decides retry, or synthesizes physical acceptance evidence.
+ * exposes W14 transport dispatch and W03 business-idempotency structural ports for W07 only after
+ * creating their current owners; it never bypasses W07, promotes a receipt to VERIFIED, decides
+ * retry, or synthesizes physical acceptance evidence.
  */
 export class W15JLocalPhysicalHost {
   readonly governedDeviceDispatch: W14LocalGovernedDeviceDispatchPort;
@@ -162,6 +168,7 @@ export class W15JLocalPhysicalHost {
       ...(config.psqlTimeoutMs === undefined ? {} : { timeoutMs: config.psqlTimeoutMs }),
     });
     const durableReservations = new W03PostgresDeviceReservationAdapter(sql);
+    const executionIdempotencyFence = new W03PostgresExecutionIdempotencyFence(sql);
     const deliveries = new DeviceCommandDeliveryManager(durableReservations);
     const receiptIngress = new DeviceReceiptIngressManager({
       sessionTrust: deviceSessions,
@@ -179,7 +186,11 @@ export class W15JLocalPhysicalHost {
       deliveries,
     });
 
-    const voiceIntake = resolveVoiceIntake(dependencies, this.governedDeviceDispatch);
+    const voiceIntake = resolveVoiceIntake(
+      dependencies,
+      this.governedDeviceDispatch,
+      executionIdempotencyFence,
+    );
     const voiceCandidates = new VoiceCandidateNetworkBoundary(voiceIntake);
     const devicePlane = new GatewayVoiceDevicePlaneNetworkHandler(
       {
