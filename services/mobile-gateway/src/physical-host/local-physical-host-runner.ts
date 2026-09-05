@@ -146,9 +146,7 @@ export async function startW15JLocalPhysicalHostRunner(
   try {
     removers.push(hooks.registerSignal('SIGINT', onSignal));
     removers.push(hooks.registerSignal('SIGTERM', onSignal));
-    hooks.emit(
-      announcement(address, staged.value.bootstrapReference, staged.value.expiresAtMs),
-    );
+    hooks.emit(announcement(address, staged.value.bootstrapReference, staged.value.expiresAtMs));
   } catch {
     await stop();
     throw new Error('W15-J LOCAL runner initialization failed.');
