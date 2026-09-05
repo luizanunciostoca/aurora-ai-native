@@ -42,7 +42,7 @@ class AuroraWakeEnrollmentRecorder(
             onError("microphone permission is required for wake enrollment")
             return
         }
-        if (!AuroraAudioRuntime.arbiter.tryAcquire(AudioOwner.STT)) {
+        if (!AuroraAudioRuntime.arbiter.tryAcquire(AudioOwner.ENROLLMENT)) {
             active.set(false)
             onError("exclusive microphone ownership is unavailable for wake enrollment")
             return
@@ -131,7 +131,7 @@ class AuroraWakeEnrollmentRecorder(
 
     private fun releaseAudioLease() {
         if (audioLeaseHeld.compareAndSet(true, false)) {
-            AuroraAudioRuntime.arbiter.release(AudioOwner.STT)
+            AuroraAudioRuntime.arbiter.release(AudioOwner.ENROLLMENT)
         }
     }
 
