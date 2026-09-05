@@ -31,11 +31,13 @@ import ai.aurora.device.wake.WakeSetupActivity
 import ai.aurora.ui.AuroraRoot
 import ai.aurora.ui.AuroraRootViewModel
 import ai.aurora.ui.PrivacyCapturePolicy
+import ai.aurora.ui.RuntimeIntegrationSnapshotProvider
 import ai.aurora.ui.VoiceCaptureController
 import ai.aurora.ui.VoiceRecognitionConfig
 import ai.aurora.ui.VoiceRecognitionResult
 import ai.aurora.ui.VoiceSessionRegistry
 import ai.aurora.ui.model.AuroraUiIntent
+import ai.aurora.ui.model.RuntimeIntegrationUiRegistry
 
 class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceChangeListener, WakeInteractionBridge.Receiver {
     private lateinit var uiPreferences: SharedPreferences
@@ -58,9 +60,12 @@ class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceCha
         super.onCreate(savedInstanceState)
         uiPreferences = getSharedPreferences(UI_PREFERENCES_NAME, MODE_PRIVATE)
         uiPreferences.registerOnSharedPreferenceChangeListener(this)
-        rootViewModel = ViewModelProvider(this)[AuroraRootViewModel::class.java]
 
         val aurora = application as AuroraApplication
+        val runtimeIntegrationProvider = RuntimeIntegrationSnapshotProvider(aurora)
+        RuntimeIntegrationUiRegistry.install { runtimeIntegrationProvider.snapshot() }
+        rootViewModel = ViewModelProvider(this)[AuroraRootViewModel::class.java]
+
         governedVoiceCatalog =
             GovernedVoiceCommandCatalog(
                 projectionProvider = { aurora.voiceProjectionStore().current() },
@@ -117,6 +122,7 @@ class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceCha
     override fun onResume() {
         super.onResume()
         applyPrivacyCapturePolicy()
+        rootViewModel.refreshRuntime()
         maybeArmConfiguredWakeWord()
     }
 
