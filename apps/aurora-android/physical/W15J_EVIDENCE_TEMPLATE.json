@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "wave": "W15-J",
   "dp4Status": "OPEN",
   "dp5Status": "CLOSED_PHYSICAL_EVIDENCE_INCOMPLETE",
@@ -8,7 +8,8 @@
     "applicationId": "REQUIRED",
     "variant": "REQUIRED",
     "versionCode": "REQUIRED",
-    "versionName": "REQUIRED"
+    "versionName": "REQUIRED",
+    "sha256": "REQUIRED"
   },
   "device": {
     "serialSha256": "REQUIRED",
@@ -22,13 +23,17 @@
   "environment": {
     "gatewayIdentity": "REQUIRED_OR_BLOCKED",
     "gatewayVersion": "REQUIRED_OR_BLOCKED",
+    "gatewayTransport": "LOCAL_ADB_REVERSE_ONLY",
+    "adbReversePort": "REQUIRED",
     "operator": "REQUIRED",
     "observedAtUtc": "REQUIRED"
   },
   "scenarios": {
     "lifecycleAndRestart": "NOT_RUN",
+    "sameSocketGatewayComposition": "NOT_RUN",
+    "signedRegistrationAttestationReceipt": "NOT_RUN",
     "registrationAndSession": "NOT_RUN",
-    "sessionRotation": "NOT_RUN",
+    "sessionReconnectAndRotation": "NOT_RUN",
     "sessionRevocation": "NOT_RUN",
     "capabilityFreshness": "NOT_RUN",
     "permissionDenialAndRevocation": "NOT_RUN",
@@ -44,11 +49,14 @@
   "threatReview": {
     "packageImpersonation": "NOT_RUN",
     "secretLeakage": "NOT_RUN",
+    "gatewayCredentialOrProofLeakage": "NOT_RUN",
     "privilegeEscalation": "NOT_RUN",
     "staleTrust": "NOT_RUN",
+    "sameSocketBindingBypass": "NOT_RUN",
     "forgedEvidence": "NOT_RUN",
     "uiAutomationFallback": "NOT_RUN",
-    "localPersistenceCorruption": "NOT_RUN"
+    "localPersistenceCorruption": "NOT_RUN",
+    "localCleartextEscape": "NOT_RUN"
   },
   "resourceObservations": {
     "startup": "NOT_OBSERVED",
@@ -59,6 +67,12 @@
     "storage": "NOT_OBSERVED",
     "foregroundService": "NOT_OBSERVED"
   },
+  "riskGates": {
+    "A_AUTHORITY": "NOT_EVALUATED",
+    "B_PROVIDER_RECONCILIATION": "NOT_EVALUATED",
+    "C_REPLAY_IDEMPOTENCY": "NOT_EVALUATED",
+    "D_EVIDENCE_OBSERVABILITY": "NOT_EVALUATED"
+  },
   "handoffs": {
     "w17Telemetry": [],
     "w19SecurityHardening": [],
@@ -67,6 +81,7 @@
   "evidenceReferences": [],
   "notes": [
     "This file is an evidence template only and grants no execution authority.",
-    "PASS requires representative physical-device evidence; CI/emulator/in-process mocks cannot close DP5."
+    "PASS requires representative physical-device evidence; CI/emulator/in-process mocks cannot close DP5.",
+    "LOCAL ADB reverse transport is for controlled physical acceptance only and is not a production transport claim."
   ]
 }
