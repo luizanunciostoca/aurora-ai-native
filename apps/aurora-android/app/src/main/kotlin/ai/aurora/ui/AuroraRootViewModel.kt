@@ -52,8 +52,7 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) = refreshConnectivity()
         override fun onLost(network: Network) = refreshConnectivity()
-        override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) =
-            refreshConnectivity()
+        override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) = refreshConnectivity()
     }
 
     init {
@@ -63,47 +62,31 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
 
     fun onIntent(intent: AuroraUiIntent) {
         when (intent) {
-            AuroraUiIntent.NextOnboarding -> moveOnboarding(forward = true)
-            AuroraUiIntent.PreviousOnboarding -> moveOnboarding(forward = false)
+            AuroraUiIntent.NextOnboarding -> moveOnboarding(true)
+            AuroraUiIntent.PreviousOnboarding -> moveOnboarding(false)
             AuroraUiIntent.CompleteOnboarding -> completeOnboarding()
             is AuroraUiIntent.OpenSurface -> _state.update { it.copy(surface = intent.surface) }
             is AuroraUiIntent.UpdateDraft -> _state.update { it.copy(inputDraft = intent.value.take(MAX_INPUT_CHARS)) }
             is AuroraUiIntent.SubmitText -> submitText(intent.text)
             is AuroraUiIntent.OpenDynamicView -> openView(intent.viewType)
-            AuroraUiIntent.CloseWorkspace ->
-                _state.update {
-                    it.copy(
-                        workspaceOpen = false,
-                        manifest = null,
-                        surface = UiSurface.CONVERSATION,
-                    )
-                }
-            AuroraUiIntent.StartVoice ->
-                _state.update {
-                    it.copy(
-                        presence = AuroraPresenceMode.AWAKEN,
-                        voice = it.voice.copy(lastError = null),
-                        globalNotice = "Captura de voz iniciada somente após permissão explícita.",
-                    )
-                }
-            AuroraUiIntent.VoiceListening ->
-                _state.update {
-                    it.copy(
-                        voice = it.voice.copy(
-                            listening = true,
-                            partialTranscript = "",
-                            lastError = null,
-                        ),
-                        presence = AuroraPresenceMode.LISTENING,
-                        globalNotice = null,
-                    )
-                }
-            is AuroraUiIntent.VoicePartial ->
-                _state.update {
-                    it.copy(
-                        voice = it.voice.copy(partialTranscript = intent.transcript.take(MAX_INPUT_CHARS)),
-                    )
-                }
+            AuroraUiIntent.CloseWorkspace -> _state.update { it.copy(workspaceOpen = false, manifest = null, surface = UiSurface.CONVERSATION) }
+            AuroraUiIntent.StartVoice -> _state.update {
+                it.copy(
+                    presence = AuroraPresenceMode.AWAKEN,
+                    voice = it.voice.copy(lastError = null),
+                    globalNotice = "Captura de voz iniciada somente após permissão explícita.",
+                )
+            }
+            AuroraUiIntent.VoiceListening -> _state.update {
+                it.copy(
+                    voice = it.voice.copy(listening = true, partialTranscript = "", lastError = null),
+                    presence = AuroraPresenceMode.LISTENING,
+                    globalNotice = null,
+                )
+            }
+            is AuroraUiIntent.VoicePartial -> _state.update {
+                it.copy(voice = it.voice.copy(partialTranscript = intent.transcript.take(MAX_INPUT_CHARS)))
+            }
             is AuroraUiIntent.VoiceResult -> {
                 val transcript = intent.transcript.trim().take(MAX_INPUT_CHARS)
                 _state.update {
@@ -118,80 +101,57 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
                 }
                 submitText(transcript)
             }
-            is AuroraUiIntent.VoiceError ->
-                _state.update {
-                    it.copy(
-                        voice = it.voice.copy(
-                            listening = false,
-                            partialTranscript = "",
-                            lastError = intent.message,
-                        ),
-                        presence = if (it.connectivity.online) AuroraPresenceMode.PRESENT else AuroraPresenceMode.OFFLINE,
-                        globalNotice = intent.message,
-                    )
-                }
-            is AuroraUiIntent.VoiceInputAvailability ->
-                _state.update {
-                    it.copy(
-                        voice = it.voice.copy(
-                            inputAvailability = if (intent.available) VoiceEngineAvailability.AVAILABLE else VoiceEngineAvailability.UNAVAILABLE,
-                            inputEngineLabel = intent.engineLabel,
-                        ),
-                    )
-                }
-            is AuroraUiIntent.VoiceOutputAvailability ->
-                _state.update {
-                    it.copy(
-                        voice = it.voice.copy(
-                            outputAvailability = if (intent.available) VoiceEngineAvailability.AVAILABLE else VoiceEngineAvailability.UNAVAILABLE,
-                            outputEngineLabel = intent.engineLabel,
-                            audioRouteLabel = intent.audioRouteLabel,
-                        ),
-                    )
-                }
-            is AuroraUiIntent.VoiceOutputStarted ->
-                _state.update { current ->
-                    if (current.voice.pendingSpeak?.id != intent.requestId) current else
-                        current.copy(voice = current.voice.copy(outputState = VoiceOutputState.SPEAKING, lastError = null))
-                }
-            is AuroraUiIntent.VoiceOutputCompleted ->
-                _state.update { current ->
-                    if (current.voice.pendingSpeak?.id != intent.requestId) current else
-                        current.copy(
-                            voice = current.voice.copy(
-                                outputState = VoiceOutputState.IDLE,
-                                pendingSpeak = null,
-                            ),
-                        )
-                }
-            is AuroraUiIntent.VoiceOutputError ->
-                _state.update { current ->
-                    val shouldClear = intent.requestId == null || current.voice.pendingSpeak?.id == intent.requestId
-                    current.copy(
-                        voice = current.voice.copy(
-                            outputState = VoiceOutputState.ERROR,
-                            pendingSpeak = if (shouldClear) null else current.voice.pendingSpeak,
-                            lastError = intent.message,
-                        ),
-                        globalNotice = intent.message,
-                    )
-                }
-            AuroraUiIntent.TestVoiceOutput -> queueSpeech(
-                "Olá. Sou a Aurora. A saída de voz está funcionando neste tablet.",
-                force = true,
-            )
-            AuroraUiIntent.StopVoiceOutput ->
-                _state.update {
-                    it.copy(
-                        voice = it.voice.copy(
-                            outputState = VoiceOutputState.IDLE,
-                            pendingSpeak = null,
-                        ),
-                    )
-                }
+            is AuroraUiIntent.VoiceError -> _state.update {
+                it.copy(
+                    voice = it.voice.copy(listening = false, partialTranscript = "", lastError = intent.message),
+                    presence = if (it.connectivity.online) AuroraPresenceMode.PRESENT else AuroraPresenceMode.OFFLINE,
+                    globalNotice = intent.message,
+                )
+            }
+            is AuroraUiIntent.VoiceInputAvailability -> _state.update {
+                it.copy(
+                    voice = it.voice.copy(
+                        inputAvailability = if (intent.available) VoiceEngineAvailability.AVAILABLE else VoiceEngineAvailability.UNAVAILABLE,
+                        inputEngineLabel = intent.engineLabel,
+                    ),
+                )
+            }
+            is AuroraUiIntent.VoiceOutputAvailability -> _state.update {
+                it.copy(
+                    voice = it.voice.copy(
+                        outputAvailability = if (intent.available) VoiceEngineAvailability.AVAILABLE else VoiceEngineAvailability.UNAVAILABLE,
+                        outputEngineLabel = intent.engineLabel,
+                        audioRouteLabel = intent.audioRouteLabel,
+                    ),
+                )
+            }
+            is AuroraUiIntent.VoiceOutputStarted -> _state.update { current ->
+                if (current.voice.pendingSpeak?.id != intent.requestId) current else
+                    current.copy(voice = current.voice.copy(outputState = VoiceOutputState.SPEAKING, lastError = null))
+            }
+            is AuroraUiIntent.VoiceOutputCompleted -> _state.update { current ->
+                if (current.voice.pendingSpeak?.id != intent.requestId) current else
+                    current.copy(voice = current.voice.copy(outputState = VoiceOutputState.IDLE, pendingSpeak = null))
+            }
+            is AuroraUiIntent.VoiceOutputError -> _state.update { current ->
+                val shouldClear = intent.requestId == null || current.voice.pendingSpeak?.id == intent.requestId
+                current.copy(
+                    voice = current.voice.copy(
+                        outputState = VoiceOutputState.ERROR,
+                        pendingSpeak = if (shouldClear) null else current.voice.pendingSpeak,
+                        lastError = intent.message,
+                    ),
+                    globalNotice = intent.message,
+                )
+            }
+            AuroraUiIntent.TestVoiceOutput -> queueSpeech("Olá. Sou a Aurora. A saída de voz está funcionando neste tablet.", true)
+            AuroraUiIntent.StopVoiceOutput -> _state.update {
+                it.copy(voice = it.voice.copy(outputState = VoiceOutputState.IDLE, pendingSpeak = null))
+            }
             is AuroraUiIntent.SetReducedMotion -> updateSettings { it.copy(reducedMotion = intent.enabled) }
             is AuroraUiIntent.SetHighContrast -> updateSettings { it.copy(highContrast = intent.enabled) }
             is AuroraUiIntent.SetCaptions -> updateSettings { it.copy(captionsEnabled = intent.enabled) }
+            is AuroraUiIntent.SetHaptics -> updateSettings { it.copy(hapticsEnabled = intent.enabled) }
             is AuroraUiIntent.SetPrivacyMode -> {
                 updateSettings { it.copy(privacyMode = intent.enabled) }
                 if (intent.enabled) {
@@ -211,22 +171,14 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
             is AuroraUiIntent.SetWakePreference -> updateSettings { it.copy(wakePreferenceEnabled = intent.enabled) }
             is AuroraUiIntent.SetVoiceOutputEnabled -> {
                 updateSettings { it.copy(voiceOutputEnabled = intent.enabled) }
-                if (!intent.enabled) {
-                    _state.update { it.copy(voice = it.voice.copy(outputState = VoiceOutputState.IDLE, pendingSpeak = null)) }
-                }
+                if (!intent.enabled) _state.update { it.copy(voice = it.voice.copy(outputState = VoiceOutputState.IDLE, pendingSpeak = null)) }
             }
             is AuroraUiIntent.SetAutoSpeakResponses -> updateSettings { it.copy(autoSpeakResponses = intent.enabled) }
             is AuroraUiIntent.SetBargeIn -> updateSettings { it.copy(bargeInEnabled = intent.enabled) }
             is AuroraUiIntent.SetPreferOfflineRecognition -> updateSettings { it.copy(preferOfflineRecognition = intent.enabled) }
-            is AuroraUiIntent.SetVoiceLanguage -> updateSettings {
-                it.copy(voiceLanguageTag = intent.languageTag.trim().take(32))
-            }
-            is AuroraUiIntent.SetVoiceSpeechRate -> updateSettings {
-                it.copy(voiceSpeechRate = intent.value.coerceIn(0.5f, 1.5f))
-            }
-            is AuroraUiIntent.SetVoicePitch -> updateSettings {
-                it.copy(voicePitch = intent.value.coerceIn(0.5f, 2.0f))
-            }
+            is AuroraUiIntent.SetVoiceLanguage -> updateSettings { it.copy(voiceLanguageTag = intent.languageTag.trim().take(32)) }
+            is AuroraUiIntent.SetVoiceSpeechRate -> updateSettings { it.copy(voiceSpeechRate = intent.value.coerceIn(0.5f, 1.5f)) }
+            is AuroraUiIntent.SetVoicePitch -> updateSettings { it.copy(voicePitch = intent.value.coerceIn(0.5f, 2.0f)) }
             is AuroraUiIntent.ReviewApproval -> openApprovalPreview(intent.approvalRef)
             is AuroraUiIntent.SubmitHumanDecision -> submitPreviewDecision(intent.decision)
             is AuroraUiIntent.RequestCancellation -> requestCancellation(intent.subjectRef)
@@ -256,15 +208,8 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
                 devicePlaneAdapterAvailable = true,
                 registrationStatus = sessionLabel(sessionAvailability),
             )
-            val refreshedManifest = current.manifest?.let {
-                AuroraPreviewCatalog.manifestFor(it.viewType, device, connectivity)
-            }
-            current.copy(
-                presence = runtimePresence,
-                connectivity = connectivity,
-                device = device,
-                manifest = refreshedManifest,
-            )
+            val refreshedManifest = current.manifest?.let { AuroraPreviewCatalog.manifestFor(it.viewType, device, connectivity) }
+            current.copy(presence = runtimePresence, connectivity = connectivity, device = device, manifest = refreshedManifest)
         }
     }
 
@@ -331,12 +276,7 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
     private fun submitText(rawText: String) {
         val text = rawText.trim().take(MAX_INPUT_CHARS)
         if (text.isEmpty()) return
-        val userTurn = ConversationTurn(
-            id = UUID.randomUUID().toString(),
-            role = ConversationRole.USER,
-            text = text,
-            provenance = ProjectionProvenance.LIVE,
-        )
+        val userTurn = ConversationTurn(UUID.randomUUID().toString(), ConversationRole.USER, text, ProjectionProvenance.LIVE)
         _state.update {
             it.copy(
                 conversation = (it.conversation + userTurn).takeLast(MAX_TURNS),
@@ -363,6 +303,12 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
                 appendAurora("Abri o painel completo de Voice & Audio. Ele controla STT/TTS local, captions, idioma e privacidade; nenhuma dessas preferências concede authority.")
                 _state.update { it.copy(surface = UiSurface.SETTINGS, presence = AuroraPresenceMode.PRESENT) }
             }
+            listOf("sem internet", "offline", "sem conexão", "sem conexao").any(normalized::contains) -> {
+                appendAurora(
+                    "Offline: Presence, navegação local, settings e TTS continuam LOCAL_ONLY. Queueing de side effects não é criado pela UI; workspaces remotos e writes ficam UNAVAILABLE até os owners atuais voltarem.",
+                )
+                _state.update { it.copy(surface = UiSurface.SETTINGS, presence = AuroraPresenceMode.OFFLINE) }
+            }
             listOf("configura", "settings", "ajustes", "privacidade", "acessibilidade").any(normalized::contains) -> {
                 appendAurora("Abri Ajustes. Preferências locais não alteram policy ou authority do sistema.")
                 _state.update { it.copy(surface = UiSurface.SETTINGS, presence = AuroraPresenceMode.PRESENT) }
@@ -377,21 +323,12 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
             }
             listOf("voltar", "fechar workspace", "só conversa", "so conversa").any(normalized::contains) -> {
                 appendAurora("Workspace recolhido. A conversa continua como âncora.")
-                _state.update {
-                    it.copy(
-                        workspaceOpen = false,
-                        manifest = null,
-                        surface = UiSurface.CONVERSATION,
-                        presence = AuroraPresenceMode.PRESENT,
-                    )
-                }
+                _state.update { it.copy(workspaceOpen = false, manifest = null, surface = UiSurface.CONVERSATION, presence = AuroraPresenceMode.PRESENT) }
             }
             else -> {
                 val viewType = WorkspaceNavigator.classify(text)
                 if (viewType == null) {
-                    appendAurora(
-                        "Entendi. Nesta V1 eu já posso navegar pela interface, mostrar capabilities, dispositivo, workflows, marketing, CRM, ads, evidence e outras views. O processamento de negócio remoto será conectado progressivamente.",
-                    )
+                    appendAurora("Entendi. Nesta V1 eu já posso navegar pela interface, mostrar capabilities, dispositivo, workflows, marketing, CRM, ads, evidence e outras views. O processamento de negócio remoto será conectado progressivamente.")
                     _state.update { it.copy(presence = AuroraPresenceMode.PRESENT) }
                 } else {
                     appendAurora(responseFor(viewType))
@@ -409,11 +346,7 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
                 selectedView = viewType,
                 manifest = manifest,
                 surface = UiSurface.WORKSPACE,
-                presence = if (manifest.risk >= ai.aurora.ui.model.RiskBand.HIGH) {
-                    AuroraPresenceMode.COORDINATING
-                } else {
-                    AuroraPresenceMode.PRESENT
-                },
+                presence = if (manifest.risk >= ai.aurora.ui.model.RiskBand.HIGH) AuroraPresenceMode.COORDINATING else AuroraPresenceMode.PRESENT,
             )
         }
     }
@@ -437,13 +370,7 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
 
     private fun submitPreviewDecision(decision: String) {
         appendAurora("Decisão '$decision' registrada apenas como interação de preview. A UI não criou OwnerDecision, PolicyToken nem execução.")
-        _state.update {
-            it.copy(
-                surface = UiSurface.CONVERSATION,
-                presence = AuroraPresenceMode.PRESENT,
-                globalNotice = "Human Control permanece request-only até o backend de approval estar conectado.",
-            )
-        }
+        _state.update { it.copy(surface = UiSurface.CONVERSATION, presence = AuroraPresenceMode.PRESENT, globalNotice = "Human Control permanece request-only até o backend de approval estar conectado.") }
     }
 
     private fun requestCancellation(subjectRef: String) {
@@ -469,14 +396,9 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun appendAurora(text: String) {
-        val turn = ConversationTurn(
-            id = UUID.randomUUID().toString(),
-            role = ConversationRole.AURORA,
-            text = text,
-            provenance = ProjectionProvenance.LIVE,
-        )
+        val turn = ConversationTurn(UUID.randomUUID().toString(), ConversationRole.AURORA, text, ProjectionProvenance.LIVE)
         _state.update { it.copy(conversation = (it.conversation + turn).takeLast(MAX_TURNS)) }
-        queueSpeech(text, force = false)
+        queueSpeech(text, false)
     }
 
     private fun queueSpeech(text: String, force: Boolean) {
@@ -499,17 +421,16 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    private fun responseFor(viewType: WorkspaceViewType): String =
-        when (viewType) {
-            WorkspaceViewType.DEVICES -> "Abri Devices. Presence e ambiente do tablet são LIVE; registration/session remotas permanecem claramente separadas até provisioning físico."
-            WorkspaceViewType.SYSTEM_HEALTH -> "Abri System Health. Rede e runtime local são LIVE; SLOs e telemetry de produção continuam como projections futuras W17."
-            WorkspaceViewType.CAPABILITY_CATALOG -> "Abri Capability Catalog. A V1 já preserva a regra capability-first: disponibilidade nunca é permission ou authority."
-            WorkspaceViewType.META_ADS,
-            WorkspaceViewType.GOOGLE_ADS,
-            -> "Abri a visão de mídia paga. Dados de negócio ainda estão em TARGET PREVIEW e qualquer ação financeira permanece atrás de Human Control."
-            WorkspaceViewType.CRM_REVENUE -> "Abri CRM / Revenue. Nenhum PII sintético é exibido; projections reais entrarão com consent, freshness e provenance."
-            else -> "Abri ${viewType.displayTitle}. Esta surface já está implementada visualmente e aguardará projections canônicas onde o backend ainda não estiver conectado."
-        }
+    private fun responseFor(viewType: WorkspaceViewType): String = when (viewType) {
+        WorkspaceViewType.DEVICES -> "Abri Devices. Presence e ambiente do tablet são LIVE; registration/session remotas permanecem claramente separadas até provisioning físico."
+        WorkspaceViewType.SYSTEM_HEALTH -> "Abri System Health. Rede e runtime local são LIVE; SLOs e telemetry de produção continuam como projections futuras W17."
+        WorkspaceViewType.CAPABILITY_CATALOG -> "Abri Capability Catalog. A V1 já preserva a regra capability-first: disponibilidade nunca é permission ou authority."
+        WorkspaceViewType.META_ADS,
+        WorkspaceViewType.GOOGLE_ADS,
+        -> "Abri a visão de mídia paga. Dados de negócio ainda estão em TARGET PREVIEW e qualquer ação financeira permanece atrás de Human Control."
+        WorkspaceViewType.CRM_REVENUE -> "Abri CRM / Revenue. Nenhum PII sintético é exibido; projections reais entrarão com consent, freshness e provenance."
+        else -> "Abri ${viewType.displayTitle}. Esta surface já está implementada visualmente e aguardará projections canônicas onde o backend ainda não estiver conectado."
+    }
 
     private fun updateSettings(transform: (AuroraSettings) -> AuroraSettings) {
         _state.update { it.copy(settings = transform(it.settings)) }
@@ -540,14 +461,8 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
                 current.presence == AuroraPresenceMode.OFFLINE -> AuroraPresenceMode.PRESENT
                 else -> current.presence
             }
-            val refreshedManifest = current.manifest?.let {
-                AuroraPreviewCatalog.manifestFor(it.viewType, current.device, connectivity)
-            }
-            current.copy(
-                connectivity = connectivity,
-                presence = nextPresence,
-                manifest = refreshedManifest,
-            )
+            val refreshedManifest = current.manifest?.let { AuroraPreviewCatalog.manifestFor(it.viewType, current.device, connectivity) }
+            current.copy(connectivity = connectivity, presence = nextPresence, manifest = refreshedManifest)
         }
     }
 
@@ -571,18 +486,17 @@ class AuroraRootViewModel(application: Application) : AndroidViewModel(applicati
         DeviceSessionAvailability.BLOCKED -> "Sessão BLOCKED · registro/chave requer atenção"
     }
 
-    private fun baseEvidence(): EvidenceUiState =
-        EvidenceUiState(
-            headline = "Evidence disponível quando houver execução ou verificação",
-            receiptStatus = "ACK/Receipt ≠ verified success",
-            readbackStatus = "Readback ainda não solicitado",
-            correlationId = "local-ui",
-            events = listOf(
-                TimelineEvent("Build", ai.aurora.device.BuildConfig.AURORA_BUILD_SHA, SemanticTone.INFO),
-                TimelineEvent("UI profile", ai.aurora.device.BuildConfig.AURORA_UI_PROFILE, SemanticTone.INFO),
-                TimelineEvent("Authority boundary", "UI não fabrica PolicyToken/OwnerDecision", SemanticTone.VERIFIED),
-            ),
-        )
+    private fun baseEvidence(): EvidenceUiState = EvidenceUiState(
+        headline = "Evidence disponível quando houver execução ou verificação",
+        receiptStatus = "ACK/Receipt ≠ verified success",
+        readbackStatus = "Readback ainda não solicitado",
+        correlationId = "local-ui",
+        events = listOf(
+            TimelineEvent("Build", ai.aurora.device.BuildConfig.AURORA_BUILD_SHA, SemanticTone.INFO),
+            TimelineEvent("UI profile", ai.aurora.device.BuildConfig.AURORA_UI_PROFILE, SemanticTone.INFO),
+            TimelineEvent("Authority boundary", "UI não fabrica PolicyToken/OwnerDecision", SemanticTone.VERIFIED),
+        ),
+    )
 
     companion object {
         private const val PREFERENCES_NAME = "aurora.ui.v1"
