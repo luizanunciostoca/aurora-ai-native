@@ -1,6 +1,9 @@
 package ai.aurora.device
 
 import android.app.Application
+import ai.aurora.device.bootstrap.GatewayBootstrapClient
+import ai.aurora.device.bootstrap.ProcessLocalGatewayBootstrapRuntime
+import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.config.RuntimeEnvironmentConfig
 import ai.aurora.device.lifecycle.AndroidPresenceCheckpointStore
 import ai.aurora.device.lifecycle.AndroidPresenceCoordinator
@@ -18,6 +21,7 @@ class AuroraApplication : Application() {
     private lateinit var presenceEngine: PresenceEngine
     private lateinit var presenceCoordinator: AndroidPresenceCoordinator
     private lateinit var secureDeviceSessionClient: SecureDeviceSessionClient
+    private var localGatewayBootstrapRuntime: ProcessLocalGatewayBootstrapRuntime? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -34,6 +38,16 @@ class AuroraApplication : Application() {
                 keyStore = AndroidKeystoreSigningKeyStore(),
             )
 
+        if (
+            environmentConfig.environment == AuroraEnvironment.LOCAL &&
+            environmentConfig.allowCleartextTraffic
+        ) {
+            // Port 8081 is a pre-session LOCAL/ADB-reverse bootstrap exchange only. Voice and
+            // device-plane traffic continue on the authenticated W14 session channel (8080).
+            localGatewayBootstrapRuntime =
+                ProcessLocalGatewayBootstrapRuntime(GatewayBootstrapClient.physicalAdbReverse())
+        }
+
         presenceEngine =
             PresenceEngine(
                 store = AndroidPresenceCheckpointStore(this),
@@ -48,4 +62,9 @@ class AuroraApplication : Application() {
     fun presenceSnapshot(): PresenceSnapshot = presenceEngine.snapshot
 
     fun deviceSessionClient(): SecureDeviceSessionClient = secureDeviceSessionClient
+
+    internal fun localGatewayBootstrapRuntime(): ProcessLocalGatewayBootstrapRuntime =
+        requireNotNull(localGatewayBootstrapRuntime) {
+            "LOCAL gateway bootstrap runtime is unavailable in this environment"
+        }
 }
