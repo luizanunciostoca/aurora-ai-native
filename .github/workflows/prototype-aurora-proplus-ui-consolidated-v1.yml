@@ -1,0 +1,92 @@
+name: Prototype Aurora PRO+ Runtime UI V1
+
+on:
+  push:
+    branches:
+      - prototype/aurora-proplus-ui-consolidated-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android-proplus-runtime-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '9.4.1'
+          cache-read-only: true
+      - name: Validate inherited wake evidence tooling
+        shell: bash
+        run: |
+          bash -n apps/aurora-android/physical/wake/collect-wake-physical-evidence.sh
+          python3 -m json.tool apps/aurora-android/physical/wake/WAKE_EVIDENCE_TEMPLATE.json >/dev/null
+          test -x apps/aurora-android/physical/wake/collect-wake-physical-evidence.sh
+      - name: Install stable Android SDK
+        shell: bash
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+      - name: Test and assemble consolidated PRO+ Runtime UI
+        shell: bash
+        env:
+          AURORA_BUILD_SHA: ${{ github.sha }}
+        run: |
+          gradle --no-daemon --console=plain -p apps/aurora-android \
+            :app:testLocalDebugUnitTest \
+            :app:assembleLocalDebug
+          APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+          ARTIFACT_DIR=/tmp/aurora-proplus-runtime-ui-v1
+          mkdir -p "$ARTIFACT_DIR"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-PROPLUS-Runtime-UI-V1.apk"
+          (
+            cd "$ARTIFACT_DIR"
+            sha256sum Aurora-PROPLUS-Runtime-UI-V1.apk > SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt
+          )
+          BUILD_UTC="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
+          prototype_head=${{ github.sha }}
+          canonical_main=d84ca8c83a24d89aafe7fe4efbb12f0302587f18
+          runtime_ui_checkpoint=656b771fd17fe6a52c7c9020cd3382d77af26001
+          security_trust_checkpoint=5a0d54f85e45a33bcbc21ebe9f26995d36b35314
+          native_capability_checkpoint=deac2e1fe24629c15d88e2ba6f17117a530b31c4
+          evidence_runtime_checkpoint=20edbb88d9005b40742a96c9696d9b2b60aa7afb
+          source_wake_checkpoint=343b839a6425cef9493619da7ff622b7a29bfb66
+          w15j_candidate=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
+          ui_profile=PROPLUS_RUNTIME_UI_V1
+          app_version=0.18.0-alpha.2-local
+          version_code=8
+          variant=localDebug
+          target_sdk=36
+          runtime_sources=presence+w14-session+w15b-trust-metadata+w04-w15c-w15g-projection+w15h-offline-queue
+          trust_projection=sanitized-no-device-tenant-session-connection-key-identifiers
+          native_capability_projection=aggregate-read-only-no-capability-ids
+          evidence_surface=runtime-diagnostics-only-w17-not-connected
+          w07_mobile_ingress=uncomposed-fail-closed
+          ack_equals_success=false
+          blind_retry_allowed=false
+          authority_from_ui=none
+          physical_acceptance=not_implied
+          build_utc=${BUILD_UTC}
+          EOF
+      - name: Upload consolidated PRO+ Runtime UI APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-proplus-runtime-ui-v1
+          path: /tmp/aurora-proplus-runtime-ui-v1
+          if-no-files-found: error
+          retention-days: 14
