@@ -2,10 +2,10 @@
 import { randomBytes } from 'node:crypto';
 
 import type { GatewayActorBinding } from './types.js';
-import {
+import type {
+  AuthenticatedGatewayBootstrapPrincipal,
+  GatewayBootstrapGrant,
   TransientGatewayBootstrapBroker,
-  type AuthenticatedGatewayBootstrapPrincipal,
-  type GatewayBootstrapGrant,
 } from './gateway-bootstrap.js';
 
 const ACTOR_KINDS = new Set<GatewayActorBinding['kind']>(['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM']);
