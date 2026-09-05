@@ -119,23 +119,63 @@ function safeToken(value: unknown, maxLength = 256): value is string {
   );
 }
 
-function validPrincipal(value: unknown): value is AuthenticatedGatewayBootstrapPrincipal {
+function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
-  const principal = value as Partial<AuthenticatedGatewayBootstrapPrincipal>;
+  try {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return false;
+    const descriptors = Object.getOwnPropertyDescriptors(value);
+    return Object.values(descriptors).every(
+      (descriptor) => descriptor.get === undefined && descriptor.set === undefined,
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasOnlyKeys(record: Record<string, unknown>, keys: readonly string[]): boolean {
+  try {
+    const allowed = new Set(keys);
+    return Object.keys(record).every((key) => allowed.has(key));
+  } catch {
+    return false;
+  }
+}
+
+function validPrincipal(value: unknown): value is AuthenticatedGatewayBootstrapPrincipal {
+  if (
+    !isPlainDataRecord(value) ||
+    !hasOnlyKeys(value, [
+      'tenantId',
+      'actor',
+      'correlationId',
+      'deviceId',
+      'deviceSessionId',
+      'authenticatedAtMs',
+      'authenticationExpiresAtMs',
+      'authenticationReference',
+      'authorizesExecution',
+      'canGrantPermission',
+    ]) ||
+    !isPlainDataRecord(value.actor) ||
+    !hasOnlyKeys(value.actor, ['kind', 'identityId'])
+  ) {
+    return false;
+  }
   return (
-    safeToken(principal.tenantId, 128) &&
-    principal.actor !== undefined &&
-    ACTOR_KINDS.has(principal.actor.kind) &&
-    safeToken(principal.actor.identityId, 128) &&
-    safeToken(principal.correlationId, 128) &&
-    typeof principal.deviceId === 'string' &&
-    DEVICE_ID.test(principal.deviceId) &&
-    safeToken(principal.deviceSessionId, 128) &&
-    nonNegativeInteger(principal.authenticatedAtMs) &&
-    nonNegativeInteger(principal.authenticationExpiresAtMs) &&
-    safeToken(principal.authenticationReference, 256) &&
-    principal.authorizesExecution === false &&
-    principal.canGrantPermission === false
+    safeToken(value.tenantId, 128) &&
+    typeof value.actor.kind === 'string' &&
+    ACTOR_KINDS.has(value.actor.kind as GatewayActorBinding['kind']) &&
+    safeToken(value.actor.identityId, 128) &&
+    safeToken(value.correlationId, 128) &&
+    typeof value.deviceId === 'string' &&
+    DEVICE_ID.test(value.deviceId) &&
+    safeToken(value.deviceSessionId, 128) &&
+    nonNegativeInteger(value.authenticatedAtMs) &&
+    nonNegativeInteger(value.authenticationExpiresAtMs) &&
+    safeToken(value.authenticationReference, 256) &&
+    value.authorizesExecution === false &&
+    value.canGrantPermission === false
   );
 }
 
