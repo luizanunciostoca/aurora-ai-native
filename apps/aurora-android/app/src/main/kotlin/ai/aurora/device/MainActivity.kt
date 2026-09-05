@@ -15,9 +15,12 @@ import ai.aurora.device.permission.PermissionConsentBroker
 import ai.aurora.device.permission.PermissionPromptLauncher
 import ai.aurora.device.permission.RuntimePermissionRequirement
 import ai.aurora.device.permission.SharedPreferencesPermissionHistoryStore
+import ai.aurora.device.voice.GovernedVoiceCatalogResult
+import ai.aurora.device.voice.GovernedVoiceCommandCatalog
 import ai.aurora.device.voice.VoiceFastPathContext
 import ai.aurora.device.voice.W07VoiceAuthorityIngress
 import ai.aurora.device.voice.W07VoiceAuthorityIngressResult
+import ai.aurora.device.voice.WakeVoiceFastPathInputs
 import ai.aurora.device.voice.WakeVoiceFastPathRouter
 import ai.aurora.device.voice.WakeVoiceRoute
 import ai.aurora.device.wake.AuroraWakeForegroundService
@@ -39,6 +42,7 @@ class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceCha
     private lateinit var rootViewModel: AuroraRootViewModel
     private lateinit var wakeVoiceController: VoiceCaptureController
     private lateinit var wakeFastPathRouter: WakeVoiceFastPathRouter
+    private lateinit var governedVoiceCatalog: GovernedVoiceCommandCatalog
     private var lastHandledWakeId: String? = null
 
     private val microphonePermissionBroker by lazy {
@@ -56,12 +60,14 @@ class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceCha
         uiPreferences.registerOnSharedPreferenceChangeListener(this)
         rootViewModel = ViewModelProvider(this)[AuroraRootViewModel::class.java]
 
+        val aurora = application as AuroraApplication
+        governedVoiceCatalog =
+            GovernedVoiceCommandCatalog(
+                projectionProvider = { aurora.voiceProjectionStore().current() },
+            )
         wakeFastPathRouter =
             WakeVoiceFastPathRouter(
-                // No capability/command is invented locally. A future W04 projection must supply
-                // explicit definitions before the deterministic path can produce a candidate.
-                commandCatalog = { emptyList() },
-                contextProvider = { currentWakeFastPathContext() },
+                inputProvider = { currentWakeFastPathInputs() },
                 // No mobile W07 ingress is composed in this prototype yet. Candidate submission
                 // therefore fails closed to Conversation instead of bypassing current authority.
                 authorityIngress = W07VoiceAuthorityIngress {
@@ -194,21 +200,44 @@ class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceCha
                 rootViewModel.onIntent(AuroraUiIntent.VoiceResult(result.transcript))
             }
             is WakeVoiceRoute.AuthoritySubmitted -> {
-                // This branch is unreachable until a real W04 catalog and W07 mobile ingress are
-                // explicitly composed. Even then, submission means evaluation only, never success.
+                // This branch remains non-executable. Submission only hands a candidate to the
+                // current-authority path; W07/W15-F still own every execution-time gate.
                 Log.i(TAG, "wake_voice_fast_path=AUTHORITY_SUBMITTED")
                 rootViewModel.onIntent(AuroraUiIntent.VoicePartial("Solicitação enviada para validação de autoridade."))
             }
         }
     }
 
-    private fun currentWakeFastPathContext(): VoiceFastPathContext {
+    private fun currentWakeFastPathInputs(): WakeVoiceFastPathInputs {
+        val catalogResult = governedVoiceCatalog.snapshot()
+        return when (catalogResult) {
+            is GovernedVoiceCatalogResult.Ready -> {
+                val snapshot = catalogResult.snapshot
+                WakeVoiceFastPathInputs(
+                    commands = snapshot.commands,
+                    context = currentWakeFastPathContext(snapshot.availableCapabilityIds),
+                    registryVersion = snapshot.registryVersion,
+                    vocabularyVersion = snapshot.vocabularyVersion,
+                )
+            }
+            is GovernedVoiceCatalogResult.Rejected -> {
+                Log.i(TAG, "wake_voice_catalog=${catalogResult.reason.name}")
+                WakeVoiceFastPathInputs(
+                    commands = emptyList(),
+                    context = currentWakeFastPathContext(emptySet()),
+                )
+            }
+        }
+    }
+
+    private fun currentWakeFastPathContext(
+        availableCapabilityIds: Set<String>,
+    ): VoiceFastPathContext {
         val aurora = application as AuroraApplication
         return VoiceFastPathContext(
             appVisibility = aurora.presenceSnapshot().visibility,
             microphonePermission = microphonePermissionBroker.observe(MICROPHONE_REQUIREMENT),
-            // Must come from a current NativeCapabilityBridge/W04 projection. Empty is fail-closed.
-            availableCapabilityIds = emptySet(),
+            availableCapabilityIds = availableCapabilityIds,
             privacyModeEnabled = uiPreferences.getBoolean(KEY_PRIVACY_MODE, false),
         )
     }
