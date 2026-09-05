@@ -95,8 +95,13 @@ class VoiceOutputController(
                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                 .build(),
         )
-        requestAudioFocus()
         currentRequestId = requestId
+        if (!requestAudioFocus()) {
+            currentRequestId = null
+            onError(requestId, "Audio focus não foi concedido; a Aurora não iniciou a fala.")
+            return
+        }
+        onAvailability(true, runCatching { engine.defaultEngine }.getOrNull().orEmpty().ifBlank { "Android TTS" }, currentAudioRouteLabel())
         val result = engine.speak(
             text.take(MAX_SPEAK_CHARS),
             TextToSpeech.QUEUE_FLUSH,
@@ -140,7 +145,7 @@ class VoiceOutputController(
         tts = null
     }
 
-    private fun requestAudioFocus() {
+    private fun requestAudioFocus(): Boolean {
         abandonAudioFocus()
         val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
             .setAudioAttributes(
@@ -151,12 +156,25 @@ class VoiceOutputController(
             )
             .setOnAudioFocusChangeListener { change ->
                 if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) {
-                    stop()
+                    interruptForAudioFocus()
                 }
             }
             .build()
+        val result = audioManager.requestAudioFocus(request)
+        if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+            focusRequest = null
+            return false
+        }
         focusRequest = request
-        audioManager.requestAudioFocus(request)
+        return true
+    }
+
+    private fun interruptForAudioFocus() {
+        val interruptedId = currentRequestId ?: return
+        currentRequestId = null
+        runCatching { tts?.stop() }
+        abandonAudioFocus()
+        onError(interruptedId, "Saída de voz interrompida por perda de audio focus.")
     }
 
     private fun abandonAudioFocus() {
