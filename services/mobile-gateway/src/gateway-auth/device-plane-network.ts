@@ -1,3 +1,4 @@
+import { computeDeviceReceiptIntegrityDigest } from './device-key-proof-verifier.js';
 import type { GatewaySessionSnapshot } from './types.js';
 
 const DEVICE_ROUTES = new Set([
@@ -40,7 +41,6 @@ const RECEIPT_KEYS = new Set([
   'reportedState',
   'sourceReference',
   'proofReference',
-  'integrityDigest',
   'capturedAtMs',
 ]);
 
@@ -106,7 +106,10 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
   }
 }
 
-function hasOnlyKeys(value: Readonly<Record<string, unknown>>, allowed: ReadonlySet<string>): boolean {
+function hasOnlyKeys(
+  value: Readonly<Record<string, unknown>>,
+  allowed: ReadonlySet<string>,
+): boolean {
   return Object.keys(value).every((key) => allowed.has(key));
 }
 
@@ -185,7 +188,11 @@ function invoke(port: object, method: string, ...args: readonly unknown[]): unkn
   return Reflect.apply(candidate, port, args);
 }
 
-async function invokeAsync(port: object, method: string, ...args: readonly unknown[]): Promise<unknown> {
+async function invokeAsync(
+  port: object,
+  method: string,
+  ...args: readonly unknown[]
+): Promise<unknown> {
   return Promise.resolve(invoke(port, method, ...args));
 }
 
@@ -659,7 +666,6 @@ export class GatewayDevicePlaneNetworkHandler {
       !['COMPLETED', 'FAILED', 'UNCERTAIN'].includes(String(input.body.reportedState)) ||
       !safeReference(input.body.sourceReference) ||
       !safeReference(input.body.proofReference) ||
-      !safeReference(input.body.integrityDigest, 256) ||
       !safeNonNegativeInteger(input.body.capturedAtMs)
     ) {
       return devicePlaneError(400, 'BODY_MALFORMED');
@@ -681,6 +687,19 @@ export class GatewayDevicePlaneNetworkHandler {
       return devicePlaneError(503, 'UPSTREAM_PROTOCOL_VIOLATION');
     }
 
+    const integrityDigest = computeDeviceReceiptIntegrityDigest({
+      receiptId: input.body.receiptId,
+      ...(input.body.evidenceId === undefined ? {} : { evidenceId: input.body.evidenceId }),
+      commandId: input.body.commandId,
+      executionId: input.body.executionId,
+      connectionId: input.body.connectionId,
+      gatewayGeneration: input.body.gatewayGeneration,
+      deliveryReference: input.body.deliveryReference,
+      reportedState: String(input.body.reportedState),
+      sourceReference: input.body.sourceReference,
+      capturedAtMs: input.body.capturedAtMs,
+    });
+
     return managerResponse(
       invoke(this.#dependencies.receiptIngress, 'ingest', {
         receiptId: input.body.receiptId,
@@ -698,7 +717,7 @@ export class GatewayDevicePlaneNetworkHandler {
         reportedState: input.body.reportedState,
         sourceReference: input.body.sourceReference,
         proofReference: input.body.proofReference,
-        integrityDigest: input.body.integrityDigest,
+        integrityDigest,
         capturedAtMs: input.body.capturedAtMs,
         receivedAtMs: input.nowMs,
         deviceSession: trust,
