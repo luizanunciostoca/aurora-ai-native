@@ -7,58 +7,114 @@ function booleanSignal(value) {
   return String(value || '').toLowerCase() === 'true';
 }
 
-export function discoverRuntimeCapabilities(mode, env = process.env) {
+function validActionsFabricAttestation(mode, attestation, nowMs) {
+  const minimum = positiveInteger(mode?.runtimeCapabilityDiscovery?.minimumObservedConcurrentSessions) || 4;
+  if (
+    mode?.mode !== 'PRO_PLUS_ACTIONS_FABRIC' ||
+    mode?.proPlusActionsFabricEnabled !== true ||
+    attestation?.schema !== 'aurora.pro_plus.runtime_attestation.v1' ||
+    attestation?.state !== 'VERIFIED' ||
+    attestation?.executionMode !== 'PRO_PLUS_ACTIONS_FABRIC' ||
+    attestation?.authority !== false ||
+    attestation?.allSessionsNoTool !== true ||
+    Number(attestation?.repositorySideEffects || 0) !== 0 ||
+    Number(attestation?.providerSideEffects || 0) !== 0 ||
+    !positiveInteger(attestation?.workflowRunId) ||
+    typeof attestation?.candidateSha !== 'string' ||
+    !/^[a-f0-9]{40}$/u.test(attestation.candidateSha) ||
+    !positiveInteger(attestation?.observedConcurrentSessions) ||
+    attestation.observedConcurrentSessions < minimum ||
+    !positiveInteger(attestation?.successfulCopilotSessions) ||
+    attestation.successfulCopilotSessions < minimum ||
+    Number(attestation?.failedCopilotSessions || 0) !== 0
+  ) {
+    return false;
+  }
+  const observedAt = Date.parse(attestation.observedAt || '');
+  const expiresAt = Date.parse(attestation.expiresAt || '');
+  return Number.isFinite(observedAt) && Number.isFinite(expiresAt) && observedAt <= nowMs && nowMs < expiresAt;
+}
+
+export function discoverRuntimeCapabilities(
+  mode,
+  env = process.env,
+  attestation = null,
+  nowMs = Date.now(),
+) {
   const configuredMode = mode?.mode || 'UNKNOWN';
   const freeMode = configuredMode === 'FREE_ACTIONS_CLI';
-  const proPlusMode = configuredMode === 'PRO_PLUS_CLOUD_AGENT';
-
-  const cloudAgentAvailable = booleanSignal(env.AURORA_CLOUD_AGENT_AVAILABLE);
-  const accountPlanObserved = String(env.AURORA_ACCOUNT_PLAN || '').toLowerCase() === 'pro_plus';
-  const isolatedSessionCapacity = positiveInteger(env.AURORA_ISOLATED_SESSION_CAPACITY);
-  const ciParallelCapacity = positiveInteger(env.AURORA_CI_PARALLEL_CAPACITY);
-  const creditSlotBudget = positiveInteger(env.AURORA_AI_CREDIT_SLOT_BUDGET);
-  const fleetSubagentCap = positiveInteger(
+  const actionsFabricMode = configuredMode === 'PRO_PLUS_ACTIONS_FABRIC';
+  const cloudMode = configuredMode === 'PRO_PLUS_CLOUD_AGENT';
+  const ciOverride = positiveInteger(env.AURORA_CI_PARALLEL_CAPACITY);
+  const creditOverride = positiveInteger(env.AURORA_AI_CREDIT_SLOT_BUDGET);
+  const fleetOverride = positiveInteger(
     env.AURORA_FLEET_SUBAGENT_CAP || env.COPILOT_SUBAGENT_MAX_CONCURRENT,
   );
 
   if (freeMode) {
     const physicalBuildSlots = positiveInteger(mode?.physicalBuildSlots) || 1;
     return {
-      schema: 'aurora.pro_plus.runtime_capability.v1',
+      schema: 'aurora.pro_plus.runtime_capability.v2',
       configuredMode,
+      executionProfile: 'FREE',
       executionAvailable: Boolean(mode?.freeActionsCliEnabled),
       proPlusReady: false,
-      cloudAgentAvailable: false,
-      accountPlanObserved: false,
+      attestationState: 'NOT_REQUIRED',
       isolatedSessionCapacity: physicalBuildSlots,
-      ciParallelCapacity: ciParallelCapacity || physicalBuildSlots,
-      creditSlotBudget: creditSlotBudget || physicalBuildSlots,
-      fleetSubagentCap: fleetSubagentCap || physicalBuildSlots,
+      ciParallelCapacity: ciOverride || physicalBuildSlots,
+      creditSlotBudget: creditOverride || physicalBuildSlots,
+      fleetSubagentCap: fleetOverride || physicalBuildSlots,
       authority: false,
     };
   }
 
-  const proPlusReady = Boolean(
-    proPlusMode &&
-    mode?.cloudAgentEnabled &&
-    cloudAgentAvailable &&
-    accountPlanObserved &&
-    isolatedSessionCapacity &&
-    ciParallelCapacity &&
-    creditSlotBudget,
-  );
+  if (actionsFabricMode) {
+    const fallbackSlots = positiveInteger(mode?.fallbackPhysicalBuildSlots) || 1;
+    const verified = validActionsFabricAttestation(mode, attestation, nowMs);
+    const measuredSlots = verified
+      ? Math.min(
+          positiveInteger(mode?.physicalBuildSlots) || fallbackSlots,
+          positiveInteger(attestation?.observedConcurrentSessions) || fallbackSlots,
+        )
+      : fallbackSlots;
+    return {
+      schema: 'aurora.pro_plus.runtime_capability.v2',
+      configuredMode,
+      executionProfile: verified ? 'PRO_PLUS' : 'FREE_FALLBACK',
+      executionAvailable: verified || Boolean(mode?.freeActionsCliEnabled),
+      proPlusReady: verified,
+      attestationState: verified ? 'VERIFIED' : attestation?.state || 'MISSING',
+      isolatedSessionCapacity: measuredSlots,
+      ciParallelCapacity: ciOverride || measuredSlots,
+      creditSlotBudget: creditOverride || measuredSlots,
+      fleetSubagentCap: fleetOverride || measuredSlots,
+      authority: false,
+    };
+  }
 
+  const cloudAgentAvailable = booleanSignal(env.AURORA_CLOUD_AGENT_AVAILABLE);
+  const accountPlanObserved = String(env.AURORA_ACCOUNT_PLAN || '').toLowerCase() === 'pro_plus';
+  const isolatedSessionCapacity = positiveInteger(env.AURORA_ISOLATED_SESSION_CAPACITY);
+  const proPlusReady = Boolean(
+    cloudMode &&
+      mode?.cloudAgentEnabled &&
+      cloudAgentAvailable &&
+      accountPlanObserved &&
+      isolatedSessionCapacity &&
+      ciOverride &&
+      creditOverride,
+  );
   return {
-    schema: 'aurora.pro_plus.runtime_capability.v1',
+    schema: 'aurora.pro_plus.runtime_capability.v2',
     configuredMode,
+    executionProfile: proPlusReady ? 'PRO_PLUS_CLOUD' : 'UNAVAILABLE',
     executionAvailable: proPlusReady,
     proPlusReady,
-    cloudAgentAvailable,
-    accountPlanObserved,
+    attestationState: 'ENVIRONMENT_SIGNALS',
     isolatedSessionCapacity: isolatedSessionCapacity || 0,
-    ciParallelCapacity: ciParallelCapacity || 0,
-    creditSlotBudget: creditSlotBudget || 0,
-    fleetSubagentCap: fleetSubagentCap || 0,
+    ciParallelCapacity: ciOverride || 0,
+    creditSlotBudget: creditOverride || 0,
+    fleetSubagentCap: fleetOverride || 0,
     authority: false,
   };
 }
@@ -73,20 +129,15 @@ export function calculateDynamicSafeBuildCapacity({
   const ready = Math.max(0, Number(readyCandidateCount) || 0);
   const independent = Math.max(0, Number(pathIndependentCandidateCount) || 0);
   const active = Math.max(0, Number(activeLeaseCount) || 0);
-
   if (!runtime?.executionAvailable) {
     return {
-      schema: 'aurora.pro_plus.safe_build_capacity.v1',
+      schema: 'aurora.pro_plus.safe_build_capacity.v2',
       capacity: 0,
       reasons: ['RUNTIME_EXECUTION_UNAVAILABLE'],
       authority: false,
     };
   }
-
-  const configuredCeiling =
-    mode?.mode === 'FREE_ACTIONS_CLI'
-      ? Math.max(1, Number(mode.physicalBuildSlots) || 1)
-      : Number.POSITIVE_INFINITY;
+  const configuredCeiling = Math.max(1, Number(mode?.physicalBuildSlots) || 1);
   const availableSessions = Math.max(0, runtime.isolatedSessionCapacity - active);
   const dimensions = [
     configuredCeiling,
@@ -97,19 +148,19 @@ export function calculateDynamicSafeBuildCapacity({
     independent,
   ];
   const capacity = Math.max(0, Math.min(...dimensions));
-
   const reasons = [];
   if (capacity === 0 && active >= runtime.isolatedSessionCapacity)
     reasons.push('SESSION_CAPACITY_EXHAUSTED');
   if (ready === 0) reasons.push('NO_BUILD_READY_CANDIDATES');
   if (independent === 0) reasons.push('NO_PATH_INDEPENDENT_CANDIDATES');
   if (capacity > 0) reasons.push('MINIMUM_SAFE_DIMENSION');
-
+  if (runtime.executionProfile === 'FREE_FALLBACK') reasons.push('PRO_PLUS_ATTESTATION_FALLBACK');
   return {
-    schema: 'aurora.pro_plus.safe_build_capacity.v1',
+    schema: 'aurora.pro_plus.safe_build_capacity.v2',
     capacity,
+    executionProfile: runtime.executionProfile,
     dimensions: {
-      configuredCeiling: Number.isFinite(configuredCeiling) ? configuredCeiling : null,
+      configuredCeiling,
       availableSessions,
       ciParallelCapacity: runtime.ciParallelCapacity,
       creditSlotBudget: runtime.creditSlotBudget,
