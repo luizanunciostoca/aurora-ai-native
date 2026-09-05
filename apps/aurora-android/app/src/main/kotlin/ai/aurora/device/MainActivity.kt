@@ -6,6 +6,7 @@ import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.fragment.app.FragmentActivity
 import ai.aurora.ui.AuroraRoot
+import ai.aurora.ui.PrivacyCapturePolicy
 
 class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceChangeListener {
     private lateinit var uiPreferences: SharedPreferences
@@ -35,7 +36,8 @@ class MainActivity : FragmentActivity(), SharedPreferences.OnSharedPreferenceCha
     }
 
     private fun applyPrivacyCapturePolicy() {
-        if (uiPreferences.getBoolean(KEY_PRIVACY_MODE, false)) {
+        val privacyMode = uiPreferences.getBoolean(KEY_PRIVACY_MODE, false)
+        if (PrivacyCapturePolicy.shouldBlockScreenCapture(privacyMode)) {
             window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
