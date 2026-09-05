@@ -37,6 +37,8 @@ jobs:
         run: node tools/copilot/load-task-graph.mjs
       - name: Validate Copilot execution mode
         run: node tools/copilot/validate-execution-mode.mjs
+      - name: Validate PRO+ runtime orchestration
+        run: node --test tools/copilot/pro-plus-runtime.test.mjs
       - name: Validate safe READY frontier policy
         run: node tools/copilot/frontier-policy.test.mjs
       - name: Verify custom-agent profiles
@@ -47,16 +49,20 @@ jobs:
           test "$count" -eq 9
           grep -R --line-number '^description:' .github/agents/*.agent.md >/dev/null
           echo "Validated $count Aurora Copilot custom agents."
-      - name: Verify dispatcher, path fences and Free worker safeguards
+      - name: Verify dispatcher, path fences and governed worker safeguards
         shell: bash
         run: |
           set -euo pipefail
-          ! grep -R --line-number -E '(github_pat_|ghp_|AURORA_COPILOT_USER_TOKEN=)' . --exclude-dir=.git
+          forbidden='github''_pat_|gh''p_|AURORA_COPILOT_USER_TOKEN''='
+          ! grep -R --line-number -E "$forbidden" . --exclude-dir=.git
           grep -q 'AURORA_COPILOT_USER_TOKEN' .github/workflows/aurora-copilot-dispatch.yml
           grep -q 'aurora:accepted' tools/copilot/materialize-ready.mjs
           grep -q 'aurora:accepted' tools/copilot/dispatch-issue.mjs
           grep -q 'copilot-requests: write' .github/workflows/aurora-copilot-free-worker.yml
-          grep -q 'max-parallel: 2' .github/workflows/aurora-copilot-free-worker.yml
+          grep -Fq 'max-parallel: ${{ fromJSON(needs.claim.outputs.parallelism) }}' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'AURORA_CI_PARALLEL_CAPACITY' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'AURORA_AI_CREDIT_SLOT_BUDGET' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'COPILOT_SUBAGENT_MAX_CONCURRENT' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'contents: read' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'Remove generated outputs before candidate classification' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'Remove protected and generated edits from AI patch' .github/workflows/aurora-copilot-free-worker.yml
@@ -68,12 +74,13 @@ jobs:
           grep -q 'gh workflow run test-build.yml' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'gh workflow run security.yml' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'listOpenPullRequests' tools/copilot/claim-free-ready.mjs
+          grep -q 'projectActiveSessionLeases' tools/copilot/claim-free-ready.mjs
+          grep -q 'calculateDynamicSafeBuildCapacity' tools/copilot/claim-free-ready.mjs
           grep -q 'aurora:canonical-pr-open' tools/copilot/claim-free-ready.mjs
           grep -q 'aurora-governance' tools/copilot/claim-free-ready.mjs
           grep -q 'aurora-acceptance' tools/copilot/claim-free-ready.mjs
           grep -q 'aurora-coordinator' tools/copilot/claim-free-ready.mjs
           grep -q 'selectSafeReadyFrontier' tools/copilot/claim-free-ready.mjs
-          grep -q 'READY FRONTIER' tools/copilot/claim-free-ready.mjs
           grep -q 'SHARED_WRITE_SURFACE' tools/copilot/frontier-policy.mjs
           grep -q 'ALLOWED_PATH_OVERLAP' tools/copilot/frontier-policy.mjs
           grep -Fq 'packages/events/src/delivery/**' docs/governance/copilot/tasks/W03.json
@@ -81,4 +88,6 @@ jobs:
           grep -q '"name": "@aurora/events"' packages/events/package.json
           grep -q 'W03_SHARED_READINESS_SCAFFOLD' packages/events/STATUS.md
           grep -q 'MINIMUM_SAFE_CRITICAL_PATH' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'MINIMUM_SAFE_DIMENSION' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+          grep -q 'FAIL_CLOSED_UNTIL_RECONCILED' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
           grep -q 'NON_RETROACTIVE' docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
