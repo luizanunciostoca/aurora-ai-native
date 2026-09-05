@@ -10,6 +10,7 @@ import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids'
 import type { W07DeviceReceiptEvidenceIngressPort } from '../../device-receipt-ingress/types.js';
 import type { VoiceCandidateIntakePort } from '../../gateway-auth/voice-candidate-network.js';
 import type { AuthenticatedGatewayBootstrapPrincipal } from '../../gateway-auth/gateway-bootstrap.js';
+import type { W14LocalGovernedDeviceDispatchPort } from '../governed-device-dispatch.js';
 import { W15JLocalPhysicalHost } from '../local-physical-host.js';
 
 const NOW = 1_788_631_000_000;
@@ -145,6 +146,49 @@ test('starts loopback gateway and bootstrap listeners and opens W14 session from
   } finally {
     await host.stop();
   }
+});
+
+test('builds the W07 voice intake only after the exact host-owned W14 dispatch port exists', () => {
+  let captured: W14LocalGovernedDeviceDispatchPort | null = null;
+  const host = new W15JLocalPhysicalHost(
+    {
+      databaseUrl: 'postgresql://unused.invalid/aurora_physical',
+      gatewayPort: 0,
+      bootstrapPort: 0,
+      clock: () => NOW,
+    },
+    {
+      createVoiceIntake: (dispatch) => {
+        captured = dispatch;
+        return voiceIntake;
+      },
+      receiptEvidenceIngress,
+    },
+  );
+
+  assert.strictEqual(captured, host.governedDeviceDispatch);
+  assert.equal(host.governedDeviceDispatch instanceof Object, true);
+});
+
+test('voice intake factory failure aborts host construction fail closed', () => {
+  assert.throws(
+    () =>
+      new W15JLocalPhysicalHost(
+        {
+          databaseUrl: 'postgresql://unused.invalid/aurora_physical',
+          gatewayPort: 0,
+          bootstrapPort: 0,
+          clock: () => NOW,
+        },
+        {
+          createVoiceIntake: () => {
+            throw new Error('W07 unavailable');
+          },
+          receiptEvidenceIngress,
+        },
+      ),
+    /voice intake factory failed/u,
+  );
 });
 
 test('fails closed on invalid ports double start and expired server-side principal', async () => {
