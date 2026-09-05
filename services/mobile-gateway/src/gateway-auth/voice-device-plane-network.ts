@@ -4,9 +4,9 @@ import {
   type GatewayDevicePlaneHandleInput,
   type GatewayDevicePlaneResponse,
 } from './device-plane-network.js';
-import {
+import type {
   VoiceCandidateNetworkBoundary,
-  type VoiceCandidateSocketContext,
+  VoiceCandidateSocketContext,
 } from './voice-candidate-network.js';
 
 export const VOICE_CANDIDATE_DEVICE_ROUTE = '/v1/device/voice/candidates/evaluate' as const;
