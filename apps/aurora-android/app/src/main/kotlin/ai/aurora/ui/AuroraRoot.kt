@@ -39,6 +39,8 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
     val context = LocalContext.current
     val activity = context as? FragmentActivity
     val hapticsController = remember(context) { AuroraHapticsController(context) }
+    val checkpointStore = remember(context) { UiNavigationCheckpointStore(context) }
+    var navigationRestored by remember { mutableStateOf(false) }
     var stepUpState by remember { mutableStateOf(StepUpUiState()) }
 
     val voiceController = remember(context, viewModel) {
@@ -97,6 +99,30 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
         onDispose {
             voiceController.close()
             outputController.close()
+        }
+    }
+
+    LaunchedEffect(state.onboardingComplete) {
+        if (state.onboardingComplete && !navigationRestored) {
+            val checkpoint = checkpointStore.load()
+            if (checkpoint.surface == UiSurface.WORKSPACE && checkpoint.workspaceOpen) {
+                viewModel.onIntent(AuroraUiIntent.OpenDynamicView(checkpoint.selectedView))
+            } else {
+                viewModel.onIntent(AuroraUiIntent.OpenSurface(checkpoint.surface))
+            }
+            navigationRestored = true
+        }
+    }
+
+    LaunchedEffect(
+        navigationRestored,
+        state.onboardingComplete,
+        state.surface,
+        state.workspaceOpen,
+        state.selectedView,
+    ) {
+        if (navigationRestored && state.onboardingComplete) {
+            checkpointStore.save(state)
         }
     }
 
