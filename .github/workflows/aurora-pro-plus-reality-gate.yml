@@ -101,7 +101,7 @@ jobs:
         env:
           AURORA_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           AURORA_ATTESTATION_MAX_AGE_MINUTES: 1440
-        run: node tools/copilot/evaluate-pro-plus-reality.mjs /tmp/aurora-pro-plus-probes 4 | tee /tmp/aurora-pro-plus-attestation.json
+        run: node tools/copilot/evaluate-pro-plus-reality.mjs /tmp/aurora-pro-plus-probes 3 | tee /tmp/aurora-pro-plus-attestation.json
       - name: Upload runtime attestation candidate
         uses: actions/upload-artifact@v4
         with:
