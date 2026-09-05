@@ -59,9 +59,7 @@ android {
     }
 
     testOptions {
-        unitTests.all {
-            it.useJUnit()
-        }
+        unitTests.all { it.useJUnit() }
     }
 }
 
@@ -72,6 +70,7 @@ dependencies {
     androidTestImplementation(composeBom)
 
     implementation("androidx.activity:activity-compose:1.12.4")
+    implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.runtime:runtime")
