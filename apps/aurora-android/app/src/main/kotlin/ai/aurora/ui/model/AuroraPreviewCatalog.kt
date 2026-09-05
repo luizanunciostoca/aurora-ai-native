@@ -41,6 +41,7 @@ object AuroraPreviewCatalog {
         }
         val isLiveDeviceSurface = type in setOf(
             WorkspaceViewType.DEVICES,
+            WorkspaceViewType.SYSTEM_HEALTH,
             WorkspaceViewType.DEVICE_CONTROL,
             WorkspaceViewType.SECURITY_TRUST,
         )
@@ -296,13 +297,38 @@ object AuroraPreviewCatalog {
         AuroraUiComponent.Status("Credential possession", "≠ authority", "Conexão saudável não autoriza ação."),
     )
 
-    private fun devices(device: DeviceUiState): List<AuroraUiComponent> = listOf(
-        liveNotice("Estado local do tablet é LIVE; registration/session remota entra quando houver provisioning DP5."),
-        AuroraUiComponent.Status("Environment", device.environment, "Build ${device.buildSha}", SemanticTone.INFO),
-        AuroraUiComponent.Status("Presence", device.visibility, "Process generation ${device.processGeneration}", SemanticTone.VERIFIED),
-        AuroraUiComponent.Status("Local service", device.localServicePhase, "Runtime W15 já presente no APK."),
-        AuroraUiComponent.Status("Device plane", device.registrationStatus, "Adapter W15-J: ${if (device.devicePlaneAdapterAvailable) "AVAILABLE" else "UNAVAILABLE"}"),
-    )
+    private fun devices(device: DeviceUiState): List<AuroraUiComponent> {
+        val runtime = device.runtimeIntegration
+        return listOf(
+            liveNotice("Estado local do tablet e read models W04/W14/W15 são LIVE; authority/execution continuam fora da UI."),
+            AuroraUiComponent.Status("Environment", device.environment, "Build ${device.buildSha}", SemanticTone.INFO),
+            AuroraUiComponent.Status("Presence", device.visibility, "Process generation ${device.processGeneration}", SemanticTone.VERIFIED),
+            AuroraUiComponent.Status("Local service", device.localServicePhase, "Runtime W15 presente no APK."),
+            AuroraUiComponent.Status("Device plane", device.registrationStatus, "Adapter W15-J: ${if (device.devicePlaneAdapterAvailable) "AVAILABLE" else "UNAVAILABLE"}"),
+            AuroraUiComponent.Status(
+                "Governed voice",
+                runtime.governedVoiceStatus,
+                "W04 ${runtime.w04RegistryVersion} · W15-G ${runtime.w15gVocabularyVersion} · ${runtime.currentDeviceCapabilities} DEVICE capabilities · ${runtime.deterministicVoiceCommands} deterministic commands",
+                if (runtime.governedVoiceStatus == "READY") SemanticTone.VERIFIED else SemanticTone.APPROVAL,
+            ),
+            AuroraUiComponent.Status(
+                "W07 voice ingress",
+                runtime.w07VoiceIngressStatus,
+                "Ausência de ingress mantém o fast path fail-closed em Conversation; UI não executa candidato.",
+                SemanticTone.APPROVAL,
+            ),
+            AuroraUiComponent.ListBlock(
+                "Offline queue · read-only",
+                listOf(
+                    "Status ${runtime.offlineQueueStatus}",
+                    "Total ${runtime.offlineQueueTotal}",
+                    "Deferred ${runtime.offlineQueueDeferred}",
+                    "Reconciliation required ${runtime.offlineQueueReconciliationRequired}",
+                ),
+                if (runtime.offlineQueueReconciliationRequired > 0) SemanticTone.CRITICAL else SemanticTone.INFO,
+            ),
+        )
+    }
 
     private fun workflows(): List<AuroraUiComponent> = listOf(
         previewNotice("WorkflowsProjection ainda não conectado."),
@@ -357,13 +383,28 @@ object AuroraPreviewCatalog {
         AuroraUiComponent.ListBlock("Incident detail", listOf("Severity", "Affected capability", "Owner", "Mitigation", "Timeline")),
     )
 
-    private fun systemHealth(device: DeviceUiState, connectivity: ConnectivityUiState): List<AuroraUiComponent> = listOf(
-        liveNotice("Connectivity e runtime local são LIVE; SLO/evidence completeness entram com W17."),
-        AuroraUiComponent.Status("Network", connectivity.label, "Estado observado localmente", if (connectivity.online) SemanticTone.VERIFIED else SemanticTone.CRITICAL),
-        AuroraUiComponent.Status("Tablet runtime", device.visibility, "Service ${device.localServicePhase}", SemanticTone.INFO),
-        AuroraUiComponent.Metric("Evidence completeness", "—", "W17 projection futura"),
-        AuroraUiComponent.Metric("p95 latency", "—", "Nenhum SLO inventado"),
-    )
+    private fun systemHealth(device: DeviceUiState, connectivity: ConnectivityUiState): List<AuroraUiComponent> {
+        val runtime = device.runtimeIntegration
+        return listOf(
+            liveNotice("Connectivity, runtime Android e read models W04/W15 são LIVE; SLO/evidence completeness entram somente com W17."),
+            AuroraUiComponent.Status("Network", connectivity.label, "Estado observado localmente", if (connectivity.online) SemanticTone.VERIFIED else SemanticTone.CRITICAL),
+            AuroraUiComponent.Status("Tablet runtime", device.visibility, "Service ${device.localServicePhase}", SemanticTone.INFO),
+            AuroraUiComponent.Status(
+                "Voice routing",
+                runtime.governedVoiceStatus,
+                "W04 ${runtime.w04RegistryVersion} · W15-G ${runtime.w15gVocabularyVersion} · W07 ${runtime.w07VoiceIngressStatus}",
+                if (runtime.governedVoiceStatus == "READY") SemanticTone.VERIFIED else SemanticTone.APPROVAL,
+            ),
+            AuroraUiComponent.Status(
+                "Offline queue",
+                runtime.offlineQueueStatus,
+                "${runtime.offlineQueueTotal} total · ${runtime.offlineQueueDeferred} deferred · ${runtime.offlineQueueReconciliationRequired} reconciliation required",
+                if (runtime.offlineQueueReconciliationRequired > 0) SemanticTone.CRITICAL else SemanticTone.INFO,
+            ),
+            AuroraUiComponent.Metric("Evidence completeness", "—", "W17 projection futura"),
+            AuroraUiComponent.Metric("p95 latency", "—", "Nenhum SLO inventado"),
+        )
+    }
 
     private fun integrations(): List<AuroraUiComponent> = listOf(
         previewNotice("IntegrationProjection ainda não conectado."),
@@ -378,11 +419,35 @@ object AuroraPreviewCatalog {
         AuroraUiComponent.ListBlock("Trust center", listOf("Policy version", "Kill switch", "Suspicious state", "Security evidence"), SemanticTone.CRITICAL),
     )
 
-    private fun deviceControl(device: DeviceUiState): List<AuroraUiComponent> = listOf(
-        liveNotice("Runtime local disponível; ações reais só aparecem quando capability/authority bindings forem atuais."),
-        AuroraUiComponent.Status("Device adapter", if (device.devicePlaneAdapterAvailable) "AVAILABLE" else "UNAVAILABLE", "Availability não autoriza execução."),
-        AuroraUiComponent.ListBlock("Preconditions", listOf("Session current", "Capability fresh", "Android permission", "W07 authority", "Evidence strategy")),
-    )
+    private fun deviceControl(device: DeviceUiState): List<AuroraUiComponent> {
+        val runtime = device.runtimeIntegration
+        return listOf(
+            liveNotice("Runtime/read models locais disponíveis; qualquer side effect continua atrás de W07/W15-F e revalidação atual."),
+            AuroraUiComponent.Status("Device adapter", if (device.devicePlaneAdapterAvailable) "AVAILABLE" else "UNAVAILABLE", "Availability não autoriza execução."),
+            AuroraUiComponent.Status(
+                "Current DEVICE capabilities",
+                runtime.currentDeviceCapabilities.toString(),
+                "Snapshot W04/W15-C usado apenas como availability/precondition; não é permission nem authority.",
+                SemanticTone.INFO,
+            ),
+            AuroraUiComponent.Status(
+                "W07 voice ingress",
+                runtime.w07VoiceIngressStatus,
+                "NOT_COMPOSED mantém comandos de voz fora da execução.",
+                SemanticTone.APPROVAL,
+            ),
+            AuroraUiComponent.ListBlock(
+                "Offline queue · no blind retry",
+                listOf(
+                    "${runtime.offlineQueueDeferred} deferred",
+                    "${runtime.offlineQueueReconciliationRequired} reconciliation required",
+                    "UI não chama drain/retry",
+                ),
+                if (runtime.offlineQueueReconciliationRequired > 0) SemanticTone.CRITICAL else SemanticTone.INFO,
+            ),
+            AuroraUiComponent.ListBlock("Preconditions", listOf("Session current", "Capability fresh", "Android permission", "W07 authority", "Evidence strategy")),
+        )
+    }
 
     private fun workflowDetail(): List<AuroraUiComponent> = listOf(
         previewNotice("WorkflowDetailProjection ainda não conectado."),
