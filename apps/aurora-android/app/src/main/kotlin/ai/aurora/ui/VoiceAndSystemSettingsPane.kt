@@ -45,6 +45,7 @@ internal fun VoiceAndSystemSettingsPane(
 ) {
     val context = LocalContext.current
     val microphoneGranted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    val onboardingReplayController = OnboardingReplayController(context)
 
     Column(
         modifier = Modifier
@@ -228,6 +229,17 @@ internal fun VoiceAndSystemSettingsPane(
                 "O adapter W15-J está presente, mas a sessão remota ainda depende de provisioning e evidence física. Voice continua sendo apenas uma interface para o mesmo pipeline governado.",
                 SemanticTone.INFO,
             )
+        }
+
+        SettingsCard("Prototype test controls") {
+            LuminousCallout(
+                "NON-DESTRUCTIVE",
+                "Reexecutar onboarding altera somente o flag local de first-run. Chave W15-B, session metadata e preferências de voz não são apagadas.",
+                SemanticTone.INFO,
+            )
+            OutlinedButton(
+                onClick = { onboardingReplayController.replayWithoutResettingDeviceTrust() },
+            ) { Text("Reexecutar onboarding") }
         }
 
         SettingsCard("About / Environment") {
