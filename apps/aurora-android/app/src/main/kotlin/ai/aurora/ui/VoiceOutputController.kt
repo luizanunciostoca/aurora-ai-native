@@ -24,6 +24,7 @@ class VoiceOutputController(
     private var initialized = false
     private var currentRequestId: Long? = null
     private var focusRequest: AudioFocusRequest? = null
+    private val registryRegistration = VoiceSessionRegistry.register { stop() }
 
     init {
         tts = TextToSpeech(appContext) { status ->
@@ -139,6 +140,7 @@ class VoiceOutputController(
     }
 
     override fun close() {
+        registryRegistration.close()
         stop()
         initialized = false
         runCatching { tts?.shutdown() }
