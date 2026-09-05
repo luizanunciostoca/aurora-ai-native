@@ -34,6 +34,11 @@ import ai.aurora.ui.model.UiSurface
 import ai.aurora.ui.model.VoiceOutputState
 import kotlinx.coroutines.delay
 
+private enum class VoiceCapturePurpose {
+    CONVERSATION,
+    DIAGNOSTIC,
+}
+
 @Composable
 fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
@@ -46,6 +51,8 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
     var navigationRestored by remember { mutableStateOf(false) }
     var stepUpState by remember { mutableStateOf(StepUpUiState()) }
     var deviceKeyState by remember { mutableStateOf(DeviceKeyUiState()) }
+    var voiceDiagnosticState by remember { mutableStateOf(VoiceDiagnosticUiState()) }
+    var pendingCapturePurpose by remember { mutableStateOf(VoiceCapturePurpose.CONVERSATION) }
 
     val voiceController = remember(context, viewModel) {
         VoiceCaptureController(
@@ -54,6 +61,37 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
             onPartial = { viewModel.onIntent(AuroraUiIntent.VoicePartial(it)) },
             onResult = { viewModel.onIntent(AuroraUiIntent.VoiceResult(it)) },
             onError = { viewModel.onIntent(AuroraUiIntent.VoiceError(it)) },
+        )
+    }
+    val voiceDiagnosticController = remember(context) {
+        VoiceCaptureController(
+            context = context,
+            onListening = {
+                voiceDiagnosticState = VoiceDiagnosticUiState(
+                    status = VoiceDiagnosticStatus.LISTENING,
+                    detail = "Microfone ativo somente para diagnóstico local.",
+                )
+            },
+            onPartial = { transcript ->
+                voiceDiagnosticState = voiceDiagnosticState.copy(
+                    status = VoiceDiagnosticStatus.LISTENING,
+                    partialTranscript = transcript.take(2_000),
+                    detail = "Reconhecimento parcial recebido; nenhuma intenção foi criada.",
+                )
+            },
+            onResult = { transcript ->
+                voiceDiagnosticState = VoiceDiagnosticUiState(
+                    status = VoiceDiagnosticStatus.SUCCEEDED,
+                    transcript = transcript.take(2_000),
+                    detail = "Teste concluído. O transcript permaneceu fora da Conversation.",
+                )
+            },
+            onError = { message ->
+                voiceDiagnosticState = VoiceDiagnosticUiState(
+                    status = VoiceDiagnosticStatus.ERROR,
+                    detail = message,
+                )
+            },
         )
     }
     val outputController = remember(context, viewModel) {
@@ -99,9 +137,10 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
         }
     }
 
-    DisposableEffect(voiceController, outputController) {
+    DisposableEffect(voiceController, voiceDiagnosticController, outputController) {
         onDispose {
             voiceController.close()
+            voiceDiagnosticController.close()
             outputController.close()
         }
     }
@@ -170,47 +209,91 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
         if (state.voice.lastError != null) hapticsController.warning(state.settings.hapticsEnabled)
     }
 
+    LaunchedEffect(voiceDiagnosticState.status) {
+        when (voiceDiagnosticState.status) {
+            VoiceDiagnosticStatus.LISTENING -> hapticsController.listening(state.settings.hapticsEnabled)
+            VoiceDiagnosticStatus.SUCCEEDED -> hapticsController.acknowledged(state.settings.hapticsEnabled)
+            VoiceDiagnosticStatus.ERROR -> hapticsController.warning(state.settings.hapticsEnabled)
+            VoiceDiagnosticStatus.IDLE -> Unit
+        }
+    }
+
+    val captureConfig = {
+        VoiceRecognitionConfig(
+            languageTag = state.settings.voiceLanguageTag,
+            preferOffline = state.settings.preferOfflineRecognition,
+        )
+    }
+
+    fun startGrantedCapture(purpose: VoiceCapturePurpose) {
+        when (purpose) {
+            VoiceCapturePurpose.CONVERSATION -> {
+                viewModel.onIntent(AuroraUiIntent.StartVoice)
+                voiceController.start(captureConfig())
+            }
+            VoiceCapturePurpose.DIAGNOSTIC -> {
+                voiceDiagnosticState = VoiceDiagnosticUiState(
+                    status = VoiceDiagnosticStatus.IDLE,
+                    detail = "Preparando recognizer para teste local.",
+                )
+                voiceDiagnosticController.start(captureConfig())
+            }
+        }
+    }
+
     val microphoneLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
         if (granted) {
-            viewModel.onIntent(AuroraUiIntent.StartVoice)
-            voiceController.start(
-                VoiceRecognitionConfig(
-                    languageTag = state.settings.voiceLanguageTag,
-                    preferOffline = state.settings.preferOfflineRecognition,
-                ),
-            )
+            startGrantedCapture(pendingCapturePurpose)
         } else {
-            viewModel.onIntent(AuroraUiIntent.VoiceError("Permissão de microfone negada. Você pode continuar usando texto."))
+            when (pendingCapturePurpose) {
+                VoiceCapturePurpose.CONVERSATION ->
+                    viewModel.onIntent(AuroraUiIntent.VoiceError("Permissão de microfone negada. Você pode continuar usando texto."))
+                VoiceCapturePurpose.DIAGNOSTIC ->
+                    voiceDiagnosticState = VoiceDiagnosticUiState(
+                        status = VoiceDiagnosticStatus.ERROR,
+                        detail = "Permissão de microfone negada. Nenhuma intenção foi criada.",
+                    )
+            }
         }
     }
 
-    val startVoice: () -> Unit = {
+    val startCapture: (VoiceCapturePurpose) -> Unit = { purpose ->
         when {
-            state.settings.privacyMode ->
-                viewModel.onIntent(AuroraUiIntent.VoiceError("Voice está bloqueado enquanto o modo de privacidade estiver ativo."))
-            state.voice.outputState == VoiceOutputState.SPEAKING && !state.settings.bargeInEnabled ->
-                viewModel.onIntent(AuroraUiIntent.VoiceError("A Aurora está falando. Ative barge-in ou pare a saída de voz antes de iniciar o microfone."))
+            state.settings.privacyMode -> {
+                val message = "Voice está bloqueado enquanto o modo de privacidade estiver ativo."
+                if (purpose == VoiceCapturePurpose.CONVERSATION) {
+                    viewModel.onIntent(AuroraUiIntent.VoiceError(message))
+                } else {
+                    voiceDiagnosticState = VoiceDiagnosticUiState(VoiceDiagnosticStatus.ERROR, detail = message)
+                }
+            }
+            state.voice.outputState == VoiceOutputState.SPEAKING && !state.settings.bargeInEnabled -> {
+                val message = "A Aurora está falando. Ative barge-in ou pare a saída de voz antes de iniciar o microfone."
+                if (purpose == VoiceCapturePurpose.CONVERSATION) {
+                    viewModel.onIntent(AuroraUiIntent.VoiceError(message))
+                } else {
+                    voiceDiagnosticState = VoiceDiagnosticUiState(VoiceDiagnosticStatus.ERROR, detail = message)
+                }
+            }
             else -> {
                 if (state.voice.outputState == VoiceOutputState.SPEAKING && state.settings.bargeInEnabled) {
                     outputController.stop()
                     viewModel.onIntent(AuroraUiIntent.StopVoiceOutput)
                 }
+                pendingCapturePurpose = purpose
                 if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    viewModel.onIntent(AuroraUiIntent.StartVoice)
-                    voiceController.start(
-                        VoiceRecognitionConfig(
-                            languageTag = state.settings.voiceLanguageTag,
-                            preferOffline = state.settings.preferOfflineRecognition,
-                        ),
-                    )
+                    startGrantedCapture(purpose)
                 } else {
                     microphoneLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }
             }
         }
     }
+
+    val startConversationVoice: () -> Unit = { startCapture(VoiceCapturePurpose.CONVERSATION) }
+    val startDiagnosticVoice: () -> Unit = { startCapture(VoiceCapturePurpose.DIAGNOSTIC) }
 
     val stopVoiceOutput: () -> Unit = {
         outputController.stop()
@@ -257,8 +340,9 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
                     OnboardingV2Flow(
                         state = state,
                         deviceKeyState = deviceKeyState,
+                        voiceDiagnosticState = voiceDiagnosticState,
                         onIntent = viewModel::onIntent,
-                        onVoice = startVoice,
+                        onVoiceTest = startDiagnosticVoice,
                         onPrepareDeviceKey = prepareDeviceKey,
                     )
                 } else {
@@ -267,7 +351,8 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
                         stepUpState = stepUpState,
                         deviceKeyState = deviceKeyState,
                         onIntent = viewModel::onIntent,
-                        onVoice = startVoice,
+                        onVoiceConversation = startConversationVoice,
+                        onVoiceTest = startDiagnosticVoice,
                         onStopVoiceOutput = stopVoiceOutput,
                         onStepUp = startStepUp,
                         onPrepareDeviceKey = prepareDeviceKey,
@@ -284,7 +369,8 @@ private fun AuroraShell(
     stepUpState: StepUpUiState,
     deviceKeyState: DeviceKeyUiState,
     onIntent: (AuroraUiIntent) -> Unit,
-    onVoice: () -> Unit,
+    onVoiceConversation: () -> Unit,
+    onVoiceTest: () -> Unit,
     onStopVoiceOutput: () -> Unit,
     onStepUp: () -> Unit,
     onPrepareDeviceKey: () -> Unit,
@@ -301,7 +387,7 @@ private fun AuroraShell(
                     AccessibleConversationPane(
                         state = state,
                         onIntent = onIntent,
-                        onVoice = onVoice,
+                        onVoice = onVoiceConversation,
                         modifier = Modifier.width(conversationWidth).fillMaxHeight(),
                     )
                     VerticalRule()
@@ -311,7 +397,8 @@ private fun AuroraShell(
                             stepUpState,
                             deviceKeyState,
                             onIntent,
-                            onVoice,
+                            onVoiceConversation,
+                            onVoiceTest,
                             onStopVoiceOutput,
                             onStepUp,
                             onPrepareDeviceKey,
@@ -329,14 +416,15 @@ private fun AuroraShell(
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (state.surface in setOf(UiSurface.PRESENCE, UiSurface.CONVERSATION)) {
-                        AccessibleConversationPane(state, onIntent, onVoice, Modifier.fillMaxSize())
+                        AccessibleConversationPane(state, onIntent, onVoiceConversation, Modifier.fillMaxSize())
                     } else {
                         MainSurfaceContent(
                             state,
                             stepUpState,
                             deviceKeyState,
                             onIntent,
-                            onVoice,
+                            onVoiceConversation,
+                            onVoiceTest,
                             onStopVoiceOutput,
                             onStepUp,
                             onPrepareDeviceKey,
@@ -355,7 +443,8 @@ private fun MainSurfaceContent(
     stepUpState: StepUpUiState,
     deviceKeyState: DeviceKeyUiState,
     onIntent: (AuroraUiIntent) -> Unit,
-    onVoice: () -> Unit,
+    onVoiceConversation: () -> Unit,
+    onVoiceTest: () -> Unit,
     onStopVoiceOutput: () -> Unit,
     onStepUp: () -> Unit,
     onPrepareDeviceKey: () -> Unit,
@@ -363,7 +452,7 @@ private fun MainSurfaceContent(
     when (state.surface) {
         UiSurface.PRESENCE,
         UiSurface.CONVERSATION,
-        -> PresenceFocus(state, onIntent, onVoice)
+        -> PresenceFocus(state, onIntent, onVoiceConversation)
         UiSurface.WORKSPACE -> WorkspacePane(state, onIntent)
         UiSurface.HUMAN_CONTROL -> HumanControlV2Pane(state, stepUpState, onIntent, onStepUp)
         UiSurface.EVIDENCE -> EvidenceV2Pane(state, stepUpState, deviceKeyState, onIntent)
@@ -371,7 +460,7 @@ private fun MainSurfaceContent(
             state = state,
             deviceKeyState = deviceKeyState,
             onIntent = onIntent,
-            onVoice = onVoice,
+            onVoice = onVoiceTest,
             onStopVoiceOutput = onStopVoiceOutput,
             onPrepareDeviceKey = onPrepareDeviceKey,
         )
