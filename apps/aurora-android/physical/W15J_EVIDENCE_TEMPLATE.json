@@ -31,30 +31,10 @@
     "finalizedAtUtc": "REQUIRED"
   },
   "recordContract": {
-    "scenarioStatusValues": [
-      "NOT_RUN",
-      "PASS",
-      "FAIL",
-      "BLOCKED"
-    ],
-    "threatStatusValues": [
-      "NOT_RUN",
-      "PASS",
-      "FAIL",
-      "BLOCKED",
-      "HANDED_OFF"
-    ],
-    "resourceStatusValues": [
-      "NOT_OBSERVED",
-      "OBSERVED",
-      "BLOCKED"
-    ],
-    "riskGateStatusValues": [
-      "NOT_EVALUATED",
-      "PASS",
-      "FAIL",
-      "BLOCKED"
-    ],
+    "scenarioStatusValues": ["NOT_RUN", "PASS", "FAIL", "BLOCKED"],
+    "threatStatusValues": ["NOT_RUN", "PASS", "FAIL", "BLOCKED", "HANDED_OFF"],
+    "resourceStatusValues": ["NOT_OBSERVED", "OBSERVED", "BLOCKED"],
+    "riskGateStatusValues": ["NOT_EVALUATED", "PASS", "FAIL", "BLOCKED"],
     "passRule": "Every mandatory scenario with PASS must have observedAtUtc and at least one evidence reference. FAIL/BLOCKED must also identify evidence or a blocker reference. DP5 cannot close while any mandatory scenario is NOT_RUN/FAIL/BLOCKED."
   },
   "scenarios": {
