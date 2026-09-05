@@ -93,6 +93,57 @@ test('implements the existing W14 authenticator contract and consumes credential
   assert.equal(broker.verify(issued.value.credential, now + 2), null);
 });
 
+test('binds bootstrap credentials to exact session, actor kind and correlation context', () => {
+  const broker = new TransientGatewayBootstrapBroker({}, entropy('F'));
+  const manager = new GatewaySessionManager(broker);
+
+  const sessionBound = broker.issue(principal(), now);
+  assert.equal(sessionBound.ok, true);
+  if (!sessionBound.ok) throw new Error('bootstrap grant was unexpectedly rejected');
+  const sessionMismatch = manager.openSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: `${sessionBound.value.gatewaySessionId}-other`,
+    credential: sessionBound.value.credential,
+    tenantId: sessionBound.value.tenantId,
+    actor: sessionBound.value.actor,
+    correlation: { correlationId: sessionBound.value.correlationId },
+    nowMs: now + 1,
+  });
+  assert.equal(sessionMismatch.ok ? '' : sessionMismatch.error.code, 'SESSION_CONFLICT');
+  assert.equal(broker.verify(sessionBound.value.credential, now + 2), null);
+
+  const kindBound = broker.issue(principal(), now + 3);
+  assert.equal(kindBound.ok, true);
+  if (!kindBound.ok) throw new Error('bootstrap grant was unexpectedly rejected');
+  const kindMismatch = manager.openSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: kindBound.value.gatewaySessionId,
+    credential: kindBound.value.credential,
+    tenantId: kindBound.value.tenantId,
+    actor: { kind: 'SERVICE', identityId: kindBound.value.actor.identityId },
+    correlation: { correlationId: kindBound.value.correlationId },
+    nowMs: now + 4,
+  });
+  assert.equal(kindMismatch.ok ? '' : kindMismatch.error.code, 'ACTOR_MISMATCH');
+
+  const correlationBound = broker.issue(principal(), now + 5);
+  assert.equal(correlationBound.ok, true);
+  if (!correlationBound.ok) throw new Error('bootstrap grant was unexpectedly rejected');
+  const correlationMismatch = manager.openSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: correlationBound.value.gatewaySessionId,
+    credential: correlationBound.value.credential,
+    tenantId: correlationBound.value.tenantId,
+    actor: correlationBound.value.actor,
+    correlation: { correlationId: 'correlation:other' as CorrelationId },
+    nowMs: now + 6,
+  });
+  assert.equal(
+    correlationMismatch.ok ? '' : correlationMismatch.error.code,
+    'CORRELATION_MISMATCH',
+  );
+});
+
 test('rejects invalid, expired and stale upstream authentication without issuing a credential', () => {
   const broker = new TransientGatewayBootstrapBroker({ maxPrincipalAgeMs: 30_000 }, entropy('C'));
 
