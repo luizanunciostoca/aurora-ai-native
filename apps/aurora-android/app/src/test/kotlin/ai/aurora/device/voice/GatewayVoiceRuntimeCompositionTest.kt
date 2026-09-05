@@ -90,6 +90,39 @@ class GatewayVoiceRuntimeCompositionTest {
     }
 
     @Test
+    fun `known active binding reaches connector with exact ids and registration version`() {
+        val binding = localGatewayBindingFrom(boundState()) as LocalGatewayBinding.Bound
+        var observedDeviceId: String? = null
+        var observedSessionId: String? = null
+        var observedRegistrationVersion: Int? = null
+        var observedGrant: GatewayBootstrapGrant? = null
+        val composition =
+            GatewayVoiceRuntimeComposition(
+                grantSource = GatewayBootstrapGrantSource { deviceId, deviceSessionId ->
+                    observedDeviceId = deviceId
+                    observedSessionId = deviceSessionId
+                    GatewayBootstrapClientResult.Success(grant())
+                },
+                bindingProvider = { binding },
+                connector = GatewayVoiceRuntimeConnector { value, registrationVersion ->
+                    observedGrant = value
+                    observedRegistrationVersion = registrationVersion
+                    true
+                },
+                clearRuntime = {},
+            )
+
+        assertTrue(composition.compose() is GatewayVoiceRuntimeCompositionResult.Composed)
+        assertEquals(DEVICE_ID, observedDeviceId)
+        assertEquals(DEVICE_SESSION_ID, observedSessionId)
+        assertEquals(REGISTRATION_VERSION, observedRegistrationVersion)
+        assertEquals(TENANT_ID, observedGrant?.tenantId)
+        assertFalse(observedGrant?.authorizesExecution ?: true)
+        assertFalse(observedGrant?.provesExecutionSuccess ?: true)
+        assertFalse(observedGrant?.retryAuthorized ?: true)
+    }
+
+    @Test
     fun `partial or inactive local state fails before bootstrap transport`() {
         var sourceCalls = 0
         val partial =
