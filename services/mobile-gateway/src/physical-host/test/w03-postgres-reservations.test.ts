@@ -176,7 +176,10 @@ test('receipt completion fails closed for a foreign durable reference without to
 test('malformed input and database failure are non-authoritative fail-closed results', () => {
   const malformedSql = new ScriptedSql(() => '');
   const adapter = new W03PostgresDeviceReservationAdapter(malformedSql);
-  const malformed = deliveryReserve(adapter, deliveryRequest({ idempotencyKey: 'not allowed space' }));
+  const malformed = deliveryReserve(
+    adapter,
+    deliveryRequest({ idempotencyKey: 'not allowed space' }),
+  );
   assert.deepEqual(malformed, {
     ok: false,
     code: 'MALFORMED',
@@ -211,20 +214,17 @@ test('psql executor keeps database URL out of argv and sanitizes execution failu
       return 'ok';
     },
   );
-  assert.equal(
-    executor.query({ sql: 'SELECT 1', variables: { tenant_id: TENANT } }),
-    'ok',
-  );
+  assert.equal(executor.query({ sql: 'SELECT 1', variables: { tenant_id: TENANT } }), 'ok');
   assert.equal(observedDatabase, databaseUrl);
-  assert.equal(observedArgs.some((value) => value.includes(databaseUrl)), false);
+  assert.equal(
+    observedArgs.some((value) => value.includes(databaseUrl)),
+    false,
+  );
   assert.equal(observedArgs.includes('tenant_id=' + TENANT), true);
 
-  const failing = new PsqlW03SyncExecutor(
-    { databaseUrl },
-    () => {
-      throw new Error(`do not leak ${databaseUrl}`);
-    },
-  );
+  const failing = new PsqlW03SyncExecutor({ databaseUrl }, () => {
+    throw new Error(`do not leak ${databaseUrl}`);
+  });
   assert.throws(
     () => failing.query({ sql: 'SELECT 1', variables: {} }),
     (error: unknown) =>

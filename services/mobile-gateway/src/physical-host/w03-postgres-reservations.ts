@@ -187,7 +187,12 @@ function validNow(value: unknown): value is number {
 }
 
 function validFingerprint(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= 4096 && !/[\r\n\0]/u.test(value);
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 4096 &&
+    !/[\r\n\0]/u.test(value)
+  );
 }
 
 function parseReservationRow(output: string): ReservationRow | null {
@@ -300,6 +305,10 @@ export class W03PostgresDeviceReservationAdapter
     this.#sql = sql;
   }
 
+  reserve(
+    request: W03DurableDeliveryReservationRequest,
+  ): W03DurableDeliveryReservationResult;
+  reserve(request: W03ReceiptIngressReservationRequest): W03ReceiptIngressReservationResult;
   reserve(
     request: W03DurableDeliveryReservationRequest | W03ReceiptIngressReservationRequest,
   ): W03DurableDeliveryReservationResult | W03ReceiptIngressReservationResult {
