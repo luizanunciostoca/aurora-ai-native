@@ -237,10 +237,17 @@ else
     fail "finalize gateway version does not match preflight"
   grep -Fxq "apk_path_sha256=$APK_SHA256" "$OUTPUT_DIR/preflight-metadata.txt" || \
     fail "finalize APK hash does not match preflight"
+  grep -Fxq "apk_variant=$APK_VARIANT" "$OUTPUT_DIR/preflight-metadata.txt" || \
+    fail "finalize APK variant does not match preflight"
+  grep -Fxq "gateway_port=$GATEWAY_PORT" "$OUTPUT_DIR/preflight-metadata.txt" || \
+    fail "finalize gateway port does not match preflight"
 
   capture_required adb-reverse-list-before-finalize.txt "$ADB_BIN" -s "$SERIAL" reverse --list
   grep -q "tcp:$GATEWAY_PORT tcp:$GATEWAY_PORT" "$OUTPUT_DIR/adb-reverse-list-before-finalize.txt" || \
     fail "expected governed adb reverse mapping is missing before finalize"
+  # From this point the mapping is proven to belong to the same governed evidence window.
+  # If finalize aborts, the EXIT trap must remove it.
+  REVERSE_CONFIGURED_BY_SCRIPT=1
 
   capture_optional battery-after.txt adb_shell dumpsys battery
   capture_optional meminfo-after.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
