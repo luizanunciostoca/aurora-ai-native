@@ -79,6 +79,43 @@ enum class ConversationRole {
     SYSTEM,
 }
 
+enum class VoiceEngineAvailability {
+    UNKNOWN,
+    AVAILABLE,
+    UNAVAILABLE,
+}
+
+enum class VoiceOutputState {
+    IDLE,
+    SPEAKING,
+    ERROR,
+}
+
+data class VoiceSpeakRequest(
+    val id: Long,
+    val text: String,
+) {
+    init {
+        require(id > 0)
+        require(text.isNotBlank())
+        require(text.length <= 4_000)
+    }
+}
+
+data class VoiceUiState(
+    val inputAvailability: VoiceEngineAvailability = VoiceEngineAvailability.UNKNOWN,
+    val inputEngineLabel: String = "Verificando reconhecimento",
+    val outputAvailability: VoiceEngineAvailability = VoiceEngineAvailability.UNKNOWN,
+    val outputEngineLabel: String = "Inicializando síntese de voz",
+    val audioRouteLabel: String = "Sistema",
+    val listening: Boolean = false,
+    val partialTranscript: String = "",
+    val lastTranscript: String = "",
+    val outputState: VoiceOutputState = VoiceOutputState.IDLE,
+    val lastError: String? = null,
+    val pendingSpeak: VoiceSpeakRequest? = null,
+)
+
 enum class WorkspaceViewType(
     val displayTitle: String,
     val domain: String,
@@ -237,7 +274,28 @@ data class AuroraSettings(
     val hapticsEnabled: Boolean = true,
     val privacyMode: Boolean = false,
     val wakePreferenceEnabled: Boolean = false,
-)
+    val voiceOutputEnabled: Boolean = true,
+    val autoSpeakResponses: Boolean = false,
+    val bargeInEnabled: Boolean = true,
+    val preferOfflineRecognition: Boolean = true,
+    val voiceLanguageTag: String = "pt-BR",
+    val voiceSpeechRate: Float = 1.0f,
+    val voicePitch: Float = 1.0f,
+) {
+    init {
+        require(voiceLanguageTag.isNotBlank() && voiceLanguageTag.length <= 32)
+        require(voiceSpeechRate in 0.5f..1.5f)
+        require(voicePitch in 0.5f..2.0f)
+    }
+}
+
+object VoicePresentationPolicy {
+    fun maySpeak(settings: AuroraSettings, text: String): Boolean =
+        settings.voiceOutputEnabled &&
+            settings.autoSpeakResponses &&
+            !settings.privacyMode &&
+            text.isNotBlank()
+}
 
 data class ConnectivityUiState(
     val online: Boolean = false,
@@ -285,58 +343,52 @@ data class AuroraUiState(
     val settings: AuroraSettings = AuroraSettings(),
     val connectivity: ConnectivityUiState = ConnectivityUiState(),
     val device: DeviceUiState = DeviceUiState(),
-    val listening: Boolean = false,
-    val partialTranscript: String = "",
+    val voice: VoiceUiState = VoiceUiState(),
     val globalNotice: String? = null,
     val humanControl: HumanControlUiState = HumanControlUiState(),
     val evidence: EvidenceUiState = EvidenceUiState(),
-)
+) {
+    val listening: Boolean get() = voice.listening
+    val partialTranscript: String get() = voice.partialTranscript
+}
 
 sealed interface AuroraUiIntent {
     data object NextOnboarding : AuroraUiIntent
-
     data object PreviousOnboarding : AuroraUiIntent
-
     data object CompleteOnboarding : AuroraUiIntent
-
     data class OpenSurface(val surface: UiSurface) : AuroraUiIntent
-
     data class UpdateDraft(val value: String) : AuroraUiIntent
-
     data class SubmitText(val text: String) : AuroraUiIntent
-
     data class OpenDynamicView(val viewType: WorkspaceViewType) : AuroraUiIntent
-
     data object CloseWorkspace : AuroraUiIntent
-
     data object StartVoice : AuroraUiIntent
-
     data object VoiceListening : AuroraUiIntent
-
     data class VoicePartial(val transcript: String) : AuroraUiIntent
-
     data class VoiceResult(val transcript: String) : AuroraUiIntent
-
     data class VoiceError(val message: String) : AuroraUiIntent
-
+    data class VoiceInputAvailability(val available: Boolean, val engineLabel: String) : AuroraUiIntent
+    data class VoiceOutputAvailability(val available: Boolean, val engineLabel: String, val audioRouteLabel: String) : AuroraUiIntent
+    data class VoiceOutputStarted(val requestId: Long) : AuroraUiIntent
+    data class VoiceOutputCompleted(val requestId: Long) : AuroraUiIntent
+    data class VoiceOutputError(val requestId: Long?, val message: String) : AuroraUiIntent
+    data object TestVoiceOutput : AuroraUiIntent
+    data object StopVoiceOutput : AuroraUiIntent
     data class SetReducedMotion(val enabled: Boolean) : AuroraUiIntent
-
     data class SetHighContrast(val enabled: Boolean) : AuroraUiIntent
-
     data class SetCaptions(val enabled: Boolean) : AuroraUiIntent
-
     data class SetPrivacyMode(val enabled: Boolean) : AuroraUiIntent
-
     data class SetWakePreference(val enabled: Boolean) : AuroraUiIntent
-
+    data class SetVoiceOutputEnabled(val enabled: Boolean) : AuroraUiIntent
+    data class SetAutoSpeakResponses(val enabled: Boolean) : AuroraUiIntent
+    data class SetBargeIn(val enabled: Boolean) : AuroraUiIntent
+    data class SetPreferOfflineRecognition(val enabled: Boolean) : AuroraUiIntent
+    data class SetVoiceLanguage(val languageTag: String) : AuroraUiIntent
+    data class SetVoiceSpeechRate(val value: Float) : AuroraUiIntent
+    data class SetVoicePitch(val value: Float) : AuroraUiIntent
     data class ReviewApproval(val approvalRef: String = "preview-approval") : AuroraUiIntent
-
     data class SubmitHumanDecision(val decision: String) : AuroraUiIntent
-
     data class RequestCancellation(val subjectRef: String) : AuroraUiIntent
-
     data object OpenEvidence : AuroraUiIntent
-
     data object ClearNotice : AuroraUiIntent
 }
 
