@@ -155,7 +155,7 @@ test('trusted resolver exposes only command capability and server time to the ma
   });
 
   const resolved = resolver.resolve(input);
-  assert.ok(resolved);
+  if (resolved === null) throw new Error('expected trusted voice authority material to resolve');
   assert.deepEqual(source.lookup, {
     commandId: input.candidate.commandId,
     capabilityId: input.candidate.capabilityId,
@@ -236,7 +236,7 @@ test('material source cannot replace the W02-owned current-authority validator',
   });
 
   const resolved = resolver.resolve(input);
-  assert.ok(resolved);
+  if (resolved === null) throw new Error('expected trusted voice authority material to resolve');
   assert.strictEqual(resolved.validateCurrentAuthority, validator);
   assert.notStrictEqual(resolved.validateCurrentAuthority, maliciousValidator);
 });
