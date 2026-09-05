@@ -233,6 +233,86 @@ class GatewayBootstrapClientTest {
         assertEquals(0, opens)
     }
 
+    @Test
+    fun `fresh install exchange without local binding accepts server assigned binding`() {
+        val channel = RecordingChannel(response = GatewayHttpResponse(200, successBody()))
+        val client = GatewayBootstrapClient(GatewayHttpChannelFactory { channel }, nowMs = { now })
+
+        val result = client.exchange(reference)
+
+        assertTrue(result is GatewayBootstrapClientResult.Success)
+        val grant = (result as GatewayBootstrapClientResult.Success).value
+        assertEquals(deviceId, grant.deviceId)
+        assertEquals(deviceSessionId, grant.deviceSessionId)
+        assertEquals("/v1/gateway/bootstrap/exchange", channel.path)
+        assertEquals("{\"bootstrapReference\":\"$reference\"}", channel.body)
+        assertTrue(channel.closed)
+    }
+
+    @Test
+    fun `partial or malformed expected binding fails closed before transport`() {
+        var opens = 0
+        val client =
+            GatewayBootstrapClient(
+                GatewayHttpChannelFactory {
+                    opens += 1
+                    RecordingChannel(response = GatewayHttpResponse(200, successBody()))
+                },
+                nowMs = { now },
+            )
+
+        assertRejected(
+            client.exchange(reference, expectedDeviceId = deviceId, expectedDeviceSessionId = null),
+            GatewayBootstrapClientError.REFERENCE_INVALID,
+        )
+        assertRejected(
+            client.exchange(reference, expectedDeviceId = null, expectedDeviceSessionId = deviceSessionId),
+            GatewayBootstrapClientError.REFERENCE_INVALID,
+        )
+        assertRejected(
+            client.exchange(reference, expectedDeviceId = "invalid-device-id", expectedDeviceSessionId = deviceSessionId),
+            GatewayBootstrapClientError.REFERENCE_INVALID,
+        )
+        assertEquals(0, opens)
+    }
+
+    @Test
+    fun `mismatched deviceSessionId returns binding mismatch`() {
+        assertRejected(
+            clientReturning(successBody()).exchange(
+                reference,
+                deviceId,
+                "device-session:mismatched",
+            ),
+            GatewayBootstrapClientError.BINDING_MISMATCH,
+        )
+    }
+
+    @Test
+    fun `process-local runtime clear and fresh install exchange semantics`() {
+        val channel = RecordingChannel(response = GatewayHttpResponse(200, successBody()))
+        val runtime =
+            ProcessLocalGatewayBootstrapRuntime(
+                GatewayBootstrapClient(GatewayHttpChannelFactory { channel }, nowMs = { now }),
+            )
+
+        assertTrue(runtime.installReference(reference))
+        runtime.clear()
+        assertFalse(runtime.hasPendingReference())
+        assertRejected(
+            runtime.exchangeAndHold(),
+            GatewayBootstrapClientError.REFERENCE_INVALID,
+        )
+
+        assertTrue(runtime.installReference(reference))
+        val freshResult = runtime.exchangeAndHold()
+        assertTrue(freshResult is GatewayBootstrapClientResult.Success)
+        val grant = runtime.consumeGrant()
+        assertEquals(deviceId, grant?.deviceId)
+        assertEquals(deviceSessionId, grant?.deviceSessionId)
+        assertNull(runtime.consumeGrant())
+    }
+
     private fun clientReturning(body: String): GatewayBootstrapClient =
         GatewayBootstrapClient(
             GatewayHttpChannelFactory { RecordingChannel(response = GatewayHttpResponse(200, body)) },

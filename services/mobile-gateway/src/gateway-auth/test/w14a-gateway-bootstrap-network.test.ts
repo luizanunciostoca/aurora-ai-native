@@ -141,3 +141,34 @@ test('refuses non-loopback binding configuration', () => {
     /loopback/u,
   );
 });
+
+test('fails closed on invalid method double start and invalid port', async () => {
+  const broker = delivery();
+  const server = new GatewayBootstrapHttpExchangeServer(broker, { clock: () => now });
+  const address = await server.start();
+  try {
+    await assert.rejects(() => server.start(), /already started/u);
+    await assert.rejects(
+      () => new GatewayBootstrapHttpExchangeServer(broker).start(70000),
+      /port is invalid/u,
+    );
+
+    const getRes = await new Promise<{ statusCode: number }>((resolve, reject) => {
+      const req = request(
+        {
+          hostname: '127.0.0.1',
+          port: address.port,
+          path: address.path,
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        },
+        (res: { statusCode?: number }) => resolve({ statusCode: res.statusCode ?? 0 }),
+      );
+      req.on('error', reject);
+      req.end();
+    });
+    assert.equal(getRes.statusCode, 405);
+  } finally {
+    await server.stop();
+  }
+});

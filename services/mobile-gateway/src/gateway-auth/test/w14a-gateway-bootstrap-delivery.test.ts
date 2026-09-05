@@ -195,3 +195,25 @@ test('bounds staged references and rejects invalid or colliding entropy', () => 
   assert.equal(invalidResult.ok, false);
   if (!invalidResult.ok) assert.equal(invalidResult.error.code, 'ENTROPY_FAILURE');
 });
+
+test('validates delivery broker limits, revocation boundaries, and time bounds', () => {
+  const broker = delivery();
+  assert.equal(broker.revoke('gbr_unknown_reference_000000000000000000000000000000000'), false);
+  assert.equal(broker.revoke(null), false);
+
+  const futureAuth = principal({ authenticatedAtMs: now + 500 });
+  assert.equal(broker.stage(futureAuth, now).ok, false);
+
+  const expiredAuth = principal({ authenticationExpiresAtMs: now - 100 });
+  assert.equal(broker.stage(expiredAuth, now).ok, false);
+
+  const issuer = new TransientGatewayBootstrapBroker();
+  assert.throws(
+    () => new GatewayBootstrapDeliveryBroker(issuer, { referenceTtlMs: 0 }),
+    /limits are invalid/u,
+  );
+  assert.throws(
+    () => new GatewayBootstrapDeliveryBroker(issuer, { maxPendingReferences: 5000 }),
+    /limits are invalid/u,
+  );
+});
