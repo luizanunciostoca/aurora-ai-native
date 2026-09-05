@@ -9,15 +9,29 @@ function booleanSignal(value) {
   return String(value || '').toLowerCase() === 'true';
 }
 
-function loadAttestation(mode, supplied) {
-  if (supplied !== null && supplied !== undefined) return supplied;
-  const path = mode?.runtimeCapabilityDiscovery?.attestationPath;
+function readAttestationFile(path) {
   if (typeof path !== 'string' || !path) return null;
   try {
     return JSON.parse(fs.readFileSync(path, 'utf8'));
   } catch {
     return null;
   }
+}
+
+function loadAttestation(mode, env, supplied) {
+  if (supplied !== null && supplied !== undefined) {
+    return { value: supplied, source: 'SUPPLIED' };
+  }
+
+  const livePath = env?.AURORA_RUNTIME_ATTESTATION_FILE;
+  const live = readAttestationFile(livePath);
+  if (live !== null) return { value: live, source: 'LIVE_MAIN_ARTIFACT' };
+
+  const canonicalPath = mode?.runtimeCapabilityDiscovery?.attestationPath;
+  const canonical = readAttestationFile(canonicalPath);
+  if (canonical !== null) return { value: canonical, source: 'CANONICAL_FILE' };
+
+  return { value: null, source: 'MISSING' };
 }
 
 function validActionsFabricAttestation(mode, attestation, nowMs) {
@@ -78,6 +92,7 @@ export function discoverRuntimeCapabilities(
       executionAvailable: Boolean(mode?.freeActionsCliEnabled),
       proPlusReady: false,
       attestationState: 'NOT_REQUIRED',
+      attestationSource: 'NOT_REQUIRED',
       isolatedSessionCapacity: slots,
       ciParallelCapacity: ciOverride || slots,
       creditSlotBudget: creditOverride || slots,
@@ -87,7 +102,8 @@ export function discoverRuntimeCapabilities(
   }
 
   if (actionsFabricMode) {
-    const attestation = loadAttestation(mode, suppliedAttestation);
+    const loaded = loadAttestation(mode, env, suppliedAttestation);
+    const attestation = loaded.value;
     const fallbackSlots = positiveInteger(mode?.fallbackPhysicalBuildSlots) || 1;
     const verified = validActionsFabricAttestation(mode, attestation, nowMs);
     const measuredSlots = verified
@@ -103,6 +119,7 @@ export function discoverRuntimeCapabilities(
       executionAvailable: verified || Boolean(mode?.freeActionsCliEnabled),
       proPlusReady: verified,
       attestationState: verified ? 'VERIFIED' : attestation?.state || 'MISSING',
+      attestationSource: loaded.source,
       isolatedSessionCapacity: measuredSlots,
       ciParallelCapacity: ciOverride || measuredSlots,
       creditSlotBudget: creditOverride || measuredSlots,
@@ -130,6 +147,7 @@ export function discoverRuntimeCapabilities(
     executionAvailable: proPlusReady,
     proPlusReady,
     attestationState: 'ENVIRONMENT_SIGNALS',
+    attestationSource: 'ENVIRONMENT_SIGNALS',
     isolatedSessionCapacity: isolatedSessionCapacity || 0,
     ciParallelCapacity: ciOverride || 0,
     creditSlotBudget: creditOverride || 0,
