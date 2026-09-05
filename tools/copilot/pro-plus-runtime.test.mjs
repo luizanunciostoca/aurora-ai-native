@@ -11,9 +11,9 @@ const actionsMode = {
   proPlusActionsFabricEnabled: true,
   freeActionsCliEnabled: true,
   cloudAgentEnabled: false,
-  physicalBuildSlots: 4,
+  physicalBuildSlots: 3,
   fallbackPhysicalBuildSlots: 2,
-  runtimeCapabilityDiscovery: { minimumObservedConcurrentSessions: 4 },
+  runtimeCapabilityDiscovery: { minimumObservedConcurrentSessions: 3 },
 };
 const verifiedAttestation = {
   schema: 'aurora.pro_plus.runtime_attestation.v1',
@@ -23,7 +23,7 @@ const verifiedAttestation = {
   workflowRunId: 123,
   observedAt: '2026-09-05T01:00:00.000Z',
   expiresAt: '2026-09-06T01:00:00.000Z',
-  observedConcurrentSessions: 4,
+  observedConcurrentSessions: 3,
   successfulCopilotSessions: 4,
   failedCopilotSessions: 0,
   allSessionsNoTool: true,
@@ -48,13 +48,13 @@ test('PRO+ Actions Fabric falls back safely while attestation is pending', () =>
   assert.ok(result.reasons.includes('PRO_PLUS_ATTESTATION_FALLBACK'));
 });
 
-test('fresh measured PRO+ attestation unlocks four safe BUILD slots', () => {
+test('fresh measured PRO+ attestation unlocks exactly the observed three safe BUILD slots', () => {
   const runtime = discoverRuntimeCapabilities(actionsMode, {}, verifiedAttestation, Date.parse('2026-09-05T02:00:00Z'));
   const result = calculateDynamicSafeBuildCapacity({ mode: actionsMode, runtime, readyCandidateCount: 7, pathIndependentCandidateCount: 6 });
   assert.equal(runtime.proPlusReady, true);
   assert.equal(runtime.executionProfile, 'PRO_PLUS');
-  assert.equal(runtime.isolatedSessionCapacity, 4);
-  assert.equal(result.capacity, 4);
+  assert.equal(runtime.isolatedSessionCapacity, 3);
+  assert.equal(result.capacity, 3);
 });
 
 test('expired or tampered PRO+ attestation automatically returns to Free fallback', () => {
