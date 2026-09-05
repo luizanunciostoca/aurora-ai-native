@@ -34,6 +34,7 @@ import kotlinx.coroutines.delay
 fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val hapticsController = remember(context) { AuroraHapticsController(context) }
     val voiceController = remember(context, viewModel) {
         VoiceCaptureController(
             context = context,
@@ -72,6 +73,18 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
         outputController.speak(request.text, state.settings, request.id)
     }
 
+    LaunchedEffect(state.voice.listening) {
+        if (state.voice.listening) hapticsController.listening(state.settings.hapticsEnabled)
+    }
+
+    LaunchedEffect(state.voice.lastTranscript) {
+        if (state.voice.lastTranscript.isNotBlank()) hapticsController.acknowledged(state.settings.hapticsEnabled)
+    }
+
+    LaunchedEffect(state.voice.lastError) {
+        if (state.voice.lastError != null) hapticsController.warning(state.settings.hapticsEnabled)
+    }
+
     val microphoneLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
@@ -84,28 +97,16 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
                 ),
             )
         } else {
-            viewModel.onIntent(
-                AuroraUiIntent.VoiceError(
-                    "Permissão de microfone negada. Você pode continuar usando texto.",
-                ),
-            )
+            viewModel.onIntent(AuroraUiIntent.VoiceError("Permissão de microfone negada. Você pode continuar usando texto."))
         }
     }
 
     val startVoice: () -> Unit = {
         when {
             state.settings.privacyMode ->
-                viewModel.onIntent(
-                    AuroraUiIntent.VoiceError(
-                        "Voice está bloqueado enquanto o modo de privacidade estiver ativo.",
-                    ),
-                )
+                viewModel.onIntent(AuroraUiIntent.VoiceError("Voice está bloqueado enquanto o modo de privacidade estiver ativo."))
             state.voice.outputState == VoiceOutputState.SPEAKING && !state.settings.bargeInEnabled ->
-                viewModel.onIntent(
-                    AuroraUiIntent.VoiceError(
-                        "A Aurora está falando. Ative barge-in ou pare a saída de voz antes de iniciar o microfone.",
-                    ),
-                )
+                viewModel.onIntent(AuroraUiIntent.VoiceError("A Aurora está falando. Ative barge-in ou pare a saída de voz antes de iniciar o microfone."))
             else -> {
                 if (state.voice.outputState == VoiceOutputState.SPEAKING && state.settings.bargeInEnabled) {
                     outputController.stop()
@@ -142,11 +143,7 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
         Surface(modifier = Modifier.fillMaxSize(), color = Night) {
             AuroraBackdrop {
                 if (!state.onboardingComplete) {
-                    OnboardingFlow(
-                        state = state,
-                        onIntent = viewModel::onIntent,
-                        onVoice = startVoice,
-                    )
+                    OnboardingFlow(state = state, onIntent = viewModel::onIntent, onVoice = startVoice)
                 } else {
                     AuroraShell(
                         state = state,
@@ -169,14 +166,8 @@ private fun AuroraShell(
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(state, onIntent)
-        state.globalNotice?.let { notice ->
-            DegradedBanner(notice) { onIntent(AuroraUiIntent.ClearNotice) }
-        }
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth(),
-        ) {
+        state.globalNotice?.let { notice -> DegradedBanner(notice) { onIntent(AuroraUiIntent.ClearNotice) } }
+        BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
             val wideLayout = maxWidth >= 920.dp
             val extraWideLayout = maxWidth >= 1_220.dp
             val conversationWidth = maxWidth * 0.32f
@@ -186,16 +177,10 @@ private fun AuroraShell(
                         state = state,
                         onIntent = onIntent,
                         onVoice = onVoice,
-                        modifier = Modifier
-                            .width(conversationWidth)
-                            .fillMaxHeight(),
+                        modifier = Modifier.width(conversationWidth).fillMaxHeight(),
                     )
                     VerticalRule()
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight(),
-                    ) {
+                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
                         MainSurfaceContent(state, onIntent, onVoice, onStopVoiceOutput)
                     }
                     if (extraWideLayout && state.workspaceOpen && state.manifest != null) {
@@ -203,21 +188,14 @@ private fun AuroraShell(
                         InspectorRail(
                             manifest = state.manifest,
                             onIntent = onIntent,
-                            modifier = Modifier
-                                .width(270.dp)
-                                .fillMaxHeight(),
+                            modifier = Modifier.width(270.dp).fillMaxHeight(),
                         )
                     }
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (state.surface in setOf(UiSurface.PRESENCE, UiSurface.CONVERSATION)) {
-                        ConversationPane(
-                            state = state,
-                            onIntent = onIntent,
-                            onVoice = onVoice,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                        ConversationPane(state, onIntent, onVoice, Modifier.fillMaxSize())
                     } else {
                         MainSurfaceContent(state, onIntent, onVoice, onStopVoiceOutput)
                     }
@@ -249,9 +227,6 @@ private fun MainSurfaceContent(
 @Composable
 internal fun VerticalRule() {
     Box(
-        Modifier
-            .fillMaxHeight()
-            .width(1.dp)
-            .background(Outline.copy(alpha = 0.72f)),
+        Modifier.fillMaxHeight().width(1.dp).background(Outline.copy(alpha = 0.72f)),
     )
 }
