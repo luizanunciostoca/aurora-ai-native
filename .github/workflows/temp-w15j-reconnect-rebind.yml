@@ -1,0 +1,141 @@
+name: TEMP W15-J Reconnect Rebind Patch
+
+on:
+  push:
+    branches:
+      - wave/15j-physical-device-integration-acceptance
+    paths:
+      - '.github/workflows/temp-w15j-reconnect-rebind.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/15j-physical-device-integration-acceptance
+          fetch-depth: 0
+      - name: Guard exact diagnostic head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_SHA" = "${{ github.sha }}"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Apply exact reconnect rebind correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          client = Path('apps/aurora-android/app/src/main/kotlin/ai/aurora/device/network/GatewayDevicePlaneClient.kt')
+          s = client.read_text()
+          old = '''        gateway = nextGateway
+
+        val proof = proofFactory.sign(
+            attestationMessage(
+                nextGateway,
+                currentRegistration,
+                currentDeviceSession.deviceSessionId,
+                previousGateway.connectionId,
+            ),
+        )
+'''
+          new = '''        gateway = nextGateway
+
+        // W14 device bindings are socket-local. Rebind the already-accepted canonical DeviceRef
+        // on the fresh authenticated socket before asking W14-E to resume trust. This call cannot
+        // create a new local identity: any state/version drift fails closed.
+        val rebindProof = proofFactory.sign(registrationMessage(nextGateway, currentContext.deviceId))
+        val rebindResponse = post(
+            "/v1/device/registrations/register",
+            StrictJson.encodeObject(
+                listOf(
+                    "deviceId" to currentContext.deviceId,
+                    "proof" to rebindProof,
+                ),
+            ),
+        ) ?: run {
+            close()
+            return transportRejected()
+        }
+        val rebindResult = parseRegistration(rebindResponse)
+        if (rebindResult is GatewayDevicePlaneResult.Rejected) {
+            close()
+            return rebindResult
+        }
+        val reboundRegistration = (rebindResult as GatewayDevicePlaneResult.Success).value
+        if (
+            reboundRegistration.state != W14DeviceLifecycleState.ACTIVE ||
+            reboundRegistration.ref != currentRegistration.ref
+        ) {
+            close()
+            return rejected(GatewayDevicePlaneClientError.PROTOCOL_MALFORMED)
+        }
+        registration = reboundRegistration
+
+        val proof = proofFactory.sign(
+            attestationMessage(
+                nextGateway,
+                reboundRegistration,
+                currentDeviceSession.deviceSessionId,
+                previousGateway.connectionId,
+            ),
+        )
+'''
+          if s.count(old) != 1:
+              raise SystemExit('client reconnect patch anchor not unique')
+          client.write_text(s.replace(old, new))
+
+          test = Path('apps/aurora-android/app/src/test/kotlin/ai/aurora/device/network/GatewayDevicePlaneClientTest.kt')
+          s = test.read_text()
+          old_responses = '''        val resumed = FakeChannel(
+            gatewayResponse("conn-2", generation = 2),
+            sessionResponse("conn-2", generation = 2, version = 2),
+        )
+'''
+          new_responses = '''        val resumed = FakeChannel(
+            gatewayResponse("conn-2", generation = 2),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-2", generation = 2, version = 2),
+        )
+'''
+          old_asserts = '''        assertTrue(resumed.requests[0].second.contains("\\\"previousConnectionId\\\":\\\"conn-1\\\""))
+        assertTrue(resumed.requests[1].second.contains("\\\"previousConnectionId\\\":\\\"conn-1\\\""))
+        assertTrue(proofs.messages.last().endsWith("\\nconn-1"))
+'''
+          new_asserts = '''        assertTrue(resumed.requests[0].second.contains("\\\"previousConnectionId\\\":\\\"conn-1\\\""))
+        assertEquals("/v1/device/registrations/register", resumed.requests[1].first)
+        assertTrue(resumed.requests[1].second.contains("\\\"deviceId\\\":\\\"dvc_01J00000000000000000000000\\\""))
+        assertFalse(resumed.requests[1].second.contains("tenantId"))
+        assertEquals("/v1/device/sessions/resume", resumed.requests[2].first)
+        assertTrue(resumed.requests[2].second.contains("\\\"previousConnectionId\\\":\\\"conn-1\\\""))
+        assertTrue(proofs.messages[proofs.messages.lastIndex - 1].startsWith("AURORA_DEVICE_REGISTRATION_V1\\n"))
+        assertTrue(proofs.messages.last().endsWith("\\nconn-1"))
+'''
+          if s.count(old_responses) != 1 or s.count(old_asserts) != 1:
+              raise SystemExit('test reconnect patch anchors not unique')
+          test.write_text(s.replace(old_responses, new_responses).replace(old_asserts, new_asserts))
+          PY
+      - name: Remove temporary workflow and commit atomically
+        shell: bash
+        env:
+          BRANCH: wave/15j-physical-device-integration-acceptance
+        run: |
+          set -euo pipefail
+          rm .github/workflows/temp-w15j-reconnect-rebind.yml
+          git diff --check
+          git config user.name 'aurora-program-control'
+          git config user.email 'actions@users.noreply.github.com'
+          git add apps/aurora-android/app/src/main/kotlin/ai/aurora/device/network/GatewayDevicePlaneClient.kt \
+                  apps/aurora-android/app/src/test/kotlin/ai/aurora/device/network/GatewayDevicePlaneClientTest.kt \
+                  .github/workflows/temp-w15j-reconnect-rebind.yml
+          git diff --cached --quiet && { echo 'No patch produced'; exit 1; }
+          git commit -m 'fix(W15-J): rebind DeviceRef before session resume'
+          remote_sha="$(git ls-remote origin "refs/heads/$BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$GITHUB_SHA"
+          git push origin "HEAD:refs/heads/$BRANCH"
