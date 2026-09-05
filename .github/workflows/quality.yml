@@ -21,11 +21,6 @@ jobs:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
-      - name: Temporary W15-G Prettier diagnostic
-        run: |
-          npx prettier --write services/mobile-gateway/src/gateway-auth/test/w15g-w07-voice-candidate-network.test.ts
-          git diff -- services/mobile-gateway/src/gateway-auth/test/w15g-w07-voice-candidate-network.test.ts
-          git checkout -- services/mobile-gateway/src/gateway-auth/test/w15g-w07-voice-candidate-network.test.ts
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
