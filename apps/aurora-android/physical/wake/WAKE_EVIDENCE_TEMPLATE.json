@@ -96,6 +96,11 @@
     { "id": "WAKE-AUTH-002", "name": "wake during execution cannot duplicate execution", "status": "NOT_RUN", "evidenceRefs": [] },
     { "id": "WAKE-AUTH-003", "name": "wake during EXECUTION_UNCERTAIN cannot authorize retry", "status": "NOT_RUN", "evidenceRefs": [] },
     { "id": "WAKE-AUTH-004", "name": "wake candidate contains no OwnerDecision PolicyToken success or retry authority", "status": "NOT_RUN", "evidenceRefs": [] },
+    { "id": "WAKE-AUTH-005", "name": "absent or stale W04 governed voice projection falls back to Conversation and does not call W07", "status": "NOT_RUN", "evidenceRefs": [] },
+    { "id": "WAKE-AUTH-006", "name": "tenant mismatch non-DEVICE target or non-current W04 capability cannot enter the fast-path available capability set", "status": "NOT_RUN", "evidenceRefs": [] },
+    { "id": "WAKE-AUTH-007", "name": "MEDIUM HIGH or CRITICAL W04 risk maps to high-risk voice handling and escalates before W07 ingress", "status": "NOT_RUN", "evidenceRefs": [] },
+    { "id": "WAKE-AUTH-008", "name": "stale unavailable or missing W15-C native capability observation prevents fast-path W07 ingress", "status": "NOT_RUN", "evidenceRefs": [] },
+    { "id": "WAKE-AUTH-009", "name": "W07 mobile ingress unavailable returns any deterministic candidate to Conversation without execution success or retry authority", "status": "NOT_RUN", "evidenceRefs": [] },
     { "id": "WAKE-STRESS-001", "name": "100 plus deliberate wake attempts", "status": "NOT_RUN", "attempts": 0, "confirmed": 0, "evidenceRefs": [] }
   ],
   "review": {
