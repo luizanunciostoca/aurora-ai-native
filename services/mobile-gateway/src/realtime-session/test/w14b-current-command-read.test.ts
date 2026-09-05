@@ -1,4 +1,6 @@
+// @ts-expect-error -- test harness intentionally relies on Node 22 built-ins without @types/node.
 import assert from 'node:assert/strict';
+// @ts-expect-error -- test harness intentionally relies on Node 22 built-ins without @types/node.
 import test from 'node:test';
 
 import type {
