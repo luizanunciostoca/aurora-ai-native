@@ -91,6 +91,7 @@
     { "id": "WAKE-SEC-008", "name": "microphone permission revoked while armed", "status": "NOT_RUN", "evidenceRefs": [] },
     { "id": "WAKE-SEC-009", "name": "privacy mode enabled while armed", "status": "NOT_RUN", "evidenceRefs": [] },
     { "id": "WAKE-SEC-010", "name": "wake model integrity or substitution failure", "status": "NOT_RUN", "evidenceRefs": [] },
+    { "id": "WAKE-SEC-011", "name": "ultrasonic or near-ultrasonic modulated Aurora injection when test equipment and device audio path make it applicable", "status": "NOT_RUN", "evidenceRefs": [] },
     { "id": "WAKE-AUTH-001", "name": "wake during pending approval cannot approve", "status": "NOT_RUN", "evidenceRefs": [] },
     { "id": "WAKE-AUTH-002", "name": "wake during execution cannot duplicate execution", "status": "NOT_RUN", "evidenceRefs": [] },
     { "id": "WAKE-AUTH-003", "name": "wake during EXECUTION_UNCERTAIN cannot authorize retry", "status": "NOT_RUN", "evidenceRefs": [] },
