@@ -1,5 +1,10 @@
 package ai.aurora.ui
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +41,9 @@ internal fun VoiceAndSystemSettingsPane(
     onVoice: () -> Unit,
     onStopVoiceOutput: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val microphoneGranted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -150,6 +159,28 @@ internal fun VoiceAndSystemSettingsPane(
             ) { onIntent(AuroraUiIntent.SetHighContrast(it)) }
         }
 
+        SettingsCard("Runtime & Permissions") {
+            KeyValue("Microfone", if (microphoneGranted) "GRANTED" else "DENIED / NOT GRANTED")
+            KeyValue("STT", state.voice.inputAvailability.name)
+            KeyValue("TTS", state.voice.outputAvailability.name)
+            KeyValue("Network", state.connectivity.label)
+            KeyValue("Session", state.device.registrationStatus)
+            LuminousCallout(
+                "PRECONDITION ONLY",
+                "Permissões Android, biometria, network e device session são preconditions. Nenhuma delas concede business authority.",
+                SemanticTone.INFO,
+            )
+            OutlinedButton(
+                onClick = {
+                    val intent = Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${context.packageName}"),
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { context.startActivity(intent) }
+                },
+            ) { Text("Abrir permissões do Android") }
+        }
+
         SettingsCard("Offline behavior") {
             LuminousCallout(
                 "LOCAL_ONLY",
@@ -171,6 +202,7 @@ internal fun VoiceAndSystemSettingsPane(
         SettingsCard("Device & Session") {
             KeyValue("Environment", state.device.environment)
             KeyValue("Presence", state.device.visibility)
+            KeyValue("Process generation", state.device.processGeneration.toString())
             KeyValue("Local service", state.device.localServicePhase)
             KeyValue("Session", state.device.registrationStatus)
             KeyValue("Network", state.connectivity.label)
