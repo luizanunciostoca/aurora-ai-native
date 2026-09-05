@@ -33,7 +33,7 @@ class VoiceCaptureController(
     private val onError: (String) -> Unit,
 ) : AutoCloseable {
     private var recognizer: SpeechRecognizer? = null
-    private val registryRegistration = VoiceSessionRegistry.register { cancel() }
+    private val registryRegistration = VoiceSessionRegistry.register { stopForLifecycle() }
 
     fun availability(preferOffline: Boolean): VoiceInputAvailability {
         val standard = SpeechRecognizer.isRecognitionAvailable(context)
@@ -128,6 +128,13 @@ class VoiceCaptureController(
     override fun close() {
         registryRegistration.close()
         closeRecognizer()
+    }
+
+    private fun stopForLifecycle() {
+        if (recognizer == null) return
+        runCatching { recognizer?.cancel() }
+        closeRecognizer()
+        onError("Captura de voz interrompida porque a Aurora saiu do primeiro plano ou entrou em modo de privacidade.")
     }
 
     private fun closeRecognizer() {
