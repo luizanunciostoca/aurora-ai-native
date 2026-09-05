@@ -19,10 +19,13 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ai.aurora.ui.model.AuroraUiIntent
 import ai.aurora.ui.model.AuroraUiState
@@ -34,7 +37,10 @@ import kotlinx.coroutines.delay
 fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    val activity = context as? FragmentActivity
     val hapticsController = remember(context) { AuroraHapticsController(context) }
+    var stepUpState by remember { mutableStateOf(StepUpUiState()) }
+
     val voiceController = remember(context, viewModel) {
         VoiceCaptureController(
             context = context,
@@ -55,11 +61,60 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
             onError = { id, message -> viewModel.onIntent(AuroraUiIntent.VoiceOutputError(id, message)) },
         )
     }
+    val stepUpController = remember(activity) {
+        activity?.let { host ->
+            StepUpAuthController(
+                activity = host,
+                onStarted = {
+                    stepUpState = StepUpUiState(
+                        status = StepUpStatus.AUTHENTICATING,
+                        detail = "Aguardando confirmação biométrica ou credencial do dispositivo.",
+                        successSequence = stepUpState.successSequence,
+                    )
+                },
+                onSucceeded = { method ->
+                    stepUpState = StepUpUiState(
+                        status = StepUpStatus.SUCCEEDED,
+                        detail = "Interação local confirmada. Policy/authority ainda precisam ser revalidadas pelo backend.",
+                        method = method,
+                        successSequence = stepUpState.successSequence + 1,
+                    )
+                    hapticsController.acknowledged(state.settings.hapticsEnabled)
+                },
+                onFailed = { message ->
+                    stepUpState = StepUpUiState(
+                        status = StepUpStatus.FAILED,
+                        detail = message,
+                        successSequence = stepUpState.successSequence,
+                    )
+                    hapticsController.warning(state.settings.hapticsEnabled)
+                },
+            )
+        }
+    }
 
     DisposableEffect(voiceController, outputController) {
         onDispose {
             voiceController.close()
             outputController.close()
+        }
+    }
+
+    LaunchedEffect(stepUpController) {
+        val availability = stepUpController?.availability()
+        stepUpState = when {
+            availability == null -> StepUpUiState(
+                status = StepUpStatus.UNAVAILABLE,
+                detail = "A Activity atual não suporta o host biométrico esperado.",
+            )
+            availability.available -> StepUpUiState(
+                status = StepUpStatus.AVAILABLE,
+                detail = availability.detail,
+            )
+            else -> StepUpUiState(
+                status = StepUpStatus.UNAVAILABLE,
+                detail = availability.detail,
+            )
         }
     }
 
@@ -132,6 +187,19 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
         viewModel.onIntent(AuroraUiIntent.StopVoiceOutput)
     }
 
+    val startStepUp: () -> Unit = {
+        val controller = stepUpController
+        if (controller == null) {
+            stepUpState = StepUpUiState(
+                status = StepUpStatus.UNAVAILABLE,
+                detail = "Step-up local não está disponível neste host.",
+                successSequence = stepUpState.successSequence,
+            )
+        } else {
+            controller.authenticate("Confirmar interação local para revisar a proposta")
+        }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             viewModel.refreshRuntime()
@@ -147,9 +215,11 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
                 } else {
                     AuroraShell(
                         state = state,
+                        stepUpState = stepUpState,
                         onIntent = viewModel::onIntent,
                         onVoice = startVoice,
                         onStopVoiceOutput = stopVoiceOutput,
+                        onStepUp = startStepUp,
                     )
                 }
             }
@@ -160,9 +230,11 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
 @Composable
 private fun AuroraShell(
     state: AuroraUiState,
+    stepUpState: StepUpUiState,
     onIntent: (AuroraUiIntent) -> Unit,
     onVoice: () -> Unit,
     onStopVoiceOutput: () -> Unit,
+    onStepUp: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(state, onIntent)
@@ -181,7 +253,7 @@ private fun AuroraShell(
                     )
                     VerticalRule()
                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        MainSurfaceContent(state, onIntent, onVoice, onStopVoiceOutput)
+                        MainSurfaceContent(state, stepUpState, onIntent, onVoice, onStopVoiceOutput, onStepUp)
                     }
                     if (extraWideLayout && state.workspaceOpen && state.manifest != null) {
                         VerticalRule()
@@ -197,7 +269,7 @@ private fun AuroraShell(
                     if (state.surface in setOf(UiSurface.PRESENCE, UiSurface.CONVERSATION)) {
                         ConversationPane(state, onIntent, onVoice, Modifier.fillMaxSize())
                     } else {
-                        MainSurfaceContent(state, onIntent, onVoice, onStopVoiceOutput)
+                        MainSurfaceContent(state, stepUpState, onIntent, onVoice, onStopVoiceOutput, onStepUp)
                     }
                 }
             }
@@ -209,16 +281,18 @@ private fun AuroraShell(
 @Composable
 private fun MainSurfaceContent(
     state: AuroraUiState,
+    stepUpState: StepUpUiState,
     onIntent: (AuroraUiIntent) -> Unit,
     onVoice: () -> Unit,
     onStopVoiceOutput: () -> Unit,
+    onStepUp: () -> Unit,
 ) {
     when (state.surface) {
         UiSurface.PRESENCE,
         UiSurface.CONVERSATION,
         -> PresenceFocus(state, onIntent, onVoice)
         UiSurface.WORKSPACE -> WorkspacePane(state, onIntent)
-        UiSurface.HUMAN_CONTROL -> HumanControlPane(state, onIntent)
+        UiSurface.HUMAN_CONTROL -> HumanControlV2Pane(state, stepUpState, onIntent, onStepUp)
         UiSurface.EVIDENCE -> EvidencePane(state, onIntent)
         UiSurface.SETTINGS -> VoiceAndSystemSettingsPane(state, onIntent, onVoice, onStopVoiceOutput)
     }
@@ -226,7 +300,5 @@ private fun MainSurfaceContent(
 
 @Composable
 internal fun VerticalRule() {
-    Box(
-        Modifier.fillMaxHeight().width(1.dp).background(Outline.copy(alpha = 0.72f)),
-    )
+    Box(Modifier.fillMaxHeight().width(1.dp).background(Outline.copy(alpha = 0.72f)))
 }
