@@ -37,9 +37,11 @@ import ai.aurora.ui.model.VoiceOutputState
 @Composable
 internal fun VoiceAndSystemSettingsPane(
     state: AuroraUiState,
+    deviceKeyState: DeviceKeyUiState,
     onIntent: (AuroraUiIntent) -> Unit,
     onVoice: () -> Unit,
     onStopVoiceOutput: () -> Unit,
+    onPrepareDeviceKey: () -> Unit,
 ) {
     val context = LocalContext.current
     val microphoneGranted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -179,6 +181,21 @@ internal fun VoiceAndSystemSettingsPane(
                     runCatching { context.startActivity(intent) }
                 },
             ) { Text("Abrir permissões do Android") }
+        }
+
+        SettingsCard("Device Trust / Keystore") {
+            KeyValue("Estado da chave", deviceKeyState.status.name)
+            KeyValue("Algoritmo", deviceKeyState.algorithm)
+            KeyValue("Fingerprint SHA-256", deviceKeyState.fingerprintSha256)
+            Text(deviceKeyState.detail, color = TextSecondary, fontSize = 12.sp)
+            LuminousCallout(
+                "LOCAL KEY ≠ REMOTE TRUST",
+                "Preparar a chave cria/verifica somente a identidade criptográfica local W15-B. Registration, trust, policy e execution authority permanecem remotos e governados.",
+                SemanticTone.VERIFIED,
+            )
+            Button(onClick = onPrepareDeviceKey) {
+                Text(if (deviceKeyState.status == DeviceKeyUiStatus.READY) "Verificar novamente" else "Preparar / validar chave local")
+            }
         }
 
         SettingsCard("Offline behavior") {
