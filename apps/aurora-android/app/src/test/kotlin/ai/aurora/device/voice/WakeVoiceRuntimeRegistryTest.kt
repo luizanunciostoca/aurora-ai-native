@@ -35,6 +35,13 @@ class WakeVoiceRuntimeRegistryTest {
         val dummyIngress = GovernedW07VoiceAuthorityIngress(dummyTransport)
         // Verify default uncomposed ingress fails closed without touching any transport
         WakeVoiceRuntimeRegistry.clearAuthorityIngress()
+
+        val defaultIngress = W07VoiceAuthorityIngress {
+            W07VoiceAuthorityIngressResult.Unavailable("W07 Android authority ingress not composed")
+        }
+        val result = defaultIngress.submit(candidate)
+        assertTrue(result is W07VoiceAuthorityIngressResult.Unavailable)
+        assertEquals("W07 Android authority ingress not composed", (result as W07VoiceAuthorityIngressResult.Unavailable).reason)
         assertEquals(0, transportCalls)
     }
 
