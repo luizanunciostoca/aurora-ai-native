@@ -53,6 +53,11 @@ class AuroraWakeForegroundService : Service(), SharedPreferences.OnSharedPrefere
                 disarmAndStop("WAKE_PRIVACY_BLOCKED")
             key == KEY_WAKE_PREFERENCE && !uiPreferences.getBoolean(KEY_WAKE_PREFERENCE, false) ->
                 disarmAndStop("DISABLED")
+            key == KEY_WAKE_SENSITIVITY && engine != null -> {
+                engine?.close()
+                engine = null
+                armIfAllowed()
+            }
         }
     }
 
@@ -83,6 +88,13 @@ class AuroraWakeForegroundService : Service(), SharedPreferences.OnSharedPrefere
         }
         if (engine != null) return
 
+        val sensitivity = uiPreferences
+            .getFloat(KEY_WAKE_SENSITIVITY, WakeSensitivityPolicy.DEFAULT_SENSITIVITY)
+            .coerceIn(0.0f, 1.0f)
+        val wakeConfig = WakeConfig(
+            confidenceThreshold = WakeSensitivityPolicy.confidenceThreshold(sensitivity),
+        )
+
         statusStore.update(
             state = "INITIALIZING",
             modelVersion = model.modelVersion,
@@ -92,6 +104,7 @@ class AuroraWakeForegroundService : Service(), SharedPreferences.OnSharedPrefere
         val newEngine = AudioRecordAuroraWakeEngine(
             context = this,
             model = model,
+            config = wakeConfig,
             privacyBlocked = { uiPreferences.getBoolean(KEY_PRIVACY_MODE, false) },
             playbackState = WakePlaybackAwareness::snapshot,
             onState = { state ->
@@ -208,6 +221,7 @@ class AuroraWakeForegroundService : Service(), SharedPreferences.OnSharedPrefere
         private const val UI_PREFERENCES = "aurora.ui.v1"
         private const val KEY_WAKE_PREFERENCE = "wake_preference"
         private const val KEY_PRIVACY_MODE = "privacy_mode"
+        const val KEY_WAKE_SENSITIVITY = "wake_sensitivity"
         private const val CHANNEL_ID = "aurora_wake_word"
         private const val NOTIFICATION_ID = 16021
 
@@ -216,7 +230,7 @@ class AuroraWakeForegroundService : Service(), SharedPreferences.OnSharedPrefere
         const val ACTION_DISARM = "ai.aurora.action.WAKE_DISARM"
         const val ACTION_START_BOUNDED_FOLLOWUP = "ai.aurora.action.WAKE_FOLLOWUP"
 
-        /** Must only be called from a user-visible/allowed context on Android 14+. */
+        /** Must only be called from a user-visible or otherwise platform-allowed context. */
         fun armFromVisibleContext(context: Context) {
             context.startForegroundService(
                 Intent(context, AuroraWakeForegroundService::class.java).setAction(ACTION_ARM),

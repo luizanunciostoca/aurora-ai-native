@@ -32,6 +32,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.aurora.device.wake.AuroraVoiceInteractionService
+import ai.aurora.device.wake.AuroraWakeModelStore
+import ai.aurora.device.wake.WakeRuntimeStatusStore
+import ai.aurora.device.wake.WakeSetupActivity
 import ai.aurora.ui.model.AuroraPresenceMode
 import ai.aurora.ui.model.AuroraUiIntent
 import ai.aurora.ui.model.AuroraUiState
@@ -49,6 +53,18 @@ internal fun OnboardingV2Flow(
 ) {
     val context = LocalContext.current
     val microphoneGranted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    val wakeModelValid = AuroraWakeModelStore(context).hasValidModel()
+    val assistantConfigured = AuroraVoiceInteractionService.isConfiguredAsAssistant(context)
+    val wakeRuntime = WakeRuntimeStatusStore(context).snapshot()
+    val wakeReadiness = when {
+        state.settings.privacyMode -> "PARTIAL"
+        !state.settings.wakePreferenceEnabled -> "USER_SETUP_REQUIRED"
+        !microphoneGranted || !wakeModelValid -> "USER_SETUP_REQUIRED"
+        wakeRuntime.state in setOf("HOTWORD_LISTENING", "ARMED") && assistantConfigured -> "READY"
+        wakeRuntime.state in setOf("HOTWORD_LISTENING", "ARMED") -> "PARTIAL"
+        assistantConfigured -> "PARTIAL"
+        else -> "PLATFORM_LIMITED"
+    }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wide = maxWidth >= 900.dp
@@ -64,10 +80,15 @@ internal fun OnboardingV2Flow(
                     deviceKeyState = deviceKeyState,
                     voiceDiagnosticState = voiceDiagnosticState,
                     microphoneGranted = microphoneGranted,
+                    wakeModelValid = wakeModelValid,
+                    assistantConfigured = assistantConfigured,
+                    wakeRuntimeState = wakeRuntime.state,
+                    wakeReadiness = wakeReadiness,
                     onIntent = onIntent,
                     onVoiceTest = onVoiceTest,
                     onPrepareDeviceKey = onPrepareDeviceKey,
                     onOpenAndroidSettings = { openAndroidAppSettings(context) },
+                    onOpenWakeSetup = { context.startActivity(Intent(context, WakeSetupActivity::class.java)) },
                     modifier = Modifier.weight(0.62f).widthIn(max = 760.dp),
                 )
             }
@@ -86,10 +107,15 @@ internal fun OnboardingV2Flow(
                     deviceKeyState = deviceKeyState,
                     voiceDiagnosticState = voiceDiagnosticState,
                     microphoneGranted = microphoneGranted,
+                    wakeModelValid = wakeModelValid,
+                    assistantConfigured = assistantConfigured,
+                    wakeRuntimeState = wakeRuntime.state,
+                    wakeReadiness = wakeReadiness,
                     onIntent = onIntent,
                     onVoiceTest = onVoiceTest,
                     onPrepareDeviceKey = onPrepareDeviceKey,
                     onOpenAndroidSettings = { openAndroidAppSettings(context) },
+                    onOpenWakeSetup = { context.startActivity(Intent(context, WakeSetupActivity::class.java)) },
                     modifier = Modifier.fillMaxWidth().widthIn(max = 760.dp),
                 )
                 Spacer(Modifier.height(12.dp))
@@ -133,10 +159,15 @@ private fun OnboardingCard(
     deviceKeyState: DeviceKeyUiState,
     voiceDiagnosticState: VoiceDiagnosticUiState,
     microphoneGranted: Boolean,
+    wakeModelValid: Boolean,
+    assistantConfigured: Boolean,
+    wakeRuntimeState: String,
+    wakeReadiness: String,
     onIntent: (AuroraUiIntent) -> Unit,
     onVoiceTest: () -> Unit,
     onPrepareDeviceKey: () -> Unit,
     onOpenAndroidSettings: () -> Unit,
+    onOpenWakeSetup: () -> Unit,
     modifier: Modifier,
 ) {
     Card(
@@ -205,15 +236,23 @@ private fun OnboardingCard(
 
                 OnboardingStep.VOICE_AUDIO -> {
                     Heading(
-                        "Voice & Audio",
-                        "Este botão executa somente diagnóstico de microfone/recognizer. O transcript de teste não entra na Conversation nem vira intenção.",
+                        "Voice, Wake & Audio",
+                        "Teste STT/TTS e configure o hotword local “Aurora”. O transcript de diagnóstico não entra na Conversation nem vira intenção.",
                     )
                     KeyValue("STT", state.voice.inputEngineLabel)
                     KeyValue("TTS", state.voice.outputEngineLabel)
-                    KeyValue("Idioma", state.settings.voiceLanguageTag)
-                    KeyValue("Teste", voiceDiagnosticState.status.name)
-                    Button(onClick = onVoiceTest, enabled = !state.settings.privacyMode) {
-                        Text(if (voiceDiagnosticState.status == VoiceDiagnosticStatus.LISTENING) "Ouvindo teste…" else "Testar microfone")
+                    KeyValue("Idioma STT/TTS", state.settings.voiceLanguageTag)
+                    KeyValue("Wake model", if (wakeModelValid) "LOCAL / VALID" else "SETUP REQUIRED")
+                    KeyValue("Wake runtime", wakeRuntimeState)
+                    KeyValue("Default Assistant", if (assistantConfigured) "AURORA ACTIVE" else "NOT SELECTED")
+                    KeyValue("Wake readiness", wakeReadiness)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(onClick = onVoiceTest, enabled = !state.settings.privacyMode) {
+                            Text(if (voiceDiagnosticState.status == VoiceDiagnosticStatus.LISTENING) "Ouvindo teste…" else "Testar microfone")
+                        }
+                        OutlinedButton(onClick = onOpenWakeSetup, enabled = !state.settings.privacyMode) {
+                            Text(if (wakeModelValid) "Recalibrar “Aurora”" else "Ativar “Aurora”")
+                        }
                     }
                     if (state.settings.captionsEnabled) {
                         val transcript = voiceDiagnosticState.transcript.ifBlank { voiceDiagnosticState.partialTranscript }
@@ -223,14 +262,14 @@ private fun OnboardingCard(
                     }
                     Text(voiceDiagnosticState.detail, color = TextSecondary, fontSize = 12.sp)
                     LuminousCallout(
-                        "DIAGNOSTIC ONLY",
-                        "O resultado comprova apenas a disponibilidade local da entrada de voz. Não cria Conversation intent, permission, authority ou execution.",
+                        "LOCAL HOTWORD",
+                        "O detector de “Aurora” é separado do SpeechRecognizer: AudioRecord/VAD/model local detectam apenas o wake; depois do wake, STT bounded produz um candidate para o pipeline governado.",
                         SemanticTone.VERIFIED,
                     )
                     LuminousCallout(
-                        "WAKE",
-                        "Wake contínuo permanece preference-only até existir hotword engine dedicado + foreground/privacy policy.",
-                        SemanticTone.APPROVAL,
+                        "WAKE ≠ AUTHORITY",
+                        "Acordar a Aurora nunca concede permission, approval, business authority, execution truth ou retry eligibility.",
+                        SemanticTone.INFO,
                     )
                 }
 
@@ -252,9 +291,16 @@ private fun OnboardingCard(
 
                 OnboardingStep.READY -> {
                     Heading(
-                        "Pronta para os primeiros testes",
-                        "Presence, conversa, voz, accessibility, settings e runtime local estão disponíveis. Recursos remotos continuam claramente marcados até seus bindings canônicos.",
+                        if (wakeReadiness == "READY") "Pronta para interação por voz" else "Configuração parcial — sem falso READY",
+                        if (wakeReadiness == "READY") {
+                            "Presence, conversa, wake word, voz e runtime local estão disponíveis. Recursos remotos continuam marcados até seus bindings canônicos."
+                        } else {
+                            "A interface pode ser usada, mas o wake word ainda tem setup ou limitação de plataforma. A Aurora não representa always-listening como pronto enquanto isso não for verdade."
+                        },
                     )
+                    KeyValue("Onboarding status", wakeReadiness)
+                    KeyValue("Wake runtime", wakeRuntimeState)
+                    KeyValue("Default Assistant", if (assistantConfigured) "AURORA ACTIVE" else "NOT SELECTED")
                     KeyValue("Build", state.device.buildSha)
                     KeyValue("Environment", state.device.environment)
                     KeyValue("Session", state.device.registrationStatus)
@@ -263,10 +309,15 @@ private fun OnboardingCard(
                         KeyValue("Key security", deviceKeyState.securityLevel)
                     }
                     KeyValue("Voice diagnostic", voiceDiagnosticState.status.name)
+                    if (wakeReadiness != "READY") {
+                        OutlinedButton(onClick = onOpenWakeSetup, enabled = !state.settings.privacyMode) {
+                            Text("Concluir configuração de “Aurora”")
+                        }
+                    }
                     LuminousCallout(
                         "PRIMEIRO TESTE",
-                        "Depois de entrar, use Falar/Digitar na Conversation para gerar intenções reais da UI. O teste de microfone desta etapa permanece separado.",
-                        SemanticTone.VERIFIED,
+                        "Depois de entrar, use “Aurora” quando o wake estiver READY, ou Falar/Digitar na Conversation. Todos os caminhos convergem para o mesmo pipeline governado.",
+                        if (wakeReadiness == "READY") SemanticTone.VERIFIED else SemanticTone.APPROVAL,
                     )
                 }
             }

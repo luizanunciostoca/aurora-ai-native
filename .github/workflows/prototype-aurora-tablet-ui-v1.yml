@@ -1,4 +1,4 @@
-name: Prototype Aurora Tablet UI V3
+name: Prototype Aurora Tablet UI V4 Wake
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  android-ui-v3:
+  android-ui-v4-wake:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -34,7 +34,7 @@ jobs:
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - name: Test and assemble Aurora Tablet UI V3
+      - name: Test and assemble Aurora Tablet UI V4 Wake
         shell: bash
         env:
           AURORA_BUILD_SHA: ${{ github.sha }}
@@ -44,23 +44,28 @@ jobs:
             :app:assembleLocalDebug
           APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
           test -n "$APK"
-          mkdir -p /tmp/aurora-tablet-ui-v3
-          cp "$APK" /tmp/aurora-tablet-ui-v3/Aurora-Tablet-UI-V3.apk
-          sha256sum /tmp/aurora-tablet-ui-v3/Aurora-Tablet-UI-V3.apk > /tmp/aurora-tablet-ui-v3/SHA256SUMS.txt
-          cat > /tmp/aurora-tablet-ui-v3/BUILD_IDENTITY.txt <<EOF
+          mkdir -p /tmp/aurora-tablet-ui-v4-wake
+          cp "$APK" /tmp/aurora-tablet-ui-v4-wake/Aurora-Tablet-UI-V4-Wake.apk
+          sha256sum /tmp/aurora-tablet-ui-v4-wake/Aurora-Tablet-UI-V4-Wake.apk > /tmp/aurora-tablet-ui-v4-wake/SHA256SUMS.txt
+          BUILD_UTC="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          cat > /tmp/aurora-tablet-ui-v4-wake/BUILD_IDENTITY.txt <<EOF
           prototype_head=${{ github.sha }}
-          w15j_base=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
-          ui_profile=TABLET_UI_V3
-          app_version=0.16.0-alpha.3-local
+          w15j_candidate=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
+          ui_profile=TABLET_UI_V4_WAKE
+          app_version=0.17.0-alpha.1-local
           variant=localDebug
-          voice_mode=tap-to-talk-stt-plus-tts
-          wake_mode=local-kws-contracts-only
-          wake_model=prototype-template-pt-BR-v1-pre-enrollment
+          target_sdk=36
+          voice_mode=bounded-stt-plus-tts-plus-barge-in
+          wake_mode=voiceinteraction-lifecycle-plus-local-microphone-fgs-kws
+          wake_model=per-device-local-enrollment-template-pt-BR-v1
+          wake_raw_audio_persistence=disabled
+          wake_authority=none
+          build_utc=${BUILD_UTC}
           EOF
-      - name: Upload Aurora Tablet UI V3 APK
+      - name: Upload Aurora Tablet UI V4 Wake APK
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-tablet-ui-v3
-          path: /tmp/aurora-tablet-ui-v3
+          name: aurora-tablet-ui-v4-wake
+          path: /tmp/aurora-tablet-ui-v4-wake
           if-no-files-found: error
           retention-days: 14

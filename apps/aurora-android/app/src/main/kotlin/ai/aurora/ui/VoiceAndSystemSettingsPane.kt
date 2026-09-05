@@ -1,9 +1,12 @@
 package ai.aurora.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Debug
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,12 +25,23 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import ai.aurora.device.wake.AuroraVoiceInteractionService
+import ai.aurora.device.wake.AuroraWakeForegroundService
+import ai.aurora.device.wake.AuroraWakeModelStore
+import ai.aurora.device.wake.WakeRuntimeStatusStore
+import ai.aurora.device.wake.WakeSensitivityPolicy
+import ai.aurora.device.wake.WakeSetupActivity
 import ai.aurora.ui.model.AuroraUiIntent
 import ai.aurora.ui.model.AuroraUiState
 import ai.aurora.ui.model.SemanticTone
@@ -46,6 +60,22 @@ internal fun VoiceAndSystemSettingsPane(
     val context = LocalContext.current
     val microphoneGranted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     val onboardingReplayController = OnboardingReplayController(context)
+    val uiPreferences = remember(context) { context.getSharedPreferences(UI_PREFERENCES_NAME, Context.MODE_PRIVATE) }
+    var wakeSensitivity by remember {
+        mutableFloatStateOf(
+            uiPreferences.getFloat(AuroraWakeForegroundService.KEY_WAKE_SENSITIVITY, WakeSensitivityPolicy.DEFAULT_SENSITIVITY),
+        )
+    }
+    var wakeRefresh by remember { mutableIntStateOf(0) }
+    @Suppress("UNUSED_EXPRESSION")
+    wakeRefresh
+    val wakeRuntime = WakeRuntimeStatusStore(context).snapshot()
+    val wakeModelValid = AuroraWakeModelStore(context).hasValidModel()
+    val assistantConfigured = AuroraVoiceInteractionService.isConfiguredAsAssistant(context)
+    val powerManager = context.getSystemService(PowerManager::class.java)
+    val batteryOptimizationExempt = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
+    val processPssMb = Debug.getPss().toDouble() / 1024.0
+    val processCpuMs = android.os.Process.getElapsedCpuTime()
 
     Column(
         modifier = Modifier
@@ -56,7 +86,7 @@ internal fun VoiceAndSystemSettingsPane(
     ) {
         Heading(
             "Voice, Audio & Settings",
-            "Configuração local do assistente multimodal. Speech/TTS não criam permission, authority ou execution truth.",
+            "Configuração local do assistente multimodal. Speech/TTS/Wake não criam permission, authority ou execution truth.",
         )
 
         SettingsCard("Voice runtime") {
@@ -100,7 +130,7 @@ internal fun VoiceAndSystemSettingsPane(
             ) { onIntent(AuroraUiIntent.SetAutoSpeakResponses(it)) }
             SettingToggleV2(
                 "Barge-in",
-                "Ao tocar para falar durante TTS, interrompe a fala atual antes de iniciar STT.",
+                "Permite interromper TTS e iniciar uma nova interação; self-wake da própria fala “Aurora” é suprimido localmente.",
                 state.settings.bargeInEnabled,
             ) { onIntent(AuroraUiIntent.SetBargeIn(it)) }
             VoiceSlider("Velocidade", state.settings.voiceSpeechRate, 0.5f..1.5f, "${"%.2f".format(state.settings.voiceSpeechRate)}×") {
@@ -121,23 +151,95 @@ internal fun VoiceAndSystemSettingsPane(
             }
         }
 
-        SettingsCard("Wake & Presence") {
+        SettingsCard("Wake Word · Aurora") {
             SettingToggleV2(
-                "Wake preference",
-                "Preferência armazenada, mas o hotword contínuo ainda não está ativo. A implementação final requer engine dedicado + foreground/privacy policy.",
+                "Ativar “Aurora”",
+                "Detector dedicado on-device. Nenhum áudio contínuo é enviado ao backend e o wake nunca autoriza uma ação.",
                 state.settings.wakePreferenceEnabled,
-            ) { onIntent(AuroraUiIntent.SetWakePreference(it)) }
+            ) { enabled ->
+                onIntent(AuroraUiIntent.SetWakePreference(enabled))
+                if (!enabled) AuroraWakeForegroundService.disarm(context)
+            }
+            KeyValue("Estado", wakeRuntime.state)
+            KeyValue("Engine", wakeRuntime.engine)
+            KeyValue("Modelo", wakeRuntime.modelVersion)
+            KeyValue("Modelo íntegro/local", if (wakeModelValid) "YES" else "NO / SETUP REQUIRED")
+            KeyValue("Default Assistant", if (assistantConfigured) "AURORA ACTIVE" else "NOT SELECTED")
+            KeyValue("Microfone", if (microphoneGranted) "GRANTED" else "DENIED / NOT GRANTED")
+            KeyValue("Battery optimization exemption", if (batteryOptimizationExempt) "EXEMPT" else "NOT EXEMPT")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SmallBadge("CONFIRMED ${wakeRuntime.confirmedWakes}", SemanticTone.VERIFIED)
+                SmallBadge("REJECTED ${wakeRuntime.rejectedOrIgnoredCandidates}", SemanticTone.INFO)
+            }
+            wakeRuntime.lastError?.let { LuminousCallout("WAKE STATUS", it, SemanticTone.CRITICAL) }
+
+            VoiceSlider(
+                title = "Sensibilidade",
+                value = wakeSensitivity,
+                range = 0.0f..1.0f,
+                label = "${(wakeSensitivity * 100).toInt()}%",
+            ) { value ->
+                wakeSensitivity = value.coerceIn(0.0f, 1.0f)
+                uiPreferences.edit()
+                    .putFloat(AuroraWakeForegroundService.KEY_WAKE_SENSITIVITY, wakeSensitivity)
+                    .apply()
+            }
+            Text(
+                "Sensibilidade altera apenas o threshold acústico local (${String.format("%.2f", WakeSensitivityPolicy.confidenceThreshold(wakeSensitivity))}); não altera policy, approval ou execution authority.",
+                color = TextSecondary,
+                fontSize = 12.sp,
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = { context.startActivity(Intent(context, WakeSetupActivity::class.java)) },
+                    enabled = !state.settings.privacyMode,
+                ) { Text(if (wakeModelValid) "Recalibrar wake word" else "Configurar wake word") }
+                OutlinedButton(
+                    onClick = {
+                        runCatching { AuroraWakeForegroundService.armFromVisibleContext(context) }
+                        wakeRefresh += 1
+                    },
+                    enabled = state.settings.wakePreferenceEnabled && wakeModelValid && microphoneGranted && !state.settings.privacyMode,
+                ) { Text("Rearmar agora") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = { wakeRefresh += 1 }) { Text("Atualizar diagnóstico") }
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                        }
+                    },
+                ) { Text("Battery settings") }
+            }
             LuminousCallout(
-                "PREFERENCE ONLY",
-                "A APK não mantém SpeechRecognizer aberto em loop. Isso evita uma falsa implementação de always-listening e preserva bateria/privacidade.",
-                SemanticTone.APPROVAL,
+                "LOCAL + FAIL CLOSED",
+                "O hotword usa AudioRecord 16 kHz + VAD + modelo derivado do enrollment local. Raw PCM não é persistido. Privacy Mode e revogação do microfone desarmam o caminho.",
+                SemanticTone.VERIFIED,
+            )
+            LuminousCallout(
+                if (assistantConfigured) "ASSISTANT TRACK A" else "FALLBACK TRACK B",
+                if (assistantConfigured) {
+                    "Como assistente Android ativo, o VoiceInteractionService pode restaurar o listener configurado pelo lifecycle oficial."
+                } else {
+                    "Sem Aurora como Default Assistant, o microphone FGS precisa ser armado por contexto visível e pode exigir rearm após reboot/restrições da plataforma."
+                },
+                if (assistantConfigured) SemanticTone.VERIFIED else SemanticTone.APPROVAL,
+            )
+            KeyValue("Process PSS snapshot", "${"%.1f".format(processPssMb)} MiB")
+            KeyValue("Process CPU elapsed", "$processCpuMs ms")
+            Text(
+                "Wake latency, battery delta/hour, thermal e false-activation rate exigem coleta física representativa; esta UI não fabrica esses números.",
+                color = TextSecondary,
+                fontSize = 12.sp,
             )
         }
 
         SettingsCard("Privacy & Accessibility") {
             SettingToggleV2(
                 "Privacy mode",
-                "Bloqueia captura e saída de voz enquanto estiver ativo.",
+                "Bloqueia wake, captura e saída de voz enquanto estiver ativo.",
                 state.settings.privacyMode,
             ) { onIntent(AuroraUiIntent.SetPrivacyMode(it)) }
             SettingToggleV2(
@@ -261,7 +363,7 @@ private fun LanguageSelector(state: AuroraUiState, onIntent: (AuroraUiIntent) ->
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Idioma", fontWeight = FontWeight.Medium)
         Text(
-            "O mesmo locale é aplicado ao reconhecimento e ao TTS quando suportado pelo dispositivo.",
+            "O mesmo locale é aplicado ao reconhecimento e ao TTS quando suportado pelo dispositivo. O modelo de wake deste prototype permanece especificamente pt-BR / “Aurora”.",
             color = TextSecondary,
             fontSize = 12.sp,
         )
@@ -337,3 +439,5 @@ private fun engineTone(availability: VoiceEngineAvailability): SemanticTone = wh
     VoiceEngineAvailability.UNKNOWN -> SemanticTone.INFO
     VoiceEngineAvailability.UNAVAILABLE -> SemanticTone.CRITICAL
 }
+
+private const val UI_PREFERENCES_NAME = "aurora.ui.v1"
