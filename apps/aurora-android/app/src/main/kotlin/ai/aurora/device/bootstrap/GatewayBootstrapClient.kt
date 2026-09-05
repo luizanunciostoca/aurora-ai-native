@@ -87,9 +87,11 @@ internal sealed interface GatewayBootstrapClientResult<out T> {
 /**
  * Exchanges a single server-staged bootstrap reference for one W14 gateway credential.
  *
- * The caller supplies only local expected device/session binding for comparison. Tenant, actor,
- * correlation and credential material are never accepted as Android authority input. A post-write
- * loss is TRANSPORT_UNCERTAIN and requires a fresh bootstrap; this client never retries it.
+ * A fresh install may accept the device/session binding assigned by the already-authenticated
+ * server principal. When a local binding is already known, both expected values must be supplied
+ * and are enforced exactly. Tenant, actor, correlation and credential material are never accepted
+ * as Android authority input. A post-write loss is TRANSPORT_UNCERTAIN and requires a fresh
+ * bootstrap; this client never retries it.
  */
 internal class GatewayBootstrapClient(
     private val channelFactory: GatewayHttpChannelFactory,
@@ -97,13 +99,17 @@ internal class GatewayBootstrapClient(
 ) {
     fun exchange(
         bootstrapReference: String,
-        expectedDeviceId: String,
-        expectedDeviceSessionId: String,
+        expectedDeviceId: String? = null,
+        expectedDeviceSessionId: String? = null,
     ): GatewayBootstrapClientResult<GatewayBootstrapGrant> {
+        val expectedBindingPresent = expectedDeviceId != null || expectedDeviceSessionId != null
         if (
             !BOOTSTRAP_REFERENCE.matches(bootstrapReference) ||
-            !DEVICE_ID.matches(expectedDeviceId) ||
-            !SAFE_TOKEN.matches(expectedDeviceSessionId)
+            (expectedBindingPresent &&
+                (expectedDeviceId == null ||
+                    expectedDeviceSessionId == null ||
+                    !DEVICE_ID.matches(expectedDeviceId) ||
+                    !SAFE_TOKEN.matches(expectedDeviceSessionId)))
         ) {
             return rejected(GatewayBootstrapClientError.REFERENCE_INVALID)
         }
@@ -142,8 +148,8 @@ internal class GatewayBootstrapClient(
 
     private fun parseGrant(
         body: String,
-        expectedDeviceId: String,
-        expectedDeviceSessionId: String,
+        expectedDeviceId: String?,
+        expectedDeviceSessionId: String?,
     ): GatewayBootstrapClientResult<GatewayBootstrapGrant> {
         val root = runCatching { StrictJson.parseObject(body) }.getOrNull()
             ?: return rejected(GatewayBootstrapClientError.PROTOCOL_MALFORMED)
@@ -200,7 +206,11 @@ internal class GatewayBootstrapClient(
                 )
             }.getOrNull() ?: return rejected(GatewayBootstrapClientError.PROTOCOL_MALFORMED)
 
-        if (grant.deviceId != expectedDeviceId || grant.deviceSessionId != expectedDeviceSessionId) {
+        if (
+            expectedDeviceId != null &&
+            expectedDeviceSessionId != null &&
+            (grant.deviceId != expectedDeviceId || grant.deviceSessionId != expectedDeviceSessionId)
+        ) {
             return rejected(GatewayBootstrapClientError.BINDING_MISMATCH)
         }
         val now = nowMs()
@@ -242,8 +252,8 @@ internal class ProcessLocalGatewayBootstrapRuntime(
 
     @Synchronized
     fun exchangeAndHold(
-        expectedDeviceId: String,
-        expectedDeviceSessionId: String,
+        expectedDeviceId: String? = null,
+        expectedDeviceSessionId: String? = null,
     ): GatewayBootstrapClientResult<Unit> {
         val reference = bootstrapReference
             ?: return rejected(GatewayBootstrapClientError.REFERENCE_INVALID)
