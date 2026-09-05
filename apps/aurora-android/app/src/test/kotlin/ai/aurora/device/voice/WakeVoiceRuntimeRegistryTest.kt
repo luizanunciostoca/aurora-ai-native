@@ -60,9 +60,39 @@ class WakeVoiceRuntimeRegistryTest {
         val ingress = GovernedW07VoiceAuthorityIngress(transport)
         WakeVoiceRuntimeRegistry.installAuthorityIngress(ingress)
 
-        val ingressResult = ingress.submit(candidate)
+        val router = WakeVoiceFastPathRouter(
+            inputProvider = {
+                WakeVoiceFastPathInputs(
+                    commands = listOf(
+                        VoiceCommandDefinition(
+                            commandId = "open-camera",
+                            phrases = setOf("open camera"),
+                            capabilityId = "camera.open",
+                            risk = VoiceCommandRisk.LOW,
+                        ),
+                    ),
+                    context = VoiceFastPathContext(
+                        appVisibility = ai.aurora.device.lifecycle.AppVisibility.FOREGROUND,
+                        microphonePermission = ai.aurora.device.permission.RuntimePermissionObservation(
+                            requirement = ai.aurora.device.permission.RuntimePermissionRequirement("android.permission.RECORD_AUDIO"),
+                            state = ai.aurora.device.permission.RuntimePermissionState.GRANTED,
+                            observedAtMs = 1000L,
+                            expiresAtMs = 31000L,
+                            shouldShowRationale = false,
+                        ),
+                        availableCapabilityIds = setOf("camera.open"),
+                        privacyModeEnabled = false,
+                    ),
+                )
+            },
+            authorityIngress = ingress,
+            nowMs = { 1000L },
+        )
 
-        assertEquals(W07VoiceAuthorityIngressResult.AcceptedForEvaluation, ingressResult)
+        val routeResult = router.route("open camera", 0.99) as WakeVoiceRoute.AuthoritySubmitted
+
+        assertEquals("open-camera", routeResult.dispatch.commandId)
+        assertEquals("camera.open", routeResult.dispatch.capabilityId)
         assertEquals("open-camera", observedSubmission?.commandId)
         assertEquals("camera.open", observedSubmission?.capabilityId)
         assertEquals("open camera", observedSubmission?.normalizedTranscript)
