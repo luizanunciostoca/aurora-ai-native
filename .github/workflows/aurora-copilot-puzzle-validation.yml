@@ -33,21 +33,6 @@ jobs:
         run: node tools/copilot/validate-execution-mode.mjs
       - name: Validate PRO+ runtime capacity, leases and telemetry
         run: node --test tools/copilot/pro-plus-runtime.test.mjs
-      - name: Set up canonical Node for temporary diagnostic
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
-        with:
-          node-version: 22.16.0
-          cache: npm
-      - name: TEMP PRO+ canonical Prettier diagnostic
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm ci
-          cp tools/copilot/runtime-capacity.mjs /tmp/runtime-capacity.before.mjs
-          npx prettier --write tools/copilot/runtime-capacity.mjs >/dev/null
-          echo 'PRO_PLUS_PRETTIER_PATCH_BEGIN'
-          diff -u /tmp/runtime-capacity.before.mjs tools/copilot/runtime-capacity.mjs || true
-          echo 'PRO_PLUS_PRETTIER_PATCH_END'
       - name: Validate canonical BUILD frontier safety
         run: node tools/copilot/frontier-policy.test.mjs
       - name: Validate Puzzle scheduling semantics
