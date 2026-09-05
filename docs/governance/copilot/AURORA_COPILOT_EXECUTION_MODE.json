@@ -1,41 +1,48 @@
 {
-  "schemaVersion": 4,
-  "mode": "FREE_ACTIONS_CLI",
+  "schemaVersion": 5,
+  "mode": "PRO_PLUS_ACTIONS_FABRIC",
+  "activationState": "PENDING_REALITY_GATE",
   "cloudAgentEnabled": false,
+  "proPlusActionsFabricEnabled": true,
   "freeActionsCliEnabled": true,
+  "fallbackPhysicalBuildSlots": 2,
   "prebuildWorkerEnabled": false,
-  "maxParallelTasks": 2,
-  "physicalBuildSlots": 2,
-  "maxLogicalLanes": 32,
-  "maxPrebuildArtifactLanes": 24,
+  "maxParallelTasks": 4,
+  "physicalBuildSlots": 4,
+  "maxLogicalLanes": 64,
+  "maxPrebuildArtifactLanes": 48,
   "copilotModel": "auto",
   "runtimeCapabilityDiscovery": {
     "enabled": true,
-    "failurePolicy": "FAIL_CLOSED",
+    "failurePolicy": "FAIL_CLOSED_TO_FREE_FALLBACK",
     "requiredForProPlus": true,
+    "attestationPath": "docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json",
+    "minimumObservedConcurrentSessions": 4,
+    "attestationMaxAgeMinutes": 1440,
     "signals": [
-      "AURORA_CLOUD_AGENT_AVAILABLE",
-      "AURORA_ACCOUNT_PLAN",
-      "AURORA_ISOLATED_SESSION_CAPACITY",
-      "AURORA_CI_PARALLEL_CAPACITY",
-      "AURORA_AI_CREDIT_SLOT_BUDGET"
+      "MEASURED_COPILOT_CLI_SUCCESS",
+      "MEASURED_CONCURRENT_JOB_OVERLAP",
+      "EXACT_WORKFLOW_RUN_ID",
+      "EXACT_CANDIDATE_SHA",
+      "ATTESTATION_EXPIRY"
     ]
   },
   "capacityController": {
     "strategy": "MINIMUM_SAFE_DIMENSION",
     "subtractActiveSessionLeases": true,
     "respectWriterLeases": true,
-    "unknownCapacityPolicy": "ZERO_CAPACITY"
+    "unknownCapacityPolicy": "FREE_FALLBACK_ONLY"
   },
   "sessionLeaseRegistry": {
     "source": "LIVE_GITHUB_ISSUE_TASK_PROJECTION",
     "lockDimensions": ["allowedPaths", "sharedWriteSurfaces"],
-    "staleLeasePolicy": "FAIL_CLOSED_UNTIL_RECONCILED",
+    "staleLeasePolicy": "PRESERVE_WRITER_LOCK_RELEASE_SESSION_AFTER_TTL",
+    "sessionLeaseTtlMinutes": 60,
     "prOpenConsumesBuildSession": false
   },
   "developmentTelemetry": {
     "enabled": true,
-    "schema": "aurora.pro_plus.development_telemetry.v1",
+    "schema": "aurora.pro_plus.development_telemetry.v2",
     "canonicalAuthority": false
   },
   "scheduler": {
@@ -51,20 +58,16 @@
     "runningTaskActivationPolicy": "NON_RETROACTIVE",
     "handoffFormat": "AURORA_COMPACT_V1"
   },
-  "upgradeTarget": "PRO_PLUS_CLOUD_AGENT",
+  "upgradeTarget": "PRO_PLUS_CLOUD_AGENT_OPTIONAL",
   "authority": "Operational execution mode only. Live main, exact-SHA evidence, CURRENT_PROGRAM_STATUS, Developer Manual, ADRs and owning wave governance remain authoritative.",
   "notes": [
-    "Copilot Pro+ governance is active; physical Pro+ execution remains capability-gated until the runtime proves plan, cloud-agent, isolated-session, CI and AI-credit capacity.",
+    "PRO_PLUS_ACTIONS_FABRIC is the active target mode and uses measured GitHub Actions plus Copilot CLI concurrency instead of guessing subscription or cloud-agent capability.",
+    "Until the bounded Reality Gate attestation is VERIFIED and fresh, canonical BUILD execution automatically falls back to at most 2 Free-compatible physical slots.",
     "Physical build slots and logical puzzle lanes are independent capacities.",
-    "Copilot Free canonical BUILD concurrency remains capped by Aurora at 2 physicalBuildSlots.",
-    "Logical lanes may span multiple waves simultaneously and may perform READINESS or governed PREBUILD without consuming canonical BUILD authority.",
-    "A missing dependency blocks canonical BUILD/integration, not all preparatory work.",
-    "PREBUILD is non-authoritative and artifact-only until every canonical dependency is accepted and contract reconciliation succeeds.",
-    "ISOLATED_PATCH prebuild is permitted only when a task explicitly declares prebuildAllowedPaths; path ownership is never guessed.",
+    "Logical lanes may perform READINESS or governed PREBUILD without consuming canonical BUILD authority.",
     "Active writer leases block colliding allowedPaths/sharedWriteSurfaces even when they do not consume a physical BUILD slot.",
-    "Only running/dispatched leases consume physical session capacity; an open canonical PR retains its writer lock without consuming a worker slot.",
-    "Unknown Pro+ runtime, CI or credit capacity resolves to zero additional BUILD capacity.",
-    "A task already running when this standard is activated keeps its original accepted base/contract and is not invalidated retroactively.",
-    "Increasing safe BUILD capacity never weakens dependency, path, shared-surface, exact-head or acceptance gates."
+    "A stale running lease releases only its physical session reservation after TTL; its writer lock remains fail-closed until reconciliation.",
+    "PREBUILD remains non-authoritative and artifact-only until every canonical dependency is accepted and contract reconciliation succeeds.",
+    "Increasing measured safe BUILD capacity never weakens dependency, path, shared-surface, exact-head, Risk Gate, review or acceptance barriers."
   ]
 }
