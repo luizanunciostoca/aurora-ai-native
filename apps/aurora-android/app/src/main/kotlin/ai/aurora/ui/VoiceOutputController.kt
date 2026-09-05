@@ -24,7 +24,10 @@ class VoiceOutputController(
     private var initialized = false
     private var currentRequestId: Long? = null
     private var focusRequest: AudioFocusRequest? = null
-    private val registryRegistration = VoiceSessionRegistry.register { stopForLifecycle() }
+    private val registryRegistration = VoiceSessionRegistry.register(
+        onBackground = { stopForLifecycle("Saída de voz interrompida porque a Aurora saiu do primeiro plano.") },
+        onPrivacy = { stopForLifecycle("Saída de voz interrompida pelo modo de privacidade.") },
+    )
 
     init {
         tts = TextToSpeech(appContext) { status ->
@@ -147,12 +150,12 @@ class VoiceOutputController(
         tts = null
     }
 
-    private fun stopForLifecycle() {
+    private fun stopForLifecycle(message: String) {
         val interruptedId = currentRequestId ?: return
         currentRequestId = null
         runCatching { tts?.stop() }
         abandonAudioFocus()
-        onError(interruptedId, "Saída de voz interrompida porque a Aurora saiu do primeiro plano ou entrou em modo de privacidade.")
+        onError(interruptedId, message)
     }
 
     private fun requestAudioFocus(): Boolean {
