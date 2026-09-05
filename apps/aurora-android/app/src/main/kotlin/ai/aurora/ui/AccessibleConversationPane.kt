@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
@@ -29,6 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ai.aurora.ui.model.AuroraPresenceMode
@@ -160,6 +163,9 @@ private fun AccessibleCommandInput(
     onIntent: (AuroraUiIntent) -> Unit,
     onVoice: () -> Unit,
 ) {
+    val submit = {
+        if (state.inputDraft.isNotBlank()) onIntent(AuroraUiIntent.SubmitText(state.inputDraft))
+    }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value = state.inputDraft,
@@ -170,11 +176,14 @@ private fun AccessibleCommandInput(
             placeholder = { Text("Pergunte, peça para mostrar, comparar ou explicar…") },
             minLines = 1,
             maxLines = 4,
+            singleLine = false,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = { submit() }),
             shape = RoundedCornerShape(18.dp),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                onClick = { onIntent(AuroraUiIntent.SubmitText(state.inputDraft)) },
+                onClick = submit,
                 enabled = state.inputDraft.isNotBlank(),
                 modifier = Modifier
                     .weight(1f)
