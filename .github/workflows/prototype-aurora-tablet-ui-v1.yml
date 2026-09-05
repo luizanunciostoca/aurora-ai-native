@@ -1,4 +1,4 @@
-name: Prototype Aurora Tablet UI V4 Wake
+name: Prototype Aurora Tablet UI V4 Wake Governed
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  android-ui-v4-wake:
+  android-ui-v4-wake-governed:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -40,7 +40,7 @@ jobs:
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - name: Test and assemble Aurora Tablet UI V4 Wake
+      - name: Test and assemble Aurora Tablet UI V4 Wake Governed
         shell: bash
         env:
           AURORA_BUILD_SHA: ${{ github.sha }}
@@ -50,34 +50,37 @@ jobs:
             :app:assembleLocalDebug
           APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
           test -n "$APK"
-          ARTIFACT_DIR=/tmp/aurora-tablet-ui-v4-wake
+          ARTIFACT_DIR=/tmp/aurora-tablet-ui-v4-wake-governed
           mkdir -p "$ARTIFACT_DIR"
-          cp "$APK" "$ARTIFACT_DIR/Aurora-Tablet-UI-V4-Wake.apk"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-Tablet-UI-V4-Wake-Governed.apk"
           (
             cd "$ARTIFACT_DIR"
-            sha256sum Aurora-Tablet-UI-V4-Wake.apk > SHA256SUMS.txt
+            sha256sum Aurora-Tablet-UI-V4-Wake-Governed.apk > SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
           BUILD_UTC="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
           prototype_head=${{ github.sha }}
           w15j_candidate=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
-          ui_profile=TABLET_UI_V4_WAKE
-          app_version=0.17.0-alpha.1-local
+          ui_profile=TABLET_UI_V4_WAKE_GOVERNED_FAST_PATH
+          app_version=0.17.0-alpha.2-local
           variant=localDebug
           target_sdk=36
           voice_mode=bounded-stt-plus-tts-plus-barge-in
-          voice_fast_path=w15g-fail-closed-until-canonical-w04-catalog-and-w07-mobile-ingress
+          voice_fast_path=w04-w15c-w15g-atomic-governed-projection
+          voice_projection_default=empty-fail-closed
+          w07_mobile_ingress=uncomposed-fail-closed
+          voice_authority=none
           wake_mode=voiceinteraction-lifecycle-plus-local-microphone-fgs-kws
           wake_model=per-device-local-enrollment-template-pt-BR-v1
           wake_raw_audio_persistence=disabled
           wake_authority=none
           build_utc=${BUILD_UTC}
           EOF
-      - name: Upload Aurora Tablet UI V4 Wake APK
+      - name: Upload Aurora Tablet UI V4 Wake Governed APK
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-tablet-ui-v4-wake
-          path: /tmp/aurora-tablet-ui-v4-wake
+          name: aurora-tablet-ui-v4-wake-governed
+          path: /tmp/aurora-tablet-ui-v4-wake-governed
           if-no-files-found: error
           retention-days: 14
