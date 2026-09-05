@@ -58,10 +58,7 @@ test('builds the exact trusted tuple from collector evidence', () => {
     assert.equal(result.expected.candidateSha, 'a'.repeat(40));
     assert.equal(result.expected.apk.sha256, 'b'.repeat(64));
     assert.equal(result.expected.device.serialSha256, 'c'.repeat(64));
-    assert.equal(
-      result.expected.environment.gatewayTransport,
-      'LOCAL_ADB_REVERSE_ONLY',
-    );
+    assert.equal(result.expected.environment.gatewayTransport, 'LOCAL_ADB_REVERSE_ONLY');
     assert.deepEqual(result.adbReverseMappings, [
       { host: 'tcp', port: 8080, status: 'PRESENT' },
       { host: 'tcp', port: 8081, status: 'PRESENT' },
