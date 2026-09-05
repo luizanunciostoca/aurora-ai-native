@@ -7,9 +7,13 @@ if (!directory || !Number.isInteger(required) || required < 2) {
   throw new Error('usage: node evaluate-pro-plus-reality.mjs <probe-dir> <required-concurrency>');
 }
 
-const files = fs.readdirSync(directory).filter((name) => name.endsWith('.json')).sort();
+const files = fs
+  .readdirSync(directory)
+  .filter((name) => name.endsWith('.json'))
+  .sort();
 const probes = files.map((name) => JSON.parse(fs.readFileSync(path.join(directory, name), 'utf8')));
-if (probes.length !== required) throw new Error(`expected ${required} probe records, got ${probes.length}`);
+if (probes.length !== required)
+  throw new Error(`expected ${required} probe records, got ${probes.length}`);
 
 for (const probe of probes) {
   if (
@@ -25,10 +29,12 @@ for (const probe of probes) {
   }
 }
 
-const events = probes.flatMap((probe) => [
-  { at: probe.startedAtMs, delta: 1 },
-  { at: probe.finishedAtMs, delta: -1 },
-]).sort((left, right) => left.at - right.at || right.delta - left.delta);
+const events = probes
+  .flatMap((probe) => [
+    { at: probe.startedAtMs, delta: 1 },
+    { at: probe.finishedAtMs, delta: -1 },
+  ])
+  .sort((left, right) => left.at - right.at || right.delta - left.delta);
 let active = 0;
 let peak = 0;
 for (const event of events) {

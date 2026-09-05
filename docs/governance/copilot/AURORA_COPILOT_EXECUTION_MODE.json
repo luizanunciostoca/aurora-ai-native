@@ -19,7 +19,13 @@
     "attestationPath": "docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json",
     "minimumObservedConcurrentSessions": 3,
     "attestationMaxAgeMinutes": 1440,
-    "signals": ["MEASURED_COPILOT_CLI_SUCCESS", "MEASURED_CONCURRENT_JOB_OVERLAP", "EXACT_WORKFLOW_RUN_ID", "EXACT_CANDIDATE_SHA", "ATTESTATION_EXPIRY"]
+    "signals": [
+      "MEASURED_COPILOT_CLI_SUCCESS",
+      "MEASURED_CONCURRENT_JOB_OVERLAP",
+      "EXACT_WORKFLOW_RUN_ID",
+      "EXACT_CANDIDATE_SHA",
+      "ATTESTATION_EXPIRY"
+    ]
   },
   "capacityController": {
     "strategy": "MINIMUM_SAFE_DIMENSION",

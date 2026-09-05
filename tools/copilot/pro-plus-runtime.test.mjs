@@ -1,11 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { calculateDynamicSafeBuildCapacity, discoverRuntimeCapabilities } from './runtime-capacity.mjs';
-import { filterCandidatesAgainstActiveLeases, projectActiveSessionLeases } from './session-lease-registry.mjs';
+import {
+  calculateDynamicSafeBuildCapacity,
+  discoverRuntimeCapabilities,
+} from './runtime-capacity.mjs';
+import {
+  filterCandidatesAgainstActiveLeases,
+  projectActiveSessionLeases,
+} from './session-lease-registry.mjs';
 import { buildProPlusDevelopmentTelemetry } from './pro-plus-telemetry.mjs';
 
-const freeMode = { mode: 'FREE_ACTIONS_CLI', freeActionsCliEnabled: true, cloudAgentEnabled: false, physicalBuildSlots: 2 };
+const freeMode = {
+  mode: 'FREE_ACTIONS_CLI',
+  freeActionsCliEnabled: true,
+  cloudAgentEnabled: false,
+  physicalBuildSlots: 2,
+};
 const actionsMode = {
   mode: 'PRO_PLUS_ACTIONS_FABRIC',
   proPlusActionsFabricEnabled: true,
@@ -34,14 +45,30 @@ const verifiedAttestation = {
 
 test('Free mode remains bounded and subtracts active leases', () => {
   const runtime = discoverRuntimeCapabilities(freeMode, {});
-  const result = calculateDynamicSafeBuildCapacity({ mode: freeMode, runtime, readyCandidateCount: 4, pathIndependentCandidateCount: 4, activeLeaseCount: 1 });
+  const result = calculateDynamicSafeBuildCapacity({
+    mode: freeMode,
+    runtime,
+    readyCandidateCount: 4,
+    pathIndependentCandidateCount: 4,
+    activeLeaseCount: 1,
+  });
   assert.equal(runtime.executionProfile, 'FREE');
   assert.equal(result.capacity, 1);
 });
 
 test('PRO+ Actions Fabric falls back safely while attestation is pending', () => {
-  const runtime = discoverRuntimeCapabilities(actionsMode, {}, { state: 'PENDING' }, Date.parse('2026-09-05T02:00:00Z'));
-  const result = calculateDynamicSafeBuildCapacity({ mode: actionsMode, runtime, readyCandidateCount: 8, pathIndependentCandidateCount: 8 });
+  const runtime = discoverRuntimeCapabilities(
+    actionsMode,
+    {},
+    { state: 'PENDING' },
+    Date.parse('2026-09-05T02:00:00Z'),
+  );
+  const result = calculateDynamicSafeBuildCapacity({
+    mode: actionsMode,
+    runtime,
+    readyCandidateCount: 8,
+    pathIndependentCandidateCount: 8,
+  });
   assert.equal(runtime.proPlusReady, false);
   assert.equal(runtime.executionProfile, 'FREE_FALLBACK');
   assert.equal(result.capacity, 2);
@@ -49,8 +76,18 @@ test('PRO+ Actions Fabric falls back safely while attestation is pending', () =>
 });
 
 test('fresh measured PRO+ attestation unlocks exactly the observed three safe BUILD slots', () => {
-  const runtime = discoverRuntimeCapabilities(actionsMode, {}, verifiedAttestation, Date.parse('2026-09-05T02:00:00Z'));
-  const result = calculateDynamicSafeBuildCapacity({ mode: actionsMode, runtime, readyCandidateCount: 7, pathIndependentCandidateCount: 6 });
+  const runtime = discoverRuntimeCapabilities(
+    actionsMode,
+    {},
+    verifiedAttestation,
+    Date.parse('2026-09-05T02:00:00Z'),
+  );
+  const result = calculateDynamicSafeBuildCapacity({
+    mode: actionsMode,
+    runtime,
+    readyCandidateCount: 7,
+    pathIndependentCandidateCount: 6,
+  });
   assert.equal(runtime.proPlusReady, true);
   assert.equal(runtime.executionProfile, 'PRO_PLUS');
   assert.equal(runtime.isolatedSessionCapacity, 3);
@@ -59,7 +96,12 @@ test('fresh measured PRO+ attestation unlocks exactly the observed three safe BU
 
 test('expired or tampered PRO+ attestation automatically returns to Free fallback', () => {
   const expired = { ...verifiedAttestation, expiresAt: '2026-09-05T01:30:00.000Z' };
-  const runtime = discoverRuntimeCapabilities(actionsMode, {}, expired, Date.parse('2026-09-05T02:00:00Z'));
+  const runtime = discoverRuntimeCapabilities(
+    actionsMode,
+    {},
+    expired,
+    Date.parse('2026-09-05T02:00:00Z'),
+  );
   assert.equal(runtime.proPlusReady, false);
   assert.equal(runtime.executionProfile, 'FREE_FALLBACK');
   assert.equal(runtime.isolatedSessionCapacity, 2);
@@ -67,7 +109,10 @@ test('expired or tampered PRO+ attestation automatically returns to Free fallbac
 
 test('legacy cloud mode still fails closed when full external capability is not proven', () => {
   const mode = { mode: 'PRO_PLUS_CLOUD_AGENT', cloudAgentEnabled: true, physicalBuildSlots: 8 };
-  const runtime = discoverRuntimeCapabilities(mode, { AURORA_CLOUD_AGENT_AVAILABLE: 'true', AURORA_ACCOUNT_PLAN: 'pro_plus' });
+  const runtime = discoverRuntimeCapabilities(mode, {
+    AURORA_CLOUD_AGENT_AVAILABLE: 'true',
+    AURORA_ACCOUNT_PLAN: 'pro_plus',
+  });
   assert.equal(runtime.executionAvailable, false);
 });
 
@@ -77,16 +122,37 @@ test('active semantic and path leases defer colliding writers', () => {
     { id: 'B', allowedPaths: ['services/b/**'], sharedWriteSurfaces: ['surface:device'] },
     { id: 'C', allowedPaths: ['services/c/**'], sharedWriteSurfaces: ['surface:other'] },
   ];
-  const issues = [{ number: 1, state: 'open', title: '[AURORA][TASK A] lease owner', body: '<!-- AURORA_TASK_ID: A -->', updated_at: '2026-09-05T00:00:00Z', labels: [{ name: 'aurora:copilot-free-running' }] }];
+  const issues = [
+    {
+      number: 1,
+      state: 'open',
+      title: '[AURORA][TASK A] lease owner',
+      body: '<!-- AURORA_TASK_ID: A -->',
+      updated_at: '2026-09-05T00:00:00Z',
+      labels: [{ name: 'aurora:copilot-free-running' }],
+    },
+  ];
   const leases = projectActiveSessionLeases(issues, tasks);
-  const result = filterCandidatesAgainstActiveLeases([{ task: tasks[1], issue: { number: 2 } }, { task: tasks[2], issue: { number: 3 } }], leases);
+  const result = filterCandidatesAgainstActiveLeases(
+    [
+      { task: tasks[1], issue: { number: 2 } },
+      { task: tasks[2], issue: { number: 3 } },
+    ],
+    leases,
+  );
   assert.equal(result.eligible[0].task.id, 'C');
   assert.equal(result.deferred[0].reason, 'ACTIVE_SHARED_WRITE_LEASE');
 });
 
 test('development telemetry remains operational evidence and never authority', () => {
   const runtime = discoverRuntimeCapabilities(freeMode, {});
-  const telemetry = buildProPlusDevelopmentTelemetry({ runtime, capacity: { capacity: 2 }, activeLeases: [{ taskId: 'A' }], selected: [{ task: { id: 'B' } }], deferred: [{ taskId: 'C' }] });
+  const telemetry = buildProPlusDevelopmentTelemetry({
+    runtime,
+    capacity: { capacity: 2 },
+    activeLeases: [{ taskId: 'A' }],
+    selected: [{ task: { id: 'B' } }],
+    deferred: [{ taskId: 'C' }],
+  });
   assert.equal(telemetry.canonicalAuthority, false);
   assert.equal(telemetry.authorityElevationViolations, 0);
   assert.equal(telemetry.buildCapacityUtilizationBps, 5000);
