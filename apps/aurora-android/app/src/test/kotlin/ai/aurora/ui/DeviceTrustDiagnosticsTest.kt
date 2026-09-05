@@ -38,12 +38,12 @@ class DeviceTrustDiagnosticsTest {
         val rendered = result.toString()
 
         assertEquals("PRESENT", result.keyState)
-        assertEquals(3, result.keyGeneration)
+        assertEquals(3L, result.keyGeneration)
         assertEquals(7, result.boundRegistrationVersion)
         assertEquals("ACTIVE", result.registrationState)
         assertEquals(7, result.registrationVersion)
         assertEquals("PRESENT_METADATA", result.sessionState)
-        assertEquals(30, result.sessionRemainingSeconds)
+        assertEquals(30L, result.sessionRemainingSeconds)
         assertFalse(result.authorizesExecution)
         assertFalse(rendered.contains("secret-keystore-alias"))
         assertFalse(rendered.contains("dvc_01SECRETDEVICE"))
@@ -87,7 +87,7 @@ class DeviceTrustDiagnosticsTest {
         val result = DeviceTrustDiagnostics.sanitize(state, nowMs = 100)
 
         assertEquals("EXPIRED_METADATA", result.sessionState)
-        assertEquals(0, result.sessionRemainingSeconds)
+        assertEquals(0L, result.sessionRemainingSeconds)
         assertTrue(result.registrationState == "ACTIVE")
         assertFalse(result.authorizesExecution)
     }
