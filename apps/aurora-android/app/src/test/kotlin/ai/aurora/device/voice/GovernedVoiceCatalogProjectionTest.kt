@@ -25,7 +25,23 @@ class GovernedVoiceCatalogProjectionTest {
         assertEquals(setOf("camera.open"), result.snapshot.availableCapabilityIds)
         assertEquals(1, result.snapshot.commands.size)
         assertEquals(VoiceCommandRisk.LOW, result.snapshot.commands.single().risk)
+        assertEquals("github:main/packages/registries/capabilities@w04-live.1", result.snapshot.registrySourceRef)
+        assertEquals(REGISTRY_HASH, result.snapshot.registryContentSha256)
+        assertEquals("github:accepted/W15-G/vocabulary@w15g-live.1", result.snapshot.vocabularySourceRef)
+        assertEquals(VOCABULARY_HASH, result.snapshot.vocabularyContentSha256)
         assertFalse(result.snapshot.authorizesExecution)
+    }
+
+    @Test
+    fun invalidProjectionHashIsRejectedAtConstructionBoundary() {
+        val failure = runCatching {
+            GovernedProjectionProvenance(
+                sourceRef = "github:main/w04",
+                contentSha256 = "not-a-sha256",
+            )
+        }
+
+        assertTrue(failure.isFailure)
     }
 
     @Test
@@ -140,6 +156,11 @@ class GovernedVoiceCatalogProjectionTest {
             registryVersion = "w04-live.1",
             observedAtMs = 900,
             expiresAtMs = 2_000,
+            provenance =
+                GovernedProjectionProvenance(
+                    sourceRef = "github:main/packages/registries/capabilities@w04-live.1",
+                    contentSha256 = REGISTRY_HASH,
+                ),
             entries = entries,
         )
 
@@ -157,6 +178,11 @@ class GovernedVoiceCatalogProjectionTest {
             vocabularyVersion = "w15g-live.1",
             observedAtMs = 900,
             expiresAtMs = 2_000,
+            provenance =
+                GovernedProjectionProvenance(
+                    sourceRef = "github:accepted/W15-G/vocabulary@w15g-live.1",
+                    contentSha256 = VOCABULARY_HASH,
+                ),
             bindings = bindings,
         )
 
@@ -182,4 +208,9 @@ class GovernedVoiceCatalogProjectionTest {
             observedAtMs = 950,
             expiresAtMs = 1_500,
         )
+
+    companion object {
+        private const val REGISTRY_HASH = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        private const val VOCABULARY_HASH = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
 }
