@@ -1,0 +1,69 @@
+--- a/apps/aurora-android/app/src/main/kotlin/ai/aurora/device/network/GatewayDevicePlaneClient.kt
++++ b/apps/aurora-android/app/src/main/kotlin/ai/aurora/device/network/GatewayDevicePlaneClient.kt
+@@ -292,10 +292,41 @@
+         }
+         gateway = nextGateway
+ 
++        // W14 device bindings are socket-local. Rebind the already-accepted canonical DeviceRef
++        // on the fresh authenticated socket before asking W14-E to resume trust. This call cannot
++        // create a new local identity: any state/version drift fails closed.
++        val rebindProof = proofFactory.sign(registrationMessage(nextGateway, currentContext.deviceId))
++        val rebindResponse = post(
++            "/v1/device/registrations/register",
++            StrictJson.encodeObject(
++                listOf(
++                    "deviceId" to currentContext.deviceId,
++                    "proof" to rebindProof,
++                ),
++            ),
++        ) ?: run {
++            close()
++            return transportRejected()
++        }
++        val rebindResult = parseRegistration(rebindResponse)
++        if (rebindResult is GatewayDevicePlaneResult.Rejected) {
++            close()
++            return rebindResult
++        }
++        val reboundRegistration = (rebindResult as GatewayDevicePlaneResult.Success).value
++        if (
++            reboundRegistration.state != W14DeviceLifecycleState.ACTIVE ||
++            reboundRegistration.ref != currentRegistration.ref
++        ) {
++            close()
++            return rejected(GatewayDevicePlaneClientError.PROTOCOL_MALFORMED)
++        }
++        registration = reboundRegistration
++
+         val proof = proofFactory.sign(
+             attestationMessage(
+                 nextGateway,
+-                currentRegistration,
++                reboundRegistration,
+                 currentDeviceSession.deviceSessionId,
+                 previousGateway.connectionId,
+             ),
+--- a/apps/aurora-android/app/src/test/kotlin/ai/aurora/device/network/GatewayDevicePlaneClientTest.kt
++++ b/apps/aurora-android/app/src/test/kotlin/ai/aurora/device/network/GatewayDevicePlaneClientTest.kt
+@@ -102,6 +102,7 @@
+         )
+         val resumed = FakeChannel(
+             gatewayResponse("conn-2", generation = 2),
++            registrationResponse("ACTIVE", version = 2),
+             sessionResponse("conn-2", generation = 2, version = 2),
+         )
+         val channels = ArrayDeque(listOf(initial, resumed))
+@@ -125,7 +126,12 @@
+         assertEquals("conn-2", result.value.gateway.connectionId)
+         assertEquals(2, result.value.gateway.generation)
+         assertTrue(resumed.requests[0].second.contains("\"previousConnectionId\":\"conn-1\""))
+-        assertTrue(resumed.requests[1].second.contains("\"previousConnectionId\":\"conn-1\""))
++        assertEquals("/v1/device/registrations/register", resumed.requests[1].first)
++        assertTrue(resumed.requests[1].second.contains("\"deviceId\":\"dvc_01J00000000000000000000000\""))
++        assertFalse(resumed.requests[1].second.contains("tenantId"))
++        assertEquals("/v1/device/sessions/resume", resumed.requests[2].first)
++        assertTrue(resumed.requests[2].second.contains("\"previousConnectionId\":\"conn-1\""))
++        assertTrue(proofs.messages[proofs.messages.lastIndex - 1].startsWith("AURORA_DEVICE_REGISTRATION_V1\n"))
+         assertTrue(proofs.messages.last().endsWith("\nconn-1"))
+     }
+ 
