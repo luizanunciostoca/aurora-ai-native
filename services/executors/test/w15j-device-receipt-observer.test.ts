@@ -76,9 +76,7 @@ function material(
   };
 }
 
-function observation(
-  overrides: Partial<DeviceReceiptObservation> = {},
-): DeviceReceiptObservation {
+function observation(overrides: Partial<DeviceReceiptObservation> = {}): DeviceReceiptObservation {
   return {
     kind: 'DEVICE_RECEIPT_EVIDENCE_OBSERVATION',
     schemaVersion: SCHEMA_VERSION,
@@ -117,7 +115,8 @@ function observation(
 
 class CapturingSource implements TrustedDeviceExecutionMaterialSource {
   lookup: TrustedDeviceExecutionLookup | null = null;
-  factory: (lookup: TrustedDeviceExecutionLookup) => TrustedDeviceExecutionMaterial | null = material;
+  factory: (lookup: TrustedDeviceExecutionLookup) => TrustedDeviceExecutionMaterial | null =
+    material;
 
   resolve(lookup: TrustedDeviceExecutionLookup): TrustedDeviceExecutionMaterial | null {
     this.lookup = lookup;
