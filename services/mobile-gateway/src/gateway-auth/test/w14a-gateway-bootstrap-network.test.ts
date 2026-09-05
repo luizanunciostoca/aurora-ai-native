@@ -60,7 +60,10 @@ async function post(
           'content-length': new TextEncoder().encode(body).byteLength,
         },
       },
-      (response: { statusCode?: number; on(event: string, listener: (chunk?: unknown) => void): void }) => {
+      (response: {
+        statusCode?: number;
+        on(event: string, listener: (chunk?: unknown) => void): void;
+      }) => {
         let responseBody = '';
         response.on('data', (chunk) => {
           responseBody += String(chunk ?? '');
@@ -126,10 +129,7 @@ test('fails closed on wrong route malformed body and unsupported content type', 
   try {
     assert.equal((await post(address.port, '/not-bootstrap', '{}')).statusCode, 404);
     assert.equal((await post(address.port, address.path, '{')).statusCode, 400);
-    assert.equal(
-      (await post(address.port, address.path, '{}', 'text/plain')).statusCode,
-      415,
-    );
+    assert.equal((await post(address.port, address.path, '{}', 'text/plain')).statusCode, 415);
   } finally {
     await server.stop();
   }
