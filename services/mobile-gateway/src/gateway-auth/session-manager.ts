@@ -133,12 +133,18 @@ function validateAuthClaims(
       'issuedAtMs',
       'expiresAtMs',
       'authVersion',
+      'gatewaySessionId',
+      'actorKind',
+      'correlationId',
     ]) ||
     !isBoundedToken(value.tenantId, 256) ||
     !isBoundedToken(value.actorIdentityId, 256) ||
     !isBoundedToken(value.authVersion, 64) ||
     !isFiniteInteger(value.issuedAtMs) ||
-    !isFiniteInteger(value.expiresAtMs)
+    !isFiniteInteger(value.expiresAtMs) ||
+    (value.gatewaySessionId !== undefined && !isBoundedToken(value.gatewaySessionId)) ||
+    (value.actorKind !== undefined && !ACTOR_KINDS.has(String(value.actorKind))) ||
+    (value.correlationId !== undefined && !isBoundedToken(value.correlationId, 256))
   ) {
     return error(
       'AUTH_INVALID',
@@ -162,6 +168,13 @@ function validateAuthClaims(
     issuedAtMs: value.issuedAtMs,
     expiresAtMs: value.expiresAtMs,
     authVersion: value.authVersion,
+    ...(value.gatewaySessionId === undefined ? {} : { gatewaySessionId: value.gatewaySessionId }),
+    ...(value.actorKind === undefined
+      ? {}
+      : { actorKind: value.actorKind as GatewayActorBinding['kind'] }),
+    ...(value.correlationId === undefined
+      ? {}
+      : { correlationId: value.correlationId as CorrelationId }),
   });
 }
 
@@ -419,6 +432,27 @@ export class GatewaySessionManager {
     }
     if (claims.value.actorIdentityId !== input.actor.identityId) {
       return error('ACTOR_MISMATCH', 'Authenticated actor does not match the session actor.');
+    }
+    if (
+      claims.value.gatewaySessionId !== undefined &&
+      claims.value.gatewaySessionId !== input.sessionId
+    ) {
+      return error(
+        'SESSION_CONFLICT',
+        'Authenticated gateway session does not match the requested session.',
+      );
+    }
+    if (claims.value.actorKind !== undefined && claims.value.actorKind !== input.actor.kind) {
+      return error('ACTOR_MISMATCH', 'Authenticated actor kind does not match the session actor.');
+    }
+    if (
+      claims.value.correlationId !== undefined &&
+      claims.value.correlationId !== input.correlation.correlationId
+    ) {
+      return error(
+        'CORRELATION_MISMATCH',
+        'Authenticated correlation does not match the session context.',
+      );
     }
 
     const connectionId = `conn:${input.sessionId}:${generation}`;
