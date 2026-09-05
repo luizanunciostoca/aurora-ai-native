@@ -18,6 +18,8 @@ export interface GovernedDeviceCommandMaterial {
   readonly commandId: CommandId;
   readonly executionId: ExecutionId;
   readonly causationId: CausationId;
+  readonly orderingKey: string;
+  readonly orderingSequence: number;
   readonly actionIntent: ActionIntent;
   readonly canonicalPayloadHash: string;
   readonly authorizesExecution: false;
@@ -128,6 +130,9 @@ function materialMatches(command: GovernedDeviceCommandMaterial): boolean {
     COMMAND_ID.test(command.commandId) &&
     EXECUTION_ID.test(command.executionId) &&
     CAUSATION_ID.test(command.causationId) &&
+    SAFE_REFERENCE.test(command.orderingKey) &&
+    Number.isSafeInteger(command.orderingSequence) &&
+    command.orderingSequence > 0 &&
     SHA256.test(command.canonicalPayloadHash) &&
     intent.kind === 'ACTION_INTENT' &&
     intent.executionTarget?.kind === 'DEVICE' &&
@@ -191,7 +196,8 @@ function validW14Result(result: W14GovernedDeviceDispatchResult): boolean {
 /**
  * W07-owned last barrier before a DEVICE command reaches W14 transport/session handling.
  * Passing gates are prerequisites only: neither this adapter nor W14 responses mint authority,
- * verified execution outcome, or retry permission.
+ * verified execution outcome, or retry permission. Delivery ordering is supplied as already
+ * governed server material; W14 preserves it but does not invent scheduler semantics.
  */
 export class W07GovernedDeviceDispatchAdapter {
   readonly #w14: W14GovernedDeviceDispatchPort;
