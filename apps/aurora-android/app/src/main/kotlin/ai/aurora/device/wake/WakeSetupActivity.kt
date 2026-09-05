@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +32,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import ai.aurora.device.AuroraApplication
+import ai.aurora.device.voice.GovernedVoiceCatalogResult
+import ai.aurora.device.voice.GovernedVoiceCommandCatalog
 
 class WakeSetupActivity : FragmentActivity() {
     private lateinit var recorder: AuroraWakeEnrollmentRecorder
@@ -40,12 +45,15 @@ class WakeSetupActivity : FragmentActivity() {
     private var recording by mutableStateOf(false)
     private var sampleCount by mutableStateOf(0)
     private var assistantStatus by mutableStateOf("Verificando…")
+    private var voiceGovernanceStatus by mutableStateOf("Verificando…")
+    private var voiceGovernanceDetail by mutableStateOf("Reconciliando W04/W15-C/W15-G…")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         recorder = AuroraWakeEnrollmentRecorder(this)
         modelStore = AuroraWakeModelStore(this)
         refreshAssistantStatus()
+        refreshVoiceGovernanceStatus()
         setContent {
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
@@ -58,6 +66,7 @@ class WakeSetupActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         refreshAssistantStatus()
+        refreshVoiceGovernanceStatus()
     }
 
     override fun onDestroy() {
@@ -80,10 +89,15 @@ class WakeSetupActivity : FragmentActivity() {
             ActivityResultContracts.StartActivityForResult(),
         ) {
             refreshAssistantStatus()
+            refreshVoiceGovernanceStatus()
         }
 
         Column(
-            modifier = Modifier.fillMaxSize().padding(28.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(28.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text("Ativar Aurora por voz", style = MaterialTheme.typography.headlineMedium)
@@ -97,6 +111,8 @@ class WakeSetupActivity : FragmentActivity() {
                     Text("Amostras locais: $sampleCount / 3")
                     Text("Assistente Android: $assistantStatus")
                     Text("Engine: AudioRecord local · 16 kHz · modelo pt-BR por enrollment")
+                    Text("Fast path governado: $voiceGovernanceStatus")
+                    Text(voiceGovernanceDetail)
                 }
             }
 
@@ -133,6 +149,7 @@ class WakeSetupActivity : FragmentActivity() {
                             assistantRoleLauncher.launch(manager.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT))
                         } else {
                             refreshAssistantStatus()
+                            refreshVoiceGovernanceStatus()
                         }
                     } else {
                         detail = "Nesta versão do Android, selecione a Aurora como assistente pelas configurações do sistema quando disponível."
@@ -159,6 +176,7 @@ class WakeSetupActivity : FragmentActivity() {
                             modelStore.clear()
                             status = "DISABLED"
                             detail = "Wake word desativado e enrollment local removido."
+                            refreshVoiceGovernanceStatus()
                         },
                     ) { Text("Desativar e apagar modelo") }
                 }
@@ -229,6 +247,7 @@ class WakeSetupActivity : FragmentActivity() {
             } else {
                 "Wake word armado. Para handoff global sem toque, selecione também a Aurora como assistente Android."
             }
+            refreshVoiceGovernanceStatus()
         }.onFailure { throwable ->
             status = "WAKE_ERROR"
             detail = "Não foi possível armar o wake word: ${throwable.javaClass.simpleName}"
@@ -247,6 +266,29 @@ class WakeSetupActivity : FragmentActivity() {
                 }
             }
             else -> "CONFIGURAÇÃO PELO SISTEMA"
+        }
+    }
+
+    private fun refreshVoiceGovernanceStatus() {
+        val aurora = application as AuroraApplication
+        when (
+            val result =
+                GovernedVoiceCommandCatalog(
+                    projectionProvider = { aurora.voiceProjectionStore().current() },
+                ).snapshot()
+        ) {
+            is GovernedVoiceCatalogResult.Ready -> {
+                val snapshot = result.snapshot
+                voiceGovernanceStatus =
+                    "READY · W04 ${snapshot.registryVersion} · W15-G ${snapshot.vocabularyVersion}"
+                voiceGovernanceDetail =
+                    "Capabilities DEVICE atuais: ${snapshot.availableCapabilityIds.size}; comandos determinísticos: ${snapshot.commands.size}. W07 mobile ingress: NOT_COMPOSED. Este READY é somente readiness de roteamento e não concede authority."
+            }
+            is GovernedVoiceCatalogResult.Rejected -> {
+                voiceGovernanceStatus = "FAIL_CLOSED · ${result.reason.name}"
+                voiceGovernanceDetail =
+                    "Sem projeção governada atual, nenhuma fala usa o fast path; a interação segue para Conversation. W07 mobile ingress: NOT_COMPOSED."
+            }
         }
     }
 
