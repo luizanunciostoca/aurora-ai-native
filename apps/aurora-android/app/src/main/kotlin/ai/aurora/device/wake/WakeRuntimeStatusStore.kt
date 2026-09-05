@@ -1,7 +1,6 @@
 package ai.aurora.device.wake
 
 import android.content.Context
-import java.util.concurrent.atomic.AtomicBoolean
 
 data class WakeRuntimeSnapshot(
     val state: String,
@@ -59,9 +58,4 @@ class WakeRuntimeStatusStore(context: Context) {
         private const val KEY_LAST_ERROR = "last_error"
         private const val KEY_UPDATED_AT = "updated_at_ms"
     }
-}
-
-/** Shared only inside the app process. It is an acoustic gating hint, never authority. */
-object AuroraAudioActivityState {
-    val ttsActive = AtomicBoolean(false)
 }

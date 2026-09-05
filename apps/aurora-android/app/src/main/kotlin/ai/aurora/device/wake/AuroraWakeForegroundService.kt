@@ -93,11 +93,12 @@ class AuroraWakeForegroundService : Service(), SharedPreferences.OnSharedPrefere
             context = this,
             model = model,
             privacyBlocked = { uiPreferences.getBoolean(KEY_PRIVACY_MODE, false) },
-            ttsActive = { AuroraAudioActivityState.ttsActive.get() },
+            playbackState = WakePlaybackAwareness::snapshot,
             onState = { state ->
                 statusStore.update(state.name, modelVersion = model.modelVersion)
             },
             onConfirmed = { candidate -> handleConfirmedWake(candidate, model.modelVersion) },
+            onRejectedOrIgnored = statusStore::incrementRejectedOrIgnored,
             onError = { message ->
                 statusStore.update("WAKE_ERROR", modelVersion = model.modelVersion, lastError = message)
                 updateNotification("Wake word indisponível. Abra a Aurora para diagnóstico.", null)
@@ -168,6 +169,7 @@ class AuroraWakeForegroundService : Service(), SharedPreferences.OnSharedPrefere
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         } else {
+            @Suppress("DEPRECATION")
             startForeground(NOTIFICATION_ID, notification)
         }
     }

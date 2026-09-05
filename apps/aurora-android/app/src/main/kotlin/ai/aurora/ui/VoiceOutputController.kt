@@ -9,6 +9,7 @@ import android.media.AudioManager
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import ai.aurora.device.wake.WakePlaybackAwareness
 import ai.aurora.ui.model.AuroraSettings
 import java.util.Locale
 
@@ -61,6 +62,7 @@ class VoiceOutputController(
                     override fun onDone(utteranceId: String?) {
                         val id = utteranceId?.toLongOrNull() ?: return
                         if (!utteranceGuard.completeIfCurrent(id)) return
+                        WakePlaybackAwareness.onTtsStopped()
                         abandonAudioFocus()
                         onCompleted(id)
                     }
@@ -127,13 +129,16 @@ class VoiceOutputController(
             runCatching { engine.defaultEngine }.getOrNull().orEmpty().ifBlank { "Android TTS" },
             currentAudioRouteLabel(),
         )
+        val boundedText = text.take(MAX_SPEAK_CHARS)
+        WakePlaybackAwareness.onTtsStarted(boundedText)
         val result = engine.speak(
-            text.take(MAX_SPEAK_CHARS),
+            boundedText,
             TextToSpeech.QUEUE_FLUSH,
             Bundle(),
             requestId.toString(),
         )
         if (result == TextToSpeech.ERROR && utteranceGuard.completeIfCurrent(requestId)) {
+            WakePlaybackAwareness.onTtsStopped()
             abandonAudioFocus()
             onError(requestId, "O mecanismo TTS recusou a solicitação de fala.")
         }
@@ -142,6 +147,7 @@ class VoiceOutputController(
     fun stop() {
         utteranceGuard.clear()
         runCatching { tts?.stop() }
+        WakePlaybackAwareness.onTtsStopped()
         abandonAudioFocus()
     }
 
@@ -172,10 +178,11 @@ class VoiceOutputController(
     }
 
     private fun stopForLifecycle(message: String) {
-        val interruptedId = utteranceGuard.clear() ?: return
+        val interruptedId = utteranceGuard.clear()
         runCatching { tts?.stop() }
+        WakePlaybackAwareness.onTtsStopped()
         abandonAudioFocus()
-        onError(interruptedId, message)
+        if (interruptedId != null) onError(interruptedId, message)
     }
 
     private fun requestAudioFocus(requestId: Long): Boolean {
@@ -205,6 +212,7 @@ class VoiceOutputController(
     private fun interruptForAudioFocus(requestId: Long) {
         if (!utteranceGuard.completeIfCurrent(requestId)) return
         runCatching { tts?.stop() }
+        WakePlaybackAwareness.onTtsStopped()
         abandonAudioFocus()
         onError(requestId, "Saída de voz interrompida por perda de audio focus.")
     }
@@ -219,11 +227,13 @@ class VoiceOutputController(
         val id = utteranceId?.toLongOrNull()
         if (id != null) {
             if (!utteranceGuard.completeIfCurrent(id)) return
+            WakePlaybackAwareness.onTtsStopped()
             abandonAudioFocus()
             onError(id, message)
             return
         }
         val current = utteranceGuard.clear() ?: return
+        WakePlaybackAwareness.onTtsStopped()
         abandonAudioFocus()
         onError(current, message)
     }

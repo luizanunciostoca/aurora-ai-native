@@ -19,9 +19,10 @@ class AudioRecordAuroraWakeEngine(
     private val model: AuroraWakeTemplateModel,
     private val config: WakeConfig = WakeConfig(),
     private val privacyBlocked: () -> Boolean,
-    private val ttsActive: () -> Boolean,
+    private val playbackState: () -> WakePlaybackSnapshot,
     private val onState: (WakeState) -> Unit,
     private val onConfirmed: (WakeCandidate) -> Unit,
+    private val onRejectedOrIgnored: () -> Unit = {},
     private val onError: (String) -> Unit,
 ) : AutoCloseable {
     private val appContext = context.applicationContext
@@ -92,19 +93,30 @@ class AudioRecordAuroraWakeEngine(
                     onState(WakeState.PERMISSION_REQUIRED)
                     break
                 }
-                val read = recorder?.read(frame, 0, frame.size, AudioRecord.READ_BLOCKING) ?: AudioRecord.ERROR_INVALID_OPERATION
+                val read = recorder?.read(frame, 0, frame.size, AudioRecord.READ_BLOCKING)
+                    ?: AudioRecord.ERROR_INVALID_OPERATION
                 if (read < 0) throw IllegalStateException("AudioRecord read failed: $read")
                 if (read != frame.size) continue
                 val candidatePcm = segmenter.accept(frame) ?: continue
-                val features = runCatching { AuroraWakeFeatureExtractor.extract(candidatePcm) }.getOrNull() ?: continue
+                val features = runCatching { AuroraWakeFeatureExtractor.extract(candidatePcm) }.getOrNull()
+                if (features == null) {
+                    onRejectedOrIgnored()
+                    continue
+                }
                 val confidence = model.confidence(features)
+                val playback = playbackState()
                 val observation = WakeObservation(
                     observedAtMs = System.currentTimeMillis(),
                     confidence = confidence,
                     featureFingerprint = fingerprint(features),
-                    ttsActive = ttsActive(),
-                    // Until a trusted playback reference exists, null intentionally fails closed while TTS is active.
-                    playbackCorrelation = null,
+                    ttsActive = playback.ttsActive,
+                    // Conservative deterministic correlation: suppress only when Aurora's own current
+                    // TTS text contains the wake word. Other TTS keeps real-user barge-in possible.
+                    playbackCorrelation = when {
+                        !playback.ttsActive -> null
+                        playback.keywordPlaybackActive -> 1.0
+                        else -> 0.0
+                    },
                     microphonePermissionGranted = true,
                     privacyBlocked = false,
                 )
@@ -114,7 +126,7 @@ class AudioRecordAuroraWakeEngine(
                         onState(WakeState.HOTWORD_CONFIRMED)
                         onConfirmed(evaluation.candidate)
                     }
-                    is WakeEvaluation.Rejected -> Unit
+                    is WakeEvaluation.Rejected -> onRejectedOrIgnored()
                 }
             }
         } catch (throwable: Throwable) {
