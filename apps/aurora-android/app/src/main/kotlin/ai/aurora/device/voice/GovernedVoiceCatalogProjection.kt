@@ -4,6 +4,7 @@ import ai.aurora.device.capability.NativeCapabilityAvailability
 import ai.aurora.device.capability.NativeCapabilityObservation
 
 const val W04_CANONICAL_CAPABILITY_REGISTRY_KIND = "AURORA_CANONICAL_CAPABILITY_REGISTRY"
+private val SHA256_HEX = Regex("^[0-9a-f]{64}$")
 
 enum class W04VoiceCapabilityTargetKind {
     PROVIDER,
@@ -26,6 +27,25 @@ enum class W04VoiceCapabilityRiskClass {
     MEDIUM,
     HIGH,
     CRITICAL,
+}
+
+/**
+ * Immutable provenance for one externally reconciled projection payload.
+ *
+ * The digest is integrity/audit metadata only. It is not a signature, authority token or proof that
+ * the producer was permitted to execute anything. The adapter that creates the projection remains
+ * responsible for authenticating its upstream source before constructing this object.
+ */
+data class GovernedProjectionProvenance(
+    val sourceRef: String,
+    val contentSha256: String,
+) {
+    init {
+        require(sourceRef.isNotBlank()) { "projection sourceRef must not be blank" }
+        require(SHA256_HEX.matches(contentSha256)) {
+            "projection contentSha256 must be lowercase 64-hex SHA-256"
+        }
+    }
 }
 
 /**
@@ -57,6 +77,7 @@ data class W04VoiceCapabilityRegistryProjection(
     val registryVersion: String,
     val observedAtMs: Long,
     val expiresAtMs: Long,
+    val provenance: GovernedProjectionProvenance,
     val entries: List<W04VoiceCapabilityEntry>,
 ) {
     init {
@@ -90,6 +111,7 @@ data class W15GVoiceCommandVocabularyProjection(
     val vocabularyVersion: String,
     val observedAtMs: Long,
     val expiresAtMs: Long,
+    val provenance: GovernedProjectionProvenance,
     val bindings: List<W15GVoiceCommandBinding>,
 ) {
     init {
@@ -135,7 +157,11 @@ class GovernedVoiceProjectionStore {
 data class GovernedVoiceCatalogSnapshot(
     val activeTenantId: String,
     val registryVersion: String,
+    val registrySourceRef: String,
+    val registryContentSha256: String,
     val vocabularyVersion: String,
+    val vocabularySourceRef: String,
+    val vocabularyContentSha256: String,
     val commands: List<VoiceCommandDefinition>,
     val availableCapabilityIds: Set<String>,
     val authorizesExecution: Boolean = false,
@@ -143,7 +169,11 @@ data class GovernedVoiceCatalogSnapshot(
     init {
         require(activeTenantId.isNotBlank())
         require(registryVersion.isNotBlank())
+        require(registrySourceRef.isNotBlank())
+        require(SHA256_HEX.matches(registryContentSha256))
         require(vocabularyVersion.isNotBlank())
+        require(vocabularySourceRef.isNotBlank())
+        require(SHA256_HEX.matches(vocabularyContentSha256))
         require(!authorizesExecution) { "voice catalog projection cannot authorize execution" }
     }
 }
@@ -266,7 +296,11 @@ class GovernedVoiceCommandCatalog(
             GovernedVoiceCatalogSnapshot(
                 activeTenantId = projection.activeTenantId,
                 registryVersion = registry.registryVersion,
+                registrySourceRef = registry.provenance.sourceRef,
+                registryContentSha256 = registry.provenance.contentSha256,
                 vocabularyVersion = vocabulary.vocabularyVersion,
+                vocabularySourceRef = vocabulary.provenance.sourceRef,
+                vocabularyContentSha256 = vocabulary.provenance.contentSha256,
                 commands = commands,
                 availableCapabilityIds = availableIds,
             ),
