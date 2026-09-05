@@ -3,6 +3,7 @@ import type {
   CorrelationId,
   EvidenceId,
   ExecutionId,
+  IdentityId,
   ReceiptId,
   TenantId,
 } from '@aurora/contracts/ids';
@@ -52,6 +53,7 @@ export interface DeviceSessionTrustPort {
 
 export interface DeviceIngressAuthenticationRequest {
   readonly tenantId: TenantId;
+  readonly actorIdentityId: IdentityId;
   readonly correlationId: CorrelationId;
   readonly deviceRef: DeviceRef;
   readonly deviceSessionId: string;
