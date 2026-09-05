@@ -246,10 +246,7 @@ function fingerprintFromRecord(record: DeviceRegistrationRecord): string | null 
   return match?.[1] ?? null;
 }
 
-function registrationMessage(
-  gateway: GatewaySessionSnapshot,
-  deviceId: string,
-): string {
+function registrationMessage(gateway: GatewaySessionSnapshot, deviceId: string): string {
   return [
     'AURORA_DEVICE_REGISTRATION_V1',
     gateway.sessionId,
@@ -457,16 +454,22 @@ export class DeviceKeyProofVerifier {
   }
 
   verify(input: unknown): DeviceReceiptAuthenticationResult {
-    if (!isRecord(input) || !nonNegativeInteger(input.receivedAtMs)) {
+    if (
+      !isRecord(input) ||
+      !nonNegativeInteger(input.receivedAtMs) ||
+      !nonNegativeInteger(input.capturedAtMs)
+    ) {
       return authFailure('MALFORMED');
     }
+    const receivedAtMs = input.receivedAtMs;
+    const capturedAtMs = input.capturedAtMs;
     const message = receiptMessage(input);
     if (message === null || !safeToken(input.proofReference, 512)) {
       return authFailure('MALFORMED');
     }
     if (
-      input.receivedAtMs < input.capturedAtMs ||
-      input.receivedAtMs - input.capturedAtMs > this.#config.maxProofAgeMs
+      receivedAtMs < capturedAtMs ||
+      receivedAtMs - capturedAtMs > this.#config.maxProofAgeMs
     ) {
       return authFailure('STALE_PROOF');
     }
@@ -488,7 +491,7 @@ export class DeviceKeyProofVerifier {
     if (!verifyParsedProof(parsed, message)) return authFailure('UNAUTHENTICATED');
     return {
       ok: true,
-      authenticatedAtMs: input.receivedAtMs,
+      authenticatedAtMs: receivedAtMs,
       authenticationReference: `device-receipt-proof:sha256:${parsed.fingerprint}:${String(input.receiptId)}`,
       authorizesExecution: false,
       canGrantPermission: false,
