@@ -10,6 +10,9 @@ import ai.aurora.device.session.W14DeviceRefView
 import ai.aurora.device.session.W14DeviceRegistrationView
 import ai.aurora.device.session.W14DeviceSessionTrustState
 import ai.aurora.device.session.W14DeviceSessionTrustView
+import ai.aurora.device.voice.GovernedVoiceCandidateSubmission
+import ai.aurora.device.voice.GovernedVoiceCandidateTransport
+import ai.aurora.device.voice.GovernedVoiceCandidateTransportResult
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
@@ -193,13 +196,18 @@ internal class W15BDeviceSessionAcceptance(
  * This class owns transport composition only. It cannot create W07 authority, permission, outcome
  * truth, or retry eligibility. A lost response after a request write is surfaced as
  * [GatewayDevicePlaneClientError.TRANSPORT_UNCERTAIN] and requires upstream reconciliation.
+ *
+ * The same already-authenticated channel also realizes [GovernedVoiceCandidateTransport]. Voice
+ * candidates therefore inherit the current W14 socket/device-session binding instead of opening a
+ * second voice-only network stack. A 202 reply is only an acknowledgement of receipt for W07
+ * evaluation; it is never action authority, proof of execution, verified outcome or retry grant.
  */
 class GatewayDevicePlaneClient internal constructor(
     private val channelFactory: GatewayHttpChannelFactory,
     private val proofFactory: DeviceProofFactory,
     private val sessionAcceptance: DeviceSessionAcceptance,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
-) : AutoCloseable {
+) : AutoCloseable, GovernedVoiceCandidateTransport {
     private var channel: GatewayHttpChannel? = null
     private var context: ConnectionContext? = null
     private var gateway: GatewaySessionNetworkView? = null
@@ -440,6 +448,37 @@ class GatewayDevicePlaneClient internal constructor(
         return parseReceipt(response)
     }
 
+    /**
+     * Submits one non-authoritative voice candidate over the current authenticated W14 socket.
+     * The body deliberately contains no tenant/actor/device/session/policy/authority/outcome/retry
+     * fields; the server-side W14 route derives all trusted context from the live connection.
+     */
+    @Synchronized
+    override fun submit(
+        candidate: GovernedVoiceCandidateSubmission,
+    ): GovernedVoiceCandidateTransportResult {
+        if (context == null || gateway == null || registration == null || deviceSession == null) {
+            return GovernedVoiceCandidateTransportResult.Unavailable(
+                reason = "device-plane session not connected",
+            )
+        }
+
+        val response = post(
+            VOICE_CANDIDATE_DEVICE_ROUTE,
+            StrictJson.encodeObject(
+                listOf(
+                    "commandId" to candidate.commandId,
+                    "capabilityId" to candidate.capabilityId,
+                    "normalizedTranscript" to candidate.normalizedTranscript,
+                    "requiresW07Authorization" to candidate.requiresW07Authorization,
+                    "authorizesExecution" to candidate.authorizesExecution,
+                ),
+            ),
+        ) ?: return voiceTransportUnavailable()
+
+        return parseVoiceCandidateResponse(response)
+    }
+
     @Synchronized
     fun currentSnapshot(): GatewayDevicePlaneResult<GatewayDevicePlaneSnapshot> =
         if (context == null || gateway == null || registration == null || deviceSession == null) {
@@ -649,6 +688,56 @@ class GatewayDevicePlaneClient internal constructor(
                 requiresW07Reconciliation = value.jsonBoolean("requiresW07Reconciliation"),
             )
         }
+    }
+
+    private fun parseVoiceCandidateResponse(
+        response: GatewayHttpResponse,
+    ): GovernedVoiceCandidateTransportResult =
+        try {
+            val root = StrictJson.parseObject(response.body)
+            requireNoAuthority(root)
+            require(root.jsonBoolean("provesExecutionSuccess") == false)
+            require(root.jsonBoolean("retryAuthorized") == false)
+
+            if (response.statusCode != 202) {
+                GovernedVoiceCandidateTransportResult.Unavailable(
+                    reason = "voice candidate rejected",
+                )
+            } else {
+                require(root.fields.keys == VOICE_CANDIDATE_SUCCESS_RESPONSE_KEYS)
+                require(root.jsonBoolean("ok"))
+                require(root.jsonBoolean("acceptedForEvaluation"))
+                GovernedVoiceCandidateTransportResult.Delivered(
+                    acceptedForEvaluation = true,
+                    authorizesExecution = false,
+                    provesExecutionSuccess = false,
+                    retryAuthorized = false,
+                )
+            }
+        } catch (_: IllegalArgumentException) {
+            GovernedVoiceCandidateTransportResult.Unavailable(
+                reason = "voice candidate response malformed",
+            )
+        } catch (_: IllegalStateException) {
+            GovernedVoiceCandidateTransportResult.Unavailable(
+                reason = "voice candidate response malformed",
+            )
+        }
+
+    private fun voiceTransportUnavailable(): GovernedVoiceCandidateTransportResult.Unavailable {
+        val failure = transportRejected()
+        val uncertain =
+            failure.requiresReconciliation || failure.error == GatewayDevicePlaneClientError.TRANSPORT_UNCERTAIN
+        return GovernedVoiceCandidateTransportResult.Unavailable(
+            reason =
+                if (uncertain) {
+                    "voice candidate delivery uncertain"
+                } else {
+                    "voice candidate transport unavailable"
+                },
+            deliveryUncertain = uncertain,
+            retryAuthorized = false,
+        )
     }
 
     private fun <T> parseObjectResult(
@@ -915,5 +1004,14 @@ private fun ByteArray.toHex(): String = joinToString(separator = "") { byte -> "
 
 private const val GATEWAY_PROTOCOL_VERSION = "1.0"
 private const val MAX_CREDENTIAL_LENGTH = 16 * 1024
+private const val VOICE_CANDIDATE_DEVICE_ROUTE = "/v1/device/voice/candidates/evaluate"
+private val VOICE_CANDIDATE_SUCCESS_RESPONSE_KEYS =
+    setOf(
+        "ok",
+        "acceptedForEvaluation",
+        "authorizesExecution",
+        "provesExecutionSuccess",
+        "retryAuthorized",
+    )
 private val SAFE_TOKEN = Regex("[A-Za-z0-9._:/+-]+")
 private val DEVICE_ID = Regex("dvc_[0-9A-HJKMNP-TV-Z]{26}")
