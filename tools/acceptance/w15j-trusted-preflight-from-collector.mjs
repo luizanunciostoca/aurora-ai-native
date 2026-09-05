@@ -20,7 +20,9 @@ function parseKeyValueFile(path) {
 
 function required(record, key, label) {
   const value = record[key];
-  if (typeof value !== 'string' || value.trim() === '') throw new Error(`${label}.${key} is required`);
+  if (typeof value !== 'string' || value.trim() === '') {
+    throw new Error(`${label}.${key} is required`);
+  }
   return value;
 }
 
@@ -31,7 +33,9 @@ function exact(value, pattern, label) {
 
 function exactPort(value, expected, label) {
   const port = Number(value);
-  if (!Number.isSafeInteger(port) || port !== expected) throw new Error(`${label} must be ${expected}`);
+  if (!Number.isSafeInteger(port) || port !== expected) {
+    throw new Error(`${label} must be ${expected}`);
+  }
   return port;
 }
 
@@ -39,24 +43,51 @@ export function buildTrustedW15JPreflight(evidenceDirectory) {
   const preflight = parseKeyValueFile(join(evidenceDirectory, 'preflight-metadata.txt'));
   const apk = parseKeyValueFile(join(evidenceDirectory, 'apk-identity.txt'));
   const dual = parseKeyValueFile(join(evidenceDirectory, 'dual-port-metadata.txt'));
-  const mappings = readFileSync(join(evidenceDirectory, 'adb-reverse-dual-port-preflight.txt'), 'utf8');
+  const mappings = readFileSync(
+    join(evidenceDirectory, 'adb-reverse-dual-port-preflight.txt'),
+    'utf8',
+  );
 
-  const candidateSha = exact(required(preflight, 'candidate_sha', 'preflight'), GIT_SHA, 'candidate_sha');
-  if (required(apk, 'candidate_sha', 'apk') !== candidateSha) throw new Error('candidate SHA drift between collector records');
-  const apkSha256 = exact(required(preflight, 'apk_path_sha256', 'preflight'), SHA256, 'apk sha256');
-  if (required(apk, 'apk_sha256', 'apk') !== apkSha256) throw new Error('APK digest drift between collector records');
+  const candidateSha = exact(
+    required(preflight, 'candidate_sha', 'preflight'),
+    GIT_SHA,
+    'candidate_sha',
+  );
+  if (required(apk, 'candidate_sha', 'apk') !== candidateSha) {
+    throw new Error('candidate SHA drift between collector records');
+  }
+  const apkSha256 = exact(
+    required(preflight, 'apk_path_sha256', 'preflight'),
+    SHA256,
+    'apk sha256',
+  );
+  if (required(apk, 'apk_sha256', 'apk') !== apkSha256) {
+    throw new Error('APK digest drift between collector records');
+  }
   if (required(preflight, 'apk_variant', 'preflight') !== required(apk, 'variant', 'apk')) {
     throw new Error('APK variant drift between collector records');
   }
-  if (required(preflight, 'ro.kernel.qemu', 'preflight') === '1') throw new Error('emulator evidence is not physical DP5 provenance');
+  if (required(preflight, 'ro.kernel.qemu', 'preflight') === '1') {
+    throw new Error('emulator evidence is not physical DP5 provenance');
+  }
 
-  const deviceGatewayPort = exactPort(required(dual, 'device_gateway_port', 'dual-port'), 8080, 'device_gateway_port');
-  const bootstrapPort = exactPort(required(dual, 'bootstrap_port', 'dual-port'), 8081, 'bootstrap_port');
+  const deviceGatewayPort = exactPort(
+    required(dual, 'device_gateway_port', 'dual-port'),
+    8080,
+    'device_gateway_port',
+  );
+  const bootstrapPort = exactPort(
+    required(dual, 'bootstrap_port', 'dual-port'),
+    8081,
+    'bootstrap_port',
+  );
   if (required(dual, 'transport_scope', 'dual-port') !== 'LOCAL_ADB_REVERSE_ONLY') {
     throw new Error('dual-port transport scope must be LOCAL_ADB_REVERSE_ONLY');
   }
   for (const port of [deviceGatewayPort, bootstrapPort]) {
-    if (!mappings.includes(`tcp:${port} tcp:${port}`)) throw new Error(`ADB reverse mapping tcp:${port} is absent from collector evidence`);
+    if (!mappings.includes(`tcp:${port} tcp:${port}`)) {
+      throw new Error(`ADB reverse mapping tcp:${port} is absent from collector evidence`);
+    }
   }
 
   return {
@@ -71,7 +102,11 @@ export function buildTrustedW15JPreflight(evidenceDirectory) {
         sha256: apkSha256,
       },
       device: {
-        serialSha256: exact(required(preflight, 'serial_sha256', 'preflight'), SHA256, 'device serial sha256'),
+        serialSha256: exact(
+          required(preflight, 'serial_sha256', 'preflight'),
+          SHA256,
+          'device serial sha256',
+        ),
         manufacturer: required(preflight, 'manufacturer', 'preflight'),
         model: required(preflight, 'model', 'preflight'),
         product: required(preflight, 'product', 'preflight'),
@@ -101,11 +136,17 @@ if (process.argv[1]?.endsWith('w15j-trusted-preflight-from-collector.mjs')) {
   const evidenceDirectory = process.argv[2];
   const outputPath = process.argv[3];
   if (!evidenceDirectory || !outputPath) {
-    console.error('Usage: node tools/acceptance/w15j-trusted-preflight-from-collector.mjs <evidence-directory> <output-json>');
+    console.error(
+      'Usage: node tools/acceptance/w15j-trusted-preflight-from-collector.mjs <evidence-directory> <output-json>',
+    );
     process.exitCode = 2;
   } else {
     try {
-      writeFileSync(outputPath, `${JSON.stringify(buildTrustedW15JPreflight(evidenceDirectory), null, 2)}\n`, { flag: 'wx' });
+      writeFileSync(
+        outputPath,
+        `${JSON.stringify(buildTrustedW15JPreflight(evidenceDirectory), null, 2)}\n`,
+        { flag: 'wx' },
+      );
       console.log(`W15J_TRUSTED_PREFLIGHT_WRITTEN ${outputPath}`);
     } catch (error) {
       console.error(`W15J_TRUSTED_PREFLIGHT_BLOCKED: ${error.message}`);
