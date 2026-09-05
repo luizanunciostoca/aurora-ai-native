@@ -1,4 +1,4 @@
-name: Prototype Aurora Tablet UI V4 Wake Governed Provenance
+name: Prototype Aurora Tablet UI V4 Wake Governed Diagnostics
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 jobs:
-  android-ui-v4-wake-governed-provenance:
+  android-ui-v4-wake-governed-diagnostics:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -40,7 +40,7 @@ jobs:
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - name: Test and assemble Aurora Tablet UI V4 Wake Governed Provenance
+      - name: Test and assemble Aurora Tablet UI V4 Wake Governed Diagnostics
         shell: bash
         env:
           AURORA_BUILD_SHA: ${{ github.sha }}
@@ -50,25 +50,27 @@ jobs:
             :app:assembleLocalDebug
           APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
           test -n "$APK"
-          ARTIFACT_DIR=/tmp/aurora-tablet-ui-v4-wake-governed-provenance
+          ARTIFACT_DIR=/tmp/aurora-tablet-ui-v4-wake-governed-diagnostics
           mkdir -p "$ARTIFACT_DIR"
-          cp "$APK" "$ARTIFACT_DIR/Aurora-Tablet-UI-V4-Wake-Governed-Provenance.apk"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-Tablet-UI-V4-Wake-Governed-Diagnostics.apk"
           (
             cd "$ARTIFACT_DIR"
-            sha256sum Aurora-Tablet-UI-V4-Wake-Governed-Provenance.apk > SHA256SUMS.txt
+            sha256sum Aurora-Tablet-UI-V4-Wake-Governed-Diagnostics.apk > SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
           BUILD_UTC="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
           prototype_head=${{ github.sha }}
           w15j_candidate=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
-          ui_profile=TABLET_UI_V4_WAKE_GOVERNED_PROVENANCE
-          app_version=0.17.0-alpha.3-local
+          ui_profile=TABLET_UI_V4_WAKE_GOVERNED_DIAGNOSTICS
+          app_version=0.17.0-alpha.4-local
           variant=localDebug
           target_sdk=36
           voice_mode=bounded-stt-plus-tts-plus-barge-in
           voice_fast_path=w04-w15c-w15g-atomic-governed-projection
           voice_projection_provenance=source-ref-plus-content-sha256-required
+          voice_projection_snapshot=defensive-deep-copy
+          voice_projection_ui=fail-closed-diagnostics-no-raw-source-ref
           voice_projection_default=empty-fail-closed
           w07_mobile_ingress=uncomposed-fail-closed
           voice_authority=none
@@ -78,10 +80,10 @@ jobs:
           wake_authority=none
           build_utc=${BUILD_UTC}
           EOF
-      - name: Upload Aurora Tablet UI V4 Wake Governed Provenance APK
+      - name: Upload Aurora Tablet UI V4 Wake Governed Diagnostics APK
         uses: actions/upload-artifact@v4
         with:
-          name: aurora-tablet-ui-v4-wake-governed-provenance
-          path: /tmp/aurora-tablet-ui-v4-wake-governed-provenance
+          name: aurora-tablet-ui-v4-wake-governed-diagnostics
+          path: /tmp/aurora-tablet-ui-v4-wake-governed-diagnostics
           if-no-files-found: error
           retention-days: 14
