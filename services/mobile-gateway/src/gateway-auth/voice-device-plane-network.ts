@@ -184,11 +184,11 @@ export class GatewayVoiceDevicePlaneNetworkHandler extends GatewayDevicePlaneNet
     this.#voiceDependencies = voiceDependencies;
   }
 
-  isRoute(path: string): boolean {
+  override isRoute(path: string): boolean {
     return path === VOICE_CANDIDATE_DEVICE_ROUTE || super.isRoute(path);
   }
 
-  async handle(input: GatewayDevicePlaneHandleInput): Promise<GatewayDevicePlaneResponse> {
+  override async handle(input: GatewayDevicePlaneHandleInput): Promise<GatewayDevicePlaneResponse> {
     if (input.path !== VOICE_CANDIDATE_DEVICE_ROUTE) return super.handle(input);
     if (!currentGatewayBinding(input)) {
       return voiceRouteError(409, 'AUTHENTICATED_CONTEXT_NOT_CURRENT');
