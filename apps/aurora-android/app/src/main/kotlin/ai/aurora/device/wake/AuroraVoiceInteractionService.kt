@@ -87,6 +87,19 @@ class AuroraVoiceInteractionService : VoiceInteractionService() {
             }
             Handler(Looper.getMainLooper()).post {
                 runCatching { service.showSession(args, 0) }
+                    .onFailure { failure ->
+                        WakeRuntimeStatusStore(service).update(
+                            state = "WAKE_PLATFORM_BLOCKED",
+                            lastError = "Assistant wake-session handoff failed: ${failure.javaClass.simpleName}",
+                        )
+                        runCatching { AuroraWakeForegroundService.rearm(service) }
+                            .onFailure { rearmFailure ->
+                                WakeRuntimeStatusStore(service).update(
+                                    state = "WAKE_PLATFORM_BLOCKED",
+                                    lastError = "Wake handoff and recovery failed: ${rearmFailure.javaClass.simpleName}",
+                                )
+                            }
+                    }
             }
             return true
         }

@@ -22,7 +22,22 @@ private class AuroraVoiceInteractionSession(context: Context) : VoiceInteraction
             putExtra(MainActivity.EXTRA_WAKE_SESSION_ID, wakeId)
             putExtra(MainActivity.EXTRA_WAKE_CONFIDENCE, AuroraVoiceInteractionService.wakeConfidence(args))
         }
-        runCatching { startAssistantActivity(intent) }
+        val launchFailure = runCatching { startAssistantActivity(intent) }.exceptionOrNull()
+        if (launchFailure != null) {
+            WakeRuntimeStatusStore(context).update(
+                state = "WAKE_PLATFORM_BLOCKED",
+                lastError = "Assistant activity handoff failed: ${launchFailure.javaClass.simpleName}",
+            )
+            runCatching { AuroraWakeForegroundService.rearm(context) }
+                .onFailure { rearmFailure ->
+                    WakeRuntimeStatusStore(context).update(
+                        state = "WAKE_PLATFORM_BLOCKED",
+                        lastError = "Assistant activity handoff and recovery failed: ${rearmFailure.javaClass.simpleName}",
+                    )
+                }
+            setUiEnabled(false)
+            return
+        }
         setUiEnabled(false)
     }
 }
