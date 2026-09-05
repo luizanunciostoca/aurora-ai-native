@@ -8,6 +8,8 @@ import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import ai.aurora.device.bootstrap.GatewayBootstrapSetupActivity
+import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.wake.WakeRuntimeStatusStore
 import ai.aurora.device.wake.WakeSetupActivity
 
@@ -49,6 +51,21 @@ class MainActivity : Activity() {
                 }
             },
         )
+        if (
+            aurora.environmentConfig.environment == AuroraEnvironment.LOCAL &&
+            aurora.environmentConfig.allowCleartextTraffic
+        ) {
+            layout.addView(
+                Button(this).apply {
+                    text = "Carregar bootstrap local temporário"
+                    setOnClickListener {
+                        startActivity(
+                            Intent(this@MainActivity, GatewayBootstrapSetupActivity::class.java),
+                        )
+                    }
+                },
+            )
+        }
         setContentView(layout)
     }
 }
