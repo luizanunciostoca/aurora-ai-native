@@ -21,6 +21,9 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
         <activity
+            android:name=".bootstrap.GatewayBootstrapSetupActivity"
+            android:exported="false" />
+        <activity
             android:name=".wake.WakeVoiceActivity"
             android:exported="false" />
         <activity
