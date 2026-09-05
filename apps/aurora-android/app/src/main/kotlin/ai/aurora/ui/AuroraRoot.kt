@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
+import ai.aurora.device.AuroraApplication
 import ai.aurora.ui.model.AuroraUiIntent
 import ai.aurora.ui.model.AuroraUiState
 import ai.aurora.ui.model.UiSurface
@@ -38,10 +39,13 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
     val activity = context as? FragmentActivity
+    val application = context.applicationContext as? AuroraApplication
     val hapticsController = remember(context) { AuroraHapticsController(context) }
     val checkpointStore = remember(context) { UiNavigationCheckpointStore(context) }
+    val deviceKeyController = remember(application) { application?.let(::DeviceKeyProvisioningController) }
     var navigationRestored by remember { mutableStateOf(false) }
     var stepUpState by remember { mutableStateOf(StepUpUiState()) }
+    var deviceKeyState by remember { mutableStateOf(DeviceKeyUiState()) }
 
     val voiceController = remember(context, viewModel) {
         VoiceCaptureController(
@@ -226,6 +230,19 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
         }
     }
 
+    val prepareDeviceKey: () -> Unit = {
+        deviceKeyState = deviceKeyController?.prepareOrVerify()
+            ?: DeviceKeyUiState(
+                status = DeviceKeyUiStatus.ERROR,
+                detail = "AuroraApplication não está disponível neste host.",
+            )
+        if (deviceKeyState.status == DeviceKeyUiStatus.READY) {
+            hapticsController.acknowledged(state.settings.hapticsEnabled)
+        } else {
+            hapticsController.warning(state.settings.hapticsEnabled)
+        }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             viewModel.refreshRuntime()
@@ -242,10 +259,12 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
                     AuroraShell(
                         state = state,
                         stepUpState = stepUpState,
+                        deviceKeyState = deviceKeyState,
                         onIntent = viewModel::onIntent,
                         onVoice = startVoice,
                         onStopVoiceOutput = stopVoiceOutput,
                         onStepUp = startStepUp,
+                        onPrepareDeviceKey = prepareDeviceKey,
                     )
                 }
             }
@@ -257,10 +276,12 @@ fun AuroraRoot(viewModel: AuroraRootViewModel = viewModel()) {
 private fun AuroraShell(
     state: AuroraUiState,
     stepUpState: StepUpUiState,
+    deviceKeyState: DeviceKeyUiState,
     onIntent: (AuroraUiIntent) -> Unit,
     onVoice: () -> Unit,
     onStopVoiceOutput: () -> Unit,
     onStepUp: () -> Unit,
+    onPrepareDeviceKey: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         TopBar(state, onIntent)
@@ -279,7 +300,16 @@ private fun AuroraShell(
                     )
                     VerticalRule()
                     Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        MainSurfaceContent(state, stepUpState, onIntent, onVoice, onStopVoiceOutput, onStepUp)
+                        MainSurfaceContent(
+                            state,
+                            stepUpState,
+                            deviceKeyState,
+                            onIntent,
+                            onVoice,
+                            onStopVoiceOutput,
+                            onStepUp,
+                            onPrepareDeviceKey,
+                        )
                     }
                     if (extraWideLayout && state.workspaceOpen && state.manifest != null) {
                         VerticalRule()
@@ -295,7 +325,16 @@ private fun AuroraShell(
                     if (state.surface in setOf(UiSurface.PRESENCE, UiSurface.CONVERSATION)) {
                         AccessibleConversationPane(state, onIntent, onVoice, Modifier.fillMaxSize())
                     } else {
-                        MainSurfaceContent(state, stepUpState, onIntent, onVoice, onStopVoiceOutput, onStepUp)
+                        MainSurfaceContent(
+                            state,
+                            stepUpState,
+                            deviceKeyState,
+                            onIntent,
+                            onVoice,
+                            onStopVoiceOutput,
+                            onStepUp,
+                            onPrepareDeviceKey,
+                        )
                     }
                 }
             }
@@ -308,10 +347,12 @@ private fun AuroraShell(
 private fun MainSurfaceContent(
     state: AuroraUiState,
     stepUpState: StepUpUiState,
+    deviceKeyState: DeviceKeyUiState,
     onIntent: (AuroraUiIntent) -> Unit,
     onVoice: () -> Unit,
     onStopVoiceOutput: () -> Unit,
     onStepUp: () -> Unit,
+    onPrepareDeviceKey: () -> Unit,
 ) {
     when (state.surface) {
         UiSurface.PRESENCE,
@@ -320,7 +361,14 @@ private fun MainSurfaceContent(
         UiSurface.WORKSPACE -> WorkspacePane(state, onIntent)
         UiSurface.HUMAN_CONTROL -> HumanControlV2Pane(state, stepUpState, onIntent, onStepUp)
         UiSurface.EVIDENCE -> EvidencePane(state, onIntent)
-        UiSurface.SETTINGS -> VoiceAndSystemSettingsPane(state, onIntent, onVoice, onStopVoiceOutput)
+        UiSurface.SETTINGS -> VoiceAndSystemSettingsPane(
+            state = state,
+            deviceKeyState = deviceKeyState,
+            onIntent = onIntent,
+            onVoice = onVoice,
+            onStopVoiceOutput = onStopVoiceOutput,
+            onPrepareDeviceKey = onPrepareDeviceKey,
+        )
     }
 }
 
