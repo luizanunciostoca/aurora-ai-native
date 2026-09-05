@@ -252,10 +252,10 @@ internal fun VoiceAndSystemSettingsPane(
                     val snapshot = result.snapshot
                     KeyValue("Estado", "PROJECTION READY / NON-AUTHORITATIVE")
                     KeyValue("W04 registry", snapshot.registryVersion)
-                    KeyValue("W04 source", compactProjectionRef(snapshot.registrySourceRef))
+                    KeyValue("W04 source", "BOUND / ${snapshot.registrySourceRef.length} chars")
                     KeyValue("W04 SHA-256", compactProjectionHash(snapshot.registryContentSha256))
                     KeyValue("W15-G vocabulary", snapshot.vocabularyVersion)
-                    KeyValue("W15-G source", compactProjectionRef(snapshot.vocabularySourceRef))
+                    KeyValue("W15-G source", "BOUND / ${snapshot.vocabularySourceRef.length} chars")
                     KeyValue("W15-G SHA-256", compactProjectionHash(snapshot.vocabularyContentSha256))
                     KeyValue("DEVICE capabilities atuais", snapshot.availableCapabilityIds.size.toString())
                     SmallBadge("PROJECTION CURRENT", SemanticTone.VERIFIED)
@@ -485,8 +485,5 @@ private fun engineTone(availability: VoiceEngineAvailability): SemanticTone = wh
 
 private fun compactProjectionHash(value: String): String =
     if (value.length <= 16) value else "${value.take(12)}…${value.takeLast(4)}"
-
-private fun compactProjectionRef(value: String): String =
-    if (value.length <= 96) value else "${value.take(92)}…"
 
 private const val UI_PREFERENCES_NAME = "aurora.ui.v1"
