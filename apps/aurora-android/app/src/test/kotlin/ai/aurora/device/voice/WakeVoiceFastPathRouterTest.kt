@@ -17,8 +17,7 @@ class WakeVoiceFastPathRouterTest {
         var ingressCalls = 0
         val router =
             WakeVoiceFastPathRouter(
-                commandCatalog = { emptyList() },
-                contextProvider = { context() },
+                inputProvider = { inputs(commands = emptyList()) },
                 authorityIngress = W07VoiceAuthorityIngress {
                     ingressCalls += 1
                     W07VoiceAuthorityIngressResult.AcceptedForEvaluation
@@ -46,8 +45,7 @@ class WakeVoiceFastPathRouterTest {
         var submitted: VoiceDispatchCandidate? = null
         val router =
             WakeVoiceFastPathRouter(
-                commandCatalog = { commands() },
-                contextProvider = { context() },
+                inputProvider = { inputs() },
                 authorityIngress = W07VoiceAuthorityIngress { candidate ->
                     submitted = candidate
                     W07VoiceAuthorityIngressResult.AcceptedForEvaluation
@@ -81,8 +79,7 @@ class WakeVoiceFastPathRouterTest {
         var ingressCalls = 0
         val router =
             WakeVoiceFastPathRouter(
-                commandCatalog = { commands() },
-                contextProvider = { context(privacyMode = true) },
+                inputProvider = { inputs(context = context(privacyMode = true)) },
                 authorityIngress = W07VoiceAuthorityIngress {
                     ingressCalls += 1
                     W07VoiceAuthorityIngressResult.AcceptedForEvaluation
@@ -96,12 +93,42 @@ class WakeVoiceFastPathRouterTest {
         assertEquals(0, ingressCalls)
     }
 
+    @Test
+    fun `one atomic input provider is read exactly once per evaluation`() {
+        var snapshots = 0
+        val router =
+            WakeVoiceFastPathRouter(
+                inputProvider = {
+                    snapshots += 1
+                    inputs()
+                },
+                authorityIngress = W07VoiceAuthorityIngress {
+                    W07VoiceAuthorityIngressResult.Unavailable("test")
+                },
+                nowMs = { nowMs },
+            )
+
+        router.route("open camera", 0.99)
+
+        assertEquals(1, snapshots)
+    }
+
     private fun router(ingress: W07VoiceAuthorityIngressResult): WakeVoiceFastPathRouter =
         WakeVoiceFastPathRouter(
-            commandCatalog = { commands() },
-            contextProvider = { context() },
+            inputProvider = { inputs() },
             authorityIngress = W07VoiceAuthorityIngress { ingress },
             nowMs = { nowMs },
+        )
+
+    private fun inputs(
+        commands: List<VoiceCommandDefinition> = commands(),
+        context: VoiceFastPathContext = context(),
+    ): WakeVoiceFastPathInputs =
+        WakeVoiceFastPathInputs(
+            commands = commands,
+            context = context,
+            registryVersion = "w04-live.1",
+            vocabularyVersion = "w15g-live.1",
         )
 
     private fun commands(): List<VoiceCommandDefinition> =
