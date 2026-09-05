@@ -35,66 +35,16 @@ enum class AuroraPresenceMode {
     OFFLINE,
 }
 
-enum class ProjectionFreshness {
-    CURRENT,
-    STALE,
-    UNKNOWN,
-    CONFLICT,
-}
+enum class ProjectionFreshness { CURRENT, STALE, UNKNOWN, CONFLICT }
+enum class ProjectionProvenance { LIVE, CONNECTED_WHEN_AVAILABLE, TARGET_PREVIEW }
+enum class PresentationMode { RICH_RESPONSE, FOCUSED, COMPOSITE, FOCUSED_WITH_SAFETY, FOCUSED_WITH_EVIDENCE }
+enum class RiskBand { LOW, MEDIUM, HIGH, CRITICAL }
+enum class SemanticTone { NEUTRAL, INFO, EXECUTION, REASONING, VERIFIED, APPROVAL, CRITICAL }
+enum class ConversationRole { USER, AURORA, SYSTEM }
+enum class VoiceEngineAvailability { UNKNOWN, AVAILABLE, UNAVAILABLE }
+enum class VoiceOutputState { IDLE, SPEAKING, ERROR }
 
-enum class ProjectionProvenance {
-    LIVE,
-    CONNECTED_WHEN_AVAILABLE,
-    TARGET_PREVIEW,
-}
-
-enum class PresentationMode {
-    RICH_RESPONSE,
-    FOCUSED,
-    COMPOSITE,
-    FOCUSED_WITH_SAFETY,
-    FOCUSED_WITH_EVIDENCE,
-}
-
-enum class RiskBand {
-    LOW,
-    MEDIUM,
-    HIGH,
-    CRITICAL,
-}
-
-enum class SemanticTone {
-    NEUTRAL,
-    INFO,
-    EXECUTION,
-    REASONING,
-    VERIFIED,
-    APPROVAL,
-    CRITICAL,
-}
-
-enum class ConversationRole {
-    USER,
-    AURORA,
-    SYSTEM,
-}
-
-enum class VoiceEngineAvailability {
-    UNKNOWN,
-    AVAILABLE,
-    UNAVAILABLE,
-}
-
-enum class VoiceOutputState {
-    IDLE,
-    SPEAKING,
-    ERROR,
-}
-
-data class VoiceSpeakRequest(
-    val id: Long,
-    val text: String,
-) {
+data class VoiceSpeakRequest(val id: Long, val text: String) {
     init {
         require(id > 0)
         require(text.isNotBlank())
@@ -116,10 +66,7 @@ data class VoiceUiState(
     val pendingSpeak: VoiceSpeakRequest? = null,
 )
 
-enum class WorkspaceViewType(
-    val displayTitle: String,
-    val domain: String,
-) {
+enum class WorkspaceViewType(val displayTitle: String, val domain: String) {
     EXECUTIVE_OVERVIEW("Executive Overview", "Executive"),
     ATTENTION_QUEUE("Attention Queue", "Executive"),
     OBJECTIVE_DETAIL("Objective Detail", "Goals"),
@@ -164,14 +111,13 @@ data class WorkspaceNeed(
 )
 
 object WorkspaceCompositionPolicy {
-    fun choosePresentation(need: WorkspaceNeed): PresentationMode =
-        when {
-            need.needsControl || need.risk >= RiskBand.HIGH -> PresentationMode.FOCUSED_WITH_SAFETY
-            need.needsComparison && need.itemCount > 3 -> PresentationMode.COMPOSITE
-            need.needsEvidence -> PresentationMode.FOCUSED_WITH_EVIDENCE
-            need.itemCount <= 3 -> PresentationMode.RICH_RESPONSE
-            else -> PresentationMode.FOCUSED
-        }
+    fun choosePresentation(need: WorkspaceNeed): PresentationMode = when {
+        need.needsControl || need.risk >= RiskBand.HIGH -> PresentationMode.FOCUSED_WITH_SAFETY
+        need.needsComparison && need.itemCount > 3 -> PresentationMode.COMPOSITE
+        need.needsEvidence -> PresentationMode.FOCUSED_WITH_EVIDENCE
+        need.itemCount <= 3 -> PresentationMode.RICH_RESPONSE
+        else -> PresentationMode.FOCUSED
+    }
 }
 
 data class ConversationTurn(
@@ -182,74 +128,19 @@ data class ConversationTurn(
     val timestampLabel: String = "agora",
 )
 
-data class TimelineEvent(
-    val label: String,
-    val detail: String,
-    val tone: SemanticTone = SemanticTone.NEUTRAL,
-)
-
-data class GraphNode(
-    val id: String,
-    val label: String,
-    val state: String,
-    val tone: SemanticTone = SemanticTone.NEUTRAL,
-)
-
-data class GraphEdge(
-    val from: String,
-    val to: String,
-)
+data class TimelineEvent(val label: String, val detail: String, val tone: SemanticTone = SemanticTone.NEUTRAL)
+data class GraphNode(val id: String, val label: String, val state: String, val tone: SemanticTone = SemanticTone.NEUTRAL)
+data class GraphEdge(val from: String, val to: String)
 
 sealed interface AuroraUiComponent {
-    data class Metric(
-        val label: String,
-        val value: String,
-        val caption: String,
-        val tone: SemanticTone = SemanticTone.INFO,
-    ) : AuroraUiComponent
-
-    data class Status(
-        val label: String,
-        val value: String,
-        val detail: String,
-        val tone: SemanticTone = SemanticTone.NEUTRAL,
-    ) : AuroraUiComponent
-
-    data class ListBlock(
-        val title: String,
-        val items: List<String>,
-        val tone: SemanticTone = SemanticTone.NEUTRAL,
-    ) : AuroraUiComponent
-
-    data class Recommendation(
-        val title: String,
-        val body: String,
-        val reason: String,
-        val tone: SemanticTone = SemanticTone.REASONING,
-    ) : AuroraUiComponent
-
-    data class Timeline(
-        val title: String,
-        val events: List<TimelineEvent>,
-    ) : AuroraUiComponent
-
-    data class Table(
-        val title: String,
-        val columns: List<String>,
-        val rows: List<List<String>>,
-    ) : AuroraUiComponent
-
-    data class Graph(
-        val title: String,
-        val nodes: List<GraphNode>,
-        val edges: List<GraphEdge>,
-    ) : AuroraUiComponent
-
-    data class TextBlock(
-        val title: String,
-        val body: String,
-        val tone: SemanticTone = SemanticTone.NEUTRAL,
-    ) : AuroraUiComponent
+    data class Metric(val label: String, val value: String, val caption: String, val tone: SemanticTone = SemanticTone.INFO) : AuroraUiComponent
+    data class Status(val label: String, val value: String, val detail: String, val tone: SemanticTone = SemanticTone.NEUTRAL) : AuroraUiComponent
+    data class ListBlock(val title: String, val items: List<String>, val tone: SemanticTone = SemanticTone.NEUTRAL) : AuroraUiComponent
+    data class Recommendation(val title: String, val body: String, val reason: String, val tone: SemanticTone = SemanticTone.REASONING) : AuroraUiComponent
+    data class Timeline(val title: String, val events: List<TimelineEvent>) : AuroraUiComponent
+    data class Table(val title: String, val columns: List<String>, val rows: List<List<String>>) : AuroraUiComponent
+    data class Graph(val title: String, val nodes: List<GraphNode>, val edges: List<GraphEdge>) : AuroraUiComponent
+    data class TextBlock(val title: String, val body: String, val tone: SemanticTone = SemanticTone.NEUTRAL) : AuroraUiComponent
 }
 
 data class DynamicViewManifest(
@@ -291,16 +182,10 @@ data class AuroraSettings(
 
 object VoicePresentationPolicy {
     fun maySpeak(settings: AuroraSettings, text: String): Boolean =
-        settings.voiceOutputEnabled &&
-            settings.autoSpeakResponses &&
-            !settings.privacyMode &&
-            text.isNotBlank()
+        settings.voiceOutputEnabled && settings.autoSpeakResponses && !settings.privacyMode && text.isNotBlank()
 }
 
-data class ConnectivityUiState(
-    val online: Boolean = false,
-    val label: String = "Verificando rede",
-)
+data class ConnectivityUiState(val online: Boolean = false, val label: String = "Verificando rede")
 
 data class DeviceUiState(
     val environment: String = "UNKNOWN",
@@ -376,6 +261,7 @@ sealed interface AuroraUiIntent {
     data class SetReducedMotion(val enabled: Boolean) : AuroraUiIntent
     data class SetHighContrast(val enabled: Boolean) : AuroraUiIntent
     data class SetCaptions(val enabled: Boolean) : AuroraUiIntent
+    data class SetHaptics(val enabled: Boolean) : AuroraUiIntent
     data class SetPrivacyMode(val enabled: Boolean) : AuroraUiIntent
     data class SetWakePreference(val enabled: Boolean) : AuroraUiIntent
     data class SetVoiceOutputEnabled(val enabled: Boolean) : AuroraUiIntent
@@ -396,42 +282,26 @@ object WorkspaceNavigator {
     fun classify(text: String): WorkspaceViewType? {
         val normalized = text.lowercase()
         return when {
-            listOf("atenção", "atencao", "bloque", "pendência", "pendencia").any(normalized::contains) ->
-                WorkspaceViewType.ATTENTION_QUEUE
+            listOf("atenção", "atencao", "bloque", "pendência", "pendencia").any(normalized::contains) -> WorkspaceViewType.ATTENTION_QUEUE
             listOf("objetivo", "goal").any(normalized::contains) -> WorkspaceViewType.OBJECTIVE_DETAIL
-            listOf("grafo", "dependência", "dependencia", "caminho crítico", "caminho critico").any(normalized::contains) ->
-                WorkspaceViewType.GOAL_GRAPH
+            listOf("grafo", "dependência", "dependencia", "caminho crítico", "caminho critico").any(normalized::contains) -> WorkspaceViewType.GOAL_GRAPH
             listOf("tarefa", "task").any(normalized::contains) -> WorkspaceViewType.TASK_DETAIL
-            listOf(
-                "capability",
-                "capabilities",
-                "o que pode",
-                "o que consegue",
-                "consegue fazer",
-                "pode fazer",
-                "o que a aurora consegue",
-            ).any(normalized::contains) -> WorkspaceViewType.CAPABILITY_CATALOG
+            listOf("capability", "capabilities", "o que pode", "o que consegue", "consegue fazer", "pode fazer", "o que a aurora consegue").any(normalized::contains) -> WorkspaceViewType.CAPABILITY_CATALOG
             listOf("agente", "worker", "workforce").any(normalized::contains) -> WorkspaceViewType.WORKFORCE
-            listOf("marketing", "campanha", "conteúdo", "conteudo").any(normalized::contains) ->
-                WorkspaceViewType.MARKETING_OVERVIEW
+            listOf("marketing", "campanha", "conteúdo", "conteudo").any(normalized::contains) -> WorkspaceViewType.MARKETING_OVERVIEW
             listOf("lead", "crm", "receita", "revenue", "vendas").any(normalized::contains) -> WorkspaceViewType.CRM_REVENUE
-            listOf("comentário", "comentario", "direct", "dm", "community", "inbox").any(normalized::contains) ->
-                WorkspaceViewType.COMMUNITY_INBOX
+            listOf("comentário", "comentario", "direct", "dm", "community", "inbox").any(normalized::contains) -> WorkspaceViewType.COMMUNITY_INBOX
             listOf("meta ads", "facebook ads", "instagram ads").any(normalized::contains) -> WorkspaceViewType.META_ADS
             listOf("google ads", "pmax", "search ads").any(normalized::contains) -> WorkspaceViewType.GOOGLE_ADS
-            listOf("provider", "provedor", "integração", "integracao", "conexão", "conexao").any(normalized::contains) ->
-                WorkspaceViewType.PROVIDERS
+            listOf("provider", "provedor", "integração", "integracao", "conexão", "conexao").any(normalized::contains) -> WorkspaceViewType.PROVIDERS
             listOf("device", "tablet", "dispositivo", "sessão", "sessao").any(normalized::contains) -> WorkspaceViewType.DEVICES
             listOf("workflow", "fluxo", "n8n").any(normalized::contains) -> WorkspaceViewType.WORKFLOWS
-            listOf("evidence", "evidência", "evidencia", "prova", "receipt", "readback", "verificado").any(normalized::contains) ->
-                WorkspaceViewType.SYSTEM_HEALTH
+            listOf("evidence", "evidência", "evidencia", "prova", "receipt", "readback", "verificado").any(normalized::contains) -> WorkspaceViewType.SYSTEM_HEALTH
             listOf("segurança", "seguranca", "trust", "kill switch").any(normalized::contains) -> WorkspaceViewType.SECURITY_TRUST
-            listOf("calendário", "calendario", "agenda", "publicação", "publicacao").any(normalized::contains) ->
-                WorkspaceViewType.PUBLICATION_CALENDAR
+            listOf("calendário", "calendario", "agenda", "publicação", "publicacao").any(normalized::contains) -> WorkspaceViewType.PUBLICATION_CALENDAR
             listOf("asset", "ativo", "criativo", "biblioteca").any(normalized::contains) -> WorkspaceViewType.ASSET_LIBRARY
             listOf("memória", "memoria", "knowledge", "conhecimento").any(normalized::contains) -> WorkspaceViewType.KNOWLEDGE_MEMORY
-            listOf("analytics", "resultado", "outcome", "métrica", "metrica").any(normalized::contains) ->
-                WorkspaceViewType.ANALYTICS_OUTCOMES
+            listOf("analytics", "resultado", "outcome", "métrica", "metrica").any(normalized::contains) -> WorkspaceViewType.ANALYTICS_OUTCOMES
             else -> null
         }
     }
