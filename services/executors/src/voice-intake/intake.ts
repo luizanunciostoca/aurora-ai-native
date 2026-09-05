@@ -95,7 +95,13 @@ export function evaluateVoiceCandidateWithResolution(
   context: AuthenticatedVoiceEvaluationContext,
   resolver: VoiceAuthorityEvaluationResolver,
 ): VoiceCandidateEvaluationWithResolution {
-  if (!validCandidate(candidate)) return { result: rejected('CANDIDATE_MALFORMED') as Extract<VoiceCandidateIntakeResult, { readonly ok: false }> };
+  if (!validCandidate(candidate))
+    return {
+      result: rejected('CANDIDATE_MALFORMED') as Extract<
+        VoiceCandidateIntakeResult,
+        { readonly ok: false }
+      >,
+    };
   if (!validContext(context)) {
     return {
       result: rejected('AUTHENTICATED_CONTEXT_MALFORMED') as Extract<

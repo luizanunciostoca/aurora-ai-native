@@ -150,9 +150,11 @@ export class OwnerBackedVoiceExecutionStateSource implements TrustedVoiceExecuti
     }
     const identities = new Map<string, PreissuedVoiceExecutionIdentity>();
     for (const identity of config.identities) {
-      if (!validIdentity(identity)) throw new Error('Preissued voice execution identity is invalid.');
+      if (!validIdentity(identity))
+        throw new Error('Preissued voice execution identity is invalid.');
       const identityKey = key(identity.commandId, identity.capabilityId);
-      if (identities.has(identityKey)) throw new Error('Duplicate preissued voice execution identity.');
+      if (identities.has(identityKey))
+        throw new Error('Duplicate preissued voice execution identity.');
       identities.set(identityKey, Object.freeze({ ...identity }));
     }
     this.#identities = identities;

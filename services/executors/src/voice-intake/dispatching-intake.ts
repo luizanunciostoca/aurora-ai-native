@@ -203,27 +203,22 @@ export class W15JDispatchingVoiceCandidateIntake {
       this.#config.resolver,
     );
     if (!evaluated.result.ok) {
-      return resultWithDispatch(
-        evaluated.result,
-        observation('NOT_ATTEMPTED_AUTHORITY_REJECTED'),
-      );
+      return resultWithDispatch(evaluated.result, observation('NOT_ATTEMPTED_AUTHORITY_REJECTED'));
     }
 
     const authority = evaluated.result.gate;
     if (authority.executionEligible !== true || authority.currentAuthorityValidated !== true) {
-      return resultWithDispatch(
-        evaluated.result,
-        observation('NOT_ATTEMPTED_AUTHORITY_REJECTED'),
-      );
+      return resultWithDispatch(evaluated.result, observation('NOT_ATTEMPTED_AUTHORITY_REJECTED'));
     }
 
-    const actionIntent = evaluated.resolved.actionIntent;
-    const evaluatedAt = evaluated.resolved.authorityEvaluation.policyEvaluation.evaluatedAt;
+    const resolved = evaluated.resolved;
+    if (resolved === undefined) {
+      return resultWithDispatch(evaluated.result, observation('NOT_ATTEMPTED_STATE_UNAVAILABLE'));
+    }
+    const actionIntent = resolved.actionIntent;
+    const evaluatedAt = resolved.authorityEvaluation.policyEvaluation.evaluatedAt;
     if (!validEvaluationTime(evaluatedAt)) {
-      return resultWithDispatch(
-        evaluated.result,
-        observation('NOT_ATTEMPTED_STATE_UNAVAILABLE'),
-      );
+      return resultWithDispatch(evaluated.result, observation('NOT_ATTEMPTED_STATE_UNAVAILABLE'));
     }
 
     let state: TrustedVoiceExecutionState | null;
@@ -238,10 +233,7 @@ export class W15JDispatchingVoiceCandidateIntake {
       state = null;
     }
     if (state === null || !validState(state, input.candidate, actionIntent)) {
-      return resultWithDispatch(
-        evaluated.result,
-        observation('NOT_ATTEMPTED_STATE_UNAVAILABLE'),
-      );
+      return resultWithDispatch(evaluated.result, observation('NOT_ATTEMPTED_STATE_UNAVAILABLE'));
     }
 
     const target = actionIntent.executionTarget;

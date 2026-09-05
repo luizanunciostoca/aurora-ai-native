@@ -195,7 +195,9 @@ function resolver(authorized = true): VoiceAuthorityEvaluationResolver {
   };
 }
 
-function healthyState(overrides: Partial<TrustedVoiceExecutionState> = {}): TrustedVoiceExecutionState {
+function healthyState(
+  overrides: Partial<TrustedVoiceExecutionState> = {},
+): TrustedVoiceExecutionState {
   const target = actionIntent().executionTarget;
   if (target === undefined) throw new Error('target fixture missing');
   return {
@@ -327,7 +329,11 @@ test('unavailable target and active kill switch both block before W03 reservatio
     healthyState({
       containment: {
         ...healthyState().containment,
-        killSwitch: { state: 'ACTIVE', changedAt: '2026-09-05T19:20:00.000Z' },
+        killSwitch: {
+          state: 'ACTIVE',
+          changedAt:
+            '2026-09-05T19:20:00.000Z' as TrustedVoiceExecutionState['containment']['killSwitch']['changedAt'],
+        },
       },
     }),
   ]) {

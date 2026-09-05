@@ -7,6 +7,7 @@ import type { ActionIntent } from '@aurora/contracts/actions';
 import type { CausationId, CommandId, ExecutionId } from '@aurora/contracts/ids';
 
 import type { FailureContainmentSnapshot } from '../src/failure-containment/types.js';
+import type { ExecutableTargetBinding } from '../src/target-resolution/types.js';
 import {
   OwnerBackedVoiceExecutionStateSource,
   type CurrentVoiceContainmentStateSource,
@@ -71,7 +72,9 @@ function lookup(): TrustedVoiceExecutionStateLookup {
   };
 }
 
-function identity(overrides: Partial<PreissuedVoiceExecutionIdentity> = {}): PreissuedVoiceExecutionIdentity {
+function identity(
+  overrides: Partial<PreissuedVoiceExecutionIdentity> = {},
+): PreissuedVoiceExecutionIdentity {
   return {
     commandId: COMMAND,
     capabilityId: CAPABILITY,
@@ -85,7 +88,9 @@ function identity(overrides: Partial<PreissuedVoiceExecutionIdentity> = {}): Pre
   };
 }
 
-function containment(killSwitchState: 'INACTIVE' | 'ACTIVE' = 'INACTIVE'): FailureContainmentSnapshot {
+function containment(
+  killSwitchState: 'INACTIVE' | 'ACTIVE' = 'INACTIVE',
+): FailureContainmentSnapshot {
   return {
     circuit: { state: 'CLOSED', consecutiveFailures: 0, halfOpenProbeInFlight: false },
     killSwitch: {
@@ -106,7 +111,9 @@ class TargetSource implements CurrentVoiceTargetBindingSource {
   unavailable = false;
   fail = false;
 
-  resolve(request: Parameters<CurrentVoiceTargetBindingSource['resolve']>[0]) {
+  resolve(
+    request: Parameters<CurrentVoiceTargetBindingSource['resolve']>[0],
+  ): readonly ExecutableTargetBinding[] | null {
     this.calls += 1;
     if (this.fail) throw new Error('target owner unavailable');
     if (this.unavailable) return null;
@@ -122,7 +129,7 @@ class TargetSource implements CurrentVoiceTargetBindingSource {
         freshUntil: '2026-09-05T19:45:00.000Z' as never,
         compatibleActionIntentSchemaVersions: ['1.0.0'],
         preconditionsSatisfied: true,
-      },
+      } as unknown as ExecutableTargetBinding,
     ];
   }
 }
@@ -247,10 +254,7 @@ test('constructor rejects duplicate or authority-bearing/malformed preissued exe
     /Duplicate preissued voice execution identity/u,
   );
   assert.throws(
-    () =>
-      runtime([
-        identity({ authorizesExecution: true as unknown as false }),
-      ]),
+    () => runtime([identity({ authorizesExecution: true as unknown as false })]),
     /execution identity is invalid/u,
   );
   assert.throws(
