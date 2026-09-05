@@ -457,6 +457,7 @@ export class DeviceReceiptIngressManager {
 
     const authentication = this.#dependencies.authentication.verify({
       tenantId: candidate.tenantId,
+      actorIdentityId: trust.actorIdentityId,
       correlationId: candidate.correlationId,
       deviceRef: candidate.deviceRef,
       deviceSessionId: candidate.deviceSessionId,
