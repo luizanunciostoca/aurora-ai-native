@@ -40,6 +40,7 @@ import ai.aurora.device.session.AndroidDeviceSessionMetadataStore
 import ai.aurora.device.voice.GovernedVoiceCatalogResult
 import ai.aurora.device.voice.GovernedVoiceCommandCatalog
 import ai.aurora.ui.DeviceTrustDiagnostics
+import ai.aurora.ui.NativeCapabilityDiagnostics
 
 class WakeSetupActivity : FragmentActivity() {
     private lateinit var recorder: AuroraWakeEnrollmentRecorder
@@ -365,6 +366,15 @@ class WakeSetupActivity : FragmentActivity() {
             is GovernedVoiceCatalogResult.Rejected ->
                 "W04/W15-G: FAIL_CLOSED · ${governed.reason.name}"
         }
+        val nativeCapabilityLine = when (governed) {
+            is GovernedVoiceCatalogResult.Ready -> {
+                val observations = aurora.voiceProjectionStore().current()?.nativeCapabilityObservations.orEmpty()
+                val summary = NativeCapabilityDiagnostics.summarize(observations)
+                "W15-C native observations: ${summary.total} total · ${summary.available} available · ${summary.preconditionRequired} precondition · ${summary.stale} stale · ${summary.unsupported} unsupported · ${summary.unknown} unknown"
+            }
+            is GovernedVoiceCatalogResult.Rejected ->
+                "W15-C native observations: NOT_CURRENT_FAIL_CLOSED"
+        }
         runtimeDiagnostics = buildList {
             add("Build: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.AURORA_BUILD_SHA.take(12)}")
             add("Environment: ${aurora.environmentConfig.environment.name}")
@@ -372,6 +382,7 @@ class WakeSetupActivity : FragmentActivity() {
             add("W14 session availability: $session")
             addAll(trustLines)
             add(governedLine)
+            add(nativeCapabilityLine)
             add("W07 voice ingress: NOT_COMPOSED")
             add(offlineSummary)
         }
