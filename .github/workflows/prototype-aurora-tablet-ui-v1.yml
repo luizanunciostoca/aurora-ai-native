@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - prototype/aurora-tablet-ui-v1
+      - prototype/aurora-wake-word-v1
   workflow_dispatch:
 
 permissions:
@@ -53,7 +54,8 @@ jobs:
           app_version=0.16.0-alpha.3-local
           variant=localDebug
           voice_mode=tap-to-talk-stt-plus-tts
-          wake_mode=preference-only
+          wake_mode=local-kws-contracts-only
+          wake_model=prototype-template-pt-BR-v1-pre-enrollment
           EOF
       - name: Upload Aurora Tablet UI V3 APK
         uses: actions/upload-artifact@v4
