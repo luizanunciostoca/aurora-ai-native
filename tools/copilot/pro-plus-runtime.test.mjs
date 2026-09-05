@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -91,7 +94,72 @@ test('fresh measured PRO+ attestation unlocks exactly the observed three safe BU
   assert.equal(runtime.proPlusReady, true);
   assert.equal(runtime.executionProfile, 'PRO_PLUS');
   assert.equal(runtime.isolatedSessionCapacity, 3);
+  assert.equal(runtime.attestationSource, 'SUPPLIED');
   assert.equal(result.capacity, 3);
+});
+
+test('live main Reality Gate artifact is preferred over the committed bootstrap attestation', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'aurora-proplus-'));
+  try {
+    const canonicalPath = join(directory, 'canonical.json');
+    const livePath = join(directory, 'live.json');
+    writeFileSync(
+      canonicalPath,
+      JSON.stringify({ ...verifiedAttestation, workflowRunId: 100, observedConcurrentSessions: 3 }),
+    );
+    writeFileSync(
+      livePath,
+      JSON.stringify({
+        ...verifiedAttestation,
+        workflowRunId: 200,
+        candidateSha: 'b'.repeat(40),
+        observedConcurrentSessions: 4,
+      }),
+    );
+    const mode = {
+      ...actionsMode,
+      runtimeCapabilityDiscovery: {
+        ...actionsMode.runtimeCapabilityDiscovery,
+        attestationPath: canonicalPath,
+      },
+    };
+    const runtime = discoverRuntimeCapabilities(
+      mode,
+      { AURORA_RUNTIME_ATTESTATION_FILE: livePath },
+      null,
+      Date.parse('2026-09-05T02:00:00Z'),
+    );
+    assert.equal(runtime.proPlusReady, true);
+    assert.equal(runtime.attestationSource, 'LIVE_MAIN_ARTIFACT');
+    assert.equal(runtime.isolatedSessionCapacity, 3);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('missing or unreadable live artifact falls back to the canonical attestation file', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'aurora-proplus-'));
+  try {
+    const canonicalPath = join(directory, 'canonical.json');
+    writeFileSync(canonicalPath, JSON.stringify(verifiedAttestation));
+    const mode = {
+      ...actionsMode,
+      runtimeCapabilityDiscovery: {
+        ...actionsMode.runtimeCapabilityDiscovery,
+        attestationPath: canonicalPath,
+      },
+    };
+    const runtime = discoverRuntimeCapabilities(
+      mode,
+      { AURORA_RUNTIME_ATTESTATION_FILE: join(directory, 'missing.json') },
+      null,
+      Date.parse('2026-09-05T02:00:00Z'),
+    );
+    assert.equal(runtime.proPlusReady, true);
+    assert.equal(runtime.attestationSource, 'CANONICAL_FILE');
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('expired or tampered PRO+ attestation automatically returns to Free fallback', () => {
@@ -144,16 +212,23 @@ test('active semantic and path leases defer colliding writers', () => {
   assert.equal(result.deferred[0].reason, 'ACTIVE_SHARED_WRITE_LEASE');
 });
 
-test('development telemetry remains operational evidence and never authority', () => {
-  const runtime = discoverRuntimeCapabilities(freeMode, {});
+test('development telemetry remains operational evidence and exposes attestation provenance', () => {
+  const runtime = discoverRuntimeCapabilities(
+    actionsMode,
+    {},
+    verifiedAttestation,
+    Date.parse('2026-09-05T02:00:00Z'),
+  );
   const telemetry = buildProPlusDevelopmentTelemetry({
     runtime,
-    capacity: { capacity: 2 },
+    capacity: { capacity: 3 },
     activeLeases: [{ taskId: 'A' }],
     selected: [{ task: { id: 'B' } }],
     deferred: [{ taskId: 'C' }],
   });
   assert.equal(telemetry.canonicalAuthority, false);
   assert.equal(telemetry.authorityElevationViolations, 0);
-  assert.equal(telemetry.buildCapacityUtilizationBps, 5000);
+  assert.equal(telemetry.executionProfile, 'PRO_PLUS');
+  assert.equal(telemetry.attestationSource, 'SUPPLIED');
+  assert.equal(telemetry.buildCapacityUtilizationBps, 3333);
 });
