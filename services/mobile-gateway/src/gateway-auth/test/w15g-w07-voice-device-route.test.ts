@@ -290,8 +290,11 @@ test('fails closed on stale authenticated socket binding without reading device 
       return null;
     },
   });
-  const input = requestInput();
-  input.socketBinding = { ...input.socketBinding, connectionId: 'stale-connection' };
+  const base = requestInput();
+  const input: GatewayDevicePlaneHandleInput = {
+    ...base,
+    socketBinding: { ...base.socketBinding, connectionId: 'stale-connection' },
+  };
 
   const result = await route.handle(input);
   assert.equal(result.statusCode, 409);
