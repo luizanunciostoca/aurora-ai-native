@@ -181,6 +181,15 @@ private fun OnboardingCard(
                     KeyValue("Chave local", deviceKeyState.status.name)
                     if (deviceKeyState.status == DeviceKeyUiStatus.READY) {
                         KeyValue("Algoritmo", deviceKeyState.algorithm)
+                        KeyValue("Security level", deviceKeyState.securityLevel)
+                        KeyValue(
+                            "Hardware-backed",
+                            when (deviceKeyState.secureHardwareBacked) {
+                                true -> "YES"
+                                false -> "NO"
+                                null -> "UNKNOWN"
+                            },
+                        )
                         KeyValue("Fingerprint", deviceKeyState.fingerprintSha256)
                     }
                     Text(deviceKeyState.detail, color = TextSecondary, fontSize = 12.sp)
@@ -189,7 +198,7 @@ private fun OnboardingCard(
                     }
                     LuminousCallout(
                         "LOCAL KEY ≠ REMOTE TRUST",
-                        "A chave W15-B é não exportável e não autoriza execução. O gateway ainda precisa registrar e aceitar o dispositivo.",
+                        "TEE/StrongBox melhoram a proteção local quando presentes, mas não registram o dispositivo e não autorizam execução. O gateway ainda precisa registrar e aceitar o DeviceRef.",
                         SemanticTone.VERIFIED,
                     )
                 }
@@ -250,6 +259,9 @@ private fun OnboardingCard(
                     KeyValue("Environment", state.device.environment)
                     KeyValue("Session", state.device.registrationStatus)
                     KeyValue("Key", deviceKeyState.status.name)
+                    if (deviceKeyState.status == DeviceKeyUiStatus.READY) {
+                        KeyValue("Key security", deviceKeyState.securityLevel)
+                    }
                     KeyValue("Voice diagnostic", voiceDiagnosticState.status.name)
                     LuminousCallout(
                         "PRIMEIRO TESTE",
