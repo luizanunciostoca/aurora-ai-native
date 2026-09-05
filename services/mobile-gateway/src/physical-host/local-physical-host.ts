@@ -27,6 +27,7 @@ import {
 } from '../gateway-auth/voice-candidate-network.js';
 import { GatewayVoiceDevicePlaneNetworkHandler } from '../gateway-auth/voice-device-plane-network.js';
 import { RealtimeCommandSessionManager } from '../realtime-session/manager.js';
+import { W14LocalGovernedDeviceDispatchPort } from './governed-device-dispatch.js';
 import {
   PsqlW03SyncExecutor,
   W03PostgresDeviceReservationAdapter,
@@ -77,11 +78,13 @@ function currentTime(clock: () => number): number {
  * Controlled W15-J LOCAL physical host composition.
  *
  * W14 owns gateway/device/session/trust/transport state. W03 owns durable idempotency through the
- * accepted Postgres schema. W07 ports are injected as already-composed owner adapters. This class
- * never issues business authority, prepares a device command, promotes a receipt to VERIFIED, or
- * synthesizes physical acceptance evidence.
+ * accepted Postgres schema. W07 ports are injected as already-composed owner adapters. The host
+ * exposes a W14 transport dispatch port for W07 to call only after its own authority, target,
+ * safeguard and containment gates; the host itself never bypasses W07, promotes a receipt to
+ * VERIFIED, decides retry, or synthesizes physical acceptance evidence.
  */
 export class W15JLocalPhysicalHost {
+  readonly governedDeviceDispatch: W14LocalGovernedDeviceDispatchPort;
   readonly #clock: () => number;
   readonly #gatewayPort: number;
   readonly #bootstrapPort: number;
@@ -130,6 +133,14 @@ export class W15JLocalPhysicalHost {
       authentication: deviceProofVerifier,
       durableIngress: durableReservations,
       w07Ingress: dependencies.receiptEvidenceIngress,
+    });
+
+    this.governedDeviceDispatch = new W14LocalGovernedDeviceDispatchPort({
+      gatewaySessions,
+      devices,
+      deviceSessions,
+      realtimeCommands,
+      deliveries,
     });
 
     const voiceCandidates = new VoiceCandidateNetworkBoundary(dependencies.voiceIntake);
