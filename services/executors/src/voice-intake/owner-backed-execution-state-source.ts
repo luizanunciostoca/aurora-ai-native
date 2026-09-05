@@ -36,6 +36,8 @@ export interface CurrentVoiceTargetBindingSource {
     readonly tenantId: string;
     readonly actorIdentityId: string;
     readonly deviceId: string;
+    /** Authenticated W14 registration version; target owners must reject stale device binding. */
+    readonly registrationVersion: number;
     readonly evaluatedAt: string;
   }): readonly ExecutableTargetBinding[] | null;
 }
@@ -127,6 +129,8 @@ function canonicalLookupMatches(lookup: TrustedVoiceExecutionStateLookup): boole
     intent.correlation.correlationId === lookup.context.correlationId &&
     target?.kind === 'DEVICE' &&
     target.bindingReference === lookup.context.deviceId &&
+    Number.isSafeInteger(lookup.context.registrationVersion) &&
+    lookup.context.registrationVersion > 0 &&
     Number.isFinite(Date.parse(lookup.evaluatedAt))
   );
 }
@@ -179,6 +183,7 @@ export class OwnerBackedVoiceExecutionStateSource implements TrustedVoiceExecuti
         tenantId: lookup.context.tenantId,
         actorIdentityId: lookup.context.actorIdentityId,
         deviceId: lookup.context.deviceId,
+        registrationVersion: lookup.context.registrationVersion,
         evaluatedAt: lookup.evaluatedAt,
       });
       safeguards = this.#safeguards.resolve({
