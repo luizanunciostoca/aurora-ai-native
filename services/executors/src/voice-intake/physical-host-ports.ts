@@ -5,11 +5,15 @@ import {
 } from '../readback/device-receipt-observer.js';
 import type { IdempotencyFencePort, PreconditionEvaluator } from '../safeguards/types.js';
 import type { CurrentAuthorityValidator } from '../sdk/types.js';
-import {
-  W15JDispatchingVoiceCandidateIntake,
-  type TrustedVoiceExecutionStateSource,
-} from './dispatching-intake.js';
+import { W15JDispatchingVoiceCandidateIntake } from './dispatching-intake.js';
 import { evaluateVoiceCandidate } from './intake.js';
+import {
+  OwnerBackedVoiceExecutionStateSource,
+  type CurrentVoiceContainmentStateSource,
+  type CurrentVoiceSafeguardStateSource,
+  type CurrentVoiceTargetBindingSource,
+  type PreissuedVoiceExecutionIdentity,
+} from './owner-backed-execution-state-source.js';
 import {
   TrustedServerVoiceAuthorityResolver,
   type TrustedVoiceAuthorityMaterialSource,
@@ -39,6 +43,7 @@ export interface W15JDispatchingPhysicalHostW07Ports {
   readonly createVoiceIntake: (
     w14Dispatch: W14GovernedDeviceDispatchPort,
     idempotencyFence: IdempotencyFencePort,
+    targetBindings: CurrentVoiceTargetBindingSource,
   ) => W15JPhysicalHostVoiceIntakePort;
   readonly receiptEvidenceIngress: W07DeviceReceiptObservationAdapter;
 }
@@ -54,8 +59,12 @@ export interface W15JPhysicalHostW07PortConfig {
 }
 
 export interface W15JDispatchingPhysicalHostW07PortConfig extends W15JPhysicalHostW07PortConfig {
-  /** Server-owned W07 current target/order/attempt/quota/containment state. */
-  readonly executionStateSource: TrustedVoiceExecutionStateSource;
+  /** Immutable server-issued command/execution/order/hash identity; never sourced from Android. */
+  readonly executionIdentities: readonly PreissuedVoiceExecutionIdentity[];
+  /** Current W07 attempt/quota owner. Missing current state fails closed. */
+  readonly safeguardStateSource: CurrentVoiceSafeguardStateSource;
+  /** Current W07 circuit/kill/dependency/cancellation owner. No healthy defaults are permitted. */
+  readonly containmentStateSource: CurrentVoiceContainmentStateSource;
   /** Current W07 precondition evaluator; Android cannot supply precondition truth. */
   readonly evaluatePrecondition: PreconditionEvaluator;
 }
@@ -94,11 +103,10 @@ export function createW15JPhysicalHostW07Ports(
 /**
  * W07-owned dispatching adapter bundle for the controlled W15-J physical host.
  *
- * The factory receives both structural runtime ports only after the host has created them: W14
- * transport dispatch plus the W03-backed W07-C business idempotency fence. Authority, target
- * resolution, containment and safeguards remain W07-owned; W14 only revalidates transport/device
- * trust and prepares delivery. No raw credential, verified outcome or retry permission crosses the
- * factory boundary.
+ * The factory receives current structural runtime ports only after the host creates them: W14
+ * transport dispatch, W03 business idempotency and W14 DEVICE target availability. W07 builds its
+ * current execution-state source around those owners plus current safeguard/containment owners.
+ * No raw credential, verified outcome or retry permission crosses this boundary.
  */
 export function createW15JDispatchingPhysicalHostW07Ports(
   config: W15JDispatchingPhysicalHostW07PortConfig,
@@ -109,15 +117,23 @@ export function createW15JDispatchingPhysicalHostW07Ports(
   const createVoiceIntake = (
     w14Dispatch: W14GovernedDeviceDispatchPort,
     idempotencyFence: IdempotencyFencePort,
-  ): W15JPhysicalHostVoiceIntakePort =>
-    new W15JDispatchingVoiceCandidateIntake({
+    targetBindings: CurrentVoiceTargetBindingSource,
+  ): W15JPhysicalHostVoiceIntakePort => {
+    const executionStateSource = new OwnerBackedVoiceExecutionStateSource({
+      identities: config.executionIdentities,
+      targetBindings,
+      safeguards: config.safeguardStateSource,
+      containment: config.containmentStateSource,
+    });
+    return new W15JDispatchingVoiceCandidateIntake({
       resolver,
-      executionStateSource: config.executionStateSource,
+      executionStateSource,
       evaluatePrecondition: config.evaluatePrecondition,
       idempotencyFence,
       w14Dispatch,
       ...(config.clock === undefined ? {} : { clock: config.clock }),
     });
+  };
 
   return Object.freeze({ createVoiceIntake, receiptEvidenceIngress });
 }
