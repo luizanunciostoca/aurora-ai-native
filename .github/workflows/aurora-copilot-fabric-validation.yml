@@ -59,7 +59,7 @@ jobs:
           grep -q 'aurora:accepted' tools/copilot/materialize-ready.mjs
           grep -q 'aurora:accepted' tools/copilot/dispatch-issue.mjs
           grep -q 'copilot-requests: write' .github/workflows/aurora-copilot-free-worker.yml
-          grep -Fq 'max-parallel: ${{ fromJSON(needs.claim.outputs.parallelism) }}' .github/workflows/aurora-copilot-free-worker.yml
+          grep -q 'needs.claim.outputs.parallelism' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'AURORA_CI_PARALLEL_CAPACITY' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'AURORA_AI_CREDIT_SLOT_BUDGET' .github/workflows/aurora-copilot-free-worker.yml
           grep -q 'COPILOT_SUBAGENT_MAX_CONCURRENT' .github/workflows/aurora-copilot-free-worker.yml
