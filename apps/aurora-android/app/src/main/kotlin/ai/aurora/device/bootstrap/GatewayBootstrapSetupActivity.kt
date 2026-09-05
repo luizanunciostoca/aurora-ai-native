@@ -4,6 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
@@ -56,7 +57,7 @@ class GatewayBootstrapSetupActivity : Activity() {
                         InputType.TYPE_TEXT_VARIATION_PASSWORD or
                         InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
                 isSingleLine = true
-                importantForAutofill = IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+                importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
             }
         layout.addView(reference)
         layout.addView(
