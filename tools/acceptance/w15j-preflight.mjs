@@ -108,6 +108,13 @@ const REQUIRED_RISK_GATES = Object.freeze([
 ]);
 
 const REQUIRED_REVERSE_PORTS = Object.freeze([8080, 8081]);
+const REQUIRED_COLLECTOR_KEYS = Object.freeze([
+  'rawDirectory',
+  'preflightMetadata',
+  'finalizeMetadata',
+  'sha256Manifest',
+  'adbReverseCleanup',
+]);
 const REQUIRED_STATUSES = new Set(['NOT_RUN', 'FAIL', 'BLOCKED']);
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/u;
 
@@ -183,6 +190,54 @@ export function validateW15JPreflight(dossier, preflight = {}) {
     }
   }
 
+  const expected = preflight.expected;
+  if (!expected || typeof expected !== 'object') {
+    throw new Error('preflight.expected trusted provenance tuple is required');
+  }
+  if (
+    candidateSha !== exactSha(expected.candidateSha, 'preflight.expected.candidateSha', GIT_SHA)
+  ) {
+    throw new Error('candidateSha does not match trusted preflight');
+  }
+  const expectedApk = expected.apk;
+  for (const field of ['applicationId', 'variant', 'versionCode', 'versionName']) {
+    if (apk[field] !== requiredString(expectedApk?.[field], `preflight.expected.apk.${field}`)) {
+      throw new Error(`apk.${field} does not match trusted preflight`);
+    }
+  }
+  if (
+    apk.sha256.toLowerCase() !==
+    exactSha(expectedApk?.sha256, 'preflight.expected.apk.sha256', SHA256)
+  ) {
+    throw new Error('apk.sha256 does not match trusted preflight');
+  }
+  const expectedDevice = expected.device;
+  for (const field of ['manufacturer', 'model', 'product', 'apiLevel', 'buildFingerprint']) {
+    if (
+      device[field] !==
+      requiredString(expectedDevice?.[field], `preflight.expected.device.${field}`)
+    ) {
+      throw new Error(`device.${field} does not match trusted preflight`);
+    }
+  }
+  if (
+    device.serialSha256.toLowerCase() !==
+    exactSha(expectedDevice?.serialSha256, 'preflight.expected.device.serialSha256', SHA256)
+  ) {
+    throw new Error('device.serialSha256 does not match trusted preflight');
+  }
+  for (const field of ['gatewayIdentity', 'gatewayVersion']) {
+    if (
+      environment[field] !==
+      requiredString(expected.environment?.[field], `preflight.expected.environment.${field}`)
+    ) {
+      throw new Error(`environment.${field} does not match trusted preflight`);
+    }
+  }
+  if (environment.gatewayTransport !== expected.environment?.gatewayTransport) {
+    throw new Error('environment.gatewayTransport does not match trusted preflight');
+  }
+
   const mappings = preflight.adbReverseMappings;
   if (!Array.isArray(mappings)) throw new Error('preflight.adbReverseMappings is required');
   for (const port of REQUIRED_REVERSE_PORTS) {
@@ -212,8 +267,18 @@ export function validateW15JPreflight(dossier, preflight = {}) {
     observedRecord(dossier.riskGates?.[key], `riskGates.${key}`, new Set(['PASS']));
   }
 
-  for (const [key, value] of Object.entries(dossier.collectorEvidence || {})) {
-    requiredString(value, `collectorEvidence.${key}`);
+  for (const key of REQUIRED_COLLECTOR_KEYS) {
+    requiredString(dossier.collectorEvidence?.[key], `collectorEvidence.${key}`);
+  }
+  if (
+    Object.keys(dossier.collectorEvidence || {})
+      .sort()
+      .join(',') !== REQUIRED_COLLECTOR_KEYS.slice().sort().join(',')
+  ) {
+    throw new Error('collectorEvidence must contain exactly the canonical required keys');
+  }
+  if (!Array.isArray(dossier.evidenceReferences) || dossier.evidenceReferences.length === 0) {
+    throw new Error('evidenceReferences must not be empty');
   }
   requiredString(
     dossier.finalization?.operatorAttestationReference,
@@ -246,12 +311,18 @@ export function loadAndValidateW15JPreflight(path, preflight = {}) {
 
 if (process.argv[1]?.endsWith('w15j-preflight.mjs')) {
   const dossierPath = process.argv[2];
-  if (!dossierPath) {
-    console.error('Usage: node tools/acceptance/w15j-preflight.mjs <w15j-evidence.json>');
+  const preflightPath = process.argv[3];
+  if (!dossierPath || !preflightPath) {
+    console.error(
+      'Usage: node tools/acceptance/w15j-preflight.mjs <w15j-evidence.json> <trusted-preflight.json>',
+    );
     process.exitCode = 2;
   } else {
     try {
-      const result = loadAndValidateW15JPreflight(dossierPath);
+      const result = loadAndValidateW15JPreflight(
+        dossierPath,
+        JSON.parse(readFileSync(preflightPath, 'utf8')),
+      );
       console.log(
         `W15J_PREFLIGHT_READY candidate=${result.candidateSha} scenarios=${result.requiredScenarioCount}`,
       );

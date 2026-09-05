@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -85,10 +89,34 @@ function canonicalDossier() {
       operatorAttestationReference: 'attestations/operator.txt',
       independentReviewReference: 'attestations/reviewer.txt',
     },
+    evidenceReferences: ['physical/w15j-evidence.json'],
   };
 }
 
 const preflight = {
+  expected: {
+    candidateSha: 'a'.repeat(40),
+    apk: {
+      applicationId: 'ai.aurora.device.local',
+      variant: 'localRelease',
+      versionCode: '15',
+      versionName: '0.15.0',
+      sha256: 'b'.repeat(64),
+    },
+    device: {
+      serialSha256: 'c'.repeat(64),
+      manufacturer: 'Example',
+      model: 'Tablet',
+      product: 'tablet',
+      apiLevel: '35',
+      buildFingerprint: 'example/tablet/15',
+    },
+    environment: {
+      gatewayIdentity: 'gateway-local-01',
+      gatewayVersion: 'w14-local-1',
+      gatewayTransport: 'LOCAL_ADB_REVERSE_ONLY',
+    },
+  },
   adbReverseMappings: [
     { host: 'tcp', port: 8080, status: 'PRESENT' },
     { host: 'tcp', port: 8081, status: 'PRESENT' },
@@ -176,26 +204,74 @@ test('requires threat review, resources, canonical risk gates, and attestations'
 
 test('requires exact provenance and both LOCAL reverse mappings', () => {
   const wrongCandidate = clone(canonicalDossier());
-  wrongCandidate.candidateSha = 'not-a-sha';
+  wrongCandidate.candidateSha = 'd'.repeat(40);
   assert.throws(
     () => validateW15JPreflight(wrongCandidate, preflight),
-    /candidateSha has an invalid format/,
+    /candidateSha does not match trusted preflight/,
+  );
+
+  const wrongApk = clone(canonicalDossier());
+  wrongApk.apk.sha256 = 'd'.repeat(64);
+  assert.throws(
+    () => validateW15JPreflight(wrongApk, preflight),
+    /apk.sha256 does not match trusted preflight/,
+  );
+
+  const wrongDevice = clone(canonicalDossier());
+  wrongDevice.device.model = 'OtherTablet';
+  assert.throws(
+    () => validateW15JPreflight(wrongDevice, preflight),
+    /device.model does not match trusted preflight/,
   );
 
   const wrongGateway = clone(canonicalDossier());
-  wrongGateway.environment.gatewayTransport = 'REMOTE';
+  wrongGateway.environment.gatewayIdentity = 'gateway-other';
   assert.throws(
     () => validateW15JPreflight(wrongGateway, preflight),
-    /environment.gatewayTransport must be LOCAL_ADB_REVERSE_ONLY/,
+    /environment.gatewayIdentity does not match trusted preflight/,
   );
 
   const missingBootstrapMapping = {
+    expected: preflight.expected,
     adbReverseMappings: [{ host: 'tcp', port: 8080, status: 'PRESENT' }],
   };
   assert.throws(
     () => validateW15JPreflight(canonicalDossier(), missingBootstrapMapping),
     /ADB reverse mapping tcp:8081 is not PRESENT/,
   );
+});
+
+test('requires exact collector keys and dossier-level evidence references', () => {
+  for (const collectorEvidence of [{}, { rawDirectory: 'physical/raw' }]) {
+    const dossier = canonicalDossier();
+    dossier.collectorEvidence = collectorEvidence;
+    assert.throws(() => validateW15JPreflight(dossier, preflight), /collectorEvidence/);
+  }
+  const dossier = canonicalDossier();
+  delete dossier.evidenceReferences;
+  assert.throws(
+    () => validateW15JPreflight(dossier, preflight),
+    /evidenceReferences must not be empty/,
+  );
+});
+
+test('CLI requires a trusted preflight file and validates both inputs', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'w15j-preflight-'));
+  const dossierPath = join(directory, 'dossier.json');
+  const preflightPath = join(directory, 'preflight.json');
+  writeFileSync(dossierPath, JSON.stringify(canonicalDossier()));
+  writeFileSync(preflightPath, JSON.stringify(preflight));
+  const modulePath = new URL('./w15j-preflight.mjs', import.meta.url);
+  const missing = spawnSync(process.execPath, [modulePath.pathname, dossierPath], {
+    encoding: 'utf8',
+  });
+  assert.equal(missing.status, 2);
+  assert.match(missing.stderr, /Usage: .*trusted-preflight\.json/);
+  const output = execFileSync(process.execPath, [modulePath.pathname, dossierPath, preflightPath], {
+    encoding: 'utf8',
+  });
+  assert.match(output, /W15J_PREFLIGHT_READY candidate=/);
+  rmSync(directory, { recursive: true, force: true });
 });
 
 test('does not mutate the canonical evidence record', () => {
