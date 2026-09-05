@@ -179,10 +179,12 @@ function toDispatchObservation(
 /**
  * W07-owned voice-to-device execution coordinator for the controlled W15-J host.
  *
- * Order is intentional: current authority -> target -> containment -> safeguards/idempotency ->
- * W14 transport. W03 reservation therefore never happens when target/circuit/kill/cancellation
- * already blocks the command. W14 still revalidates gateway/device trust immediately before
- * submission. No acknowledgement/receipt here proves execution success or grants retry authority.
+ * The guard sequence mirrors the accepted W07-H integration order exactly:
+ * current authority -> target -> safeguards/idempotency -> containment -> W14 effect boundary.
+ * W14 still revalidates gateway/device trust immediately before submission. A W03 reservation is
+ * therefore an execution-attempt fence, not proof that an effect occurred; containment may still
+ * block after reservation and any later retry remains governed by W07 reconciliation/fresh guards.
+ * No acknowledgement/receipt here proves execution success or grants retry authority.
  */
 export class W15JDispatchingVoiceCandidateIntake {
   readonly #config: W15JDispatchingVoiceIntakeConfig;
@@ -259,24 +261,6 @@ export class W15JDispatchingVoiceCandidateIntake {
       );
     }
 
-    const containment = evaluateFailureContainment({
-      schemaVersion: actionIntent.schemaVersion,
-      actionIntent,
-      evaluatedAt,
-      phase: 'PRE_EXTERNAL',
-      snapshot: state.containment,
-    });
-    if (
-      containment.mayProceedToOtherGuards !== true ||
-      containment.cancellationDisposition !== 'NONE' ||
-      containment.requiresReconciliationHandoff !== false
-    ) {
-      return resultWithDispatch(
-        evaluated.result,
-        observation('NOT_ATTEMPTED_CONTAINMENT_REJECTED', { commandId: state.commandId }),
-      );
-    }
-
     const safeguards = evaluateExecutionSafeguards({
       schemaVersion: actionIntent.schemaVersion,
       actionIntent,
@@ -292,6 +276,24 @@ export class W15JDispatchingVoiceCandidateIntake {
       return resultWithDispatch(
         evaluated.result,
         observation('NOT_ATTEMPTED_SAFEGUARD_REJECTED', { commandId: state.commandId }),
+      );
+    }
+
+    const containment = evaluateFailureContainment({
+      schemaVersion: actionIntent.schemaVersion,
+      actionIntent,
+      evaluatedAt,
+      phase: 'PRE_EXTERNAL',
+      snapshot: state.containment,
+    });
+    if (
+      containment.mayProceedToOtherGuards !== true ||
+      containment.cancellationDisposition !== 'NONE' ||
+      containment.requiresReconciliationHandoff !== false
+    ) {
+      return resultWithDispatch(
+        evaluated.result,
+        observation('NOT_ATTEMPTED_CONTAINMENT_REJECTED', { commandId: state.commandId }),
       );
     }
 
