@@ -129,6 +129,11 @@ class WakeGovernedFastPathIntegrationTest {
                     registryVersion = "w04-live.1",
                     observedAtMs = 900,
                     expiresAtMs = 2_000,
+                    provenance =
+                        GovernedProjectionProvenance(
+                            sourceRef = "github:main/packages/registries/capabilities@w04-live.1",
+                            contentSha256 = REGISTRY_HASH,
+                        ),
                     entries =
                         listOf(
                             W04VoiceCapabilityEntry(
@@ -147,6 +152,11 @@ class WakeGovernedFastPathIntegrationTest {
                     vocabularyVersion = "w15g-live.1",
                     observedAtMs = 900,
                     expiresAtMs = 2_000,
+                    provenance =
+                        GovernedProjectionProvenance(
+                            sourceRef = "github:accepted/W15-G/vocabulary@w15g-live.1",
+                            contentSha256 = VOCABULARY_HASH,
+                        ),
                     bindings =
                         listOf(
                             W15GVoiceCommandBinding(
@@ -181,4 +191,9 @@ class WakeGovernedFastPathIntegrationTest {
             availableCapabilityIds = available,
             privacyModeEnabled = false,
         )
+
+    companion object {
+        private const val REGISTRY_HASH = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        private const val VOCABULARY_HASH = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
 }
