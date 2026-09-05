@@ -245,7 +245,7 @@ private fun AuroraShell(
             val conversationWidth = maxWidth * 0.32f
             if (wideLayout) {
                 Row(modifier = Modifier.fillMaxSize()) {
-                    ConversationPane(
+                    AccessibleConversationPane(
                         state = state,
                         onIntent = onIntent,
                         onVoice = onVoice,
@@ -267,7 +267,7 @@ private fun AuroraShell(
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
                     if (state.surface in setOf(UiSurface.PRESENCE, UiSurface.CONVERSATION)) {
-                        ConversationPane(state, onIntent, onVoice, Modifier.fillMaxSize())
+                        AccessibleConversationPane(state, onIntent, onVoice, Modifier.fillMaxSize())
                     } else {
                         MainSurfaceContent(state, stepUpState, onIntent, onVoice, onStopVoiceOutput, onStepUp)
                     }
