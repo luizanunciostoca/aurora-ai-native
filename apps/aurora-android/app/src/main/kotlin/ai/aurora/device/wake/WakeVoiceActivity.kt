@@ -92,8 +92,10 @@ class WakeVoiceActivity : Activity() {
         statusView.text = display
         mainHandler.postDelayed(
             {
-                if (!isFinishing) finish()
+                // Start the microphone FGS while this Activity is still visibly foreground. Modern
+                // Android may reject microphone-FGS starts after finish() moves us to background.
                 rearmFromVisibleContext()
+                if (!isFinishing) finish()
             },
             COMPLETION_DISPLAY_MS,
         )
