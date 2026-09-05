@@ -1,0 +1,49 @@
+name: TEMP Aurora PRO+ Format Evidence
+
+on:
+  pull_request:
+    paths:
+      - 'docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json'
+      - 'tools/copilot/evaluate-pro-plus-reality.mjs'
+      - 'tools/copilot/pro-plus-runtime.test.mjs'
+      - 'tools/copilot/runtime-capacity.mjs'
+      - 'tools/copilot/validate-execution-mode.mjs'
+      - '.github/workflows/aurora-pro-plus-format-evidence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  format-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Format exact candidate files
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json
+            tools/copilot/evaluate-pro-plus-reality.mjs
+            tools/copilot/pro-plus-runtime.test.mjs
+            tools/copilot/runtime-capacity.mjs
+            tools/copilot/validate-execution-mode.mjs
+          )
+          npx prettier --write "${files[@]}"
+          for file in "${files[@]}"; do
+            mkdir -p "/tmp/aurora-pro-plus-formatted/$(dirname "$file")"
+            cp "$file" "/tmp/aurora-pro-plus-formatted/$file"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurora-pro-plus-formatted-files
+          path: /tmp/aurora-pro-plus-formatted
+          if-no-files-found: error
+          retention-days: 1
