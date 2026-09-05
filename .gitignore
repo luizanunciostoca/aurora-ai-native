@@ -15,7 +15,6 @@ service-account-key.json
 credentials.json
 
 # Builds / caches
-.gradle/
 **/.gradle/
 build/
 dist/

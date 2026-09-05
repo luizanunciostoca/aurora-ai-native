@@ -23,6 +23,9 @@ object WakeVoiceRuntimeRegistry {
         }
 
     /** Module-internal composition point for the real W07 adapter. Never pass a local executor. */
+    internal val currentAuthorityIngress: W07VoiceAuthorityIngress
+        get() = authorityIngress
+
     internal fun installAuthorityIngress(ingress: W07VoiceAuthorityIngress) {
         authorityIngress = ingress
     }

@@ -25,9 +25,7 @@ class WakeVoiceRuntimeRegistryTest {
     fun `starts fail closed with default uncomposed authority ingress`() {
         WakeVoiceRuntimeRegistry.clearAuthorityIngress()
 
-        val defaultIngress = W07VoiceAuthorityIngress {
-            W07VoiceAuthorityIngressResult.Unavailable("W07 Android authority ingress not composed")
-        }
+        val defaultIngress = WakeVoiceRuntimeRegistry.currentAuthorityIngress
         val result = defaultIngress.submit(candidate)
         assertTrue(result is W07VoiceAuthorityIngressResult.Unavailable)
         assertEquals("W07 Android authority ingress not composed", (result as W07VoiceAuthorityIngressResult.Unavailable).reason)
@@ -131,9 +129,7 @@ class WakeVoiceRuntimeRegistryTest {
                     ),
                 )
             },
-            authorityIngress = W07VoiceAuthorityIngress {
-                W07VoiceAuthorityIngressResult.Unavailable("W07 Android authority ingress not composed")
-            },
+            authorityIngress = WakeVoiceRuntimeRegistry.currentAuthorityIngress,
             nowMs = { 1000L },
         )
 
