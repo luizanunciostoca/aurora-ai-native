@@ -12,6 +12,7 @@ import type { VoiceCandidateIntakePort } from '../../gateway-auth/voice-candidat
 import type { AuthenticatedGatewayBootstrapPrincipal } from '../../gateway-auth/gateway-bootstrap.js';
 import type { W14LocalGovernedDeviceDispatchPort } from '../governed-device-dispatch.js';
 import { W15JLocalPhysicalHost } from '../local-physical-host.js';
+import type { LocalW07IdempotencyFencePort } from '../w03-execution-fence.js';
 
 const NOW = 1_788_631_000_000;
 
@@ -148,8 +149,9 @@ test('starts loopback gateway and bootstrap listeners and opens W14 session from
   }
 });
 
-test('builds the W07 voice intake only after the exact host-owned W14 dispatch port exists', () => {
-  let captured: W14LocalGovernedDeviceDispatchPort | null = null;
+test('builds W07 voice intake only after exact host-owned W14 dispatch and W03 fence exist', () => {
+  let capturedDispatch: W14LocalGovernedDeviceDispatchPort | null = null;
+  let capturedFence: LocalW07IdempotencyFencePort | null = null;
   const host = new W15JLocalPhysicalHost(
     {
       databaseUrl: 'postgresql://unused.invalid/aurora_physical',
@@ -158,16 +160,19 @@ test('builds the W07 voice intake only after the exact host-owned W14 dispatch p
       clock: () => NOW,
     },
     {
-      createVoiceIntake: (dispatch) => {
-        captured = dispatch;
+      createVoiceIntake: (dispatch, idempotencyFence) => {
+        capturedDispatch = dispatch;
+        capturedFence = idempotencyFence;
         return voiceIntake;
       },
       receiptEvidenceIngress,
     },
   );
 
-  assert.strictEqual(captured, host.governedDeviceDispatch);
+  assert.strictEqual(capturedDispatch, host.governedDeviceDispatch);
   assert.equal(host.governedDeviceDispatch instanceof Object, true);
+  assert.notEqual(capturedFence, null);
+  assert.equal(typeof capturedFence?.reserve, 'function');
 });
 
 test('voice intake factory failure aborts host construction fail closed', () => {
