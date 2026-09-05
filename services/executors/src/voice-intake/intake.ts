@@ -73,6 +73,112 @@ function canonicalContextMatches(
   );
 }
 
+export type VoiceCandidateEvaluationWithResolution =
+  | Readonly<{
+      result: Extract<VoiceCandidateIntakeResult, { readonly ok: true }>;
+      resolved: ResolvedVoiceAuthorityEvaluation;
+    }>
+  | Readonly<{
+      result: Extract<VoiceCandidateIntakeResult, { readonly ok: false }>;
+      resolved?: never;
+    }>;
+
+/**
+ * Server-internal single-pass voice evaluation.
+ *
+ * Successful evaluation returns the already-resolved canonical material to trusted W07 server
+ * composition only, avoiding a second resolver/current-policy read between authority evaluation
+ * and downstream W07 guards. Callers must never expose `resolved` through the Android/W14 wire.
+ */
+export function evaluateVoiceCandidateWithResolution(
+  candidate: VoiceEvaluationCandidate,
+  context: AuthenticatedVoiceEvaluationContext,
+  resolver: VoiceAuthorityEvaluationResolver,
+): VoiceCandidateEvaluationWithResolution {
+  if (!validCandidate(candidate))
+    return {
+      result: rejected('CANDIDATE_MALFORMED') as Extract<
+        VoiceCandidateIntakeResult,
+        { readonly ok: false }
+      >,
+    };
+  if (!validContext(context)) {
+    return {
+      result: rejected('AUTHENTICATED_CONTEXT_MALFORMED') as Extract<
+        VoiceCandidateIntakeResult,
+        { readonly ok: false }
+      >,
+    };
+  }
+
+  let resolved: ResolvedVoiceAuthorityEvaluation | null;
+  try {
+    resolved = resolver.resolve({ candidate, context });
+  } catch {
+    return {
+      result: rejected('CANONICAL_RESOLUTION_UNAVAILABLE') as Extract<
+        VoiceCandidateIntakeResult,
+        { readonly ok: false }
+      >,
+    };
+  }
+  if (resolved === null) {
+    return {
+      result: rejected('CANONICAL_RESOLUTION_UNAVAILABLE') as Extract<
+        VoiceCandidateIntakeResult,
+        { readonly ok: false }
+      >,
+    };
+  }
+  if (!canonicalContextMatches(resolved, context)) {
+    return {
+      result: rejected('CANONICAL_CONTEXT_MISMATCH') as Extract<
+        VoiceCandidateIntakeResult,
+        { readonly ok: false }
+      >,
+    };
+  }
+  if (resolved.actionIntent.capability.capability !== candidate.capabilityId) {
+    return {
+      result: rejected('CANONICAL_CAPABILITY_MISMATCH') as Extract<
+        VoiceCandidateIntakeResult,
+        { readonly ok: false }
+      >,
+    };
+  }
+
+  let gate;
+  try {
+    gate = validateExecutorAuthority({
+      schemaVersion: resolved.actionIntent.schemaVersion,
+      actionIntent: resolved.actionIntent,
+      authorityEvaluation: resolved.authorityEvaluation,
+      validateCurrentAuthority: resolved.validateCurrentAuthority,
+      nonAuthoritativeSignals: { lane: 'FAST' },
+    });
+  } catch {
+    return {
+      result: rejected('W07_EVALUATION_FAILED') as Extract<
+        VoiceCandidateIntakeResult,
+        { readonly ok: false }
+      >,
+    };
+  }
+
+  return {
+    result: {
+      kind: 'VOICE_CANDIDATE_INTAKE',
+      ok: true,
+      acceptedForEvaluation: true,
+      gate,
+      authorizesExecution: false,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    },
+    resolved,
+  };
+}
+
 /**
  * Governed server-side intake for the accepted W15-G deterministic voice candidate.
  *
@@ -86,43 +192,5 @@ export function evaluateVoiceCandidate(
   context: AuthenticatedVoiceEvaluationContext,
   resolver: VoiceAuthorityEvaluationResolver,
 ): VoiceCandidateIntakeResult {
-  if (!validCandidate(candidate)) return rejected('CANDIDATE_MALFORMED');
-  if (!validContext(context)) return rejected('AUTHENTICATED_CONTEXT_MALFORMED');
-
-  let resolved: ResolvedVoiceAuthorityEvaluation | null;
-  try {
-    resolved = resolver.resolve({ candidate, context });
-  } catch {
-    return rejected('CANONICAL_RESOLUTION_UNAVAILABLE');
-  }
-  if (resolved === null) return rejected('CANONICAL_RESOLUTION_UNAVAILABLE');
-  if (!canonicalContextMatches(resolved, context)) {
-    return rejected('CANONICAL_CONTEXT_MISMATCH');
-  }
-  if (resolved.actionIntent.capability.capability !== candidate.capabilityId) {
-    return rejected('CANONICAL_CAPABILITY_MISMATCH');
-  }
-
-  let gate;
-  try {
-    gate = validateExecutorAuthority({
-      schemaVersion: resolved.actionIntent.schemaVersion,
-      actionIntent: resolved.actionIntent,
-      authorityEvaluation: resolved.authorityEvaluation,
-      validateCurrentAuthority: resolved.validateCurrentAuthority,
-      nonAuthoritativeSignals: { lane: 'FAST' },
-    });
-  } catch {
-    return rejected('W07_EVALUATION_FAILED');
-  }
-
-  return {
-    kind: 'VOICE_CANDIDATE_INTAKE',
-    ok: true,
-    acceptedForEvaluation: true,
-    gate,
-    authorizesExecution: false,
-    provesExecutionSuccess: false,
-    retryAuthorized: false,
-  };
+  return evaluateVoiceCandidateWithResolution(candidate, context, resolver).result;
 }
