@@ -41,19 +41,74 @@ class GatewayBootstrapClientTest {
     }
 
     @Test
-    fun `authority bearing extra field and binding drift fail closed`() {
-        val authorityBody = successBody().replace(
-            "\"authorizesExecution\":false",
-            "\"authorizesExecution\":true",
+    fun `fresh install accepts server assigned device and session binding without client identity input`() {
+        val serverAssignedDeviceId = "dvc_01ARZ3NDEKTSV4RRFFQ69G5FB0"
+        val serverAssignedSessionId = "device-session:server-assigned"
+        val channel =
+            RecordingChannel(
+                response =
+                    GatewayHttpResponse(
+                        200,
+                        successBody(
+                            grantDeviceId = serverAssignedDeviceId,
+                            grantDeviceSessionId = serverAssignedSessionId,
+                        ),
+                    ),
+            )
+        val client = GatewayBootstrapClient(GatewayHttpChannelFactory { channel }, nowMs = { now })
+
+        val result = client.exchange(reference)
+
+        assertTrue(result is GatewayBootstrapClientResult.Success)
+        val grant = (result as GatewayBootstrapClientResult.Success).value
+        assertEquals(serverAssignedDeviceId, grant.deviceId)
+        assertEquals(serverAssignedSessionId, grant.deviceSessionId)
+        assertEquals("{\"bootstrapReference\":\"$reference\"}", channel.body)
+        assertFalse(channel.body!!.contains("deviceId"))
+        assertFalse(channel.body!!.contains("deviceSessionId"))
+        assertFalse(channel.body!!.contains("tenantId"))
+        assertFalse(channel.body!!.contains("actor"))
+    }
+
+    @Test
+    fun `partial expected binding fails before opening transport`() {
+        var opens = 0
+        val client =
+            GatewayBootstrapClient(
+                GatewayHttpChannelFactory {
+                    opens += 1
+                    RecordingChannel(response = GatewayHttpResponse(200, successBody()))
+                },
+                nowMs = { now },
+            )
+
+        assertRejected(
+            client.exchange(reference, expectedDeviceId = deviceId),
+            GatewayBootstrapClientError.REFERENCE_INVALID,
         )
+        assertRejected(
+            client.exchange(reference, expectedDeviceSessionId = deviceSessionId),
+            GatewayBootstrapClientError.REFERENCE_INVALID,
+        )
+        assertEquals(0, opens)
+    }
+
+    @Test
+    fun `authority bearing extra field and binding drift fail closed`() {
+        val authorityBody =
+            successBody().replace(
+                "\"authorizesExecution\":false",
+                "\"authorizesExecution\":true",
+            )
         val authorityClient = clientReturning(authorityBody)
         val authority = authorityClient.exchange(reference, deviceId, deviceSessionId)
         assertRejected(authority, GatewayBootstrapClientError.PROTOCOL_MALFORMED)
 
-        val extraBody = successBody().replace(
-            "\"retryAuthorized\":false",
-            "\"retryAuthorized\":false,\"ownerDecision\":\"forged\"",
-        )
+        val extraBody =
+            successBody().replace(
+                "\"retryAuthorized\":false",
+                "\"retryAuthorized\":false,\"ownerDecision\":\"forged\"",
+            )
         assertRejected(
             clientReturning(extraBody).exchange(reference, deviceId, deviceSessionId),
             GatewayBootstrapClientError.PROTOCOL_MALFORMED,
@@ -66,6 +121,26 @@ class GatewayBootstrapClientTest {
                 deviceSessionId,
             ),
             GatewayBootstrapClientError.BINDING_MISMATCH,
+        )
+        assertRejected(
+            clientReturning(successBody()).exchange(
+                reference,
+                deviceId,
+                "device-session:substituted",
+            ),
+            GatewayBootstrapClientError.BINDING_MISMATCH,
+        )
+    }
+
+    @Test
+    fun `malformed server assigned binding fails closed on fresh install`() {
+        assertRejected(
+            clientReturning(successBody(grantDeviceId = "dvc_invalid")).exchange(reference),
+            GatewayBootstrapClientError.PROTOCOL_MALFORMED,
+        )
+        assertRejected(
+            clientReturning(successBody(grantDeviceSessionId = "not allowed whitespace")).exchange(reference),
+            GatewayBootstrapClientError.PROTOCOL_MALFORMED,
         )
     }
 
@@ -114,6 +189,10 @@ class GatewayBootstrapClientTest {
         assertEquals(deviceId, grant?.deviceId)
         assertNull(runtime.consumeGrant())
 
+        runtime.clear()
+        assertFalse(runtime.hasPendingReference())
+        assertNull(runtime.consumeGrant())
+
         val uncertainRuntime =
             ProcessLocalGatewayBootstrapRuntime(
                 GatewayBootstrapClient(
@@ -160,8 +239,12 @@ class GatewayBootstrapClientTest {
             nowMs = { now },
         )
 
-    private fun successBody(expiresAtMs: Long = now + 60_000): String =
-        """{"ok":true,"value":{"gatewaySessionId":"gws_${"s".repeat(22)}","credential":"gwc_${"c".repeat(43)}","tenantId":"tenant:alpha","actor":{"kind":"HUMAN","identityId":"identity:alpha"},"correlationId":"correlation:android-bootstrap","deviceId":"$deviceId","deviceSessionId":"$deviceSessionId","issuedAtMs":${now - 1},"expiresAtMs":$expiresAtMs,"authVersion":"w14-bootstrap-v1","authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false}}"""
+    private fun successBody(
+        expiresAtMs: Long = now + 60_000,
+        grantDeviceId: String = deviceId,
+        grantDeviceSessionId: String = deviceSessionId,
+    ): String =
+        """{"ok":true,"value":{"gatewaySessionId":"gws_${"s".repeat(22)}","credential":"gwc_${"c".repeat(43)}","tenantId":"tenant:alpha","actor":{"kind":"HUMAN","identityId":"identity:alpha"},"correlationId":"correlation:android-bootstrap","deviceId":"$grantDeviceId","deviceSessionId":"$grantDeviceSessionId","issuedAtMs":${now - 1},"expiresAtMs":$expiresAtMs,"authVersion":"w14-bootstrap-v1","authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false}}"""
 
     private fun assertRejected(
         result: GatewayBootstrapClientResult<*>,
