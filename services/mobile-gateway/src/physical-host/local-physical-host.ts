@@ -4,7 +4,10 @@ import { DeviceReceiptIngressManager } from '../device-receipt-ingress/manager.j
 import type { W07DeviceReceiptEvidenceIngressPort } from '../device-receipt-ingress/types.js';
 import { DeviceSessionTrustManager } from '../device-session/session-trust.js';
 import { DeviceKeyProofVerifier } from '../gateway-auth/device-key-proof-verifier.js';
-import { GatewayBootstrapDeliveryBroker } from '../gateway-auth/gateway-bootstrap-delivery.js';
+import {
+  GatewayBootstrapDeliveryBroker,
+  type GatewayBootstrapStageResult,
+} from '../gateway-auth/gateway-bootstrap-delivery.js';
 import {
   GatewayBootstrapHttpExchangeServer,
   type GatewayBootstrapHttpExchangeAddress,
@@ -12,7 +15,6 @@ import {
 import {
   TransientGatewayBootstrapBroker,
   type AuthenticatedGatewayBootstrapPrincipal,
-  type GatewayBootstrapStageResult,
 } from '../gateway-auth/gateway-bootstrap.js';
 import {
   GatewayHttpNetworkTransport,

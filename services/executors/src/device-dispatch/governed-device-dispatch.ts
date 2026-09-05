@@ -154,7 +154,8 @@ function gatesAllow(
   if (resolvedTarget.bindingReference !== executionTarget.bindingReference) return false;
   if (!gates.target.resolved) return false;
   if (gates.target.binding.target.kind !== 'DEVICE') return false;
-  if (gates.target.binding.target.bindingReference !== executionTarget.bindingReference) return false;
+  if (gates.target.binding.target.bindingReference !== executionTarget.bindingReference)
+    return false;
 
   return (
     gates.authority.kind === 'EXECUTOR_AUTHORITY_GATE' &&
@@ -221,7 +222,11 @@ export class W07GovernedDeviceDispatchAdapter {
     } catch {
       return rejected('W14_UNAVAILABLE', true);
     }
-    if (!Number.isSafeInteger(dispatchedAtMs) || dispatchedAtMs < 0 || dispatchedAtMs > MAX_DATE_MS) {
+    if (
+      !Number.isSafeInteger(dispatchedAtMs) ||
+      dispatchedAtMs < 0 ||
+      dispatchedAtMs > MAX_DATE_MS
+    ) {
       return rejected('W14_UNAVAILABLE', true);
     }
 

@@ -71,7 +71,8 @@ function registration(): DeviceRegistrationRecord {
     updatedAt: '2026-09-05T20:00:00.000Z',
     provenance: {
       source: 'W14_DEVICE_REGISTRATION',
-      reference: 'device-key:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      reference:
+        'device-key:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       observedAt: '2026-09-05T20:00:00.000Z',
     },
     authoritySemantics: 'DEVICE_REGISTRATION_ONLY_NO_ACTION_AUTHORITY',
@@ -113,7 +114,9 @@ function trust(): DeviceSessionTrustSnapshot {
   } as unknown as DeviceSessionTrustSnapshot;
 }
 
-function realtimeSession(overrides: Partial<RealtimeCommandSessionSnapshot> = {}): RealtimeCommandSessionSnapshot {
+function realtimeSession(
+  overrides: Partial<RealtimeCommandSessionSnapshot> = {},
+): RealtimeCommandSessionSnapshot {
   return {
     gatewaySessionId: GATEWAY_SESSION,
     gatewayConnectionId: CONNECTION,
@@ -212,7 +215,8 @@ function request(): LocalW14GovernedDeviceDispatchRequest {
       orderingKey: 'device:camera',
       orderingSequence: 9,
       actionIntent: actionIntent(),
-      canonicalPayloadHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      canonicalPayloadHash:
+        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       authorizesExecution: false,
     },
     context: {
@@ -248,22 +252,41 @@ function harness(): Harness {
   let trustValue = trust();
   let existingRealtime: RealtimeCommandSessionSnapshot | null = null;
   let deliveryFailure: { code: string; retryable: boolean } | null = null;
-  const calls = { open: [] as unknown[], resume: [] as unknown[], submit: [] as unknown[], prepare: [] as unknown[] };
+  const calls = {
+    open: [] as unknown[],
+    resume: [] as unknown[],
+    submit: [] as unknown[],
+    prepare: [] as unknown[],
+  };
 
   const dependencies = {
     gatewaySessions: {
       getSession: () => ({ ok: true, value: gatewayValue }),
     },
     devices: {
-      resolve: () => ({ ok: true, record: registration(), authorizesExecution: false, canGrantPermission: false }),
+      resolve: () => ({
+        ok: true,
+        record: registration(),
+        authorizesExecution: false,
+        canGrantPermission: false,
+      }),
     },
     deviceSessions: {
-      getSession: () => ({ ok: true, snapshot: trustValue, authorizesExecution: false, canGrantPermission: false }),
+      getSession: () => ({
+        ok: true,
+        snapshot: trustValue,
+        authorizesExecution: false,
+        canGrantPermission: false,
+      }),
     },
     realtimeCommands: {
       getSession: () =>
         existingRealtime === null
-          ? { ok: false, error: { code: 'SESSION_NOT_FOUND', message: 'missing', retryable: false }, authorizesExecution: false }
+          ? {
+              ok: false,
+              error: { code: 'SESSION_NOT_FOUND', message: 'missing', retryable: false },
+              authorizesExecution: false,
+            }
           : { ok: true, value: existingRealtime, authorizesExecution: false },
       openSession: (input: unknown) => {
         calls.open.push(input);
@@ -279,7 +302,11 @@ function harness(): Harness {
         calls.submit.push(input);
         return {
           ok: true,
-          value: { disposition: 'SUBMITTED', session: realtimeSession(), command: realtimeCommand() },
+          value: {
+            disposition: 'SUBMITTED',
+            session: realtimeSession(),
+            command: realtimeCommand(),
+          },
           authorizesExecution: false,
         };
       },
@@ -362,7 +389,9 @@ test('resumes realtime session only from server-held previous connection and adv
 test('stale gateway or trust binding fails closed before realtime submission', () => {
   const gatewayState = harness();
   gatewayState.setGateway({ ...gateway(), connectionId: 'other-connection' });
-  let result = new W14LocalGovernedDeviceDispatchPort(gatewayState.dependencies).dispatch(request());
+  let result = new W14LocalGovernedDeviceDispatchPort(gatewayState.dependencies).dispatch(
+    request(),
+  );
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.code, 'GATEWAY_SESSION_NOT_CURRENT');
   assert.equal(gatewayState.calls.submit.length, 0);

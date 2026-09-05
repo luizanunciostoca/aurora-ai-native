@@ -2,6 +2,8 @@
 import { execFileSync } from 'node:child_process';
 // @ts-expect-error -- Aurora targets Node 22 runtime built-ins without repository-wide @types/node.
 import { createHash } from 'node:crypto';
+// @ts-expect-error -- Aurora targets Node 22 runtime built-ins without repository-wide @types/node.
+import { env as processEnv } from 'node:process';
 
 import type {
   W03DurableDeliveryReservationPort,
@@ -155,7 +157,7 @@ export class PsqlW03SyncExecutor implements W03SyncSqlExecutor {
     try {
       return this.#execFileSync(this.#psqlBinary, args, {
         encoding: 'utf8',
-        env: { ...process.env, PGDATABASE: this.#databaseUrl },
+        env: { ...processEnv, PGDATABASE: this.#databaseUrl },
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: this.#timeoutMs,
       });
@@ -316,7 +318,9 @@ export class W03PostgresDeviceReservationAdapter
 
   complete(request: W03ReceiptIngressCompletionRequest): W03ReceiptIngressCompletionResult {
     const malformed = receiptMalformed(request);
-    if (malformed !== null) return malformed;
+    if (malformed !== null) {
+      return { ok: false, code: 'MALFORMED', retryable: false, authorizesExecution: false };
+    }
     const key = receiptKey(request.receiptId);
     const expectedReference = durableReference('w03r', request.tenantId, key);
     if (request.durableReference !== expectedReference) {

@@ -5,6 +5,6 @@
     "moduleResolution": "NodeNext",
     "baseUrl": "."
   },
-  "include": ["*.ts", "test/**/*.ts"],
+  "include": ["*.ts"],
   "exclude": ["dist", "dist-test", "node_modules"]
 }

@@ -311,7 +311,10 @@ function validCommandMaterial(
   );
 }
 
-function commandSnapshotValid(command: RealtimeCommandSnapshot, input: LocalW14GovernedDeviceDispatchRequest) {
+function commandSnapshotValid(
+  command: RealtimeCommandSnapshot,
+  input: LocalW14GovernedDeviceDispatchRequest,
+) {
   const target = input.command.actionIntent.executionTarget;
   return (
     target?.kind === 'DEVICE' &&
@@ -342,13 +345,20 @@ export class W14LocalGovernedDeviceDispatchPort {
   dispatch(request: LocalW14GovernedDeviceDispatchRequest): LocalW14GovernedDeviceDispatchResult {
     const nowMs = request.dispatchedAtMs;
     if (!nonNegativeInteger(nowMs) || nowMs > MAX_DATE_MS) return failure('MALFORMED_TIME');
-    if (!validCommandMaterial(request.command, request.context)) return failure('MATERIAL_MISMATCH');
+    if (!validCommandMaterial(request.command, request.context))
+      return failure('MATERIAL_MISMATCH');
 
     const deviceRef = contextDeviceRef(request.context);
     if (deviceRef === null) return failure('CONTEXT_MALFORMED');
     const gateway = currentGateway(this.#dependencies.gatewaySessions, request.context, nowMs);
     if (gateway === null) return failure('GATEWAY_SESSION_NOT_CURRENT');
-    const trust = currentTrustedDevice(this.#dependencies, request.context, gateway, deviceRef, nowMs);
+    const trust = currentTrustedDevice(
+      this.#dependencies,
+      request.context,
+      gateway,
+      deviceRef,
+      nowMs,
+    );
     if (trust === null) return failure('DEVICE_SESSION_NOT_CURRENT');
 
     const realtime = ensureRealtimeSession(
@@ -413,9 +423,7 @@ export class W14LocalGovernedDeviceDispatchPort {
     return {
       ok: true,
       disposition:
-        submitted.value.disposition === 'ALREADY_SUBMITTED'
-          ? 'ALREADY_SUBMITTED'
-          : 'SUBMITTED',
+        submitted.value.disposition === 'ALREADY_SUBMITTED' ? 'ALREADY_SUBMITTED' : 'SUBMITTED',
       commandReference: `w14:command:${request.command.commandId}`,
       deliveryReference: delivery.deliveryReference,
       authorizesExecution: false,

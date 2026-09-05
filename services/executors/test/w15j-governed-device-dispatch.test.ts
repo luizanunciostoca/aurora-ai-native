@@ -167,7 +167,8 @@ test('authority target safeguards and containment failures each prevent any W14 
     (value) => Object.assign(value.target, { resolved: false }),
     (value) => Object.assign(value.safeguards, { safeToInvokeExternal: false }),
     (value) => Object.assign(value.containment, { mayProceedToOtherGuards: false }),
-    (value) => Object.assign(value.containment, { cancellationDisposition: 'STOP_BEFORE_EXTERNAL' }),
+    (value) =>
+      Object.assign(value.containment, { cancellationDisposition: 'STOP_BEFORE_EXTERNAL' }),
     (value) => Object.assign(value.containment, { requiresReconciliationHandoff: true }),
   ];
 
