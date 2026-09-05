@@ -46,11 +46,7 @@ function delivery(reference = `gbr_${'r'.repeat(43)}`): GatewayBootstrapDelivery
       gatewaySessionId: () => `gws_${'s'.repeat(22)}`,
     },
   );
-  return new GatewayBootstrapDeliveryBroker(
-    issuer,
-    {},
-    { reference: () => reference },
-  );
+  return new GatewayBootstrapDeliveryBroker(issuer, {}, { reference: () => reference });
 }
 
 test('stages only an opaque non-authoritative reference and exchanges it exactly once', () => {
@@ -92,7 +88,9 @@ test('issued grant is bound to server-staged gateway session actor and correlati
   assert.equal(exchanged.ok, true);
   if (!exchanged.ok) throw new Error('reference exchange rejected');
 
-  const manager = new GatewaySessionManager(brokerIssuer(exchanged.value.credential, exchanged.value));
+  const manager = new GatewaySessionManager(
+    brokerIssuer(exchanged.value.credential, exchanged.value),
+  );
   const substituted = manager.openSession({
     protocolVersion: GATEWAY_PROTOCOL_VERSION,
     sessionId: `${exchanged.value.gatewaySessionId}-substituted`,
