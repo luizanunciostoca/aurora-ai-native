@@ -1,0 +1,18 @@
+{
+  "schema": "aurora.pro_plus.runtime_attestation.v1",
+  "state": "PENDING",
+  "executionMode": "PRO_PLUS_ACTIONS_FABRIC",
+  "candidateSha": null,
+  "workflowRunId": null,
+  "observedAt": null,
+  "expiresAt": null,
+  "probeConcurrency": 4,
+  "observedConcurrentSessions": 0,
+  "successfulCopilotSessions": 0,
+  "failedCopilotSessions": 0,
+  "allSessionsNoTool": true,
+  "repositorySideEffects": 0,
+  "providerSideEffects": 0,
+  "authority": false,
+  "notes": "Pending bounded GitHub Actions + Copilot CLI Reality Gate evidence. Until VERIFIED and fresh, Program Control must use the Free-compatible fallback capacity."
+}
