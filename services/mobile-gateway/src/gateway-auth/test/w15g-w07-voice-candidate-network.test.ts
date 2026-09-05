@@ -29,20 +29,19 @@ const candidate = {
 
 test('forwards only bounded candidate plus server-derived context and sanitizes successful evaluation', () => {
   let observed: unknown = null;
-  const boundary =
-    new VoiceCandidateNetworkBoundary({
-      evaluate: (input) => {
-        observed = input;
-        return {
-          ok: true,
-          acceptedForEvaluation: true,
-          gate: { executionEligible: true, secretAuthorityEvidence: 'must-not-cross-network' },
-          authorizesExecution: false,
-          provesExecutionSuccess: false,
-          retryAuthorized: false,
-        };
-      },
-    });
+  const boundary = new VoiceCandidateNetworkBoundary({
+    evaluate: (input) => {
+      observed = input;
+      return {
+        ok: true,
+        acceptedForEvaluation: true,
+        gate: { executionEligible: true, secretAuthorityEvidence: 'must-not-cross-network' },
+        authorizesExecution: false,
+        provesExecutionSuccess: false,
+        retryAuthorized: false,
+      };
+    },
+  });
 
   const response = boundary.evaluate(candidate, context);
   assert.equal(response.statusCode, 202);
@@ -60,19 +59,18 @@ test('forwards only bounded candidate plus server-derived context and sanitizes 
 
 test('rejects client-supplied identity policy trust outcome and retry fields before W07 intake', () => {
   let calls = 0;
-  const boundary =
-    new VoiceCandidateNetworkBoundary({
-      evaluate: () => {
-        calls += 1;
-        return {
-          ok: true,
-          acceptedForEvaluation: true,
-          authorizesExecution: false,
-          provesExecutionSuccess: false,
-          retryAuthorized: false,
-        };
-      },
-    });
+  const boundary = new VoiceCandidateNetworkBoundary({
+    evaluate: () => {
+      calls += 1;
+      return {
+        ok: true,
+        acceptedForEvaluation: true,
+        authorizesExecution: false,
+        provesExecutionSuccess: false,
+        retryAuthorized: false,
+      };
+    },
+  });
 
   for (const injected of [
     { tenantId: 'ten_forged' },
@@ -93,21 +91,26 @@ test('rejects client-supplied identity policy trust outcome and retry fields bef
 
 test('requires the canonical negative authority flags from W15 candidate', () => {
   const boundary = new VoiceCandidateNetworkBoundary({ evaluate: () => null });
-  const authorityInjected = boundary.evaluate({ ...candidate, authorizesExecution: true }, context);
-  const w07Bypass = boundary.evaluate({ ...candidate, requiresW07Authorization: false }, context);
+  const authorityInjected = boundary.evaluate(
+    { ...candidate, authorizesExecution: true },
+    context,
+  );
+  const w07Bypass = boundary.evaluate(
+    { ...candidate, requiresW07Authorization: false },
+    context,
+  );
   assert.equal(authorityInjected.statusCode, 400);
   assert.equal(w07Bypass.statusCode, 400);
 });
 
 test('fails closed when authenticated context is incomplete', () => {
   let calls = 0;
-  const boundary =
-    new VoiceCandidateNetworkBoundary({
-      evaluate: () => {
-        calls += 1;
-        return null;
-      },
-    });
+  const boundary = new VoiceCandidateNetworkBoundary({
+    evaluate: () => {
+      calls += 1;
+      return null;
+    },
+  });
   const response = boundary.evaluate(candidate, { ...context, deviceSessionId: '' });
   assert.equal(response.statusCode, 409);
   assert.equal(response.body.authorizesExecution, false);
@@ -115,39 +118,36 @@ test('fails closed when authenticated context is incomplete', () => {
 });
 
 test('rejects malformed, authority-bearing, or unavailable W07 responses without exposing details', () => {
-  const malformed =
-    new VoiceCandidateNetworkBoundary({
-      evaluate: () => ({
-        ok: true,
-        acceptedForEvaluation: true,
-        authorizesExecution: true,
-        provesExecutionSuccess: false,
-        retryAuthorized: false,
-      }),
-    }).evaluate(candidate, context);
+  const malformed = new VoiceCandidateNetworkBoundary({
+    evaluate: () => ({
+      ok: true,
+      acceptedForEvaluation: true,
+      authorizesExecution: true,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    }),
+  }).evaluate(candidate, context);
   assert.equal(malformed.statusCode, 503);
   assert.equal(malformed.body.authorizesExecution, false);
 
-  const denied =
-    new VoiceCandidateNetworkBoundary({
-      evaluate: () => ({
-        ok: false,
-        acceptedForEvaluation: false,
-        error: { code: 'CANONICAL_RESOLUTION_UNAVAILABLE', detail: 'private' },
-        authorizesExecution: false,
-        provesExecutionSuccess: false,
-        retryAuthorized: false,
-      }),
-    }).evaluate(candidate, context);
+  const denied = new VoiceCandidateNetworkBoundary({
+    evaluate: () => ({
+      ok: false,
+      acceptedForEvaluation: false,
+      error: { code: 'CANONICAL_RESOLUTION_UNAVAILABLE', detail: 'private' },
+      authorizesExecution: false,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    }),
+  }).evaluate(candidate, context);
   assert.equal(denied.statusCode, 409);
   assert.equal(JSON.stringify(denied.body).includes('private'), false);
 
-  const unavailable =
-    new VoiceCandidateNetworkBoundary({
-      evaluate: () => {
-        throw new Error('backend detail must not escape');
-      },
-    }).evaluate(candidate, context);
+  const unavailable = new VoiceCandidateNetworkBoundary({
+    evaluate: () => {
+      throw new Error('backend detail must not escape');
+    },
+  }).evaluate(candidate, context);
   assert.equal(unavailable.statusCode, 503);
   assert.equal(JSON.stringify(unavailable.body).includes('backend detail'), false);
   assert.equal(unavailable.body.retryAuthorized, false);
