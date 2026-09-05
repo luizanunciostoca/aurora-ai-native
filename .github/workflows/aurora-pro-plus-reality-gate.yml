@@ -1,0 +1,111 @@
+name: Aurora PRO+ Reality Gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/aurora-pro-plus-reality-gate.yml'
+      - 'docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json'
+      - 'docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json'
+      - 'tools/copilot/**'
+  pull_request:
+    paths:
+      - '.github/workflows/aurora-pro-plus-reality-gate.yml'
+      - '.github/workflows/aurora-copilot-free-worker.yml'
+      - 'docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json'
+      - 'docs/governance/copilot/AURORA_PRO_PLUS_RUNTIME_ATTESTATION.json'
+      - 'tools/copilot/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: probe-${{ matrix.slot }}
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        slot: [1, 2, 3, 4]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      copilot-requests: write
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install current Copilot CLI
+        run: npm install --global @github/copilot@latest
+      - name: Run bounded no-tool Copilot concurrency probe
+        id: probe
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SLOT: ${{ matrix.slot }}
+        run: |
+          set +e
+          started="$(date +%s%3N)"
+          output="$(timeout 180s copilot \
+            --model=auto \
+            --mode=autopilot \
+            --max-autopilot-continues=1 \
+            --no-ask-user \
+            --stream=off \
+            -p 'Return exactly AURORA_PRO_PLUS_PROBE_OK. Do not use tools, files, network, shell, repository writes, or provider actions.' 2>&1)"
+          status=$?
+          finished="$(date +%s%3N)"
+          set -e
+          ok=false
+          if test "$status" = '0' && printf '%s' "$output" | grep -q 'AURORA_PRO_PLUS_PROBE_OK'; then
+            ok=true
+          fi
+          jq -n \
+            --argjson slot "$SLOT" \
+            --argjson started "$started" \
+            --argjson finished "$finished" \
+            --argjson exitCode "$status" \
+            --argjson ok "$ok" \
+            '{schema:"aurora.pro_plus.runtime_probe.v1",slot:$slot,startedAtMs:$started,finishedAtMs:$finished,exitCode:$exitCode,ok:$ok,noTool:true,repositorySideEffects:0,providerSideEffects:0}' \
+            > "probe-$SLOT.json"
+          cat "probe-$SLOT.json"
+          test "$ok" = 'true'
+      - name: Upload probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-pro-plus-probe-${{ matrix.slot }}
+          path: probe-${{ matrix.slot }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  attest:
+    name: measured-attestation
+    needs: probe
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Download all probe evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: aurora-pro-plus-probe-*
+          path: /tmp/aurora-pro-plus-probes
+          merge-multiple: true
+      - name: Evaluate measured concurrent capacity
+        env:
+          AURORA_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AURORA_ATTESTATION_MAX_AGE_MINUTES: 1440
+        run: node tools/copilot/evaluate-pro-plus-reality.mjs /tmp/aurora-pro-plus-probes 3 | tee /tmp/aurora-pro-plus-attestation.json
+      - name: Upload runtime attestation candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: aurora-pro-plus-runtime-attestation
+          path: /tmp/aurora-pro-plus-attestation.json
+          if-no-files-found: error
+          retention-days: 7

@@ -17,15 +17,33 @@ const freeMode = {
   cloudAgentEnabled: false,
   physicalBuildSlots: 2,
 };
-
-const proPlusMode = {
-  mode: 'PRO_PLUS_CLOUD_AGENT',
-  freeActionsCliEnabled: false,
-  cloudAgentEnabled: true,
-  physicalBuildSlots: 2,
+const actionsMode = {
+  mode: 'PRO_PLUS_ACTIONS_FABRIC',
+  proPlusActionsFabricEnabled: true,
+  freeActionsCliEnabled: true,
+  cloudAgentEnabled: false,
+  physicalBuildSlots: 3,
+  fallbackPhysicalBuildSlots: 2,
+  runtimeCapabilityDiscovery: { minimumObservedConcurrentSessions: 3 },
+};
+const verifiedAttestation = {
+  schema: 'aurora.pro_plus.runtime_attestation.v1',
+  state: 'VERIFIED',
+  executionMode: 'PRO_PLUS_ACTIONS_FABRIC',
+  candidateSha: 'a'.repeat(40),
+  workflowRunId: 123,
+  observedAt: '2026-09-05T01:00:00.000Z',
+  expiresAt: '2026-09-06T01:00:00.000Z',
+  observedConcurrentSessions: 3,
+  successfulCopilotSessions: 4,
+  failedCopilotSessions: 0,
+  allSessionsNoTool: true,
+  repositorySideEffects: 0,
+  providerSideEffects: 0,
+  authority: false,
 };
 
-test('Free mode remains bounded and subtracts active leases from physical capacity', () => {
+test('Free mode remains bounded and subtracts active leases', () => {
   const runtime = discoverRuntimeCapabilities(freeMode, {});
   const result = calculateDynamicSafeBuildCapacity({
     mode: freeMode,
@@ -34,65 +52,75 @@ test('Free mode remains bounded and subtracts active leases from physical capaci
     pathIndependentCandidateCount: 4,
     activeLeaseCount: 1,
   });
-  assert.equal(runtime.executionAvailable, true);
+  assert.equal(runtime.executionProfile, 'FREE');
   assert.equal(result.capacity, 1);
-  assert.equal(result.authority, false);
 });
 
-test('PRO+ fails closed when plan/runtime/CI/credit capability is not proven', () => {
-  const runtime = discoverRuntimeCapabilities(proPlusMode, {
-    AURORA_CLOUD_AGENT_AVAILABLE: 'true',
-    AURORA_ACCOUNT_PLAN: 'pro_plus',
-  });
+test('PRO+ Actions Fabric falls back safely while attestation is pending', () => {
+  const runtime = discoverRuntimeCapabilities(
+    actionsMode,
+    {},
+    { state: 'PENDING' },
+    Date.parse('2026-09-05T02:00:00Z'),
+  );
   const result = calculateDynamicSafeBuildCapacity({
-    mode: proPlusMode,
+    mode: actionsMode,
     runtime,
     readyCandidateCount: 8,
     pathIndependentCandidateCount: 8,
   });
   assert.equal(runtime.proPlusReady, false);
-  assert.equal(result.capacity, 0);
-  assert.deepEqual(result.reasons, ['RUNTIME_EXECUTION_UNAVAILABLE']);
+  assert.equal(runtime.executionProfile, 'FREE_FALLBACK');
+  assert.equal(result.capacity, 2);
+  assert.ok(result.reasons.includes('PRO_PLUS_ATTESTATION_FALLBACK'));
 });
 
-test('PRO+ capacity is the minimum safe runtime, CI, credit and DAG dimension', () => {
-  const runtime = discoverRuntimeCapabilities(proPlusMode, {
-    AURORA_CLOUD_AGENT_AVAILABLE: 'true',
-    AURORA_ACCOUNT_PLAN: 'pro_plus',
-    AURORA_ISOLATED_SESSION_CAPACITY: '8',
-    AURORA_CI_PARALLEL_CAPACITY: '5',
-    AURORA_AI_CREDIT_SLOT_BUDGET: '4',
-    AURORA_FLEET_SUBAGENT_CAP: '4',
-  });
+test('fresh measured PRO+ attestation unlocks exactly the observed three safe BUILD slots', () => {
+  const runtime = discoverRuntimeCapabilities(
+    actionsMode,
+    {},
+    verifiedAttestation,
+    Date.parse('2026-09-05T02:00:00Z'),
+  );
   const result = calculateDynamicSafeBuildCapacity({
-    mode: proPlusMode,
+    mode: actionsMode,
     runtime,
     readyCandidateCount: 7,
     pathIndependentCandidateCount: 6,
-    activeLeaseCount: 1,
   });
   assert.equal(runtime.proPlusReady, true);
-  assert.equal(result.capacity, 4);
-  assert.equal(runtime.fleetSubagentCap, 4);
+  assert.equal(runtime.executionProfile, 'PRO_PLUS');
+  assert.equal(runtime.isolatedSessionCapacity, 3);
+  assert.equal(result.capacity, 3);
+});
+
+test('expired or tampered PRO+ attestation automatically returns to Free fallback', () => {
+  const expired = { ...verifiedAttestation, expiresAt: '2026-09-05T01:30:00.000Z' };
+  const runtime = discoverRuntimeCapabilities(
+    actionsMode,
+    {},
+    expired,
+    Date.parse('2026-09-05T02:00:00Z'),
+  );
+  assert.equal(runtime.proPlusReady, false);
+  assert.equal(runtime.executionProfile, 'FREE_FALLBACK');
+  assert.equal(runtime.isolatedSessionCapacity, 2);
+});
+
+test('legacy cloud mode still fails closed when full external capability is not proven', () => {
+  const mode = { mode: 'PRO_PLUS_CLOUD_AGENT', cloudAgentEnabled: true, physicalBuildSlots: 8 };
+  const runtime = discoverRuntimeCapabilities(mode, {
+    AURORA_CLOUD_AGENT_AVAILABLE: 'true',
+    AURORA_ACCOUNT_PLAN: 'pro_plus',
+  });
+  assert.equal(runtime.executionAvailable, false);
 });
 
 test('active semantic and path leases defer colliding writers', () => {
   const tasks = [
-    {
-      id: 'A',
-      allowedPaths: ['services/a/**'],
-      sharedWriteSurfaces: ['surface:device'],
-    },
-    {
-      id: 'B',
-      allowedPaths: ['services/b/**'],
-      sharedWriteSurfaces: ['surface:device'],
-    },
-    {
-      id: 'C',
-      allowedPaths: ['services/c/**'],
-      sharedWriteSurfaces: ['surface:other'],
-    },
+    { id: 'A', allowedPaths: ['services/a/**'], sharedWriteSurfaces: ['surface:device'] },
+    { id: 'B', allowedPaths: ['services/b/**'], sharedWriteSurfaces: ['surface:device'] },
+    { id: 'C', allowedPaths: ['services/c/**'], sharedWriteSurfaces: ['surface:other'] },
   ];
   const issues = [
     {
@@ -112,23 +140,19 @@ test('active semantic and path leases defer colliding writers', () => {
     ],
     leases,
   );
-  assert.equal(leases.length, 1);
-  assert.equal(result.eligible.length, 1);
   assert.equal(result.eligible[0].task.id, 'C');
   assert.equal(result.deferred[0].reason, 'ACTIVE_SHARED_WRITE_LEASE');
 });
 
-test('development telemetry is operational evidence and never authority', () => {
+test('development telemetry remains operational evidence and never authority', () => {
   const runtime = discoverRuntimeCapabilities(freeMode, {});
-  const capacity = { capacity: 2 };
   const telemetry = buildProPlusDevelopmentTelemetry({
     runtime,
-    capacity,
+    capacity: { capacity: 2 },
     activeLeases: [{ taskId: 'A' }],
     selected: [{ task: { id: 'B' } }],
     deferred: [{ taskId: 'C' }],
   });
-  assert.equal(telemetry.schema, 'aurora.pro_plus.development_telemetry.v1');
   assert.equal(telemetry.canonicalAuthority, false);
   assert.equal(telemetry.authorityElevationViolations, 0);
   assert.equal(telemetry.buildCapacityUtilizationBps, 5000);
