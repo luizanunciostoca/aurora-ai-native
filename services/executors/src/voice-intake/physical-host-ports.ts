@@ -1,8 +1,14 @@
 import type { CurrentAuthorityValidator } from '../sdk/types.js';
+import type { IdempotencyFencePort, PreconditionEvaluator } from '../safeguards/types.js';
+import type { W14GovernedDeviceDispatchPort } from '../device-dispatch/governed-device-dispatch.js';
 import {
   W07DeviceReceiptObservationAdapter,
   type TrustedDeviceExecutionMaterialSource,
 } from '../readback/device-receipt-observer.js';
+import {
+  W15JDispatchingVoiceCandidateIntake,
+  type TrustedVoiceExecutionStateSource,
+} from './dispatching-intake.js';
 import { evaluateVoiceCandidate } from './intake.js';
 import {
   TrustedServerVoiceAuthorityResolver,
@@ -21,11 +27,18 @@ export interface W15JPhysicalHostVoiceIntakeInput {
 
 /** Structural W07 intake port consumed by the W14 same-socket voice boundary. */
 export interface W15JPhysicalHostVoiceIntakePort {
-  evaluate(input: W15JPhysicalHostVoiceIntakeInput): VoiceCandidateIntakeResult;
+  evaluate(input: W15JPhysicalHostVoiceIntakeInput): unknown;
 }
 
 export interface W15JPhysicalHostW07Ports {
   readonly voiceIntake: W15JPhysicalHostVoiceIntakePort;
+  readonly receiptEvidenceIngress: W07DeviceReceiptObservationAdapter;
+}
+
+export interface W15JDispatchingPhysicalHostW07Ports {
+  readonly createVoiceIntake: (
+    w14Dispatch: W14GovernedDeviceDispatchPort,
+  ) => W15JPhysicalHostVoiceIntakePort;
   readonly receiptEvidenceIngress: W07DeviceReceiptObservationAdapter;
 }
 
@@ -39,28 +52,71 @@ export interface W15JPhysicalHostW07PortConfig {
   readonly clock?: () => number;
 }
 
-/**
- * W07-owned concrete adapter bundle for the controlled W15-J physical host.
- *
- * This helper does not issue PolicyToken/OwnerDecision material and does not own policy persistence.
- * Voice candidates remain non-authoritative input; the current-authority validator is independently
- * injected by the W02 owner. Device receipt observations remain evidence input only.
- */
-export function createW15JPhysicalHostW07Ports(
-  config: W15JPhysicalHostW07PortConfig,
-): W15JPhysicalHostW07Ports {
-  const resolver = new TrustedServerVoiceAuthorityResolver({
+export interface W15JDispatchingPhysicalHostW07PortConfig extends W15JPhysicalHostW07PortConfig {
+  /** Server-owned W07 current target/order/attempt/quota/containment state. */
+  readonly executionStateSource: TrustedVoiceExecutionStateSource;
+  /** Current W07 precondition evaluator; Android cannot supply precondition truth. */
+  readonly evaluatePrecondition: PreconditionEvaluator;
+  /** W03-owned durable business idempotency fence consumed by W07-C. */
+  readonly idempotencyFence: IdempotencyFencePort;
+}
+
+function buildResolver(config: W15JPhysicalHostW07PortConfig): TrustedServerVoiceAuthorityResolver {
+  return new TrustedServerVoiceAuthorityResolver({
     source: config.voiceAuthoritySource,
     validateCurrentAuthority: config.validateCurrentAuthority,
     ...(config.clock === undefined ? {} : { clock: config.clock }),
   });
-  const receiptEvidenceIngress = new W07DeviceReceiptObservationAdapter(
-    config.deviceExecutionSource,
-  );
+}
+
+function buildReceiptObserver(
+  config: W15JPhysicalHostW07PortConfig,
+): W07DeviceReceiptObservationAdapter {
+  return new W07DeviceReceiptObservationAdapter(config.deviceExecutionSource);
+}
+
+/**
+ * W07-owned concrete evaluation-only adapter bundle for compatibility and isolated authority tests.
+ * It does not dispatch a device command.
+ */
+export function createW15JPhysicalHostW07Ports(
+  config: W15JPhysicalHostW07PortConfig,
+): W15JPhysicalHostW07Ports {
+  const resolver = buildResolver(config);
+  const receiptEvidenceIngress = buildReceiptObserver(config);
   const voiceIntake: W15JPhysicalHostVoiceIntakePort = Object.freeze({
-    evaluate: (input: W15JPhysicalHostVoiceIntakeInput) =>
+    evaluate: (input: W15JPhysicalHostVoiceIntakeInput): VoiceCandidateIntakeResult =>
       evaluateVoiceCandidate(input.candidate, input.context, resolver),
   });
 
   return Object.freeze({ voiceIntake, receiptEvidenceIngress });
+}
+
+/**
+ * W07-owned dispatching adapter bundle for the controlled W15-J physical host.
+ *
+ * The factory receives the structural W14 transport port only after the host has created current
+ * gateway/device/session managers. Authority, target resolution, containment and safeguards remain
+ * W07-owned; W14 only revalidates transport/device trust and prepares delivery. No raw credential,
+ * verified outcome or retry permission crosses this factory boundary.
+ */
+export function createW15JDispatchingPhysicalHostW07Ports(
+  config: W15JDispatchingPhysicalHostW07PortConfig,
+): W15JDispatchingPhysicalHostW07Ports {
+  const resolver = buildResolver(config);
+  const receiptEvidenceIngress = buildReceiptObserver(config);
+
+  const createVoiceIntake = (
+    w14Dispatch: W14GovernedDeviceDispatchPort,
+  ): W15JPhysicalHostVoiceIntakePort =>
+    new W15JDispatchingVoiceCandidateIntake({
+      resolver,
+      executionStateSource: config.executionStateSource,
+      evaluatePrecondition: config.evaluatePrecondition,
+      idempotencyFence: config.idempotencyFence,
+      w14Dispatch,
+      ...(config.clock === undefined ? {} : { clock: config.clock }),
+    });
+
+  return Object.freeze({ createVoiceIntake, receiptEvidenceIngress });
 }
