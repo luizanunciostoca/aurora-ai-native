@@ -42,8 +42,9 @@ import ai.aurora.ui.model.SemanticTone
 internal fun OnboardingV2Flow(
     state: AuroraUiState,
     deviceKeyState: DeviceKeyUiState,
+    voiceDiagnosticState: VoiceDiagnosticUiState,
     onIntent: (AuroraUiIntent) -> Unit,
-    onVoice: () -> Unit,
+    onVoiceTest: () -> Unit,
     onPrepareDeviceKey: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -53,30 +54,21 @@ internal fun OnboardingV2Flow(
         val wide = maxWidth >= 900.dp
         if (wide) {
             Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
+                modifier = Modifier.fillMaxSize().padding(32.dp),
                 horizontalArrangement = Arrangement.spacedBy(28.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                OnboardingHero(
-                    state = state,
-                    modifier = Modifier.weight(0.38f),
-                    coreSize = 220,
-                )
+                OnboardingHero(state, Modifier.weight(0.38f), coreSize = 220)
                 OnboardingCard(
                     state = state,
                     deviceKeyState = deviceKeyState,
+                    voiceDiagnosticState = voiceDiagnosticState,
                     microphoneGranted = microphoneGranted,
                     onIntent = onIntent,
-                    onVoice = onVoice,
+                    onVoiceTest = onVoiceTest,
                     onPrepareDeviceKey = onPrepareDeviceKey,
-                    onOpenAndroidSettings = {
-                        openAndroidAppSettings(context)
-                    },
-                    modifier = Modifier
-                        .weight(0.62f)
-                        .widthIn(max = 760.dp),
+                    onOpenAndroidSettings = { openAndroidAppSettings(context) },
+                    modifier = Modifier.weight(0.62f).widthIn(max = 760.dp),
                 )
             }
         } else {
@@ -88,24 +80,17 @@ internal fun OnboardingV2Flow(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
-                OnboardingHero(
-                    state = state,
-                    modifier = Modifier.fillMaxWidth(),
-                    coreSize = 128,
-                )
+                OnboardingHero(state, Modifier.fillMaxWidth(), coreSize = 128)
                 OnboardingCard(
                     state = state,
                     deviceKeyState = deviceKeyState,
+                    voiceDiagnosticState = voiceDiagnosticState,
                     microphoneGranted = microphoneGranted,
                     onIntent = onIntent,
-                    onVoice = onVoice,
+                    onVoiceTest = onVoiceTest,
                     onPrepareDeviceKey = onPrepareDeviceKey,
-                    onOpenAndroidSettings = {
-                        openAndroidAppSettings(context)
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 760.dp),
+                    onOpenAndroidSettings = { openAndroidAppSettings(context) },
+                    modifier = Modifier.fillMaxWidth().widthIn(max = 760.dp),
                 )
                 Spacer(Modifier.height(12.dp))
             }
@@ -114,11 +99,7 @@ internal fun OnboardingV2Flow(
 }
 
 @Composable
-private fun OnboardingHero(
-    state: AuroraUiState,
-    modifier: Modifier,
-    coreSize: Int,
-) {
+private fun OnboardingHero(state: AuroraUiState, modifier: Modifier, coreSize: Int) {
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -150,9 +131,10 @@ private fun OnboardingHero(
 private fun OnboardingCard(
     state: AuroraUiState,
     deviceKeyState: DeviceKeyUiState,
+    voiceDiagnosticState: VoiceDiagnosticUiState,
     microphoneGranted: Boolean,
     onIntent: (AuroraUiIntent) -> Unit,
-    onVoice: () -> Unit,
+    onVoiceTest: () -> Unit,
     onPrepareDeviceKey: () -> Unit,
     onOpenAndroidSettings: () -> Unit,
     modifier: Modifier,
@@ -215,17 +197,27 @@ private fun OnboardingCard(
                 OnboardingStep.VOICE_AUDIO -> {
                     Heading(
                         "Voice & Audio",
-                        "Teste STT e verifique o engine local. TTS, idioma, velocidade, pitch e outras opções ficam disponíveis em Settings.",
+                        "Este botão executa somente diagnóstico de microfone/recognizer. O transcript de teste não entra na Conversation nem vira intenção.",
                     )
                     KeyValue("STT", state.voice.inputEngineLabel)
                     KeyValue("TTS", state.voice.outputEngineLabel)
                     KeyValue("Idioma", state.settings.voiceLanguageTag)
-                    Button(onClick = onVoice, enabled = !state.settings.privacyMode) {
-                        Text(if (state.voice.listening) "Ouvindo…" else "Testar microfone")
+                    KeyValue("Teste", voiceDiagnosticState.status.name)
+                    Button(onClick = onVoiceTest, enabled = !state.settings.privacyMode) {
+                        Text(if (voiceDiagnosticState.status == VoiceDiagnosticStatus.LISTENING) "Ouvindo teste…" else "Testar microfone")
                     }
-                    if (state.voice.lastTranscript.isNotBlank() && state.settings.captionsEnabled) {
-                        LuminousCallout("TRANSCRIPT", state.voice.lastTranscript, SemanticTone.INFO)
+                    if (state.settings.captionsEnabled) {
+                        val transcript = voiceDiagnosticState.transcript.ifBlank { voiceDiagnosticState.partialTranscript }
+                        if (transcript.isNotBlank()) {
+                            LuminousCallout("TRANSCRIPT DE TESTE", transcript, SemanticTone.INFO)
+                        }
                     }
+                    Text(voiceDiagnosticState.detail, color = TextSecondary, fontSize = 12.sp)
+                    LuminousCallout(
+                        "DIAGNOSTIC ONLY",
+                        "O resultado comprova apenas a disponibilidade local da entrada de voz. Não cria Conversation intent, permission, authority ou execution.",
+                        SemanticTone.VERIFIED,
+                    )
                     LuminousCallout(
                         "WAKE",
                         "Wake contínuo permanece preference-only até existir hotword engine dedicado + foreground/privacy policy.",
@@ -241,9 +233,7 @@ private fun OnboardingCard(
                     KeyValue("Internet", "AVAILABLE")
                     KeyValue("Network state", "AVAILABLE")
                     KeyValue("Microfone", if (microphoneGranted) "GRANTED" else "NOT GRANTED")
-                    OutlinedButton(onClick = onOpenAndroidSettings) {
-                        Text("Abrir permissões do Android")
-                    }
+                    OutlinedButton(onClick = onOpenAndroidSettings) { Text("Abrir permissões do Android") }
                     LuminousCallout(
                         "FAIL CLOSED",
                         "Se uma capability exigir permissão negada, ela fica indisponível; a UI não amplia scopes silenciosamente.",
@@ -260,9 +250,10 @@ private fun OnboardingCard(
                     KeyValue("Environment", state.device.environment)
                     KeyValue("Session", state.device.registrationStatus)
                     KeyValue("Key", deviceKeyState.status.name)
+                    KeyValue("Voice diagnostic", voiceDiagnosticState.status.name)
                     LuminousCallout(
                         "PRIMEIRO TESTE",
-                        "Fale ou digite uma intenção. A Aurora pode navegar pelas superfícies locais e manter previews remotos sem fabricar dados.",
+                        "Depois de entrar, use Falar/Digitar na Conversation para gerar intenções reais da UI. O teste de microfone desta etapa permanece separado.",
                         SemanticTone.VERIFIED,
                     )
                 }
@@ -280,13 +271,9 @@ private fun OnboardingCard(
                 ) { Text("Voltar") }
 
                 if (state.onboardingStep == OnboardingStep.READY) {
-                    Button(onClick = { onIntent(AuroraUiIntent.CompleteOnboarding) }) {
-                        Text("Entrar na Aurora")
-                    }
+                    Button(onClick = { onIntent(AuroraUiIntent.CompleteOnboarding) }) { Text("Entrar na Aurora") }
                 } else {
-                    Button(onClick = { onIntent(AuroraUiIntent.NextOnboarding) }) {
-                        Text("Continuar")
-                    }
+                    Button(onClick = { onIntent(AuroraUiIntent.NextOnboarding) }) { Text("Continuar") }
                 }
             }
         }
