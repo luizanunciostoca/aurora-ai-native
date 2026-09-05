@@ -57,16 +57,31 @@ sealed interface WakeVoiceRoute {
 }
 
 /**
+ * One atomic view of command vocabulary + current Android preconditions for a single evaluation.
+ * A caller should derive both from the same reconciled W04/W15-C/W15-G projection snapshot.
+ */
+data class WakeVoiceFastPathInputs(
+    val commands: List<VoiceCommandDefinition>,
+    val context: VoiceFastPathContext,
+    val registryVersion: String? = null,
+    val vocabularyVersion: String? = null,
+) {
+    init {
+        require(registryVersion == null || registryVersion.isNotBlank())
+        require(vocabularyVersion == null || vocabularyVersion.isNotBlank())
+    }
+}
+
+/**
  * Runtime adapter for wake-triggered bounded STT -> W15-G -> W07 candidate ingress.
  *
- * No command catalog is invented here. The catalog must be explicitly projected from the
- * canonical capability/governance sources. An absent catalog, absent recognizer confidence,
- * unavailable runtime observation, blocked/escalated W15-G result, or unavailable W07 ingress all
- * fail closed to the normal Conversation path.
+ * No command catalog is invented here. The input provider must atomically project current governed
+ * capability/vocabulary/runtime state. An absent catalog, absent recognizer confidence, unavailable
+ * runtime observation, blocked/escalated W15-G result, or unavailable W07 ingress all fail closed to
+ * the normal Conversation path.
  */
 class WakeVoiceFastPathRouter(
-    private val commandCatalog: () -> List<VoiceCommandDefinition>,
-    private val contextProvider: () -> VoiceFastPathContext,
+    private val inputProvider: () -> WakeVoiceFastPathInputs,
     private val authorityIngress: W07VoiceAuthorityIngress,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
     private val minimumConfidence: Double = VoiceFastPath.DEFAULT_MINIMUM_CONFIDENCE,
@@ -85,13 +100,11 @@ class WakeVoiceFastPathRouter(
                 WakeVoiceFallbackReason.TRANSCRIPT_CONFIDENCE_UNAVAILABLE,
             )
 
-        val context = runCatching(contextProvider).getOrNull()
+        val inputs = runCatching(inputProvider).getOrNull()
             ?: return WakeVoiceRoute.ConversationFallback(
                 WakeVoiceFallbackReason.RUNTIME_CONTEXT_UNAVAILABLE,
             )
-
-        val commands = runCatching(commandCatalog).getOrNull().orEmpty()
-        if (commands.isEmpty()) {
+        if (inputs.commands.isEmpty()) {
             return WakeVoiceRoute.ConversationFallback(
                 WakeVoiceFallbackReason.COMMAND_CATALOG_UNAVAILABLE,
             )
@@ -100,7 +113,7 @@ class WakeVoiceFastPathRouter(
         val decision =
             runCatching {
                 VoiceFastPath(
-                    commands = commands,
+                    commands = inputs.commands,
                     nowMs = nowMs,
                     minimumConfidence = minimumConfidence,
                 ).evaluate(
@@ -110,7 +123,7 @@ class WakeVoiceFastPathRouter(
                             transcript = transcript,
                             confidence = confidence,
                         ),
-                    context = context,
+                    context = inputs.context,
                 )
             }.getOrNull()
                 ?: return WakeVoiceRoute.ConversationFallback(
