@@ -2,8 +2,18 @@
 import fs from 'node:fs/promises';
 import { loadTaskGraph } from './load-task-graph.mjs';
 import { compactFrontierSummary, selectSafeReadyFrontier } from './frontier-policy.mjs';
+import {
+  calculateDynamicSafeBuildCapacity,
+  discoverRuntimeCapabilities,
+} from './runtime-capacity.mjs';
+import {
+  filterCandidatesAgainstActiveLeases,
+  projectActiveSessionLeases,
+} from './session-lease-registry.mjs';
+import { buildProPlusDevelopmentTelemetry } from './pro-plus-telemetry.mjs';
 
-// Legacy validation marker: READY FRONTIER evolved into the canonical BUILD frontier under PUZZLE_FRONTIER.
+// Compatibility entrypoint: FREE_ACTIONS_CLI and capability-gated PRO_PLUS_CLOUD_AGENT
+// both use the same canonical BUILD frontier, lock and exact-base rules.
 
 const [owner, repo] = (process.env.GITHUB_REPOSITORY || '').split('/');
 const token = process.env.GITHUB_TOKEN;
@@ -19,16 +29,8 @@ if (!owner || !repo || !token || !outputPath || !baseSha) {
 const mode = JSON.parse(
   await fs.readFile('docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json', 'utf8'),
 );
-if (mode.mode !== 'FREE_ACTIONS_CLI' || !mode.freeActionsCliEnabled) {
-  await fs.appendFile(
-    outputPath,
-    'matrix={"include":[]}\ncount=0\nfrontier={"selected":[],"deferred":[]}\n',
-  );
-  console.log(`Free worker disabled by mode ${mode.mode}`);
-  process.exit(0);
-}
 if (mode.scheduler?.strategy !== 'PUZZLE_FRONTIER') {
-  throw new Error('FREE_ACTIONS_CLI requires PUZZLE_FRONTIER scheduler policy');
+  throw new Error('Aurora canonical BUILD claiming requires PUZZLE_FRONTIER scheduler policy');
 }
 
 const graph = await loadTaskGraph();
@@ -65,27 +67,23 @@ async function ensureLabel(name, color, description) {
 }
 
 for (const [name, color, description] of [
-  ['aurora:copilot-free-ready', '54aeff', 'BUILD_READY task queued for Copilot Free Actions CLI'],
+  ['aurora:copilot-free-ready', '54aeff', 'BUILD_READY task queued for Copilot Actions CLI'],
   [
     'aurora:copilot-free-running',
     'fbca04',
-    'Copilot Free Actions CLI worker currently owns this canonical BUILD task',
+    'Copilot Actions CLI worker currently owns this canonical BUILD task',
   ],
-  ['aurora:copilot-free-pr-open', '8250df', 'Copilot Free candidate PR has been published'],
+  ['aurora:copilot-free-pr-open', '8250df', 'Copilot candidate PR has been published'],
   [
     'aurora:copilot-free-branch-ready',
     'bf8700',
-    'Copilot Free candidate branch exists but PR publication requires Program Control',
+    'Copilot candidate branch exists but PR publication requires Program Control',
   ],
-  [
-    'aurora:copilot-free-no-change',
-    'd4c5f9',
-    'Copilot Free worker completed without a candidate patch',
-  ],
+  ['aurora:copilot-free-no-change', 'd4c5f9', 'Copilot worker completed without a candidate patch'],
   [
     'aurora:copilot-free-failed',
     'b60205',
-    'Copilot Free worker failed before publishing a candidate PR',
+    'Copilot worker failed before publishing a candidate PR',
   ],
   [
     'aurora:canonical-pr-open',
@@ -163,7 +161,8 @@ for (const issue of issues) {
     labels.has('aurora:copilot-dispatched') ||
     labels.has('aurora:copilot-free-running') ||
     labels.has('aurora:copilot-free-pr-open') ||
-    labels.has('aurora:copilot-free-branch-ready')
+    labels.has('aurora:copilot-free-branch-ready') ||
+    labels.has('aurora:copilot-pro-plus-running')
   ) {
     continue;
   }
@@ -200,19 +199,57 @@ for (const issue of issues) {
   candidates.push({ issue, task });
 }
 
-const physicalBuildSlots = Number(mode.physicalBuildSlots || mode.maxParallelTasks || 2);
-const frontier = selectSafeReadyFrontier(candidates, graph.tasks, physicalBuildSlots);
-const selected = frontier.selected;
+const runtime = discoverRuntimeCapabilities(mode);
+const activeLeases = projectActiveSessionLeases(issues, graph.tasks);
+const activeSessionLeaseCount = activeLeases.filter((lease) => lease.consumesBuildSession).length;
+const leaseFiltered = filterCandidatesAgainstActiveLeases(candidates, activeLeases);
+const independentProbe = selectSafeReadyFrontier(
+  leaseFiltered.eligible,
+  graph.tasks,
+  Math.max(1, leaseFiltered.eligible.length),
+);
+const capacity = calculateDynamicSafeBuildCapacity({
+  mode,
+  runtime,
+  readyCandidateCount: candidates.length,
+  pathIndependentCandidateCount: independentProbe.selected.length,
+  activeLeaseCount: activeSessionLeaseCount,
+});
+
+const selectedFrontier =
+  capacity.capacity > 0
+    ? selectSafeReadyFrontier(leaseFiltered.eligible, graph.tasks, capacity.capacity)
+    : { selected: [], deferred: [], downstreamDepth: independentProbe.downstreamDepth };
+const selected = selectedFrontier.selected;
+const frontier = {
+  ...selectedFrontier,
+  deferred: [...leaseFiltered.deferred, ...selectedFrontier.deferred],
+};
 const frontierSummary = compactFrontierSummary(frontier);
+const telemetry = buildProPlusDevelopmentTelemetry({
+  runtime,
+  capacity,
+  activeLeases,
+  selected,
+  deferred: frontier.deferred,
+});
 const include = [];
 
+console.log(`RUNTIME CAPABILITY ${JSON.stringify(runtime)}`);
+console.log(`DYNAMIC SAFE BUILD CAPACITY ${JSON.stringify(capacity)}`);
 console.log(`CANONICAL BUILD FRONTIER ${JSON.stringify(frontierSummary)}`);
+console.log(`PRO_PLUS DEVELOPMENT TELEMETRY ${JSON.stringify(telemetry)}`);
+
 if (summaryPath) {
   const lines = [
     '## Aurora Canonical BUILD Frontier',
     '',
     `Base SHA: \`${baseSha}\``,
-    `Physical BUILD slots: ${physicalBuildSlots}`,
+    `Execution mode: ${runtime.configuredMode}`,
+    `PRO+ runtime ready: ${runtime.proPlusReady}`,
+    `Dynamic safe BUILD capacity: ${capacity.capacity}`,
+    `Active writer leases: ${activeLeases.length}`,
+    `Active session-consuming leases: ${activeSessionLeaseCount}`,
     '',
     `Selected: ${frontierSummary.selected.length}; deferred: ${frontierSummary.deferred.length}`,
     '',
@@ -231,6 +268,7 @@ if (summaryPath) {
       );
     }
   }
+  lines.push('', '### PRO+ telemetry', '', '```json', JSON.stringify(telemetry, null, 2), '```');
   await fs.appendFile(summaryPath, `${lines.join('\n')}\n`);
 }
 
@@ -253,6 +291,7 @@ for (const { issue, task } of selected) {
     agent: task.customAgent || 'aurora-implementation',
     baseSha,
     lane: task.laneHint || '',
+    fleetSubagentCap: Math.max(1, runtime.fleetSubagentCap || 1),
   });
   console.log(
     `claimed BUILD_READY ${task.id} from issue #${issue.number} on ${task.laneHint || 'AUTO'} lane`,
@@ -261,5 +300,5 @@ for (const { issue, task } of selected) {
 
 await fs.appendFile(
   outputPath,
-  `matrix=${JSON.stringify({ include })}\ncount=${include.length}\nfrontier=${JSON.stringify(frontierSummary)}\n`,
+  `matrix=${JSON.stringify({ include })}\ncount=${include.length}\nparallelism=${capacity.capacity}\nfrontier=${JSON.stringify(frontierSummary)}\ntelemetry=${JSON.stringify(telemetry)}\n`,
 );
