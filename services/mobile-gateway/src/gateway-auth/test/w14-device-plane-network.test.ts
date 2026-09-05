@@ -8,6 +8,7 @@ import test from 'node:test';
 import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
 
 import {
+  computeDeviceReceiptIntegrityDigest,
   GATEWAY_PROTOCOL_VERSION,
   GatewayDevicePlaneNetworkHandler,
   GatewayHttpNetworkTransport,
@@ -235,7 +236,12 @@ class FakeDeviceSessions {
       authorizesExecution: false,
       canGrantPermission: false,
     };
-    return { ok: true, snapshot: this.current, authorizesExecution: false, canGrantPermission: false };
+    return {
+      ok: true,
+      snapshot: this.current,
+      authorizesExecution: false,
+      canGrantPermission: false,
+    };
   }
 
   getSession(deviceSessionId: unknown, connectionId: unknown) {
@@ -251,7 +257,12 @@ class FakeDeviceSessions {
         canGrantPermission: false,
       };
     }
-    return { ok: true, snapshot: this.current, authorizesExecution: false, canGrantPermission: false };
+    return {
+      ok: true,
+      snapshot: this.current,
+      authorizesExecution: false,
+      canGrantPermission: false,
+    };
   }
 
   revokeSession(input: unknown) {
@@ -263,7 +274,12 @@ class FakeDeviceSessions {
       revocationReasonReference: input.reasonReference,
       executionPreconditionSatisfied: false,
     };
-    return { ok: true, snapshot: this.current, authorizesExecution: false, canGrantPermission: false };
+    return {
+      ok: true,
+      snapshot: this.current,
+      authorizesExecution: false,
+      canGrantPermission: false,
+    };
   }
 }
 
@@ -279,7 +295,11 @@ class FakeRealtimeCommands {
       value: {
         commandId,
         executionId: EXECUTION_ID,
-        executionTarget: { schemaVersion: '1.0.0', kind: 'DEVICE', bindingReference: DEVICE_ID },
+        executionTarget: {
+          schemaVersion: '1.0.0',
+          kind: 'DEVICE',
+          bindingReference: DEVICE_ID,
+        },
         correlationId: CORRELATION,
         causationId: 'cau_01ARZ3NDEKTSV4RRFFQ69G5FAV',
         state: 'SUBMITTED',
@@ -615,6 +635,7 @@ test('command and receipt routes server-resolve canonical command/trust while re
     assert.equal(fakes.deliveries.lastAck?.observedAtMs, fixture.now.value);
 
     fixture.now.value += 1;
+    const capturedAtMs = fixture.now.value - 10;
     const receipt = await postJson(
       fixture.port,
       '/v1/device/receipts/ingest',
@@ -629,8 +650,7 @@ test('command and receipt routes server-resolve canonical command/trust while re
         reportedState: 'COMPLETED',
         sourceReference: 'device-receipt-1',
         proofReference: 'device-signature-1',
-        integrityDigest: 'sha256:abcdef0123456789',
-        capturedAtMs: fixture.now.value - 10,
+        capturedAtMs,
       },
       fixture.agent,
     );
@@ -640,7 +660,43 @@ test('command and receipt routes server-resolve canonical command/trust while re
     assert.equal(fakes.receipts.lastInput?.receivedAtMs, fixture.now.value);
     assert.equal(fakes.receipts.lastInput?.connectionId, 'reported-prior-connection');
     assert.equal(fakes.receipts.lastInput?.gatewayGeneration, 1);
+    assert.equal(
+      fakes.receipts.lastInput?.integrityDigest,
+      computeDeviceReceiptIntegrityDigest({
+        receiptId: RECEIPT_ID,
+        evidenceId: EVIDENCE_ID,
+        commandId: COMMAND_ID,
+        executionId: EXECUTION_ID,
+        connectionId: 'reported-prior-connection',
+        gatewayGeneration: 1,
+        deliveryReference: 'w14f:delivery-1',
+        reportedState: 'COMPLETED',
+        sourceReference: 'device-receipt-1',
+        capturedAtMs,
+      }),
+    );
     assert.equal(isRecord(fakes.receipts.lastInput?.deviceSession), true);
+
+    const clientDigestReceipt = await postJson(
+      fixture.port,
+      '/v1/device/receipts/ingest',
+      {
+        receiptId: RECEIPT_ID,
+        commandId: COMMAND_ID,
+        executionId: EXECUTION_ID,
+        connectionId: 'reported-prior-connection',
+        gatewayGeneration: 1,
+        deliveryReference: 'w14f:delivery-1',
+        reportedState: 'COMPLETED',
+        sourceReference: 'device-receipt-1',
+        proofReference: 'device-signature-1',
+        integrityDigest: 'sha256:client-controlled',
+        capturedAtMs,
+      },
+      fixture.agent,
+    );
+    assert.equal(clientDigestReceipt.statusCode, 400);
+    assert.equal(devicePlaneCode(clientDigestReceipt), 'BODY_MALFORMED');
 
     const injectedReceipt = await postJson(
       fixture.port,
@@ -655,8 +711,7 @@ test('command and receipt routes server-resolve canonical command/trust while re
         reportedState: 'COMPLETED',
         sourceReference: 'device-receipt-1',
         proofReference: 'device-signature-1',
-        integrityDigest: 'sha256:abcdef0123456789',
-        capturedAtMs: fixture.now.value - 10,
+        capturedAtMs,
         tenantId: 'ten_forged',
       },
       fixture.agent,
