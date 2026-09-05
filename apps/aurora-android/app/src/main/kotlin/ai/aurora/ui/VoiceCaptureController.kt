@@ -33,7 +33,10 @@ class VoiceCaptureController(
     private val onError: (String) -> Unit,
 ) : AutoCloseable {
     private var recognizer: SpeechRecognizer? = null
-    private val registryRegistration = VoiceSessionRegistry.register { stopForLifecycle() }
+    private val registryRegistration = VoiceSessionRegistry.register(
+        onBackground = { stopForLifecycle() },
+        onPrivacy = { purgeForPrivacy() },
+    )
 
     fun availability(preferOffline: Boolean): VoiceInputAvailability {
         val standard = SpeechRecognizer.isRecognitionAvailable(context)
@@ -134,7 +137,25 @@ class VoiceCaptureController(
         if (recognizer == null) return
         runCatching { recognizer?.cancel() }
         closeRecognizer()
-        onError("Captura de voz interrompida porque a Aurora saiu do primeiro plano ou entrou em modo de privacidade.")
+        onError("Captura de voz interrompida porque a Aurora saiu do primeiro plano.")
+    }
+
+    private fun purgeForPrivacy() {
+        val wasActive = recognizer != null
+        if (wasActive) {
+            runCatching { recognizer?.cancel() }
+            closeRecognizer()
+        }
+        // Empty result is intentionally presentation-only: conversational handling clears the last
+        // transcript and submitText ignores blank input; diagnostic handling is replaced by error.
+        onResult("")
+        onError(
+            if (wasActive) {
+                "Captura de voz interrompida e transcript limpo pelo modo de privacidade."
+            } else {
+                "Conteúdo de voz local limpo pelo modo de privacidade."
+            },
+        )
     }
 
     private fun closeRecognizer() {
