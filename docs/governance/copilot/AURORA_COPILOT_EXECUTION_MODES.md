@@ -4,36 +4,36 @@ Status: `PUZZLE_EXECUTION_GOVERNANCE_CANDIDATE`
 
 This document describes how Aurora maps the global Puzzle scheduler onto available execution mechanisms. It is operational governance only and never overrides live `main`, exact-SHA acceptance evidence, `CURRENT_PROGRAM_STATUS.md`, Developer Manual, accepted ADRs, wave ownership/dependency documents, Risk Gates or Drive acceptance evidence.
 
-The execution mechanism and scheduler are separate concerns.
+The execution mechanism and scheduler are separate concerns. Every execution mode uses `PUZZLE_FRONTIER` and optimizes for `MINIMUM_SAFE_CRITICAL_PATH`.
 
-Every execution mode uses `PUZZLE_FRONTIER` and optimizes for `MINIMUM_SAFE_CRITICAL_PATH`.
+## Pro+ governance versus runtime activation
 
-## Two capacity controls
+The Pro+ parallel-development governance introduced by #422 is active on `main`: Program Control may reason about dynamic independent BUILD sessions, intra-task fleets and parallel validation.
 
-### `physicalBuildSlots`
+Physical Pro+ execution is a separate runtime fact. The current switch remains `FREE_ACTIONS_CLI` until the runtime positively proves the required plan, execution-backend, isolated-session, CI and AI-credit signals. Merely editing the switch cannot prove that capacity exists.
 
-Maximum canonical BUILD workers that may execute simultaneously under the active execution mechanism.
+The detailed runtime contract is defined in `AURORA_PRO_PLUS_RUNTIME_ORCHESTRATION.md`.
 
-Only tasks whose dependencies are fully accepted may compete for these slots.
+## Capacity controls
+
+### Canonical BUILD capacity
+
+The current Free mode keeps a compatibility ceiling of two physical BUILD slots. The runtime controller subtracts already-running session leases and may therefore return fewer than two slots.
+
+When a reviewed Pro+ mode is activated, BUILD capacity is no longer a fixed historical number. It is computed as the minimum safe dimension across observed runtime/session capacity, CI capacity, AI-credit budget, BUILD_READY count and path/semantic independence.
 
 ### `maxLogicalLanes`
 
-Maximum concurrently materialized Puzzle PREBUILD/READINESS lanes.
-
-Logical lanes do not grant execution authority and are intentionally decoupled from current Copilot worker count.
-
-A Free configuration can therefore have 2 physical BUILD slots while maintaining dozens of future-wave logical lanes.
+Logical PREBUILD/READINESS capacity remains independent from canonical BUILD execution. Logical lanes do not grant execution authority and may greatly exceed the number of physical workers.
 
 ## PUZZLE_FRONTIER scheduler
-
-The scheduler computes two independent frontiers.
 
 ### Canonical BUILD frontier
 
 - dependencies must be `aurora:accepted` and supported by live canonical evidence;
 - explicit `dispatchPriority` wins first when slots are scarce;
 - longest remaining DAG path breaks scheduling pressure next;
-- shared-write/path conflicts fail closed;
+- active writer leases and shared-write/path conflicts fail closed;
 - only BUILD_READY issues can be claimed by implementation workers.
 
 ### Logical Puzzle frontier
@@ -45,42 +45,53 @@ The scheduler computes two independent frontiers.
 - ISOLATED_PATCH is allowed only with explicit `prebuildAllowedPaths`;
 - every PREBUILD artifact requires reconciliation after upstream acceptance.
 
-The full policy is defined by `AURORA_PUZZLE_MASSIVELY_PARALLEL_EXECUTION_STANDARD.md`.
-
 ## FREE_ACTIONS_CLI
 
-Current mode.
+Current physical execution mode.
 
-- `physicalBuildSlots = 2`.
-- `maxParallelTasks = 2` remains a compatibility alias for existing workflows.
-- `maxLogicalLanes = 32` by current governance.
-- Copilot cloud agent remains disabled.
-- Copilot CLI BUILD execution is allowed through the existing governed Actions worker when quota is available.
-- The BUILD worker receives read-only repository authority; deterministic publisher logic handles candidate publication.
-- PREBUILD automatic AI workers are disabled by default. Logical lanes remain available to Program Control, dedicated engineering contexts and future worker mechanisms.
-- Copilot quota exhaustion may reduce physical AI execution throughput but does not collapse the logical Puzzle program or change acceptance authority.
-- No PREBUILD or BUILD candidate is automatically accepted or merged.
-
-The two-slot Free cap is therefore a **physical execution limit**, not a two-lane architecture limit.
+- compatibility ceiling: `physicalBuildSlots = 2`;
+- dynamic controller subtracts active running/dispatched leases;
+- `maxLogicalLanes = 32`;
+- Copilot cloud agent remains disabled;
+- Actions CLI BUILD execution is allowed through the governed worker when quota is available;
+- worker candidates remain path-fenced and Program Control retains protected/shared surfaces;
+- no PREBUILD or BUILD candidate is automatically accepted or merged.
 
 ## PRO_PLUS_CLOUD_AGENT
 
-Planned upgrade mode.
+Capability-gated upgrade target.
 
-- activate only through normal reviewed governance;
-- enable cloud-agent execution;
-- increase `physicalBuildSlots` only after observing repository/integration capacity;
-- reuse the same already-materialized Puzzle lanes;
-- never widen ownership, dependency or authority because additional compute is available.
+It may be activated only through reviewed governance and only when runtime discovery positively observes all required signals. Unknown cloud-agent, isolated-session, CI or AI-credit capacity resolves to zero additional BUILD capacity.
 
-The main acceleration benefit of an upgraded plan is that already prepared/reconciled pieces can fill more physical slots immediately.
+Increasing compute never widens ownership, dependency, authority or acceptance policy.
+
+## Session and writer leases
+
+Live GitHub issue/task state is projected into a fail-closed lease registry.
+
+- running/dispatched work locks its `allowedPaths` and `sharedWriteSurfaces` and consumes a physical session;
+- an open canonical PR keeps the same writer lock but does not consume a worker slot;
+- a colliding candidate is deferred before dispatch;
+- stale/ambiguous leases remain locked until explicit reconciliation.
+
+## Intra-task fleets
+
+A fleet is an accelerator inside one canonical issue/branch/PR. It is not a way to claim multiple canonical issues.
+
+The parent remains the sole branch/PR integrator. Prefer differentiated roles for read-only exploration, bounded implementation, disjoint test work and read-only red-team review. Fleet consensus never substitutes for exact-head acceptance.
+
+## Development telemetry
+
+Program Control emits `aurora.pro_plus.development_telemetry.v1`, including runtime readiness, safe BUILD capacity, session/writer leases, selected/deferred work, CI capacity, credit-slot budget and fleet cap when observable.
+
+Telemetry is explicitly non-authoritative. Optimize accepted capability throughput and safe critical-path duration rather than raw agent count.
 
 ## Invariants across all modes
 
 1. Logical preparation is not canonical authority.
 2. A task graph node does not satisfy its own dependencies.
 3. `aurora:accepted` plus live canonical evidence is required for canonical dependency release.
-4. PREBUILD artifacts always declare `canonicalAuthority: false` and `requiresReconciliation: true`.
+4. PREBUILD artifacts declare `canonicalAuthority: false` and require reconciliation.
 5. No speculative runtime patch exists without an explicit path fence.
 6. Shared/root/publication surfaces remain Program Control-owned unless explicitly transferred.
 7. Intelligence is not Authority and neither is Execution.
@@ -88,10 +99,12 @@ The main acceleration benefit of an upgraded plan is that already prepared/recon
 9. Main drift requires reconciliation and new exact-head evidence.
 10. W03+ Risk Gates remain mandatory at their canonical acceptance points.
 11. Increasing worker count never authorizes unsafe fan-out.
-12. The optimization target is minimum safe end-to-end program duration, not maximum agent count or speculative code volume.
+12. Unknown Pro+ runtime capacity fails closed.
+13. One semantic surface has one writer lease at a time.
+14. The optimization target is minimum safe end-to-end program duration, not maximum agent count.
 
-## Current switch file
+## Current switch
 
 `docs/governance/copilot/AURORA_COPILOT_EXECUTION_MODE.json`
 
-The switch file is validated by `tools/copilot/validate-execution-mode.mjs`, the existing Aurora Fabric gate, and the dedicated Aurora Puzzle Validation workflow.
+The switch is validated by `tools/copilot/validate-execution-mode.mjs`, the Aurora Fabric gate and Aurora Puzzle Validation.
