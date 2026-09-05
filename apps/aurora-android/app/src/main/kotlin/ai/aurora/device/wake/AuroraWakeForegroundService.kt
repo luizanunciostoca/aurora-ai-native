@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Handler
@@ -167,5 +168,27 @@ class AuroraWakeForegroundService : Service() {
         private const val CHANNEL_ID = "aurora-wake-v1"
         private const val NOTIFICATION_ID = 15001
         private const val HANDOFF_RECOVERY_MS = 1_800L
+
+        /**
+         * Best-effort platform re-arm only. This does not create authority or imply that a wake
+         * interaction succeeded. Callers must preserve the failure status if the OS rejects it.
+         */
+        fun rearmIfConfigured(context: Context): Boolean {
+            val appContext = context.applicationContext
+            val preferences = WakeRuntimePreferences(appContext)
+            if (!preferences.wakeEnabled() || preferences.privacyModeEnabled()) return false
+            if (
+                appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+                    PackageManager.PERMISSION_GRANTED
+            ) {
+                return false
+            }
+            if (!AuroraWakeModelStore(appContext).hasValidModel()) return false
+            return runCatching {
+                appContext.startForegroundService(
+                    Intent(appContext, AuroraWakeForegroundService::class.java).setAction(ACTION_ARM),
+                )
+            }.isSuccess
+        }
     }
 }
