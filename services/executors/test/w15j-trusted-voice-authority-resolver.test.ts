@@ -172,7 +172,10 @@ test('trusted resolver exposes only command capability and server time to the ma
   assert.equal('deviceId' in (source.lookup ?? {}), false);
   assert.strictEqual(resolved.validateCurrentAuthority, validator);
   assert.equal(resolved.actionIntent.tenant.tenantId, TENANT);
-  assert.equal(resolved.authorityEvaluation.policyEvaluation.evaluatedAt, source.lookup?.evaluatedAt);
+  assert.equal(
+    resolved.authorityEvaluation.policyEvaluation.evaluatedAt,
+    source.lookup?.evaluatedAt,
+  );
 });
 
 test('authenticated W14 context mismatch fails closed before material is returned to W07 intake', () => {
