@@ -24,6 +24,14 @@
     "privacyMode": null,
     "batteryOptimizationExempt": null,
     "audioRoute": null,
+    "voiceProjectionState": null,
+    "voiceRegistryVersion": null,
+    "voiceRegistrySourceRefSha256": null,
+    "voiceRegistryContentSha256": null,
+    "voiceVocabularyVersion": null,
+    "voiceVocabularySourceRefSha256": null,
+    "voiceVocabularyContentSha256": null,
+    "w07MobileIngressState": null,
     "capturedAtUtc": null
   },
   "privacyAssertions": {
@@ -31,6 +39,7 @@
     "continuousAudioUploaded": false,
     "modelExportedByCollector": false,
     "preRollUploaded": false,
+    "rawProjectionSourceRefPersisted": false,
     "privateChainOfThoughtCollected": false
   },
   "metrics": {
