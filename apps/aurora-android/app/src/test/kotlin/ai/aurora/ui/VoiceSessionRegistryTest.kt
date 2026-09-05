@@ -14,8 +14,8 @@ class VoiceSessionRegistryTest {
     fun `background stop reaches every active registration`() {
         var first = 0
         var second = 0
-        val a = VoiceSessionRegistry.register { first += 1 }
-        val b = VoiceSessionRegistry.register { second += 1 }
+        val a = VoiceSessionRegistry.register(onBackground = { first += 1 })
+        val b = VoiceSessionRegistry.register(onBackground = { second += 1 })
 
         VoiceSessionRegistry.stopAllForBackground()
 
@@ -26,20 +26,25 @@ class VoiceSessionRegistryTest {
     }
 
     @Test
-    fun `privacy stop reaches every active registration`() {
-        var calls = 0
-        val registration = VoiceSessionRegistry.register { calls += 1 }
+    fun `privacy hook is distinct from background hook`() {
+        var backgroundCalls = 0
+        var privacyCalls = 0
+        val registration = VoiceSessionRegistry.register(
+            onBackground = { backgroundCalls += 1 },
+            onPrivacy = { privacyCalls += 1 },
+        )
 
         VoiceSessionRegistry.stopAllForPrivacy()
 
-        assertEquals(1, calls)
+        assertEquals(0, backgroundCalls)
+        assertEquals(1, privacyCalls)
         registration.close()
     }
 
     @Test
     fun `closed registration is never invoked`() {
         var calls = 0
-        val registration = VoiceSessionRegistry.register { calls += 1 }
+        val registration = VoiceSessionRegistry.register(onBackground = { calls += 1 })
         registration.close()
 
         VoiceSessionRegistry.stopAllForBackground()
@@ -51,8 +56,14 @@ class VoiceSessionRegistryTest {
     @Test
     fun `one failing stopper cannot prevent remaining resources from stopping`() {
         var safeStopperCalls = 0
-        val failing = VoiceSessionRegistry.register { error("expected test failure") }
-        val safe = VoiceSessionRegistry.register { safeStopperCalls += 1 }
+        val failing = VoiceSessionRegistry.register(
+            onBackground = {},
+            onPrivacy = { error("expected test failure") },
+        )
+        val safe = VoiceSessionRegistry.register(
+            onBackground = {},
+            onPrivacy = { safeStopperCalls += 1 },
+        )
 
         VoiceSessionRegistry.stopAllForPrivacy()
 
