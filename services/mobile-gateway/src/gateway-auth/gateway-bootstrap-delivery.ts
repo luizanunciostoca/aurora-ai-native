@@ -34,16 +34,10 @@ export interface GatewayBootstrapReferenceGrant {
 }
 
 export type GatewayBootstrapStageErrorCode =
-  | 'PRINCIPAL_INVALID'
-  | 'PRINCIPAL_EXPIRED'
-  | 'CAPACITY_EXHAUSTED'
-  | 'ENTROPY_FAILURE';
+  'PRINCIPAL_INVALID' | 'PRINCIPAL_EXPIRED' | 'CAPACITY_EXHAUSTED' | 'ENTROPY_FAILURE';
 
 export type GatewayBootstrapExchangeErrorCode =
-  | 'REFERENCE_INVALID'
-  | 'REFERENCE_UNKNOWN'
-  | 'REFERENCE_EXPIRED'
-  | 'GRANT_REJECTED';
+  'REFERENCE_INVALID' | 'REFERENCE_UNKNOWN' | 'REFERENCE_EXPIRED' | 'GRANT_REJECTED';
 
 export type GatewayBootstrapStageResult =
   | Readonly<{ ok: true; value: GatewayBootstrapReferenceGrant }>
@@ -252,7 +246,11 @@ export class GatewayBootstrapDeliveryBroker {
   }
 
   exchange(reference: unknown, nowMs: number): GatewayBootstrapExchangeResult {
-    if (typeof reference !== 'string' || !BOOTSTRAP_REFERENCE.test(reference) || !nonNegativeInteger(nowMs)) {
+    if (
+      typeof reference !== 'string' ||
+      !BOOTSTRAP_REFERENCE.test(reference) ||
+      !nonNegativeInteger(nowMs)
+    ) {
       return exchangeRejected('REFERENCE_INVALID');
     }
     const record = this.#pending.get(reference);
