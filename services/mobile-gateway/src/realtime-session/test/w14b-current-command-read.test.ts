@@ -155,7 +155,12 @@ test('W14-B current command read fails closed on malformed, missing and wrong-co
   assert.equal(missing.ok, false);
   if (!missing.ok) assert.equal(missing.error.code, 'COMMAND_NOT_FOUND');
 
-  const wrongConnection = manager.getCommand(gateway.snapshot.sessionId, 'connection-forged', COMMAND, 1_200);
+  const wrongConnection = manager.getCommand(
+    gateway.snapshot.sessionId,
+    'connection-forged',
+    COMMAND,
+    1_200,
+  );
   assert.equal(wrongConnection.ok, false);
   if (!wrongConnection.ok) assert.equal(wrongConnection.error.code, 'GATEWAY_CONNECTION_MISMATCH');
 });
