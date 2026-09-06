@@ -240,7 +240,7 @@ jobs:
           fi
           git reset
       - name: Upload isolated candidate patch
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-free-${{ matrix.issue }}
           path: /tmp/aurora-free-artifact
@@ -270,7 +270,7 @@ jobs:
       - name: Download candidate artifact
         id: artifact
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: aurora-free-${{ matrix.issue }}
           path: /tmp/aurora-free-artifact
