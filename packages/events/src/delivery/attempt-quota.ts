@@ -1,6 +1,8 @@
 import type { ActionIntentId, TenantId } from '@aurora/contracts';
 import type { SqlStatement } from './types';
 
+const SAFE_EXECUTION_REF = /^[A-Za-z0-9._:/+-]{1,256}$/u;
+
 /**
  * W03-owned durable key for the execution-attempt/quota state consumed by the
  * W07-C safeguard gate. Bound to tenant + canonical ActionIntentId +
@@ -47,6 +49,13 @@ function requireNonEmpty(value: string, name: string): string {
   return value;
 }
 
+function requireExecutionRef(value: string): string {
+  if (!SAFE_EXECUTION_REF.test(value)) {
+    throw new Error('executionRef must contain 1-256 safe characters');
+  }
+  return value;
+}
+
 function requirePositiveInteger(value: number, name: string): number {
   if (!Number.isInteger(value) || value < 1) throw new Error(`${name} must be a positive integer`);
   return value;
@@ -79,7 +88,7 @@ export function buildSelectExecutionAttemptQuotaStatement(
     values: [
       requireNonEmpty(key.tenantId, 'tenantId'),
       requireNonEmpty(key.actionIntentId, 'actionIntentId'),
-      requireNonEmpty(key.executionRef, 'executionRef'),
+      requireExecutionRef(key.executionRef),
     ],
   };
 }
@@ -109,7 +118,7 @@ export function buildInsertExecutionAttemptQuotaStatement(
     values: [
       requireNonEmpty(input.tenantId, 'tenantId'),
       requireNonEmpty(input.actionIntentId, 'actionIntentId'),
-      requireNonEmpty(input.executionRef, 'executionRef'),
+      requireExecutionRef(input.executionRef),
       requirePositiveInteger(input.attemptNumber, 'attemptNumber'),
       requirePositiveInteger(input.maxAttempts, 'maxAttempts'),
       input.quotaLimit ?? null,
@@ -146,6 +155,7 @@ WHERE tenant_id = $1
   AND action_intent_id = $2
   AND execution_ref = $3
   AND version = $9
+  AND updated_at <= $8::timestamptz
 RETURNING tenant_id, action_intent_id, execution_ref, attempt_number, max_attempts,
           quota_limit, quota_used, version, updated_at;
 `.trim();
@@ -159,7 +169,7 @@ export function buildCompareAndSwapExecutionAttemptQuotaStatement(
     values: [
       requireNonEmpty(input.tenantId, 'tenantId'),
       requireNonEmpty(input.actionIntentId, 'actionIntentId'),
-      requireNonEmpty(input.executionRef, 'executionRef'),
+      requireExecutionRef(input.executionRef),
       requirePositiveInteger(input.attemptNumber, 'attemptNumber'),
       requirePositiveInteger(input.maxAttempts, 'maxAttempts'),
       input.quotaLimit ?? null,
