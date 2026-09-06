@@ -13,7 +13,7 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@3d342e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
@@ -21,6 +21,11 @@ jobs:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
+      - name: Diagnostic canonical Prettier diff
+        run: |
+          npx prettier --write services/mobile-gateway/src/physical-host/test/local-physical-host-same-socket-voice.test.ts
+          git --no-pager diff -- services/mobile-gateway/src/physical-host/test/local-physical-host-same-socket-voice.test.ts
+          git checkout -- services/mobile-gateway/src/physical-host/test/local-physical-host-same-socket-voice.test.ts
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
