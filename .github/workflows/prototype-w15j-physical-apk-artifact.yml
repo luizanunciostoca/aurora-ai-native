@@ -6,7 +6,6 @@ on:
       - prototype/w15j-physical-apk-artifact
     paths:
       - '.github/workflows/prototype-w15j-physical-apk-artifact.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,15 +15,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
+      - name: Assert canonical packaging invocation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "push"
+          test "$GITHUB_REF_NAME" = "prototype/w15j-physical-apk-artifact"
+          test "$GITHUB_SHA" = "$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')"
       - name: Checkout exact W15-J candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 9fecc9e174ce01b324977fa25c342af079be2acb
+          ref: 6b0b5186591a475cd8dfa08d13e2364e9f34b6a4
           persist-credentials: false
       - name: Assert exact source candidate
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "9fecc9e174ce01b324977fa25c342af079be2acb"
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "6b0b5186591a475cd8dfa08d13e2364e9f34b6a4"
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
@@ -36,19 +43,34 @@ jobs:
       - name: Install stable Android SDK
         shell: bash
         run: |
+          set -euo pipefail
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           test -n "$SDK_ROOT"
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - name: Test and assemble exact localDebug candidate
+      - name: Test, assemble and self-bind exact localDebug candidate
         shell: bash
         run: |
+          set -euo pipefail
           gradle --no-daemon --console=plain -p apps/aurora-android \
             :app:testLocalDebugUnitTest \
             :app:assembleLocalDebug
+
           APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
           test -n "$APK"
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          AAPT="$SDK_ROOT/build-tools/36.0.0/aapt"
+          test -x "$AAPT"
+          BADGING="$($AAPT dump badging "$APK" | sed -n '1p')"
+          PACKAGE_ID="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          VERSION_CODE="$(printf '%s\n' "$BADGING" | sed -n "s/.* versionCode='\([^']*\)'.*/\1/p")"
+          VERSION_NAME="$(printf '%s\n' "$BADGING" | sed -n "s/.* versionName='\([^']*\)'.*/\1/p")"
+          test "$PACKAGE_ID" = "ai.aurora.device.local"
+          test "$VERSION_CODE" = "1"
+          test "$VERSION_NAME" = "0.15.0-alpha.1-local"
+
           ARTIFACT_DIR=/tmp/w15j-physical-apk
           mkdir -p "$ARTIFACT_DIR"
           cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-Physical-localDebug.apk"
@@ -57,24 +79,35 @@ jobs:
             sha256sum Aurora-W15J-Physical-localDebug.apk > SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
-          cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<'EOF'
+
+          cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
           artifact_purpose=W15-J-DP5-physical-evidence-input
-          source_candidate_sha=9fecc9e174ce01b324977fa25c342af079be2acb
+          source_candidate_sha=6b0b5186591a475cd8dfa08d13e2364e9f34b6a4
           source_branch=wave/15j-physical-device-integration-acceptance
-          paired_local_host_candidate_sha=22eb3c7a0a0d9dc03f11e3e99a0684969660c7b8
+          paired_local_host_candidate_sha=466b595e6646758bcb571711a41c4ca4698516e3
           reconciled_main_parent_sha=59abbc3cb9d1fd61ff4a52a0dd7c3ae54db95785
+          packaging_head_sha=${GITHUB_SHA}
+          packaging_branch=prototype/w15j-physical-apk-artifact
+          packaging_run_id=${GITHUB_RUN_ID}
+          gateway_environment=LOCAL
+          device_gateway_port=8080
+          bootstrap_port=8081
+          gateway_transport_scope=LOCAL_ADB_REVERSE_ONLY
           apk_variant=localDebug
-          package_id=ai.aurora.device.local
-          version_code=1
-          version_name=0.15.0-alpha.1
+          package_id=${PACKAGE_ID}
+          version_code=${VERSION_CODE}
+          version_name=${VERSION_NAME}
           canonical_acceptance=false
           physical_evidence_required=true
           dp5_status=INCOMPLETE
           EOF
+
+          test "$(wc -l < "$ARTIFACT_DIR/BUILD_IDENTITY.txt" | tr -d ' ')" = "19"
+          test "$(find "$ARTIFACT_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
       - name: Upload exact W15-J candidate APK
         uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-physical-apk-9fecc9e1-host-22eb3c7a
+          name: aurora-w15j-physical-apk-6b0b5186-host-466b595e
           path: /tmp/w15j-physical-apk
           if-no-files-found: error
           retention-days: 14
