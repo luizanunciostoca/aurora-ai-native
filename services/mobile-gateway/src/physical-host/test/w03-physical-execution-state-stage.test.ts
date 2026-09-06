@@ -68,6 +68,9 @@ test('stages explicit attempt/quota and containment state in one server-owned SQ
   assert.ok(request);
   assert.match(request.sql, /INSERT INTO w03_execution_attempt_quota/u);
   assert.match(request.sql, /INSERT INTO w03_execution_containment/u);
+  assert.match(request.sql, /NULLIF\(:'quota_limit', '-'\)::integer/u);
+  assert.match(request.sql, /NULLIF\(:'quota_used', '-'\)::integer/u);
+  assert.match(request.sql, /NULLIF\(:'opened_at_ms', '-'\)::double precision/u);
   assert.equal(request.variables.tenant_id, TENANT);
   assert.equal(request.variables.action_intent_id, ACTION);
   assert.equal(request.variables.execution_ref, EXECUTION);

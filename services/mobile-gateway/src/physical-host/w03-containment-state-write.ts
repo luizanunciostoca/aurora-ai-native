@@ -14,8 +14,7 @@ WITH inserted AS (
     current_in_flight, max_in_flight, retry_depth, max_retry_depth, updated_at
   ) VALUES (
     :'tenant_id', :'circuit_key', 1, :'circuit_state', (:'consecutive_failures')::integer,
-    CASE WHEN :'opened_at_ms' = '-' THEN NULL
-         ELSE to_timestamp((:'opened_at_ms')::double precision / 1000.0) END,
+    to_timestamp(NULLIF(:'opened_at_ms', '-')::double precision / 1000.0),
     :'kill_switch_state',
     to_timestamp((:'kill_switch_changed_at_ms')::double precision / 1000.0),
     :'dependency_health', (:'cancellation_requested')::boolean,
@@ -42,8 +41,7 @@ WITH updated AS (
   SET version = version + 1,
       circuit_state = :'circuit_state',
       consecutive_failures = (:'consecutive_failures')::integer,
-      opened_at = CASE WHEN :'opened_at_ms' = '-' THEN NULL
-                       ELSE to_timestamp((:'opened_at_ms')::double precision / 1000.0) END,
+      opened_at = to_timestamp(NULLIF(:'opened_at_ms', '-')::double precision / 1000.0),
       kill_switch_state = :'kill_switch_state',
       kill_switch_changed_at = to_timestamp((:'kill_switch_changed_at_ms')::double precision / 1000.0),
       dependency_health = :'dependency_health',

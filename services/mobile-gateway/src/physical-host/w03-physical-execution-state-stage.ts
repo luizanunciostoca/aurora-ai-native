@@ -22,8 +22,8 @@ WITH lock_scope AS (
   SELECT
     :'tenant_id', :'action_intent_id', :'execution_ref',
     (:'attempt_number')::integer, (:'max_attempts')::integer,
-    CASE WHEN :'quota_limit' = '-' THEN NULL ELSE (:'quota_limit')::integer END,
-    CASE WHEN :'quota_used' = '-' THEN NULL ELSE (:'quota_used')::integer END,
+    NULLIF(:'quota_limit', '-')::integer,
+    NULLIF(:'quota_used', '-')::integer,
     1,
     to_timestamp((:'updated_at_ms')::double precision / 1000.0),
     to_timestamp((:'updated_at_ms')::double precision / 1000.0)
@@ -38,8 +38,7 @@ WITH lock_scope AS (
   )
   SELECT
     :'tenant_id', :'circuit_key', 1, :'circuit_state', (:'consecutive_failures')::integer,
-    CASE WHEN :'opened_at_ms' = '-' THEN NULL
-         ELSE to_timestamp((:'opened_at_ms')::double precision / 1000.0) END,
+    to_timestamp(NULLIF(:'opened_at_ms', '-')::double precision / 1000.0),
     :'kill_switch_state',
     to_timestamp((:'kill_switch_changed_at_ms')::double precision / 1000.0),
     :'dependency_health', (:'cancellation_requested')::boolean,
