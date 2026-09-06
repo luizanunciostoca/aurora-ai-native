@@ -32,6 +32,8 @@ function validLookup(lookup: ExecutionAttemptQuotaLookup): boolean {
 
 function validSnapshot(snapshot: ExecutionAttemptQuotaSnapshot): boolean {
   if (
+    snapshot === null ||
+    typeof snapshot !== 'object' ||
     snapshot.authorizesExecution !== false ||
     !Number.isSafeInteger(snapshot.attemptNumber) ||
     snapshot.attemptNumber < 1 ||
@@ -41,8 +43,17 @@ function validSnapshot(snapshot: ExecutionAttemptQuotaSnapshot): boolean {
     return false;
   }
   if (snapshot.quota === undefined) return true;
-  const { limit, used } = snapshot.quota;
-  return Number.isSafeInteger(limit) && limit > 0 && Number.isSafeInteger(used) && used >= 0;
+  const quota: unknown = snapshot.quota;
+  if (typeof quota !== 'object' || quota === null) return false;
+  const { limit, used } = quota as { readonly limit: unknown; readonly used: unknown };
+  return (
+    typeof limit === 'number' &&
+    Number.isSafeInteger(limit) &&
+    limit > 0 &&
+    typeof used === 'number' &&
+    Number.isSafeInteger(used) &&
+    used >= 0
+  );
 }
 
 function rejected(

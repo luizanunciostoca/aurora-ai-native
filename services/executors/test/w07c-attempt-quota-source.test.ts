@@ -172,6 +172,35 @@ test('negative: malformed quota (non-integer/negative) fails closed', () => {
   }
 });
 
+test('negative: a null or non-object snapshot/quota from a corrupted store fails closed without throwing', () => {
+  const nullQuotaSource: ExecutionAttemptQuotaSource = {
+    resolveCurrent: () =>
+      ({ ...snapshot(), quota: null }) as unknown as ExecutionAttemptQuotaSnapshot,
+  };
+  const nullQuota = resolveCurrentAttemptQuota(lookup(), actionIntent(), nullQuotaSource);
+  assert.equal(nullQuota.status, 'REJECTED');
+  assert.deepEqual(nullQuota.status === 'REJECTED' ? nullQuota.reasons : [], [
+    'ATTEMPT_QUOTA_STATE_MALFORMED',
+  ]);
+
+  const arrayQuotaSource: ExecutionAttemptQuotaSource = {
+    resolveCurrent: () =>
+      ({ ...snapshot(), quota: [1, 2] }) as unknown as ExecutionAttemptQuotaSnapshot,
+  };
+  const arrayQuota = resolveCurrentAttemptQuota(lookup(), actionIntent(), arrayQuotaSource);
+  assert.equal(arrayQuota.status, 'REJECTED');
+  assert.deepEqual(arrayQuota.status === 'REJECTED' ? arrayQuota.reasons : [], [
+    'ATTEMPT_QUOTA_STATE_MALFORMED',
+  ]);
+
+  const nullSnapshot = resolveCurrentAttemptQuota(
+    lookup(),
+    actionIntent(),
+    sourceReturning(null as unknown as ExecutionAttemptQuotaSnapshot),
+  );
+  assert.equal(nullSnapshot.status, 'REJECTED');
+});
+
 test('boundary: attempt beyond maxAttempts still resolves structurally; the gate enforces the limit', () => {
   // The resolver validates shape, not attempt ordering; W07-C owns the
   // ATTEMPT_LIMIT_REACHED decision for the same snapshot.

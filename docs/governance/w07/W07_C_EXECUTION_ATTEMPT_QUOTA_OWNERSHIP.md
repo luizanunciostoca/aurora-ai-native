@@ -65,7 +65,10 @@ New leaf files under `services/executors/src/safeguards/**` (W07-C exclusive own
 - `attempt-quota-source.ts` — the `ExecutionAttemptQuotaSource` port, the
   tenant + ActionIntent-bound `ExecutionAttemptQuotaLookup`, the
   `ExecutionAttemptQuotaSnapshot` (reusing the canonical `ExecutionQuotaSnapshot`), and the
-  fail-closed `ExecutionAttemptQuotaResolution` vocabulary.
+  fail-closed `ExecutionAttemptQuotaResolution` vocabulary. The port is intentionally
+  **synchronous**, matching the W07 safeguard/containment/target-resolution plane: a durable
+  adapter performs asynchronous I/O (for example Postgres) at the composition edge and
+  materializes the current snapshot before the deterministic gate reads it.
 - `attempt-quota-resolution.ts` — `resolveCurrentAttemptQuota`, a deterministic fail-closed
   guard that re-reads the source at the gate and rejects on outage/throw, state absence,
   malformed state, lookup `tenantId`/`actionIntentId` context mismatch, malformed lookup

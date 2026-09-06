@@ -38,6 +38,14 @@ export interface ExecutionAttemptQuotaLookup {
  * The source never grants retry eligibility: W07-F reconciliation remains the
  * owner of retry decisions, and a snapshot is an input to the gate, not a
  * retry permission.
+ *
+ * This port is intentionally synchronous, matching the W07 safeguard /
+ * containment / target-resolution plane and the W15-J dispatching intake: a
+ * durable adapter performs any asynchronous I/O (for example Postgres) at the
+ * composition edge and materializes the current snapshot before this port is
+ * read, so the deterministic gate stays synchronous. Implementations must
+ * return the already-current snapshot synchronously and throw (failing closed)
+ * when current state cannot be provided.
  */
 export interface ExecutionAttemptQuotaSource {
   resolveCurrent(lookup: ExecutionAttemptQuotaLookup): ExecutionAttemptQuotaSnapshot | null;
