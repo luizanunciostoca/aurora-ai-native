@@ -202,9 +202,17 @@ function parseWriteRow(output: string): { disposition: string; version: number }
 function commonVariables(input: W03ContainmentInitializeRequest): Record<string, string> | null {
   if (!TENANT_ID.test(input.tenantId) || !CIRCUIT_KEY.test(input.circuitKey)) return null;
   const updatedAtMs = timestampMs(input.updatedAt);
+  const killSwitchChangedAtMs = timestampMs(input.state.killSwitch.changedAt);
   const state = stateVariables(input.state);
-  if (updatedAtMs === null || state === null || input.authorizesExecution !== false) return null;
-  if (timestampMs(input.state.killSwitch.changedAt)! > updatedAtMs) return null;
+  if (
+    updatedAtMs === null ||
+    killSwitchChangedAtMs === null ||
+    state === null ||
+    input.authorizesExecution !== false
+  ) {
+    return null;
+  }
+  if (killSwitchChangedAtMs > updatedAtMs) return null;
   return {
     tenant_id: input.tenantId,
     circuit_key: input.circuitKey,
