@@ -76,7 +76,7 @@ jobs:
           cat "probe-$SLOT.json"
           test "$ok" = 'true'
       - name: Upload probe evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-pro-plus-probe-${{ matrix.slot }}
           path: probe-${{ matrix.slot }}.json
@@ -107,7 +107,7 @@ jobs:
           AURORA_ATTESTATION_MAX_AGE_MINUTES: 1440
         run: node tools/copilot/evaluate-pro-plus-reality.mjs /tmp/aurora-pro-plus-probes 3 | tee /tmp/aurora-pro-plus-attestation.json
       - name: Upload runtime attestation candidate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: aurora-pro-plus-runtime-attestation
           path: /tmp/aurora-pro-plus-attestation.json
