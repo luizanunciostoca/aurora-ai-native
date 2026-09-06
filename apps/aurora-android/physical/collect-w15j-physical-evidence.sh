@@ -82,6 +82,7 @@ require_metadata_key() {
   fail "AURORA_EVIDENCE_MODE must be preflight or finalize"
 [[ "$GATEWAY_PORT" =~ ^[0-9]+$ ]] || fail "AURORA_GATEWAY_PORT must be numeric"
 (( GATEWAY_PORT >= 1 && GATEWAY_PORT <= 65535 )) || fail "AURORA_GATEWAY_PORT is out of range"
+[[ "$GATEWAY_PORT" == "8080" ]] || fail "AURORA_GATEWAY_PORT must be canonical device gateway port 8080"
 [[ "$CONFIGURE_ADB_REVERSE" == "0" || "$CONFIGURE_ADB_REVERSE" == "1" ]] || \
   fail "AURORA_CONFIGURE_ADB_REVERSE must be 0 or 1"
 [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || \
@@ -128,12 +129,14 @@ if [[ "$MODE" == "finalize" ]]; then
 fi
 
 read_key_value_file "$ARTIFACT_METADATA" ARTIFACT_META
-[[ "${#ARTIFACT_META[@]}" -eq 4 ]] || fail "artifact metadata must contain exactly four canonical keys"
+[[ "${#ARTIFACT_META[@]}" -eq 5 ]] || fail "artifact metadata must contain exactly five canonical keys"
 PACKAGING_HEAD_SHA="$(require_metadata_key ARTIFACT_META packaging_head_sha)"
+PACKAGING_RUN_ID="$(require_metadata_key ARTIFACT_META packaging_run_id)"
 ARTIFACT_ID="$(require_metadata_key ARTIFACT_META artifact_id)"
 ARTIFACT_NAME="$(require_metadata_key ARTIFACT_META artifact_name)"
 ARTIFACT_ZIP_SHA256="$(require_metadata_key ARTIFACT_META artifact_zip_sha256)"
 [[ "$PACKAGING_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "packaging_head_sha must be lowercase 40-hex"
+[[ "$PACKAGING_RUN_ID" =~ ^[1-9][0-9]*$ ]] || fail "packaging_run_id must be a positive integer"
 [[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]] || fail "artifact_id must be a positive integer"
 [[ "$ARTIFACT_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "artifact_name contains unsafe characters"
 [[ "$ARTIFACT_ZIP_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "artifact_zip_sha256 must be lowercase 64-hex"
@@ -157,12 +160,33 @@ for artifact_entry in "${ARTIFACT_ENTRIES[@]}"; do
     fail "artifact ZIP entry escapes the extraction directory: $artifact_entry"
 done
 read_key_value_file "$ARTIFACT_TMP/BUILD_IDENTITY.txt" BUILD_META
+[[ "${#BUILD_META[@]}" -eq 19 ]] || fail "BUILD_IDENTITY must contain exactly nineteen canonical keys"
+[[ "$(require_metadata_key BUILD_META artifact_purpose)" == "W15-J-DP5-physical-evidence-input" ]] || \
+  fail "embedded artifact purpose is not canonical"
+[[ "$(require_metadata_key BUILD_META source_branch)" == "wave/15j-physical-device-integration-acceptance" ]] || \
+  fail "embedded source branch is not canonical"
 ANDROID_SHA="$(require_metadata_key BUILD_META source_candidate_sha)"
 HOST_SHA="$(require_metadata_key BUILD_META paired_local_host_candidate_sha)"
 MAIN_SHA="$(require_metadata_key BUILD_META reconciled_main_parent_sha)"
+BUILD_PACKAGING_HEAD_SHA="$(require_metadata_key BUILD_META packaging_head_sha)"
+BUILD_PACKAGING_RUN_ID="$(require_metadata_key BUILD_META packaging_run_id)"
 [[ "$ANDROID_SHA" == "$CANDIDATE_SHA" ]] || fail "candidate SHA does not match embedded BUILD_IDENTITY"
 [[ "$HOST_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "embedded host SHA must be lowercase 40-hex"
 [[ "$MAIN_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "embedded main SHA must be lowercase 40-hex"
+[[ "$BUILD_PACKAGING_HEAD_SHA" == "$PACKAGING_HEAD_SHA" ]] || \
+  fail "embedded packaging head does not match trusted artifact metadata"
+[[ "$BUILD_PACKAGING_RUN_ID" == "$PACKAGING_RUN_ID" ]] || \
+  fail "embedded packaging run does not match trusted artifact metadata"
+[[ "$(require_metadata_key BUILD_META packaging_branch)" == "prototype/w15j-physical-apk-artifact" ]] || \
+  fail "embedded packaging branch is not canonical"
+[[ "$(require_metadata_key BUILD_META gateway_environment)" == "LOCAL" ]] || \
+  fail "embedded gateway environment must be LOCAL"
+[[ "$(require_metadata_key BUILD_META device_gateway_port)" == "8080" ]] || \
+  fail "embedded device gateway port must be 8080"
+[[ "$(require_metadata_key BUILD_META bootstrap_port)" == "8081" ]] || \
+  fail "embedded bootstrap port must be 8081"
+[[ "$(require_metadata_key BUILD_META gateway_transport_scope)" == "LOCAL_ADB_REVERSE_ONLY" ]] || \
+  fail "embedded gateway transport scope must be LOCAL_ADB_REVERSE_ONLY"
 GATEWAY_IDENTITY="aurora-w15j-local-host"
 GATEWAY_VERSION="git:$HOST_SHA"
 [[ -z "$REQUESTED_GATEWAY_IDENTITY" || "$REQUESTED_GATEWAY_IDENTITY" == "$GATEWAY_IDENTITY" ]] || \
@@ -462,6 +486,7 @@ candidate_sha=$CANDIDATE_SHA
 host_candidate_sha=$HOST_SHA
 reconciled_main_sha=$MAIN_SHA
 packaging_head_sha=$PACKAGING_HEAD_SHA
+packaging_run_id=$PACKAGING_RUN_ID
 artifact_id=$ARTIFACT_ID
 artifact_name=$ARTIFACT_NAME
 artifact_zip_sha256=$ARTIFACT_ZIP_SHA256
@@ -574,6 +599,8 @@ else
     fail "finalize main SHA does not match preflight"
   grep -Fxq "packaging_head_sha=$PACKAGING_HEAD_SHA" "$OUTPUT_DIR/preflight-metadata.txt" || \
     fail "finalize packaging SHA does not match preflight"
+  grep -Fxq "packaging_run_id=$PACKAGING_RUN_ID" "$OUTPUT_DIR/preflight-metadata.txt" || \
+    fail "finalize packaging run does not match preflight"
   grep -Fxq "artifact_id=$ARTIFACT_ID" "$OUTPUT_DIR/preflight-metadata.txt" || \
     fail "finalize artifact id does not match preflight"
   grep -Fxq "artifact_name=$ARTIFACT_NAME" "$OUTPUT_DIR/preflight-metadata.txt" || \
@@ -655,6 +682,7 @@ candidate_sha=$CANDIDATE_SHA
 host_candidate_sha=$HOST_SHA
 reconciled_main_sha=$MAIN_SHA
 packaging_head_sha=$PACKAGING_HEAD_SHA
+packaging_run_id=$PACKAGING_RUN_ID
 artifact_id=$ARTIFACT_ID
 artifact_name=$ARTIFACT_NAME
 artifact_zip_sha256=$ARTIFACT_ZIP_SHA256

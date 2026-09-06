@@ -17,7 +17,8 @@ Every physical run must bind one exact tuple:
 1. 40-hex Android candidate, paired host, reconciled main and packaging-head SHAs,
    plus the canonical per-start host instance id observed on both listeners;
 2. GitHub artifact id/name, recomputed ZIP SHA-256, embedded
-   `BUILD_IDENTITY.txt`/`SHA256SUMS.txt`, and exact tested APK SHA-256, flavor,
+   self-bound packaging head/run/branch and LOCAL dual-port values in
+   `BUILD_IDENTITY.txt`, `SHA256SUMS.txt`, and exact tested APK SHA-256, flavor,
    applicationId, versionCode and versionName;
 3. physical device manufacturer/model/product + SHA-256 of serial + build fingerprint/API;
 4. Android assistant-role holder and RECORD_AUDIO state;

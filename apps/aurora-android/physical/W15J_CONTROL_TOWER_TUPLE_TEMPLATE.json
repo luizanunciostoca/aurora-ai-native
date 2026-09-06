@@ -6,6 +6,8 @@
     "url": "REQUIRED_EXACT_GITHUB_WORKFLOW_RUN_URL",
     "status": "SUCCESS",
     "headSha": "REQUIRED_PACKAGING_HEAD_40_HEX",
+    "headBranch": "prototype/w15j-physical-apk-artifact",
+    "eventName": "push",
     "sourceRef": "REQUIRED_RUN_URL_FRAGMENT_REFERENCE"
   },
   "androidCandidateSha": "REQUIRED_40_HEX",

@@ -24,7 +24,7 @@ AURORA_EVIDENCE_DIR=<new-evidence-directory> \
 AURORA_CANDIDATE_SHA=<40-hex-candidate> \
 AURORA_APK=<exact-local-apk> \
 AURORA_ARTIFACT_ZIP=<downloaded-github-artifact-zip> \
-AURORA_ARTIFACT_METADATA=<four-key-artifact-metadata-file> \
+AURORA_ARTIFACT_METADATA=<five-key-artifact-metadata-file> \
 AURORA_APK_VARIANT=<variant> \
 AURORA_OPERATOR=<operator-id> \
 AURORA_W15J_HOST_READINESS_DIR=<exact-host-readiness-directory> \
@@ -32,6 +32,14 @@ bash apps/aurora-android/physical/run-w15j-dual-port-physical-window.sh
 ```
 
 The wrapper configures bootstrap port 8081 and delegates physical-device/APK/resource collection plus port 8080 to the canonical `collect-w15j-physical-evidence.sh`. It fails closed unless both mappings are observable afterward. On a failed preflight it removes the mapping it owns; the underlying collector cleans up its own mapping.
+
+The embedded `BUILD_IDENTITY.txt` must contain exactly the nineteen canonical
+fields, with no additions, and self-bind the packaging head, workflow run,
+canonical packaging branch, `LOCAL` environment, ports 8080/8081, and
+`LOCAL_ADB_REVERSE_ONLY` transport. Its head/run must equal the five-key artifact
+metadata and, during trusted lint, the independent Control Tower workflow tuple.
+That tuple must bind the canonical packaging head branch and `push` event and
+must contain no keys outside the canonical tuple template.
 
 The readiness directory must contain the allowlisted nine files
 `host-ready-announcement.txt`, listener/health captures for 8080 and 8081, and
@@ -78,7 +86,7 @@ AURORA_EVIDENCE_DIR=<same-evidence-directory> \
 AURORA_CANDIDATE_SHA=<same-candidate> \
 AURORA_APK=<same-apk> \
 AURORA_ARTIFACT_ZIP=<same-downloaded-github-artifact-zip> \
-AURORA_ARTIFACT_METADATA=<same-four-key-artifact-metadata-file> \
+AURORA_ARTIFACT_METADATA=<same-five-key-artifact-metadata-file> \
 AURORA_APK_VARIANT=<same-variant> \
 AURORA_OPERATOR=<same-operator> \
 AURORA_W15J_HOST_READINESS_DIR=<same-exact-host-readiness-directory> \

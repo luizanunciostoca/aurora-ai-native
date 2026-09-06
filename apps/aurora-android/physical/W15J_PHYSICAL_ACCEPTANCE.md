@@ -60,14 +60,25 @@ The tested APK must be traceable to one exact candidate. Before the physical win
 - ADB reverse port/mapping.
 
 The collector also requires the downloaded GitHub artifact ZIP itself and a
-four-key trusted metadata file. It recomputes the ZIP digest, extracts the ZIP,
+five-key trusted metadata file. It recomputes the ZIP digest, extracts the ZIP,
 and compares the supplied APK byte-for-byte with the embedded APK. The embedded
 `BUILD_IDENTITY.txt` must bind Android candidate, paired host, reconciled main,
+packaging workflow head/run/branch, the exact LOCAL dual-port transport,
 variant, package and version; the embedded `SHA256SUMS.txt` must bind that APK.
+The collector cross-checks the embedded packaging head/run against the trusted
+artifact metadata, and the final trusted builder also cross-checks them against
+the independent Control Tower workflow run. That tuple must identify the exact
+canonical packaging head branch and `push` event, and the embedded packaging
+branch must match it. `BUILD_IDENTITY.txt` must contain
+exactly the nineteen fields recorded in `W15J_BUILD_IDENTITY_TEMPLATE.txt`, with
+no additional keys, for the separately owned packaging lane.
+The Control Tower tuple and each nested workflow, artifact, and APK object also
+reject keys outside `W15J_CONTROL_TOWER_TUPLE_TEMPLATE.json`.
 The metadata file contains only:
 
 ```text
 packaging_head_sha=<40-hex packaging workflow head>
+packaging_run_id=<GitHub workflow run id>
 artifact_id=<GitHub artifact id>
 artifact_name=<GitHub artifact name>
 artifact_zip_sha256=<64-hex digest recomputed from the downloaded ZIP>
@@ -210,7 +221,7 @@ Use one exact LOCAL APK built from the candidate and one evidence directory:
 AURORA_CANDIDATE_SHA=<40-hex-candidate> \
 AURORA_APK=<path-to-exact-local-apk> \
 AURORA_ARTIFACT_ZIP=<path-to-downloaded-artifact-zip> \
-AURORA_ARTIFACT_METADATA=<path-to-four-key-artifact-metadata> \
+AURORA_ARTIFACT_METADATA=<path-to-five-key-artifact-metadata> \
 AURORA_APK_VARIANT=<variant> \
 AURORA_OPERATOR=<operator-id> \
 AURORA_W15J_HOST_READINESS_DIR=<exact-host-readiness-directory> \
@@ -250,7 +261,7 @@ AURORA_EVIDENCE_MODE=finalize \
 AURORA_CANDIDATE_SHA=<same-40-hex-candidate> \
 AURORA_APK=<same-exact-local-apk> \
 AURORA_ARTIFACT_ZIP=<same-downloaded-artifact-zip> \
-AURORA_ARTIFACT_METADATA=<same-four-key-artifact-metadata> \
+AURORA_ARTIFACT_METADATA=<same-five-key-artifact-metadata> \
 AURORA_APK_VARIANT=<same-variant> \
 AURORA_OPERATOR=<operator-id> \
 AURORA_W15J_HOST_READINESS_DIR=<same-exact-host-readiness-directory> \

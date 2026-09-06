@@ -163,6 +163,36 @@ function semanticUtc(value, label) {
 function validateControlTowerTuple(input) {
   if (!input || typeof input !== 'object')
     throw new Error('independent Control Tower tuple is required');
+  exactKeys(
+    input,
+    [
+      'schemaVersion',
+      'repository',
+      'workflowRun',
+      'androidCandidateSha',
+      'hostCandidateSha',
+      'reconciledMainSha',
+      'packagingHeadSha',
+      'artifact',
+      'apk',
+    ],
+    'Control Tower tuple',
+  );
+  exactKeys(
+    input.workflowRun,
+    ['id', 'url', 'status', 'headSha', 'headBranch', 'eventName', 'sourceRef'],
+    'Control Tower workflowRun',
+  );
+  exactKeys(
+    input.artifact,
+    ['id', 'name', 'zipSha256', 'digestSourceRef'],
+    'Control Tower artifact',
+  );
+  exactKeys(
+    input.apk,
+    ['applicationId', 'variant', 'versionCode', 'versionName', 'sha256'],
+    'Control Tower APK',
+  );
   if (input.schemaVersion !== 'w15j-control-tower-tuple-v1') {
     throw new Error('Control Tower tuple schema w15j-control-tower-tuple-v1 is required');
   }
@@ -179,6 +209,14 @@ function validateControlTowerTuple(input) {
   }
   if (required(input.workflowRun, 'status', 'Control Tower workflowRun') !== 'SUCCESS') {
     throw new Error('Control Tower workflow run status must be SUCCESS');
+  }
+  const workflowHeadBranch = required(input.workflowRun, 'headBranch', 'Control Tower workflowRun');
+  if (workflowHeadBranch !== 'prototype/w15j-physical-apk-artifact') {
+    throw new Error('Control Tower workflow head branch is not canonical');
+  }
+  const workflowEventName = required(input.workflowRun, 'eventName', 'Control Tower workflowRun');
+  if (workflowEventName !== 'push') {
+    throw new Error('Control Tower workflow event must be push');
   }
   const packagingHeadSha = exact(
     required(input, 'packagingHeadSha', 'Control Tower'),
@@ -215,6 +253,8 @@ function validateControlTowerTuple(input) {
       url: expectedUrl,
       status: 'SUCCESS',
       headSha: workflowHeadSha,
+      headBranch: workflowHeadBranch,
+      eventName: workflowEventName,
       sourceRef,
     },
     androidCandidateSha: exact(
@@ -597,7 +637,32 @@ function validateArtifact(snapshot, artifact, build, apk, manifest) {
   }
 }
 
-function validateBuildIdentity(build, apk) {
+function validateBuildIdentity(build, apk, packaging) {
+  exactKeys(
+    build,
+    [
+      'artifact_purpose',
+      'source_candidate_sha',
+      'source_branch',
+      'paired_local_host_candidate_sha',
+      'reconciled_main_parent_sha',
+      'packaging_head_sha',
+      'packaging_branch',
+      'packaging_run_id',
+      'gateway_environment',
+      'device_gateway_port',
+      'bootstrap_port',
+      'gateway_transport_scope',
+      'apk_variant',
+      'package_id',
+      'version_code',
+      'version_name',
+      'canonical_acceptance',
+      'physical_evidence_required',
+      'dp5_status',
+    ],
+    'BUILD_IDENTITY',
+  );
   for (const [buildKey, apkKey] of [
     ['source_candidate_sha', 'candidate_sha'],
     ['apk_variant', 'variant'],
@@ -619,6 +684,21 @@ function validateBuildIdentity(build, apk) {
   ) {
     throw new Error('BUILD_IDENTITY must remain non-canonical and physical-evidence-required');
   }
+  for (const [key, expected] of [
+    ['artifact_purpose', 'W15-J-DP5-physical-evidence-input'],
+    ['source_branch', 'wave/15j-physical-device-integration-acceptance'],
+    ['packaging_head_sha', packaging.headSha],
+    ['packaging_run_id', packaging.runId],
+    ['packaging_branch', packaging.branch],
+    ['gateway_environment', 'LOCAL'],
+    ['device_gateway_port', '8080'],
+    ['bootstrap_port', '8081'],
+    ['gateway_transport_scope', 'LOCAL_ADB_REVERSE_ONLY'],
+  ]) {
+    if (required(build, key, 'BUILD_IDENTITY') !== expected) {
+      throw new Error(`BUILD_IDENTITY.${key} does not match canonical packaging provenance`);
+    }
+  }
 }
 
 export function buildTrustedW15JPreflight(evidenceDirectory, controlTowerInput) {
@@ -632,6 +712,17 @@ export function buildTrustedW15JPreflight(evidenceDirectory, controlTowerInput) 
   const dual = snapshotKeyValues(snapshot, 'dual-port-metadata.txt');
   const artifact = snapshotKeyValues(snapshot, 'artifact-metadata.txt');
   const build = snapshotKeyValues(snapshot, 'BUILD_IDENTITY.txt');
+  exactKeys(
+    artifact,
+    [
+      'packaging_head_sha',
+      'packaging_run_id',
+      'artifact_id',
+      'artifact_name',
+      'artifact_zip_sha256',
+    ],
+    'artifact metadata',
+  );
 
   const androidCandidateSha = exact(
     required(build, 'source_candidate_sha', 'BUILD_IDENTITY'),
@@ -655,6 +746,11 @@ export function buildTrustedW15JPreflight(evidenceDirectory, controlTowerInput) 
     GIT_SHA,
     'packaging head SHA',
   );
+  const packagingRunId = exact(
+    required(artifact, 'packaging_run_id', 'artifact'),
+    RUN_ID,
+    'packaging run id',
+  );
   const artifactId = exact(
     required(artifact, 'artifact_id', 'artifact'),
     ARTIFACT_ID,
@@ -664,13 +760,18 @@ export function buildTrustedW15JPreflight(evidenceDirectory, controlTowerInput) 
   if (!/^[A-Za-z0-9._-]+$/u.test(artifactName))
     throw new Error('artifact name contains unsafe characters');
 
-  validateBuildIdentity(build, apk);
+  validateBuildIdentity(build, apk, {
+    headSha: packagingHeadSha,
+    runId: packagingRunId,
+    branch: controlTower.workflowRun.headBranch,
+  });
   const artifactResult = validateArtifact(snapshot, artifact, build, apk, manifest);
   const tuple = {
     androidCandidateSha,
     hostCandidateSha,
     reconciledMainSha,
     packagingHeadSha,
+    packagingRunId,
     artifact: { id: artifactId, name: artifactName, zipSha256: artifactResult.zipDigest },
     apk: {
       applicationId: required(apk, 'application_id', 'apk'),
@@ -681,6 +782,9 @@ export function buildTrustedW15JPreflight(evidenceDirectory, controlTowerInput) 
     },
   };
   assertTupleMatches(tuple, controlTower);
+  if (packagingRunId !== controlTower.workflowRun.id) {
+    throw new Error('packagingRunId does not match independent Control Tower workflow run');
+  }
   for (const name of ['installed-base-preflight.apk', 'installed-base-finalize.apk']) {
     if (manifest.files[name].sha256 !== artifactResult.apkDigest) {
       throw new Error(`${name} does not match the artifact APK SHA-256`);
@@ -713,6 +817,7 @@ export function buildTrustedW15JPreflight(evidenceDirectory, controlTowerInput) 
     ['host_candidate_sha', hostCandidateSha],
     ['reconciled_main_sha', reconciledMainSha],
     ['packaging_head_sha', packagingHeadSha],
+    ['packaging_run_id', packagingRunId],
     ['artifact_id', artifactId],
     ['artifact_name', artifactName],
     ['artifact_zip_sha256', artifactResult.zipDigest],

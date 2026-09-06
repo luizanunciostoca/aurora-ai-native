@@ -11,7 +11,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import test from 'node:test';
 
 import { createFinalizedEvidenceFixture, HOST_INSTANCE_ID, TUPLE } from './w15j-test-fixture.mjs';
@@ -41,6 +41,34 @@ function copyReadiness(sourceDirectory, targetDirectory) {
   mkdirSync(targetDirectory);
   for (const name of HOST_READINESS_FILES) {
     copyFileSync(join(sourceDirectory, name), join(targetDirectory, name));
+  }
+}
+
+function repackageArtifactWithBuildIdentity(fixture, mutate) {
+  const staging = mkdtempSync(join(tmpdir(), 'w15j-artifact-mutation-'));
+  try {
+    const apkName = 'Aurora-W15J-Physical-localDebug.apk';
+    copyFileSync(join(fixture.directory, 'candidate.apk'), join(staging, apkName));
+    copyFileSync(join(fixture.directory, 'SHA256SUMS.txt'), join(staging, 'SHA256SUMS.txt'));
+    const changed = mutate(readFileSync(join(fixture.directory, 'BUILD_IDENTITY.txt'), 'utf8'));
+    writeFileSync(join(staging, 'BUILD_IDENTITY.txt'), changed);
+    execFileSync('zip', ['-q', 'artifact.zip', apkName, 'BUILD_IDENTITY.txt', 'SHA256SUMS.txt'], {
+      cwd: staging,
+    });
+    copyFileSync(join(staging, 'artifact.zip'), join(fixture.directory, 'artifact.zip'));
+    const zipSha256 = createHash('sha256')
+      .update(readFileSync(join(fixture.directory, 'artifact.zip')))
+      .digest('hex');
+    const metadataPath = join(fixture.directory, 'artifact-metadata.txt');
+    writeFileSync(
+      metadataPath,
+      readFileSync(metadataPath, 'utf8').replace(
+        /artifact_zip_sha256=.*$/mu,
+        `artifact_zip_sha256=${zipSha256}`,
+      ),
+    );
+  } finally {
+    rmSync(staging, { recursive: true, force: true });
   }
 }
 
@@ -315,6 +343,40 @@ test('collector rejects stale host readiness at preflight', () => {
   } finally {
     rmSync(adbFixture.directory, { recursive: true, force: true });
     rmSync(artifactFixture.directory, { recursive: true, force: true });
+  }
+});
+
+test('collector rejects missing or extra embedded BUILD_IDENTITY keys', () => {
+  for (const mutate of [
+    (identity) => identity.replace(/^gateway_environment=.*\n/mu, ''),
+    (identity) => `${identity}policy_token=forbidden\n`,
+  ]) {
+    const adbFixture = safetyFixture();
+    const artifactFixture = createFinalizedEvidenceFixture();
+    try {
+      repackageArtifactWithBuildIdentity(artifactFixture, mutate);
+      const result = spawnSync('bash', [COLLECTOR], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          ADB_BIN: adbFixture.adb,
+          ADB_CALL_LOG: adbFixture.log,
+          AURORA_EVIDENCE_MODE: 'preflight',
+          AURORA_EVIDENCE_DIR: join(adbFixture.directory, 'new-evidence'),
+          AURORA_CANDIDATE_SHA: TUPLE.androidCandidateSha,
+          AURORA_APK: join(artifactFixture.directory, 'candidate.apk'),
+          AURORA_ARTIFACT_ZIP: join(artifactFixture.directory, 'artifact.zip'),
+          AURORA_ARTIFACT_METADATA: join(artifactFixture.directory, 'artifact-metadata.txt'),
+          AURORA_APK_VARIANT: TUPLE.apkVariant,
+          AURORA_OPERATOR: 'operator-1',
+        },
+      });
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /BUILD_IDENTITY must contain exactly nineteen canonical keys/);
+    } finally {
+      rmSync(adbFixture.directory, { recursive: true, force: true });
+      rmSync(artifactFixture.directory, { recursive: true, force: true });
+    }
   }
 });
 
