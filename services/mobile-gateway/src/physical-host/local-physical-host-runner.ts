@@ -52,6 +52,8 @@ export interface W15JLocalPhysicalHostRunnerInput {
 
 export interface W15JLocalPhysicalHostRunnerHandle {
   readonly address: W15JLocalPhysicalHostAddress;
+  /** Ephemeral non-secret ownership proof shared by both loopback listeners. */
+  readonly hostInstanceId: string;
   readonly bootstrapReference: string;
   readonly bootstrapExpiresAtMs: number;
   readonly physicalEvidenceStatus: 'NOT_RUN';
@@ -154,6 +156,7 @@ export async function startW15JLocalPhysicalHostRunner(
 
   return Object.freeze({
     address,
+    hostInstanceId: address.hostInstanceId,
     bootstrapReference: staged.value.bootstrapReference,
     bootstrapExpiresAtMs: staged.value.expiresAtMs,
     physicalEvidenceStatus: 'NOT_RUN',

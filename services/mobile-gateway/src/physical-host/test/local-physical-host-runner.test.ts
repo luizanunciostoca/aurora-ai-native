@@ -124,6 +124,9 @@ test('starts both loopback listeners emits only allowlisted bootstrap metadata a
   assert.equal(ready.authorizesExecution, false);
   assert.equal(ready.provesExecutionSuccess, false);
   assert.equal(ready.retryAuthorized, false);
+  assert.match(handle.hostInstanceId, /^whi_[a-f0-9]{64}$/u);
+  assert.equal(handle.hostInstanceId, handle.address.hostInstanceId);
+  assert.equal(JSON.stringify(ready).includes(handle.hostInstanceId), false);
 
   const serialized = JSON.stringify(ready);
   for (const forbidden of [

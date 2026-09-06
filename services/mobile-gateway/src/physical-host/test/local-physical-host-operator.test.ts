@@ -16,6 +16,8 @@ import {
 // @ts-expect-error -- mobile-gateway harness uses Node 22 built-ins without repository-wide @types/node.
 import { tmpdir } from 'node:os';
 // @ts-expect-error -- mobile-gateway harness uses Node 22 built-ins without repository-wide @types/node.
+import { createServer } from 'node:http';
+// @ts-expect-error -- mobile-gateway harness uses Node 22 built-ins without repository-wide @types/node.
 import { join } from 'node:path';
 // @ts-expect-error -- mobile-gateway harness uses Node 22 built-ins without repository-wide @types/node.
 import process from 'node:process';
@@ -125,7 +127,9 @@ test('validates owner-backed provider input and pins the real LOCAL runner ports
           hostMode: 'LOOPBACK_ONLY',
           physicalEvidenceStatus: 'NOT_RUN',
           authorizesExecution: false,
+          hostInstanceId: `whi_${'a'.repeat(64)}`,
         },
+        hostInstanceId: `whi_${'a'.repeat(64)}`,
         bootstrapReference: `gbr_${'A'.repeat(43)}`,
         bootstrapExpiresAtMs: NOW + 60_000,
         physicalEvidenceStatus: 'NOT_RUN',
@@ -141,6 +145,7 @@ test('validates owner-backed provider input and pins the real LOCAL runner ports
   assert.equal(captured?.principal.authenticationReference, AUTH_REFERENCE);
   assert.equal(handle.physicalEvidenceStatus, 'NOT_RUN');
   assert.equal(handle.authorizesExecution, false);
+  assert.equal(handle.hostInstanceId, `whi_${'a'.repeat(64)}`);
 });
 
 test('rejects invalid modules, failed factories and malformed/non-owner-backed inputs', async () => {
@@ -438,6 +443,7 @@ if (!started) process.exitCode = 1;`;
       'gateway_identity',
       'gateway_version',
       'host_candidate_sha',
+      'host_instance_id',
       'physical_evidence_status',
       'process_id',
       'started_at_utc',
@@ -445,6 +451,8 @@ if (!started) process.exitCode = 1;`;
     assert.equal(hostReady.host_candidate_sha, hostSha);
     assert.equal(hostReady.gateway_identity, 'aurora-w15j-local-host');
     assert.equal(hostReady.gateway_version, `git:${hostSha}`);
+    assert.match(hostReady.host_instance_id ?? '', /^whi_[a-f0-9]{64}$/u);
+    assert.equal(stdout.includes(hostReady.host_instance_id ?? ''), false);
     assert.equal(hostReady.device_gateway_port, '8080');
     assert.equal(hostReady.bootstrap_port, '8081');
     assert.equal(hostReady.physical_evidence_status, 'NOT_RUN');
@@ -468,16 +476,62 @@ if (!started) process.exitCode = 1;`;
     }
     assert.match(
       readFileSync(join(readinessPath, 'host-listener-8080.txt'), 'utf8'),
-      /http_status=404/u,
+      /http_status=200/u,
     );
     assert.match(
       readFileSync(join(readinessPath, 'host-health-8080.txt'), 'utf8'),
       /http_status=405/u,
     );
-    const probeFiles = expectedReadinessFiles.filter(
-      (name) => name !== 'host-ready-announcement.txt' && !name.endsWith('.exit-code'),
+    const listenerProbeFiles = ['host-listener-8080.txt', 'host-listener-8081.txt'];
+    for (const name of listenerProbeFiles) {
+      const probe = exactKv(readFileSync(join(readinessPath, name), 'utf8'));
+      assert.deepEqual(Object.keys(probe).sort(), [
+        'authorizes_execution',
+        'cache_control',
+        'host',
+        'host_instance_id',
+        'http_status',
+        'listener_role',
+        'method',
+        'observed_at_utc',
+        'path',
+        'physical_evidence_status',
+        'port',
+        'pragma',
+        'probe',
+        'process_id',
+        'response_bytes',
+        'server_result_code',
+      ]);
+      assert.equal(probe.observed_at_utc, hostReady.started_at_utc);
+      assert.equal(probe.process_id, hostReady.process_id);
+      assert.equal(probe.host, '127.0.0.1');
+      assert.equal(probe.method, 'GET');
+      assert.equal(probe.authorizes_execution, 'false');
+      assert.equal(probe.physical_evidence_status, 'NOT_RUN');
+      assert.equal(probe.probe, 'HTTP_LISTENER_INSTANCE_RESPONSE');
+      assert.equal(probe.path, '/v1/local-host/instance');
+      assert.equal(probe.http_status, '200');
+      assert.equal(probe.server_result_code, 'LOCAL_HOST_INSTANCE');
+      assert.equal(probe.cache_control, 'no-store');
+      assert.equal(probe.pragma, 'no-cache');
+      assert.equal(probe.host_instance_id, hostReady.host_instance_id);
+      assert.equal(
+        probe.listener_role,
+        name.includes('8080') ? 'DEVICE_GATEWAY' : 'BOOTSTRAP_EXCHANGE',
+      );
+      assert.equal(Number.isSafeInteger(Number(probe.response_bytes)), true);
+      assert.equal(Number(probe.response_bytes) > 0, true);
+    }
+    assert.match(
+      readFileSync(join(readinessPath, 'host-listener-8081.txt'), 'utf8'),
+      /http_status=200/u,
     );
-    for (const name of probeFiles) {
+    assert.match(
+      readFileSync(join(readinessPath, 'host-health-8081.txt'), 'utf8'),
+      /http_status=405/u,
+    );
+    for (const name of ['host-health-8080.txt', 'host-health-8081.txt']) {
       const probe = exactKv(readFileSync(join(readinessPath, name), 'utf8'));
       assert.deepEqual(Object.keys(probe).sort(), [
         'authorizes_execution',
@@ -495,27 +549,76 @@ if (!started) process.exitCode = 1;`;
       ]);
       assert.equal(probe.observed_at_utc, hostReady.started_at_utc);
       assert.equal(probe.process_id, hostReady.process_id);
-      assert.equal(probe.host, '127.0.0.1');
-      assert.equal(probe.method, 'GET');
-      assert.equal(probe.authorizes_execution, 'false');
-      assert.equal(probe.physical_evidence_status, 'NOT_RUN');
-      assert.equal(Number.isSafeInteger(Number(probe.response_bytes)), true);
-      assert.equal(Number(probe.response_bytes) > 0, true);
+      assert.equal(probe.http_status, '405');
+      assert.equal(probe.server_error_code, 'METHOD_NOT_ALLOWED');
     }
-    assert.match(
-      readFileSync(join(readinessPath, 'host-listener-8081.txt'), 'utf8'),
-      /http_status=404/u,
-    );
-    assert.match(
-      readFileSync(join(readinessPath, 'host-health-8081.txt'), 'utf8'),
-      /http_status=405/u,
-    );
     for (const name of expectedReadinessFiles.filter((name) => name.endsWith('.exit-code'))) {
       assert.equal(readFileSync(join(readinessPath, name), 'utf8'), '0\n');
     }
   } finally {
     rmSync(fixtureDirectory, { recursive: true, force: true });
   }
+});
+
+test('launcher instance probe rejects cache-control or pragma header drift', async () => {
+  const launcherUrl = pathToFileURL(
+    join(process.cwd(), 'tools/physical/run-w15j-local-host.mjs'),
+  ).href;
+  const launcher = (await import(launcherUrl)) as Readonly<{
+    probeW15JLocalHostHttpServer(input: Readonly<Record<string, unknown>>): Promise<unknown>;
+  }>;
+  const hostInstanceId = `whi_${'a'.repeat(64)}`;
+
+  const rejectsDrift = async (cacheControl: string, pragma: string): Promise<void> => {
+    const server = createServer(
+      (
+        _request: unknown,
+        response: {
+          statusCode: number;
+          setHeader(name: string, value: string): void;
+          end(body: string): void;
+        },
+      ) => {
+        response.statusCode = 200;
+        response.setHeader('content-type', 'application/json; charset=utf-8');
+        response.setHeader('cache-control', cacheControl);
+        response.setHeader('pragma', pragma);
+        response.end(
+          JSON.stringify({
+            kind: 'LOCAL_HOST_INSTANCE',
+            hostInstanceId,
+            listenerRole: 'DEVICE_GATEWAY',
+            authorizesExecution: false,
+            provesExecutionSuccess: false,
+            retryAuthorized: false,
+            physicalEvidenceStatus: 'NOT_RUN',
+          }),
+        );
+      },
+    );
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as Readonly<{ port: number }>;
+    try {
+      await assert.rejects(
+        () =>
+          launcher.probeW15JLocalHostHttpServer({
+            port: address.port,
+            path: '/v1/local-host/instance',
+            expectedStatus: 200,
+            expectedHostInstanceId: hostInstanceId,
+            expectedListenerRole: 'DEVICE_GATEWAY',
+          }),
+        /unexpected host instance probe response/u,
+      );
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error?: Error) => (error === undefined ? resolve() : reject(error))),
+      );
+    }
+  };
+
+  await rejectsDrift('max-age=60', 'no-cache');
+  await rejectsDrift('no-store', 'cache');
 });
 
 test('Node gate accepts only the pinned >=22.16.0 <23 range and direct mismatch fails first', async () => {

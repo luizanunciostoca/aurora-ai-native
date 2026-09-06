@@ -25,6 +25,7 @@ import {
   GatewayHttpNetworkTransport,
   type GatewayHttpNetworkAddress,
 } from '../gateway-auth/http-network-transport.js';
+import { TransientLocalHostInstanceProbe } from '../gateway-auth/local-host-instance-probe.js';
 import { GatewaySessionManager } from '../gateway-auth/session-manager.js';
 import {
   VoiceCandidateNetworkBoundary,
@@ -260,6 +261,7 @@ export interface W15JLocalPhysicalHostConfig {
 export interface W15JLocalPhysicalHostAddress {
   readonly gateway: GatewayHttpNetworkAddress;
   readonly bootstrap: GatewayBootstrapHttpExchangeAddress;
+  readonly hostInstanceId: string;
   readonly hostMode: 'LOOPBACK_ONLY';
   readonly physicalEvidenceStatus: 'NOT_RUN';
   readonly authorizesExecution: false;
@@ -341,11 +343,13 @@ export class W15JLocalPhysicalHost {
   readonly #gatewayPort: number;
   readonly #bootstrapPort: number;
   readonly #bootstrapDelivery: GatewayBootstrapDeliveryBroker;
+  readonly #hostInstanceProbe = new TransientLocalHostInstanceProbe();
   readonly #executionStateStager: W03PostgresPhysicalExecutionStateStager;
   readonly #attemptLifecycle: LocalW07AttemptLifecyclePort | null;
   readonly #containmentLifecycle: LocalW07ContainmentLifecyclePort | null;
   readonly #gatewayTransport: GatewayHttpNetworkTransport;
   readonly #bootstrapServer: GatewayBootstrapHttpExchangeServer;
+  #activeHostInstanceId: string | undefined;
   #started = false;
 
   constructor(
@@ -468,12 +472,17 @@ export class W15JLocalPhysicalHost {
 
     this.#gatewayTransport = new GatewayHttpNetworkTransport(
       gatewaySessions,
-      { host: LOOPBACK_HOST, clock: this.#clock },
+      {
+        host: LOOPBACK_HOST,
+        clock: this.#clock,
+        localHostInstanceProbe: this.#hostInstanceProbe,
+      },
       devicePlane,
     );
     this.#bootstrapServer = new GatewayBootstrapHttpExchangeServer(this.#bootstrapDelivery, {
       host: LOOPBACK_HOST,
       clock: this.#clock,
+      localHostInstanceProbe: this.#hostInstanceProbe,
     });
   }
 
@@ -543,24 +552,33 @@ export class W15JLocalPhysicalHost {
 
   async start(): Promise<W15JLocalPhysicalHostAddress> {
     if (this.#started) throw new Error('W15-J LOCAL physical host is already started.');
-    const gateway = await this.#gatewayTransport.start(this.#gatewayPort);
+    const hostInstanceId = this.#hostInstanceProbe.start();
+    this.#activeHostInstanceId = hostInstanceId;
     try {
+      const gateway = await this.#gatewayTransport.start(this.#gatewayPort);
       const bootstrap = await this.#bootstrapServer.start(this.#bootstrapPort);
       this.#started = true;
       return Object.freeze({
         gateway,
         bootstrap,
+        hostInstanceId,
         hostMode: 'LOOPBACK_ONLY',
         physicalEvidenceStatus: 'NOT_RUN',
         authorizesExecution: false,
       });
     } catch (error) {
-      await this.#gatewayTransport.stop();
+      try {
+        await this.#gatewayTransport.stop();
+      } finally {
+        this.#hostInstanceProbe.stop(hostInstanceId);
+        this.#activeHostInstanceId = undefined;
+      }
       throw error;
     }
   }
 
   async stop(): Promise<void> {
+    const hostInstanceId = this.#activeHostInstanceId;
     let firstError: unknown;
     try {
       await this.#bootstrapServer.stop();
@@ -573,6 +591,14 @@ export class W15JLocalPhysicalHost {
       if (firstError === undefined) firstError = error;
     }
     this.#started = false;
+    if (hostInstanceId !== undefined) {
+      try {
+        this.#hostInstanceProbe.stop(hostInstanceId);
+        this.#activeHostInstanceId = undefined;
+      } catch (error) {
+        if (firstError === undefined) firstError = error;
+      }
+    }
     if (firstError !== undefined) throw firstError;
   }
 }
