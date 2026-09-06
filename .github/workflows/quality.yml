@@ -21,6 +21,11 @@ jobs:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
+      - name: Diagnostic canonical Prettier diff
+        run: |
+          npx prettier --write services/mobile-gateway/src/physical-host/test/w03-half-open-probe-lease.test.ts services/mobile-gateway/src/physical-host/w03-half-open-probe-lease.ts tools/test/tsconfig.w15j-composition.json
+          git --no-pager diff -- services/mobile-gateway/src/physical-host/test/w03-half-open-probe-lease.test.ts services/mobile-gateway/src/physical-host/w03-half-open-probe-lease.ts tools/test/tsconfig.w15j-composition.json
+          git checkout -- services/mobile-gateway/src/physical-host/test/w03-half-open-probe-lease.test.ts services/mobile-gateway/src/physical-host/w03-half-open-probe-lease.ts tools/test/tsconfig.w15j-composition.json
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
