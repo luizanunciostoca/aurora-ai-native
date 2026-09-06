@@ -56,7 +56,22 @@ The tested APK must be traceable to one exact candidate. Before the physical win
 - physical-device proof (`ro.kernel.qemu != 1` and non-emulator serial);
 - operator and observation timestamps;
 - gateway/test-environment identity and version;
+- per-start local host instance id, identical on the 8080 and 8081 listeners at preflight and finalize;
 - ADB reverse port/mapping.
+
+The collector also requires the downloaded GitHub artifact ZIP itself and a
+four-key trusted metadata file. It recomputes the ZIP digest, extracts the ZIP,
+and compares the supplied APK byte-for-byte with the embedded APK. The embedded
+`BUILD_IDENTITY.txt` must bind Android candidate, paired host, reconciled main,
+variant, package and version; the embedded `SHA256SUMS.txt` must bind that APK.
+The metadata file contains only:
+
+```text
+packaging_head_sha=<40-hex packaging workflow head>
+artifact_id=<GitHub artifact id>
+artifact_name=<GitHub artifact name>
+artifact_zip_sha256=<64-hex digest recomputed from the downloaded ZIP>
+```
 
 `W15J_EVIDENCE_TEMPLATE.json` schema v1.2 records every mandatory subscenario individually. A group-level PASS is insufficient. Every mandatory scenario record must contain:
 
@@ -177,7 +192,9 @@ Retain raw collector outputs and populate the corresponding structured evidence 
 - app/data storage footprint;
 - foreground-service state, if one is actually used by the accepted build.
 
-Collector raw captures include a companion `.exit-code` file. A non-zero optional capture is evidence of an observation blocker, not a successful observation, and must be reflected as `BLOCKED` until resolved or explicitly handed off where allowed.
+Collector raw captures include a companion `.exit-code` file. Every required
+resource capture must be non-empty with exit code zero; otherwise collection
+fails closed and cannot be represented as a successful observation.
 
 These are **W15 device observations**, not production SLOs. Production telemetry/SLO ownership remains W17.
 
@@ -192,21 +209,37 @@ Use one exact LOCAL APK built from the candidate and one evidence directory:
 ```bash
 AURORA_CANDIDATE_SHA=<40-hex-candidate> \
 AURORA_APK=<path-to-exact-local-apk> \
+AURORA_ARTIFACT_ZIP=<path-to-downloaded-artifact-zip> \
+AURORA_ARTIFACT_METADATA=<path-to-four-key-artifact-metadata> \
 AURORA_APK_VARIANT=<variant> \
 AURORA_OPERATOR=<operator-id> \
-AURORA_GATEWAY_IDENTITY=<test-gateway-id> \
-AURORA_GATEWAY_VERSION=<test-gateway-version> \
+AURORA_W15J_HOST_READINESS_DIR=<exact-host-readiness-directory> \
 AURORA_EVIDENCE_DIR=<evidence-directory> \
 ./apps/aurora-android/physical/collect-w15j-physical-evidence.sh
 ```
 
-Preflight fails closed unless exactly one authorized physical ADB device is present, candidate SHA/APK metadata are supplied, the APK installs, INTERNET permission is present, and the required LOCAL reverse mapping is observed. Critical capture failures stop collection. If the script created the reverse mapping and preflight fails, it removes that mapping automatically.
+Preflight fails closed unless exactly one authorized physical ADB device is present, candidate SHA/APK metadata are supplied, the APK installs, the installed `base.apk` bytes read back from the tablet hash to the artifact APK, INTERNET permission is present, the exact nine-file host readiness contract succeeds, and the required LOCAL reverse mapping is observed. Gateway identity is fixed to `aurora-w15j-local-host`; version is derived as `git:<host SHA>`. Critical capture failures stop collection. If the script created the reverse mapping and preflight fails, it removes that mapping automatically.
 
 A successful preflight deliberately leaves the reverse mapping active only for the governed physical scenario window.
 
 ### 2. Execute the mandatory scenario matrix
 
 Run every mandatory scenario above against the same installed candidate/device/gateway identity and populate `W15J_EVIDENCE_TEMPLATE.json` per scenario. Keep gateway credentials out of shell history, collector variables, evidence files and repository content.
+
+Populate the separate wake matrix from
+`wake/WAKE_EVIDENCE_TEMPLATE.json` as `wake-evidence.json` in the evidence
+directory. It requires at least 100 unique individual reconciled attempt records
+(speaker, distance, volume, background, result, latency and concrete reference), the
+speaker/distance/volume/background matrix, passive false-wake observation,
+TTS/barge-in/audio-route/privacy/raw-PCM checks, and CPU/PSS/battery/thermal
+records. Put each referenced bounded evidence/attestation file in the same
+directory before finalization; raw microphone PCM is prohibited.
+Every observed timestamp must be inside the collector window; wake attempts and
+wake records must be inside the wake sub-window. Use a unique primary evidence
+reference for every scenario, threat, resource and risk gate. Create distinct
+`operator-attestation.json` from `W15J_OPERATOR_ATTESTATION_TEMPLATE.json`;
+identity, tuple and bounded statement are parsed rather than accepted as opaque
+text.
 
 ### 3. Finalize
 
@@ -216,15 +249,50 @@ After all scenarios, rerun the same collector with the same candidate/APK/device
 AURORA_EVIDENCE_MODE=finalize \
 AURORA_CANDIDATE_SHA=<same-40-hex-candidate> \
 AURORA_APK=<same-exact-local-apk> \
+AURORA_ARTIFACT_ZIP=<same-downloaded-artifact-zip> \
+AURORA_ARTIFACT_METADATA=<same-four-key-artifact-metadata> \
 AURORA_APK_VARIANT=<same-variant> \
 AURORA_OPERATOR=<operator-id> \
-AURORA_GATEWAY_IDENTITY=<same-test-gateway-id> \
-AURORA_GATEWAY_VERSION=<same-test-gateway-version> \
+AURORA_W15J_HOST_READINESS_DIR=<same-exact-host-readiness-directory> \
 AURORA_EVIDENCE_DIR=<same-evidence-directory> \
 ./apps/aurora-android/physical/collect-w15j-physical-evidence.sh
 ```
 
-Finalize verifies candidate SHA, APK hash, physical device hash, package and gateway identity/version against preflight, captures after-window resource evidence, removes the ADB reverse mapping, verifies the mapping is absent, and writes `evidence-manifest.sha256` over the raw evidence files.
+Finalize verifies the complete Android/host/main/packaging/artifact/APK tuple,
+physical device identity, installed package readback and gateway identity/version
+against preflight. It captures after-window resource evidence, removes both ADB
+reverse mappings, verifies cleanup, and writes `evidence-manifest.sha256` over
+every top-level evidence file.
+Both phases pull exactly one installed `base.apk`; any additional `pm path` line
+or split APK fails closed. Both phases also run fresh collector-owned bounded
+JSON probes against 8080 and 8081.
+
+After finalization, write the trusted preflight outside the immutable evidence
+directory, then lint the operator dossier:
+
+Before invoking either command, an independent reviewer reviews the finalized
+manifest and creates `reviewer-attestation.json` from
+`W15J_REVIEWER_ATTESTATION_TEMPLATE.json`. This is the only allowed unmanifested
+sidecar: it must bind the exact final manifest digest, use a trimmed identity
+distinct from the operator, and be timestamped at/after finalize and not in the
+future. Do not regenerate the manifest after adding this sidecar.
+
+```bash
+node tools/acceptance/w15j-trusted-preflight-from-collector.mjs \
+  <finalized-evidence-directory> <independent-control-tower-tuple.json> \
+  <trusted-preflight-output.json>
+node tools/acceptance/w15j-preflight.mjs \
+  <operator-dossier.json> <finalized-evidence-directory> \
+  <independent-control-tower-tuple.json>
+```
+
+Any post-finalize file addition other than the single canonical reviewer sidecar,
+or any byte change to a manifested file, invalidates the evidence set. A lint
+success says only `LINT_READY_NOT_ACCEPTED`; it never changes DP5 disposition.
+The canonical final lint rebuilds trust directly from finalized bytes and the
+independent expected tuple in the same process. It does not trust an editable
+trusted-preflight JSON. Live GitHub run/head/status/artifact revalidation remains
+an external Control Tower obligation immediately before acceptance.
 
 The collector itself never changes DP5 to accepted. `acceptance-status.txt` remains `INCOMPLETE_UNTIL_SCENARIO_MATRIX_SIGNED` until the structured matrix and integrated Risk Gates are independently reviewed.
 

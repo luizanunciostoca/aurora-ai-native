@@ -1,10 +1,31 @@
 {
   "schemaVersion": "1.2.0",
   "wave": "W15-J",
+  "authorityInvariant": "INTELLIGENCE != AUTHORITY != EXECUTION",
   "dp4Status": "OPEN",
   "dp4PublicationReference": "issue:115#issuecomment-5547053471",
   "dp5Status": "CLOSED_PHYSICAL_EVIDENCE_INCOMPLETE",
   "candidateSha": "REQUIRED_40_HEX",
+  "provenance": {
+    "repository": "luizanunciostoca/aurora-ai-native",
+    "workflowRun": {
+      "id": "REQUIRED",
+      "url": "REQUIRED",
+      "status": "SUCCESS",
+      "headSha": "REQUIRED_40_HEX",
+      "sourceRef": "REQUIRED"
+    },
+    "androidCandidateSha": "REQUIRED_40_HEX",
+    "hostCandidateSha": "REQUIRED_40_HEX",
+    "reconciledMainSha": "REQUIRED_40_HEX",
+    "packagingHeadSha": "REQUIRED_40_HEX",
+    "artifact": {
+      "id": "REQUIRED",
+      "name": "REQUIRED",
+      "zipSha256": "REQUIRED_64_HEX",
+      "digestSourceRef": "REQUIRED"
+    }
+  },
   "apk": {
     "applicationId": "REQUIRED",
     "variant": "REQUIRED",
@@ -22,10 +43,11 @@
     "physicalDeviceVerified": false
   },
   "environment": {
-    "gatewayIdentity": "REQUIRED",
-    "gatewayVersion": "REQUIRED",
+    "gatewayIdentity": "aurora-w15j-local-host",
+    "gatewayVersion": "REQUIRED_git:<hostCandidateSha>",
+    "hostInstanceId": "REQUIRED_whi_<64-lowercase-hex>",
     "gatewayTransport": "LOCAL_ADB_REVERSE_ONLY",
-    "adbReversePort": "REQUIRED",
+    "adbReversePort": 8080,
     "operator": "REQUIRED",
     "preflightObservedAtUtc": "REQUIRED",
     "finalizedAtUtc": "REQUIRED"
@@ -442,11 +464,18 @@
     }
   },
   "collectorEvidence": {
-    "rawDirectory": "REQUIRED",
-    "preflightMetadata": "REQUIRED",
-    "finalizeMetadata": "REQUIRED",
-    "sha256Manifest": "REQUIRED",
-    "adbReverseCleanup": "REQUIRED"
+    "rawDirectory": ".",
+    "preflightMetadata": "preflight-metadata.txt",
+    "finalizeMetadata": "finalize-metadata.txt",
+    "sha256Manifest": "evidence-manifest.sha256",
+    "adbReverseCleanup": "adb-reverse-dual-port-after-finalize.txt"
+  },
+  "wakeEvidence": {
+    "reference": "wake-evidence.json",
+    "sha256": "REQUIRED_64_HEX",
+    "schemaVersion": "1.1.0",
+    "deliberateAttempts": 0,
+    "scenarioCount": 26
   },
   "handoffs": {
     "w17Telemetry": [],
@@ -458,8 +487,8 @@
     "mandatoryScenarioMatrixComplete": false,
     "resourceObservationsComplete": false,
     "riskGatesComplete": false,
-    "operatorAttestationReference": "REQUIRED",
-    "independentReviewReference": "REQUIRED"
+    "operatorAttestationReference": "operator-attestation.json",
+    "independentReviewReference": "reviewer-attestation.json"
   },
   "notes": [
     "This file is an evidence template only and grants no execution authority.",

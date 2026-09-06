@@ -1,9 +1,16 @@
 {
-  "schemaVersion": "1.0",
+  "schemaVersion": "1.1.0",
   "status": "INCOMPLETE_PHYSICAL_EVIDENCE_REQUIRED",
   "authorityInvariant": "INTELLIGENCE != AUTHORITY != EXECUTION",
   "candidate": {
     "gitSha": null,
+    "hostGitSha": null,
+    "hostInstanceId": "REQUIRED_whi_<64-lowercase-hex>",
+    "mainGitSha": null,
+    "packagingGitSha": null,
+    "artifactId": null,
+    "artifactName": null,
+    "artifactZipSha256": null,
     "apkSha256": null,
     "apkVariant": null,
     "applicationId": null,
@@ -42,9 +49,22 @@
     "operatorId": null,
     "startedAtUtc": null,
     "finishedAtUtc": null,
-    "attestationReference": null,
-    "independentReviewReference": null
+    "attestationReference": "operator-attestation.json",
+    "independentReviewReference": "reviewer-attestation.json"
   },
+  "accuracy": {
+    "deliberateAttempts": 0,
+    "confirmedWakes": 0,
+    "rejectedWakes": 0,
+    "passiveObservationMinutes": 0,
+    "passiveFalseWakes": 0,
+    "passiveEvidenceReference": null,
+    "speakerIds": [],
+    "distancesMeters": [],
+    "volumes": [],
+    "backgrounds": []
+  },
+  "attempts": [],
   "scenarios": [
     {
       "id": "WAKE-ACC-001",
@@ -255,26 +275,84 @@
       "evidenceReferences": []
     }
   ],
+  "mandatoryObservations": {
+    "ttsSelfWake": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "bargeIn": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "audioRoutes": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "routes": []
+    },
+    "permissionRevocation": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "privacyMode": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "rawPcmPersistence": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": [],
+      "persisted": null
+    },
+    "cpu": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "pss": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "battery": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    },
+    "thermal": {
+      "status": "NOT_RUN",
+      "observedAtUtc": null,
+      "evidenceReferences": []
+    }
+  },
   "riskGates": {
     "A": {
       "status": "NOT_RUN",
+      "observedAtUtc": null,
       "evidenceReferences": []
     },
     "B": {
       "status": "NOT_RUN",
+      "observedAtUtc": null,
       "evidenceReferences": []
     },
     "C": {
       "status": "NOT_RUN",
+      "observedAtUtc": null,
       "evidenceReferences": []
     },
     "D": {
       "status": "NOT_RUN",
+      "observedAtUtc": null,
       "evidenceReferences": []
     }
   },
   "rawEvidence": {
-    "directory": null,
-    "sha256Manifest": null
+    "directory": ".",
+    "sha256Manifest": "evidence-manifest.sha256"
   }
 }

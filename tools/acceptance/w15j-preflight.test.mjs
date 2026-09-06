@@ -6,278 +6,256 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
+import { validateW15JPreflight } from './w15j-preflight.mjs';
+import { buildTrustedW15JPreflight } from './w15j-trusted-preflight-from-collector.mjs';
 import {
-  REQUIRED_DP5_SCENARIO_PATHS,
-  REQUIRED_THREAT_REVIEW_KEYS,
-  validateW15JPreflight,
-} from './w15j-preflight.mjs';
-
-const OBSERVED_AT = '2026-09-05T17:00:00Z';
-const evidence = (status = 'PASS') => ({
-  status,
-  observedAtUtc: OBSERVED_AT,
-  evidenceReferences: ['physical/evidence.txt'],
-});
-
-function canonicalDossier() {
-  const scenarios = {};
-  for (const path of REQUIRED_DP5_SCENARIO_PATHS) {
-    const [group, scenario] = path.split('.');
-    scenarios[group] ??= {};
-    scenarios[group][scenario] = evidence();
-  }
-  return {
-    schemaVersion: '1.2.0',
-    wave: 'W15-J',
-    candidateSha: 'a'.repeat(40),
-    apk: {
-      applicationId: 'ai.aurora.device.local',
-      variant: 'localRelease',
-      versionCode: '15',
-      versionName: '0.15.0',
-      sha256: 'b'.repeat(64),
-    },
-    device: {
-      serialSha256: 'c'.repeat(64),
-      manufacturer: 'Example',
-      model: 'Tablet',
-      product: 'tablet',
-      apiLevel: '35',
-      buildFingerprint: 'example/tablet/15',
-      physicalDeviceVerified: true,
-    },
-    environment: {
-      gatewayIdentity: 'gateway-local-01',
-      gatewayVersion: 'w14-local-1',
-      gatewayTransport: 'LOCAL_ADB_REVERSE_ONLY',
-      operator: 'operator-1',
-      preflightObservedAtUtc: OBSERVED_AT,
-      finalizedAtUtc: OBSERVED_AT,
-    },
-    scenarios,
-    threatReview: Object.fromEntries(REQUIRED_THREAT_REVIEW_KEYS.map((key) => [key, evidence()])),
-    resourceObservations: Object.fromEntries(
-      [
-        'coldStartup',
-        'warmStartup',
-        'gatewayReconnect',
-        'batteryWindow',
-        'cpu',
-        'memory',
-        'storage',
-        'foregroundService',
-      ].map((key) => [key, evidence('OBSERVED')]),
-    ),
-    riskGates: Object.fromEntries(
-      [
-        'A_AUTHORITY',
-        'B_RUNTIME_RECONCILIATION',
-        'C_REPLAY_IDEMPOTENCY',
-        'D_EVIDENCE_OBSERVABILITY',
-      ].map((key) => [key, evidence()]),
-    ),
-    collectorEvidence: {
-      rawDirectory: 'physical/raw',
-      preflightMetadata: 'physical/preflight-metadata.txt',
-      finalizeMetadata: 'physical/finalize-metadata.txt',
-      sha256Manifest: 'physical/evidence-manifest.sha256',
-      adbReverseCleanup: 'physical/adb-reverse-list-after-finalize.txt',
-    },
-    finalization: {
-      mandatoryScenarioMatrixComplete: true,
-      resourceObservationsComplete: true,
-      riskGatesComplete: true,
-      operatorAttestationReference: 'attestations/operator.txt',
-      independentReviewReference: 'attestations/reviewer.txt',
-    },
-    evidenceReferences: ['physical/w15j-evidence.json'],
-  };
-}
-
-const preflight = {
-  expected: {
-    candidateSha: 'a'.repeat(40),
-    apk: {
-      applicationId: 'ai.aurora.device.local',
-      variant: 'localRelease',
-      versionCode: '15',
-      versionName: '0.15.0',
-      sha256: 'b'.repeat(64),
-    },
-    device: {
-      serialSha256: 'c'.repeat(64),
-      manufacturer: 'Example',
-      model: 'Tablet',
-      product: 'tablet',
-      apiLevel: '35',
-      buildFingerprint: 'example/tablet/15',
-    },
-    environment: {
-      gatewayIdentity: 'gateway-local-01',
-      gatewayVersion: 'w14-local-1',
-      gatewayTransport: 'LOCAL_ADB_REVERSE_ONLY',
-    },
-  },
-  adbReverseMappings: [
-    { host: 'tcp', port: 8080, status: 'PRESENT' },
-    { host: 'tcp', port: 8081, status: 'PRESENT' },
-  ],
-};
+  canonicalDossier,
+  createFinalizedEvidenceFixture,
+  evidence,
+  rewriteManifest,
+  TUPLE,
+} from './w15j-test-fixture.mjs';
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-test('validates the canonical W15-J evidence contract', () => {
-  const result = validateW15JPreflight(canonicalDossier(), preflight);
-  assert.equal(result.readyForIndependentReview, true);
-  assert.equal(result.requiredScenarioCount, 48);
-  assert.deepEqual(result.requiredReverseMappings, [8080, 8081]);
-});
+function withFixture(run) {
+  const fixture = createFinalizedEvidenceFixture();
+  try {
+    const preflight = buildTrustedW15JPreflight(fixture.directory, fixture.controlTower);
+    return run({ ...fixture, preflight, dossier: canonicalDossier(preflight) });
+  } finally {
+    rmSync(fixture.directory, { recursive: true, force: true });
+  }
+}
 
-test('fails closed when any canonical mandatory scenario is missing', () => {
-  const dossier = canonicalDossier();
-  delete dossier.scenarios.voiceAndPresence.confidenceNeverBecomesAuthority;
-  assert.throws(
-    () => validateW15JPreflight(dossier, preflight),
-    /scenario voiceAndPresence\.confidenceNeverBecomesAuthority is required/,
-  );
-});
+test('lints the immutable canonical W15-J tuple without auto-accepting DP5', () =>
+  withFixture(({ dossier, preflight }) => {
+    const result = validateW15JPreflight(dossier, preflight);
+    assert.equal(result.readyForIndependentReview, true);
+    assert.equal(result.physicallyAccepted, false);
+    assert.equal(result.requiredScenarioCount, 48);
+    assert.deepEqual(result.requiredReverseMappings, [8080, 8081]);
+  }));
 
-test('fails closed for every disallowed scenario disposition', () => {
-  for (const status of ['NOT_RUN', 'FAIL', 'BLOCKED']) {
-    const dossier = canonicalDossier();
-    dossier.scenarios.lifecycleAndProcessRestart.coldLaunchFromStoppedProcess = evidence(status);
+test('fails closed on wrong host, main, packaging head, or artifact identity', () =>
+  withFixture(({ dossier, preflight }) => {
+    for (const mutate of [
+      (value) => {
+        value.provenance.hostCandidateSha = '1'.repeat(40);
+      },
+      (value) => {
+        value.provenance.reconciledMainSha = '1'.repeat(40);
+      },
+      (value) => {
+        value.provenance.packagingHeadSha = '1'.repeat(40);
+      },
+      (value) => {
+        value.provenance.artifact.id = '123';
+      },
+      (value) => {
+        value.provenance.artifact.zipSha256 = '1'.repeat(64);
+      },
+    ]) {
+      const changed = clone(dossier);
+      mutate(changed);
+      assert.throws(
+        () => validateW15JPreflight(changed, preflight),
+        /does not match trusted preflight/,
+      );
+    }
+  }));
+
+test('fails closed when a mandatory DP5 scenario is missing or unobserved', () =>
+  withFixture(({ dossier, preflight }) => {
+    delete dossier.scenarios.voiceAndPresence.confidenceNeverBecomesAuthority;
     assert.throws(
       () => validateW15JPreflight(dossier, preflight),
-      new RegExp(
-        `scenario lifecycleAndProcessRestart\\.coldLaunchFromStoppedProcess must not be ${status}`,
-      ),
+      /confidenceNeverBecomesAuthority is required/,
     );
-  }
-});
 
-test('requires timestamp and concrete evidence references on scenarios', () => {
-  const missingTimestamp = canonicalDossier();
-  missingTimestamp.scenarios.voiceAndPresence.falseWakeDoesNotDispatch.observedAtUtc = null;
-  assert.throws(
-    () => validateW15JPreflight(missingTimestamp, preflight),
-    /scenario voiceAndPresence\.falseWakeDoesNotDispatch\.observedAtUtc is required/,
-  );
+    const blocked = canonicalDossier(preflight);
+    blocked.scenarios.lifecycleAndProcessRestart.coldLaunchFromStoppedProcess = evidence('BLOCKED');
+    assert.throws(() => validateW15JPreflight(blocked, preflight), /must not be BLOCKED/);
+  }));
 
-  const missingReference = canonicalDossier();
-  missingReference.scenarios.voiceAndPresence.falseWakeDoesNotDispatch.evidenceReferences = [];
-  assert.throws(
-    () => validateW15JPreflight(missingReference, preflight),
-    /scenario voiceAndPresence\.falseWakeDoesNotDispatch\.evidenceReferences must not be empty/,
-  );
-});
+test('rejects arbitrary or unmanifested evidence references and missing cleanup', () =>
+  withFixture(({ dossier, preflight }) => {
+    dossier.scenarios.voiceAndPresence.falseWakeDoesNotDispatch.evidenceReferences = [
+      'invented.txt',
+    ];
+    assert.throws(
+      () => validateW15JPreflight(dossier, preflight),
+      /not bound by the final evidence manifest/,
+    );
 
-test('requires threat review, resources, canonical risk gates, and attestations', () => {
-  const missingThreat = canonicalDossier();
-  delete missingThreat.threatReview.packageImpersonationOrConfusion;
-  assert.throws(
-    () => validateW15JPreflight(missingThreat, preflight),
-    /threatReview\.packageImpersonationOrConfusion is required/,
-  );
+    const missingCleanup = canonicalDossier(preflight);
+    missingCleanup.collectorEvidence.adbReverseCleanup = 'evidence.txt';
+    assert.throws(
+      () => validateW15JPreflight(missingCleanup, preflight),
+      /does not match trusted collector source/,
+    );
+  }));
 
-  const missingResource = canonicalDossier();
-  delete missingResource.resourceObservations.cpu;
-  assert.throws(
-    () => validateW15JPreflight(missingResource, preflight),
-    /resourceObservations\.cpu is required/,
-  );
+test('rejects manifest/self, empty, or non-specific resource references', () =>
+  withFixture(({ dossier, preflight }) => {
+    const self = clone(dossier);
+    self.evidenceReferences = ['evidence-manifest.sha256'];
+    assert.throws(() => validateW15JPreflight(self, preflight), /non-manifest/);
+    const wakeSelf = clone(dossier);
+    wakeSelf.scenarios.voiceAndPresence.falseWakeDoesNotDispatch.evidenceReferences = [
+      'wake-evidence.json',
+    ];
+    assert.throws(() => validateW15JPreflight(wakeSelf, preflight), /non-self/);
 
-  const wrongGate = canonicalDossier();
-  delete wrongGate.riskGates.A_AUTHORITY;
-  assert.throws(
-    () => validateW15JPreflight(wrongGate, preflight),
-    /riskGates\.A_AUTHORITY is required/,
-  );
+    const fixture = createFinalizedEvidenceFixture();
+    try {
+      writeFileSync(join(fixture.directory, 'empty-evidence.txt'), '');
+      rewriteManifest(fixture.directory);
+      const trusted = buildTrustedW15JPreflight(fixture.directory, fixture.controlTower);
+      const empty = canonicalDossier(trusted);
+      empty.evidenceReferences = ['empty-evidence.txt'];
+      assert.throws(() => validateW15JPreflight(empty, trusted), /empty evidence/);
 
-  const missingAttestation = canonicalDossier();
-  missingAttestation.finalization.independentReviewReference = null;
-  assert.throws(
-    () => validateW15JPreflight(missingAttestation, preflight),
-    /finalization\.independentReviewReference is required/,
-  );
-});
+      const nonspecific = canonicalDossier(trusted);
+      nonspecific.resourceObservations.cpu.evidenceReferences = ['evidence.txt'];
+      assert.throws(
+        () => validateW15JPreflight(nonspecific, trusted),
+        /must reference cpuinfo-after-restart.txt/,
+      );
+    } finally {
+      rmSync(fixture.directory, { recursive: true, force: true });
+    }
+  }));
 
-test('requires exact provenance and both LOCAL reverse mappings', () => {
-  const wrongCandidate = clone(canonicalDossier());
-  wrongCandidate.candidateSha = 'd'.repeat(40);
-  assert.throws(
-    () => validateW15JPreflight(wrongCandidate, preflight),
-    /candidateSha does not match trusted preflight/,
-  );
+test('requires exact authority/status/publication, collector operator, and timestamps', () =>
+  withFixture(({ dossier, preflight }) => {
+    for (const mutate of [
+      (value) => {
+        value.authorityInvariant = 'INTELLIGENCE = AUTHORITY';
+      },
+      (value) => {
+        value.dp4Status = 'CLOSED';
+      },
+      (value) => {
+        value.dp4PublicationReference = 'issue:115';
+      },
+      (value) => {
+        value.dp5Status = 'PASS';
+      },
+      (value) => {
+        value.environment.operator = 'different-operator';
+      },
+      (value) => {
+        value.environment.hostInstanceId = `whi_${'8'.repeat(64)}`;
+      },
+      (value) => {
+        value.environment.finalizedAtUtc = '2026-09-05T18:00:01Z';
+      },
+      (value) => {
+        value.environment.preflightObservedAtUtc = '2026-02-30T00:00:00Z';
+      },
+    ]) {
+      const changed = clone(dossier);
+      mutate(changed);
+      assert.throws(() => validateW15JPreflight(changed, preflight));
+    }
+  }));
 
-  const wrongApk = clone(canonicalDossier());
-  wrongApk.apk.sha256 = 'd'.repeat(64);
-  assert.throws(
-    () => validateW15JPreflight(wrongApk, preflight),
-    /apk.sha256 does not match trusted preflight/,
-  );
+test('rejects every W15-J observed record outside the collector window or with reused primary proof', () =>
+  withFixture(({ dossier, preflight }) => {
+    dossier.scenarios.voiceAndPresence.falseWakeDoesNotDispatch.observedAtUtc =
+      '2026-09-05T18:00:01Z';
+    assert.throws(() => validateW15JPreflight(dossier, preflight), /outside the collector/);
 
-  const wrongDevice = clone(canonicalDossier());
-  wrongDevice.device.model = 'OtherTablet';
-  assert.throws(
-    () => validateW15JPreflight(wrongDevice, preflight),
-    /device.model does not match trusted preflight/,
-  );
+    const reused = canonicalDossier(preflight);
+    reused.threatReview.secretOrKeystoreLeakage.evidenceReferences = [
+      reused.threatReview.packageImpersonationOrConfusion.evidenceReferences[0],
+    ];
+    assert.throws(() => validateW15JPreflight(reused, preflight), /reuses another/);
+  }));
 
-  const wrongGateway = clone(canonicalDossier());
-  wrongGateway.environment.gatewayIdentity = 'gateway-other';
-  assert.throws(
-    () => validateW15JPreflight(wrongGateway, preflight),
-    /environment.gatewayIdentity does not match trusted preflight/,
-  );
+test('requires distinct evidence-bound attestations and evidence-bound handoffs', () =>
+  withFixture(({ dossier, preflight }) => {
+    dossier.finalization.independentReviewReference =
+      dossier.finalization.operatorAttestationReference;
+    assert.throws(
+      () => validateW15JPreflight(dossier, preflight),
+      /must be distinct|do not match parsed trusted attestations/,
+    );
 
-  const missingBootstrapMapping = {
-    expected: preflight.expected,
-    adbReverseMappings: [{ host: 'tcp', port: 8080, status: 'PRESENT' }],
-  };
-  assert.throws(
-    () => validateW15JPreflight(canonicalDossier(), missingBootstrapMapping),
-    /ADB reverse mapping tcp:8081 is not PRESENT/,
-  );
-});
+    const handoff = canonicalDossier(preflight);
+    handoff.handoffs.w17Telemetry.push({
+      downstreamOwner: 'W17',
+      evidenceReferences: ['invented.txt'],
+    });
+    assert.throws(
+      () => validateW15JPreflight(handoff, preflight),
+      /not bound by the final evidence manifest/,
+    );
+  }));
 
-test('requires exact collector keys and dossier-level evidence references', () => {
-  for (const collectorEvidence of [{}, { rawDirectory: 'physical/raw' }]) {
-    const dossier = canonicalDossier();
-    dossier.collectorEvidence = collectorEvidence;
-    assert.throws(() => validateW15JPreflight(dossier, preflight), /collectorEvidence/);
-  }
-  const dossier = canonicalDossier();
-  delete dossier.evidenceReferences;
-  assert.throws(
-    () => validateW15JPreflight(dossier, preflight),
-    /evidenceReferences must not be empty/,
-  );
-});
+test('requires the separately manifested wake matrix and at least 100 attempts', () =>
+  withFixture(({ dossier, preflight }) => {
+    delete dossier.wakeEvidence;
+    assert.throws(() => validateW15JPreflight(dossier, preflight), /wake evidence is required/);
 
-test('CLI requires a trusted preflight file and validates both inputs', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'w15j-preflight-'));
-  const dossierPath = join(directory, 'dossier.json');
-  const preflightPath = join(directory, 'preflight.json');
-  writeFileSync(dossierPath, JSON.stringify(canonicalDossier()));
-  writeFileSync(preflightPath, JSON.stringify(preflight));
-  const modulePath = fileURLToPath(import.meta.resolve('./w15j-preflight.mjs'));
-  const missing = spawnSync(process.execPath, [modulePath, dossierPath], {
-    encoding: 'utf8',
-  });
-  assert.equal(missing.status, 2);
-  assert.match(missing.stderr, /Usage: .*trusted-preflight\.json/);
-  const output = execFileSync(process.execPath, [modulePath, dossierPath, preflightPath], {
-    encoding: 'utf8',
-  });
-  assert.match(output, /W15J_PREFLIGHT_READY candidate=/);
-  rmSync(directory, { recursive: true, force: true });
-});
+    const under = canonicalDossier(preflight);
+    under.wakeEvidence.deliberateAttempts = 99;
+    assert.throws(() => validateW15JPreflight(under, preflight), />= 100/);
+  }));
 
-test('does not mutate the canonical evidence record', () => {
-  const dossier = canonicalDossier();
-  const before = JSON.stringify(dossier);
-  validateW15JPreflight(dossier, preflight);
-  assert.equal(JSON.stringify(dossier), before);
-});
+test('requires threat review, resource observations, gates, and manifested attestations', () =>
+  withFixture(({ dossier, preflight }) => {
+    delete dossier.threatReview.packageImpersonationOrConfusion;
+    assert.throws(
+      () => validateW15JPreflight(dossier, preflight),
+      /packageImpersonationOrConfusion is required/,
+    );
+
+    const missingResource = canonicalDossier(preflight);
+    delete missingResource.resourceObservations.cpu;
+    assert.throws(
+      () => validateW15JPreflight(missingResource, preflight),
+      /resourceObservations.cpu is required/,
+    );
+
+    const fakeAttestation = canonicalDossier(preflight);
+    fakeAttestation.finalization.independentReviewReference = 'fake-review.txt';
+    assert.throws(
+      () => validateW15JPreflight(fakeAttestation, preflight),
+      /do not match parsed trusted attestations/,
+    );
+  }));
+
+test('CLI rebuilds trust from evidence plus independent tuple and never auto-accepts', () =>
+  withFixture(({ directory, dossier, controlTower }) => {
+    const inputDirectory = mkdtempSync(join(tmpdir(), 'w15j-cli-input-'));
+    const dossierPath = join(inputDirectory, 'dossier.json');
+    const controlTowerPath = join(inputDirectory, 'control-tower.json');
+    writeFileSync(dossierPath, JSON.stringify(dossier));
+    writeFileSync(controlTowerPath, JSON.stringify(controlTower));
+    const modulePath = fileURLToPath(import.meta.resolve('./w15j-preflight.mjs'));
+    const missing = spawnSync(process.execPath, [modulePath, dossierPath], { encoding: 'utf8' });
+    assert.equal(missing.status, 2);
+    try {
+      const output = execFileSync(
+        process.execPath,
+        [modulePath, dossierPath, directory, controlTowerPath],
+        { encoding: 'utf8' },
+      );
+      assert.match(output, /W15J_PREFLIGHT_LINT_READY_NOT_ACCEPTED/);
+      assert.doesNotMatch(output, /DP5_PASS|PHYSICALLY_ACCEPTED/u);
+    } finally {
+      rmSync(inputDirectory, { recursive: true, force: true });
+    }
+  }));
+
+test('does not mutate the canonical evidence record', () =>
+  withFixture(({ dossier, preflight }) => {
+    const before = JSON.stringify(dossier);
+    validateW15JPreflight(dossier, preflight);
+    assert.equal(JSON.stringify(dossier), before);
+    assert.equal(dossier.candidateSha, TUPLE.androidCandidateSha);
+  }));
