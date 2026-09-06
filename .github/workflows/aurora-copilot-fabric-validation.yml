@@ -32,7 +32,7 @@ jobs:
   validate-fabric:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate governed Aurora DAG
         run: node tools/copilot/load-task-graph.mjs
       - name: Validate Copilot execution mode
