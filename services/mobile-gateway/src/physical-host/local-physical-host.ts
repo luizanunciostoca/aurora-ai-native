@@ -247,9 +247,7 @@ export class W15JLocalPhysicalHost {
     });
   }
 
-  stageExecutionState(
-    seed: W15JPhysicalExecutionStateSeed,
-  ): W15JPhysicalExecutionStateStageResult {
+  stageExecutionState(seed: W15JPhysicalExecutionStateSeed): W15JPhysicalExecutionStateStageResult {
     return this.#executionStateStager.stage(seed);
   }
 
