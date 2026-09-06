@@ -15,7 +15,10 @@ export interface ContainmentStateKey {
 export interface DurableContainmentState {
   readonly key: ContainmentStateKey;
   readonly snapshot: Omit<FailureContainmentSnapshot, 'circuit'> & {
-    readonly circuit: Omit<FailureContainmentSnapshot['circuit'], 'halfOpenProbeInFlight' | 'halfOpenProbeActionIntentId'>;
+    readonly circuit: Omit<
+      FailureContainmentSnapshot['circuit'],
+      'halfOpenProbeInFlight' | 'halfOpenProbeActionIntentId'
+    >;
   };
   readonly version: number;
   readonly updatedAt: Rfc3339Timestamp;
@@ -84,7 +87,10 @@ function validTimestamp(value: string | null): boolean {
   );
 }
 
-function rowToState(row: ContainmentStateRow, key: ContainmentStateKey): DurableContainmentState | undefined {
+function rowToState(
+  row: ContainmentStateRow,
+  key: ContainmentStateKey,
+): DurableContainmentState | undefined {
   if (
     row.tenant_id !== key.tenantId ||
     row.dependency_id !== key.dependencyId ||
@@ -193,11 +199,16 @@ export class PostgresContainmentStateStore {
   public async read(key: ContainmentStateKey): Promise<ContainmentStateRead> {
     try {
       const statement = readContainmentStateStatement(key);
-      const result = await this.client.query<ContainmentStateRow>(statement.text, statement.values);
+      const result = await this.client.query<ContainmentStateRow>(
+        statement.text,
+        statement.values,
+      );
       const row = result.rows[0];
       if (row === undefined) return { status: 'MISSING' };
       const state = rowToState(row, key);
-      return state === undefined ? { status: 'UNAVAILABLE' } : { status: 'FOUND', state };
+      return state === undefined
+        ? { status: 'UNAVAILABLE' }
+        : { status: 'FOUND', state };
     } catch {
       return { status: 'UNAVAILABLE' };
     }
@@ -210,7 +221,9 @@ export class PostgresContainmentStateStore {
       const row = result.rows[0];
       if (row === undefined) return { status: 'STALE' };
       const updated = rowToState(row, state.key);
-      return updated === undefined ? { status: 'UNAVAILABLE' } : { status: 'UPDATED', state: updated };
+      return updated === undefined
+        ? { status: 'UNAVAILABLE' }
+        : { status: 'UPDATED', state: updated };
     } catch {
       return { status: 'UNAVAILABLE' };
     }
