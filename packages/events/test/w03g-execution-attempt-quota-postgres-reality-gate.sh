@@ -66,7 +66,7 @@ fi
 echo 'W03G_POSTGRES_PASS R_MISMATCHED_QUOTA_PAIR_REJECTED'
 
 # Failure boundary: an unavailable database must produce a non-zero operation, never a guessed success.
-BAD_URL='******127.0.0.1:1/aurora_w03g'
+BAD_URL='host=127.0.0.1 port=1 dbname=aurora_w03g connect_timeout=2'
 if psql "$BAD_URL" -X -v ON_ERROR_STOP=1 -qAt -c 'SELECT 1' >/dev/null 2>&1; then
   echo 'W03G_POSTGRES_FAIL DB unavailable boundary unexpectedly succeeded' >&2
   exit 1
