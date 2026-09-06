@@ -42,7 +42,13 @@ test('factory receives current W14/W03 owners including durable attempt quota an
       clock: () => 1_788_670_000_000,
     },
     {
-      createVoiceIntake: (w14Dispatch, idempotencyFence, targetBindings, attemptQuotaState, containmentState) => {
+      createVoiceIntake: (
+        w14Dispatch,
+        idempotencyFence,
+        targetBindings,
+        attemptQuotaState,
+        containmentState,
+      ) => {
         dispatch = w14Dispatch;
         fence = idempotencyFence;
         targets = targetBindings;
