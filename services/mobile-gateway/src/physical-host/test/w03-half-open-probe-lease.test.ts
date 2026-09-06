@@ -106,7 +106,10 @@ test('same owner is idempotent while competing active owner is rejected', () => 
 
 test('heartbeat extends only an exact current unexpired owner', () => {
   const sql = new FakeSql();
-  sql.outputs.push(row('RENEWED'), `NOT_CURRENT_OWNER\t${OTHER_ACTION}\tw07-half-open-probe\t${OTHER_ACTION}\tactive\t${EXPIRY_MS}\n`);
+  sql.outputs.push(
+    row('RENEWED'),
+    `NOT_CURRENT_OWNER\t${OTHER_ACTION}\tw07-half-open-probe\t${OTHER_ACTION}\tactive\t${EXPIRY_MS}\n`,
+  );
   const adapter = new W03PostgresHalfOpenProbeLease(sql);
 
   const renewed = adapter.heartbeat(acquireInput());
