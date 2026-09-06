@@ -131,10 +131,14 @@ export function buildInsertExecutionAttemptQuotaStatement(
 /**
  * Optimistic-concurrency mutation: only the writer holding the current
  * `version` can advance the durable attempt/quota state. A stale writer
- * affects zero rows instead of silently clobbering newer state. This
- * statement only persists counters/quota; it grants no authority, outcome
- * or retry permission and does not itself decide retry eligibility -
- * that remains W07 reconciliation/retry-owned.
+ * affects zero rows instead of silently clobbering newer state. Version is
+ * the sole fencing condition - `updated_at` is not part of the `WHERE`
+ * clause, so a caller cannot confuse a legitimate version match with a
+ * clock-skew rejection (the read-side resolver independently rejects
+ * future-dated/stale snapshots; this statement only records the write-time
+ * `now` value). This statement only persists counters/quota; it grants no
+ * authority, outcome or retry permission and does not itself decide retry
+ * eligibility - that remains W07 reconciliation/retry-owned.
  *
  * This is a full-row replace, not a partial patch: every call must supply
  * the complete current `quotaLimit`/`quotaUsed` pair (or omit both to clear
@@ -155,7 +159,6 @@ WHERE tenant_id = $1
   AND action_intent_id = $2
   AND execution_ref = $3
   AND version = $9
-  AND updated_at <= $8::timestamptz
 RETURNING tenant_id, action_intent_id, execution_ref, attempt_number, max_attempts,
           quota_limit, quota_used, version, updated_at;
 `.trim();

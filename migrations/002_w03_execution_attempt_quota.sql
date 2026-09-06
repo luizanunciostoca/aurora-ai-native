@@ -16,11 +16,15 @@ CREATE TABLE IF NOT EXISTS w03_execution_attempt_quota (
     tenant_id TEXT NOT NULL CHECK (tenant_id ~ '^ten_[0-9A-HJKMNP-TV-Z]{26}$'),
     action_intent_id TEXT NOT NULL CHECK (action_intent_id ~ '^act_[0-9A-HJKMNP-TV-Z]{26}$'),
     execution_ref TEXT NOT NULL CHECK (
-        execution_ref ~ '^[A-Za-z0-9._:/+-]{1,256}$'
+        execution_ref ~ '^[A-Za-z0-9._:/+-]+$' AND char_length(execution_ref) <= 256
     ),
     attempt_number INTEGER NOT NULL CHECK (attempt_number >= 1),
     max_attempts INTEGER NOT NULL CHECK (max_attempts >= 1),
     quota_limit INTEGER CHECK (quota_limit IS NULL OR quota_limit >= 1),
+    -- quota_limit/quota_used are independently nullable at the column level
+    -- (each only bounds its own non-null value); the pairing invariant that
+    -- they must both be present or both be absent is enforced only by the
+    -- table-level CHECK below, not by these column-level CHECKs.
     quota_used INTEGER CHECK (quota_used IS NULL OR quota_used >= 0),
     version BIGINT NOT NULL DEFAULT 1 CHECK (version >= 1),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

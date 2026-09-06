@@ -37,7 +37,7 @@ test('select execution-attempt/quota statement rejects empty key fields', () => 
         actionIntentId,
         executionRef: '',
       }),
-    /executionRef must be non-empty/,
+    /executionRef must contain 1-256 safe characters/,
   );
 });
 
