@@ -21,6 +21,11 @@ jobs:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
+      - name: Diagnostic canonical Prettier diff
+        run: |
+          npx prettier --write tools/test/w15j-real-w07-composition.test.ts
+          git --no-pager diff -- tools/test/w15j-real-w07-composition.test.ts
+          git checkout -- tools/test/w15j-real-w07-composition.test.ts
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
