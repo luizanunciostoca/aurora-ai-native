@@ -150,12 +150,7 @@ export type W03HalfOpenProbeLeaseResult =
 
 interface LeaseRow {
   readonly disposition:
-    | 'ACQUIRED'
-    | 'ALREADY_OWNED'
-    | 'OWNED_BY_OTHER'
-    | 'RENEWED'
-    | 'RELEASED'
-    | 'NOT_CURRENT_OWNER';
+    'ACQUIRED' | 'ALREADY_OWNED' | 'OWNED_BY_OTHER' | 'RENEWED' | 'RELEASED' | 'NOT_CURRENT_OWNER';
   readonly ownerToken: string;
   readonly subjectType: string;
   readonly subjectId: string;
