@@ -73,7 +73,7 @@ jobs:
           s = s.replace("policyTokenId: 'ptk_01ARZ3NDEKTSV4RRFFQ69G5FAV'", "policyTokenId: 'ptk_test_fixture'")
           p.write_text(s)
           PY
-          npx prettier --write "${files[@]}"
+          npx prettier --write "${files[@]:1}"
           npm test
           rm .github/workflows/prototype-containment-clean-transplant.yml
           git config user.name 'Idebook Digital'
