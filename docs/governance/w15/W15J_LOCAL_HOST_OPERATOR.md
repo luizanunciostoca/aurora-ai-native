@@ -70,9 +70,37 @@ identity is fixed as `aurora-w15j-local-host`; its version is derived as `git:<e
 from provider input. One canonical UTC timestamp and the positive host PID are captured after host
 start and before the probes: each probe records them as `observed_at_utc` and `process_id`, while
 `host-ready-announcement.txt` records the same values as `started_at_utc` and `process_id`. The
-contract remains exactly nine files. The bootstrap probe uses `GET`; it never submits or consumes
-the one-shot `gbr_*`. No bootstrap reference, provider text, principal, database URL,
-authentication material, policy, outcome or retry decision is written to readiness storage.
+host creates a new non-secret `whi_<64 lowercase hex>` instance nonce for every start. The same
+nonce is returned by `GET /v1/local-host/instance` on both existing listeners, with distinct
+`DEVICE_GATEWAY` and `BOOTSTRAP_EXCHANGE` roles, and is recorded as `host_instance_id` in the ready
+readiness file and both listener captures. The launcher also requires the normalized exact response
+headers `cache-control: no-store` and `pragma: no-cache`; the listener captures record them as
+`cache_control=no-store` and `pragma=no-cache`. Any body or header drift rejects startup and removes
+partial readiness output. The instance ID is deliberately absent from the stdout bootstrap
+announcement. A collector must query this route on both ports again at finalization and require the
+same nonce and exact cache headers; a prior 405 response alone is not listener-ownership evidence. The contract remains
+exactly nine files. The bootstrap probe uses `GET`; it never submits or consumes the one-shot
+`gbr_*`. No bootstrap reference, provider text, principal, database URL, authentication material,
+policy, outcome or retry decision is written to readiness storage.
+
+The instance route returns HTTP 200 with this exact no-store JSON shape:
+
+```json
+{
+  "kind": "LOCAL_HOST_INSTANCE",
+  "hostInstanceId": "whi_<64 lowercase hex>",
+  "listenerRole": "DEVICE_GATEWAY",
+  "authorizesExecution": false,
+  "provesExecutionSuccess": false,
+  "retryAuthorized": false,
+  "physicalEvidenceStatus": "NOT_RUN"
+}
+```
+
+Port 8081 uses the same exact keys and values except `listenerRole` is `BOOTSTRAP_EXCHANGE`.
+
+Its nonce proves only that both responses came from the same live host instance. It is not an
+authentication credential, authority decision, execution outcome, physical PASS or retry grant.
 
 On success stdout contains one JSON line with the existing allowlisted
 `W15J_LOCAL_PHYSICAL_HOST_READY` announcement. It identifies only the opaque one-shot `gbr_*`

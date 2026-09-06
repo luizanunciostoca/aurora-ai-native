@@ -39,6 +39,7 @@ const ANNOUNCEMENT_KEYS = new Set([
   'retryAuthorized',
 ]);
 const BOOTSTRAP_REFERENCE = /^gbr_[A-Za-z0-9_-]{43,128}$/u;
+const HOST_INSTANCE_ID = /^whi_[a-f0-9]{64}$/u;
 const GIT_SHA = /^[a-f0-9]{40}$/u;
 const CANONICAL_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const READINESS_FILES = new Set([
@@ -316,7 +317,24 @@ function unchangedGitSnapshot(root, expected) {
   return current;
 }
 
-function probeHttpServer({ port, path, expectedStatus, responseField, expectedCode }) {
+function normalizedResponseHeader(headers, name) {
+  const value = headers[name];
+  if (typeof value === 'string') return value.trim().toLowerCase();
+  if (Array.isArray(value) && value.length === 1 && typeof value[0] === 'string') {
+    return value[0].trim().toLowerCase();
+  }
+  return null;
+}
+
+export function probeW15JLocalHostHttpServer({
+  port,
+  path,
+  expectedStatus,
+  responseField,
+  expectedCode,
+  expectedHostInstanceId,
+  expectedListenerRole,
+}) {
   return new Promise((resolveProbe, rejectProbe) => {
     const probe = request(
       {
@@ -342,6 +360,52 @@ function probeHttpServer({ port, path, expectedStatus, responseField, expectedCo
         response.on('end', () => {
           try {
             const parsed = JSON.parse(body);
+            if (expectedHostInstanceId !== undefined) {
+              const cacheControl = normalizedResponseHeader(response.headers, 'cache-control');
+              const pragma = normalizedResponseHeader(response.headers, 'pragma');
+              const expectedKeys = new Set([
+                'kind',
+                'hostInstanceId',
+                'listenerRole',
+                'authorizesExecution',
+                'provesExecutionSuccess',
+                'retryAuthorized',
+                'physicalEvidenceStatus',
+              ]);
+              if (
+                response.statusCode !== expectedStatus ||
+                parsed === null ||
+                typeof parsed !== 'object' ||
+                Array.isArray(parsed) ||
+                Object.keys(parsed).length !== expectedKeys.size ||
+                !Object.keys(parsed).every((key) => expectedKeys.has(key)) ||
+                parsed.kind !== 'LOCAL_HOST_INSTANCE' ||
+                parsed.hostInstanceId !== expectedHostInstanceId ||
+                parsed.listenerRole !== expectedListenerRole ||
+                parsed.authorizesExecution !== false ||
+                parsed.provesExecutionSuccess !== false ||
+                parsed.retryAuthorized !== false ||
+                parsed.physicalEvidenceStatus !== 'NOT_RUN' ||
+                cacheControl !== 'no-store' ||
+                pragma !== 'no-cache'
+              ) {
+                throw new Error('unexpected host instance probe response');
+              }
+              resolveProbe(
+                Object.freeze({
+                  port,
+                  path,
+                  status: expectedStatus,
+                  resultCode: 'LOCAL_HOST_INSTANCE',
+                  hostInstanceId: parsed.hostInstanceId,
+                  listenerRole: parsed.listenerRole,
+                  cacheControl,
+                  pragma,
+                  responseBytes: bytes,
+                }),
+              );
+              return;
+            }
             if (
               response.statusCode !== expectedStatus ||
               parsed === null ||
@@ -374,7 +438,7 @@ function probeHttpServer({ port, path, expectedStatus, responseField, expectedCo
 }
 
 function probeCapture(kind, probe, runtimeMetadata) {
-  return [
+  const result = [
     `probe=${kind}`,
     `observed_at_utc=${runtimeMetadata.startedAtUtc}`,
     `process_id=${runtimeMetadata.processId}`,
@@ -383,12 +447,21 @@ function probeCapture(kind, probe, runtimeMetadata) {
     'method=GET',
     `path=${probe.path}`,
     `http_status=${probe.status}`,
-    `server_error_code=${probe.errorCode}`,
+    ...(probe.resultCode === undefined
+      ? [`server_error_code=${probe.errorCode}`]
+      : [
+          `server_result_code=${probe.resultCode}`,
+          `host_instance_id=${probe.hostInstanceId}`,
+          `listener_role=${probe.listenerRole}`,
+          `cache_control=${probe.cacheControl}`,
+          `pragma=${probe.pragma}`,
+        ]),
     `response_bytes=${probe.responseBytes}`,
     'authorizes_execution=false',
     'physical_evidence_status=NOT_RUN',
     '',
-  ].join('\n');
+  ];
+  return result.join('\n');
 }
 
 function captureReadinessRuntimeMetadata() {
@@ -400,30 +473,36 @@ function captureReadinessRuntimeMetadata() {
   return Object.freeze({ startedAtUtc, processId });
 }
 
-async function writeHostReadiness(readiness, hostCandidateSha, runtimeMetadata, verifySourceState) {
+async function writeHostReadiness(
+  readiness,
+  hostCandidateSha,
+  hostInstanceId,
+  runtimeMetadata,
+  verifySourceState,
+) {
   const probes = await Promise.all([
-    probeHttpServer({
+    probeW15JLocalHostHttpServer({
       port: 8080,
-      path: '/__aurora_readiness_listener__',
-      expectedStatus: 404,
-      responseField: 'transportError',
-      expectedCode: 'ROUTE_NOT_FOUND',
+      path: '/v1/local-host/instance',
+      expectedStatus: 200,
+      expectedHostInstanceId: hostInstanceId,
+      expectedListenerRole: 'DEVICE_GATEWAY',
     }),
-    probeHttpServer({
+    probeW15JLocalHostHttpServer({
       port: 8081,
-      path: '/__aurora_readiness_listener__',
-      expectedStatus: 404,
-      responseField: 'bootstrapError',
-      expectedCode: 'ROUTE_NOT_FOUND',
+      path: '/v1/local-host/instance',
+      expectedStatus: 200,
+      expectedHostInstanceId: hostInstanceId,
+      expectedListenerRole: 'BOOTSTRAP_EXCHANGE',
     }),
-    probeHttpServer({
+    probeW15JLocalHostHttpServer({
       port: 8080,
       path: '/v1/gateway/sessions/open',
       expectedStatus: 405,
       responseField: 'transportError',
       expectedCode: 'METHOD_NOT_ALLOWED',
     }),
-    probeHttpServer({
+    probeW15JLocalHostHttpServer({
       port: 8081,
       path: '/v1/gateway/bootstrap/exchange',
       expectedStatus: 405,
@@ -432,8 +511,8 @@ async function writeHostReadiness(readiness, hostCandidateSha, runtimeMetadata, 
     }),
   ]);
   const captures = [
-    ['host-listener-8080.txt', 'HTTP_LISTENER_RESPONSE', probes[0]],
-    ['host-listener-8081.txt', 'HTTP_LISTENER_RESPONSE', probes[1]],
+    ['host-listener-8080.txt', 'HTTP_LISTENER_INSTANCE_RESPONSE', probes[0]],
+    ['host-listener-8081.txt', 'HTTP_LISTENER_INSTANCE_RESPONSE', probes[1]],
     ['host-health-8080.txt', 'HTTP_ROUTE_HEALTH_RESPONSE', probes[2]],
     ['host-health-8081.txt', 'HTTP_ROUTE_HEALTH_RESPONSE', probes[3]],
   ];
@@ -449,6 +528,7 @@ async function writeHostReadiness(readiness, hostCandidateSha, runtimeMetadata, 
       `host_candidate_sha=${hostCandidateSha}`,
       `gateway_identity=${GATEWAY_IDENTITY}`,
       `gateway_version=git:${hostCandidateSha}`,
+      `host_instance_id=${hostInstanceId}`,
       `started_at_utc=${runtimeMetadata.startedAtUtc}`,
       `process_id=${runtimeMetadata.processId}`,
       'device_gateway_port=8080',
@@ -568,9 +648,16 @@ export async function runW15JLocalHostLauncher(runtime = {}) {
         }),
     });
     if (readyAnnouncement === undefined) throw new Error('runner did not announce readiness');
+    if (!HOST_INSTANCE_ID.test(operatorHandle.hostInstanceId)) {
+      throw new Error('runner host instance identifier is invalid');
+    }
     const runtimeMetadata = captureReadinessRuntimeMetadata();
-    await writeHostReadiness(readiness, startupSnapshot.head, runtimeMetadata, () =>
-      unchangedGitSnapshot(root, startupSnapshot),
+    await writeHostReadiness(
+      readiness,
+      startupSnapshot.head,
+      operatorHandle.hostInstanceId,
+      runtimeMetadata,
+      () => unchangedGitSnapshot(root, startupSnapshot),
     );
     unchangedGitSnapshot(root, startupSnapshot);
     allowlistedStdoutWrite(`${JSON.stringify(readyAnnouncement)}\n`);

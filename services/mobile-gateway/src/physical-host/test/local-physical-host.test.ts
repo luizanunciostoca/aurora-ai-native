@@ -136,6 +136,73 @@ async function post(
   });
 }
 
+async function get(
+  port: number,
+  path: string,
+): Promise<{
+  statusCode: number;
+  headers: Readonly<Record<string, string | readonly string[] | undefined>>;
+  body: string;
+}> {
+  return new Promise((resolve, reject) => {
+    const req = request(
+      { hostname: '127.0.0.1', port, path, method: 'GET' },
+      (response: {
+        statusCode?: number;
+        headers: Readonly<Record<string, string | readonly string[] | undefined>>;
+        on(event: string, listener: (chunk?: unknown) => void): void;
+      }) => {
+        let responseBody = '';
+        response.on('data', (chunk) => {
+          responseBody += String(chunk ?? '');
+        });
+        response.on('end', () => {
+          resolve({
+            statusCode: response.statusCode ?? 0,
+            headers: response.headers,
+            body: responseBody,
+          });
+        });
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+function assertHostInstance(
+  response: Readonly<{
+    statusCode: number;
+    headers: Readonly<Record<string, string | readonly string[] | undefined>>;
+    body: string;
+  }>,
+  hostInstanceId: string,
+  listenerRole: 'DEVICE_GATEWAY' | 'BOOTSTRAP_EXCHANGE',
+): void {
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.headers['cache-control'], 'no-store');
+  assert.equal(response.headers.pragma, 'no-cache');
+  const body = JSON.parse(response.body) as Readonly<Record<string, unknown>>;
+  assert.deepEqual(Object.keys(body).sort(), [
+    'authorizesExecution',
+    'hostInstanceId',
+    'kind',
+    'listenerRole',
+    'physicalEvidenceStatus',
+    'provesExecutionSuccess',
+    'retryAuthorized',
+  ]);
+  assert.deepEqual(body, {
+    kind: 'LOCAL_HOST_INSTANCE',
+    hostInstanceId,
+    listenerRole,
+    authorizesExecution: false,
+    provesExecutionSuccess: false,
+    retryAuthorized: false,
+    physicalEvidenceStatus: 'NOT_RUN',
+  });
+}
+
 test('starts loopback gateway and bootstrap listeners and opens W14 session from one-shot gbr exchange', async () => {
   const host = new W15JLocalPhysicalHost(
     {
@@ -158,6 +225,17 @@ test('starts loopback gateway and bootstrap listeners and opens W14 session from
     assert.equal(address.hostMode, 'LOOPBACK_ONLY');
     assert.equal(address.physicalEvidenceStatus, 'NOT_RUN');
     assert.equal(address.authorizesExecution, false);
+    assert.match(address.hostInstanceId, /^whi_[a-f0-9]{64}$/u);
+    assertHostInstance(
+      await get(address.gateway.port, '/v1/local-host/instance'),
+      address.hostInstanceId,
+      'DEVICE_GATEWAY',
+    );
+    assertHostInstance(
+      await get(address.bootstrap.port, '/v1/local-host/instance'),
+      address.hostInstanceId,
+      'BOOTSTRAP_EXCHANGE',
+    );
 
     const exchange = await post(address.bootstrap.port, address.bootstrap.path, {
       bootstrapReference: staged.value.bootstrapReference,
@@ -189,6 +267,19 @@ test('starts loopback gateway and bootstrap listeners and opens W14 session from
     });
     assert.equal(replay.statusCode, 401);
     assert.equal(replay.body.includes(staged.value.bootstrapReference), false);
+  } finally {
+    await host.stop();
+  }
+
+  const restarted = await host.start();
+  try {
+    assert.match(restarted.hostInstanceId, /^whi_[a-f0-9]{64}$/u);
+    assert.notEqual(restarted.hostInstanceId, address.hostInstanceId);
+    assertHostInstance(
+      await get(restarted.gateway.port, '/v1/local-host/instance'),
+      restarted.hostInstanceId,
+      'DEVICE_GATEWAY',
+    );
   } finally {
     await host.stop();
   }
