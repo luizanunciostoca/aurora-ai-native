@@ -174,7 +174,7 @@ test('fails closed on stale durable state older than maxAgeMs, and on future-dat
   });
 
   assert.deepEqual(stale, { status: 'REJECTED', reason: 'STATE_STALE' });
-  assert.deepEqual(future, { status: 'REJECTED', reason: 'STATE_STALE' });
+  assert.deepEqual(future, { status: 'REJECTED', reason: 'STATE_FUTURE_DATED' });
   assert.deepEqual(malformedUpdatedAt, { status: 'REJECTED', reason: 'STATE_MALFORMED' });
 });
 

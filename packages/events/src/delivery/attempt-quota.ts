@@ -22,7 +22,13 @@ export interface ExecutionAttemptQuotaWrite extends ExecutionAttemptQuotaKey {
   readonly now: string;
 }
 
-/** Optimistic-concurrency write: only succeeds against the currently-read version. */
+/**
+ * Optimistic-concurrency write: only succeeds against the currently-read
+ * version. This is a full-row replace: `quotaLimit`/`quotaUsed` must be the
+ * complete current quota state (or both omitted to clear it), not a partial
+ * patch - an omitted quota here clears any existing quota rather than
+ * preserving it.
+ */
 export interface ExecutionAttemptQuotaCompareAndSwapInput extends ExecutionAttemptQuotaWrite {
   readonly expectedVersion: number;
 }
@@ -120,6 +126,13 @@ export function buildInsertExecutionAttemptQuotaStatement(
  * statement only persists counters/quota; it grants no authority, outcome
  * or retry permission and does not itself decide retry eligibility -
  * that remains W07 reconciliation/retry-owned.
+ *
+ * This is a full-row replace, not a partial patch: every call must supply
+ * the complete current `quotaLimit`/`quotaUsed` pair (or omit both to clear
+ * quota tracking). A caller that only wants to advance `attemptNumber` must
+ * still re-supply the quota values it read alongside `expectedVersion`;
+ * omitting quota here silently clears it rather than preserving the prior
+ * value.
  */
 export const COMPARE_AND_SWAP_EXECUTION_ATTEMPT_QUOTA_SQL = `
 UPDATE w03_execution_attempt_quota

@@ -14,7 +14,8 @@ export type AttemptQuotaRejectionReason =
   | 'STATE_ABSENT'
   | 'STATE_MALFORMED'
   | 'CONTEXT_MISMATCH'
-  | 'STATE_STALE';
+  | 'STATE_STALE'
+  | 'STATE_FUTURE_DATED';
 
 export type AttemptQuotaResolution =
   | Readonly<{
@@ -145,7 +146,10 @@ export function resolveCurrentAttemptQuota(
   }
   const updatedAtMs = parseTime(snapshot.updatedAt);
   if (updatedAtMs === undefined) return { status: 'REJECTED', reason: 'STATE_MALFORMED' };
-  if (updatedAtMs > nowMs || nowMs - updatedAtMs > maxAgeMs) {
+  if (updatedAtMs > nowMs) {
+    return { status: 'REJECTED', reason: 'STATE_FUTURE_DATED' };
+  }
+  if (nowMs - updatedAtMs > maxAgeMs) {
     return { status: 'REJECTED', reason: 'STATE_STALE' };
   }
 
