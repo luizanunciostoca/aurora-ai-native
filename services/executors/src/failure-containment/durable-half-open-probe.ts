@@ -25,7 +25,7 @@ export interface DurableHalfOpenProbeReleaseRequest {
 export type DurableHalfOpenProbePortResult =
   | Readonly<{
       ok: true;
-      disposition: 'ACQUIRED' | 'ALREADY_OWNED' | 'RELEASED';
+      disposition: 'ACQUIRED' | 'ALREADY_OWNED' | 'RENEWED' | 'RELEASED';
       circuitKey: string;
       probeActionIntentId: ActionIntent['actionIntentId'];
       leaseReference: string;
@@ -44,6 +44,7 @@ export type DurableHalfOpenProbePortResult =
 
 export interface DurableHalfOpenProbePort {
   reserve(input: DurableHalfOpenProbeRequest): DurableHalfOpenProbePortResult;
+  heartbeat(input: DurableHalfOpenProbeRequest): DurableHalfOpenProbePortResult;
   release(input: DurableHalfOpenProbeReleaseRequest): DurableHalfOpenProbePortResult;
 }
 
@@ -92,7 +93,7 @@ function failed(code: 'UNAVAILABLE' | 'MALFORMED'): DurableHalfOpenProbeFenceRes
 function normalizePortResult(
   result: DurableHalfOpenProbePortResult,
   request: Pick<DurableHalfOpenProbeRequest, 'circuitKey' | 'probeActionIntentId'>,
-  mode: 'RESERVE' | 'RELEASE',
+  mode: 'RESERVE' | 'HEARTBEAT' | 'RELEASE',
 ): DurableHalfOpenProbeFenceResult {
   if (!result.ok) {
     if (
@@ -127,6 +128,17 @@ function normalizePortResult(
     return result;
   }
 
+  if (mode === 'HEARTBEAT') {
+    if (
+      result.disposition !== 'RENEWED' ||
+      result.expiresAt === undefined ||
+      !validTimestamp(result.expiresAt)
+    ) {
+      return failed('UNAVAILABLE');
+    }
+    return result;
+  }
+
   if (result.disposition !== 'RELEASED' || result.expiresAt !== undefined) {
     return failed('UNAVAILABLE');
   }
@@ -152,6 +164,20 @@ export function reserveDurableHalfOpenProbe(
     return failed('UNAVAILABLE');
   }
   return normalizePortResult(result, request, 'RESERVE');
+}
+
+export function heartbeatDurableHalfOpenProbe(
+  request: DurableHalfOpenProbeRequest,
+  port: DurableHalfOpenProbePort,
+): DurableHalfOpenProbeFenceResult {
+  if (!validRequest(request)) return failed('MALFORMED');
+  let result: DurableHalfOpenProbePortResult;
+  try {
+    result = port.heartbeat(request);
+  } catch {
+    return failed('UNAVAILABLE');
+  }
+  return normalizePortResult(result, request, 'HEARTBEAT');
 }
 
 export function releaseDurableHalfOpenProbe(
