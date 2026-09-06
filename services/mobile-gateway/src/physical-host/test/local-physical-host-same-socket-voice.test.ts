@@ -114,7 +114,9 @@ function proofFactory() {
   const exported = publicKey.export({ format: 'der', type: 'spki' });
   const spki = Buffer.from(exported).toString('base64url');
   return (message: string): string => {
-    const signature = sign('sha256', Buffer.from(message, 'utf8'), privateKey).toString('base64url');
+    const signature = sign('sha256', Buffer.from(message, 'utf8'), privateKey).toString(
+      'base64url',
+    );
     return Buffer.from(JSON.stringify({ v: '1', alg: 'ES256', spki, signature }), 'utf8').toString(
       'base64url',
     );
@@ -180,171 +182,174 @@ const receiptEvidenceIngress: W07DeviceReceiptEvidenceIngressPort = {
   }),
 };
 
-test('real bootstrap gateway crypto registration trust and voice route share one authenticated W14 socket', async () => {
-  let observedVoice: unknown = null;
-  const voiceIntake: VoiceCandidateIntakePort = {
-    evaluate: (input) => {
-      observedVoice = input;
-      return {
+test(
+  'real bootstrap gateway crypto registration trust and voice route share one authenticated W14 socket',
+  async () => {
+    let observedVoice: unknown = null;
+    const voiceIntake: VoiceCandidateIntakePort = {
+      evaluate: (input) => {
+        observedVoice = input;
+        return {
+          ok: true,
+          acceptedForEvaluation: true,
+          authorizesExecution: false,
+          provesExecutionSuccess: false,
+          retryAuthorized: false,
+        };
+      },
+    };
+    const host = new W15JLocalPhysicalHost(
+      {
+        databaseUrl: 'postgresql://unused.invalid/aurora_same_socket_voice',
+        gatewayPort: 0,
+        bootstrapPort: 0,
+        clock: () => NOW,
+      },
+      { voiceIntake, receiptEvidenceIngress },
+    );
+    const staged = host.stageBootstrap(principal);
+    assert.equal(staged.ok, true);
+    if (!staged.ok) throw new Error('bootstrap stage failed');
+
+    const address = await host.start();
+    const bootstrapAgent = new Agent({ keepAlive: false }) as AgentLike;
+    const gatewayAgent = new Agent({ keepAlive: true, maxSockets: 1 }) as AgentLike;
+    const signProof = proofFactory();
+
+    try {
+      const exchange = await postJson(
+        address.bootstrap.port,
+        address.bootstrap.path,
+        { bootstrapReference: staged.value.bootstrapReference },
+        bootstrapAgent,
+      );
+      const grant = successfulValue(exchange);
+      assert.equal(typeof grant.gatewaySessionId, 'string');
+      assert.equal(typeof grant.credential, 'string');
+      const gatewaySessionId = String(grant.gatewaySessionId);
+
+      const opened = await postJson(
+        address.gateway.port,
+        '/v1/gateway/sessions/open',
+        {
+          protocolVersion: '1.0',
+          sessionId: gatewaySessionId,
+          credential: grant.credential,
+          tenantId: grant.tenantId,
+          actor: grant.actor,
+          correlation: { correlationId: grant.correlationId },
+        },
+        gatewayAgent,
+      );
+      const gateway = successfulValue(opened);
+      const connectionId = String(gateway.connectionId);
+      const generation = Number(gateway.generation);
+      assert.equal(generation, 1);
+      assert.equal(gateway.authorizesExecution, false);
+
+      const registered = await postJson(
+        address.gateway.port,
+        '/v1/device/registrations/register',
+        {
+          deviceId: DEVICE_ID,
+          proof: signProof(registrationMessage({ gatewaySessionId, connectionId, generation })),
+        },
+        gatewayAgent,
+      );
+      const registeredResult = successfulRecord(registered);
+      assert.equal(isRecord(registeredResult.record), true);
+      if (!isRecord(registeredResult.record) || !isRecord(registeredResult.record.ref)) {
+        throw new Error('registration response missing canonical DeviceRef');
+      }
+      assert.equal(registeredResult.record.state, 'REGISTERED');
+      assert.equal(registeredResult.record.authorizesExecution, false);
+
+      const activated = await postJson(
+        address.gateway.port,
+        '/v1/device/registrations/activate',
+        {},
+        gatewayAgent,
+      );
+      const activeResult = successfulRecord(activated);
+      assert.equal(isRecord(activeResult.record), true);
+      if (!isRecord(activeResult.record) || !isRecord(activeResult.record.ref)) {
+        throw new Error('activation response missing canonical DeviceRef');
+      }
+      const registrationVersion = Number(activeResult.record.ref.registrationVersion);
+      assert.equal(activeResult.record.state, 'ACTIVE');
+      assert.equal(registrationVersion, 2);
+
+      const trusted = await postJson(
+        address.gateway.port,
+        '/v1/device/sessions/open',
+        {
+          deviceSessionId: DEVICE_SESSION_ID,
+          proof: signProof(
+            attestationMessage({
+              gatewaySessionId,
+              connectionId,
+              generation,
+              registrationVersion,
+            }),
+          ),
+        },
+        gatewayAgent,
+      );
+      const trustResult = successfulRecord(trusted);
+      assert.equal(isRecord(trustResult.snapshot), true);
+      if (!isRecord(trustResult.snapshot)) throw new Error('device trust snapshot missing');
+      assert.equal(trustResult.snapshot.state, 'ACTIVE');
+      assert.equal(trustResult.snapshot.executionPreconditionSatisfied, true);
+      assert.equal(trustResult.snapshot.requiresCurrentAuthorityValidation, true);
+      assert.equal(trustResult.snapshot.authorizesExecution, false);
+
+      const candidate = {
+        commandId: COMMAND_ID,
+        capabilityId: CAPABILITY_ID,
+        normalizedTranscript: 'open camera',
+        requiresW07Authorization: true,
+        authorizesExecution: false,
+      } as const;
+      const voice = await postJson(
+        address.gateway.port,
+        '/v1/device/voice/candidates/evaluate',
+        candidate,
+        gatewayAgent,
+      );
+      assert.equal(voice.statusCode, 202);
+      assert.deepEqual(voice.body, {
         ok: true,
         acceptedForEvaluation: true,
         authorizesExecution: false,
         provesExecutionSuccess: false,
         retryAuthorized: false,
-      };
-    },
-  };
-  const host = new W15JLocalPhysicalHost(
-    {
-      databaseUrl: 'postgresql://unused.invalid/aurora_same_socket_voice',
-      gatewayPort: 0,
-      bootstrapPort: 0,
-      clock: () => NOW,
-    },
-    { voiceIntake, receiptEvidenceIngress },
-  );
-  const staged = host.stageBootstrap(principal);
-  assert.equal(staged.ok, true);
-  if (!staged.ok) throw new Error('bootstrap stage failed');
+      });
+      assert.deepEqual(observedVoice, {
+        candidate,
+        context: {
+          tenantId: TENANT,
+          actorIdentityId: ACTOR,
+          correlationId: CORRELATION,
+          gatewaySessionId,
+          connectionId,
+          deviceSessionId: DEVICE_SESSION_ID,
+          deviceId: DEVICE_ID,
+          registrationVersion,
+        },
+      });
 
-  const address = await host.start();
-  const bootstrapAgent = new Agent({ keepAlive: false }) as AgentLike;
-  const gatewayAgent = new Agent({ keepAlive: true, maxSockets: 1 }) as AgentLike;
-  const signProof = proofFactory();
-
-  try {
-    const exchange = await postJson(
-      address.bootstrap.port,
-      address.bootstrap.path,
-      { bootstrapReference: staged.value.bootstrapReference },
-      bootstrapAgent,
-    );
-    const grant = successfulValue(exchange);
-    assert.equal(typeof grant.gatewaySessionId, 'string');
-    assert.equal(typeof grant.credential, 'string');
-    const gatewaySessionId = String(grant.gatewaySessionId);
-
-    const opened = await postJson(
-      address.gateway.port,
-      '/v1/gateway/sessions/open',
-      {
-        protocolVersion: '1.0',
-        sessionId: gatewaySessionId,
-        credential: grant.credential,
-        tenantId: grant.tenantId,
-        actor: grant.actor,
-        correlation: { correlationId: grant.correlationId },
-      },
-      gatewayAgent,
-    );
-    const gateway = successfulValue(opened);
-    const connectionId = String(gateway.connectionId);
-    const generation = Number(gateway.generation);
-    assert.equal(generation, 1);
-    assert.equal(gateway.authorizesExecution, false);
-
-    const registered = await postJson(
-      address.gateway.port,
-      '/v1/device/registrations/register',
-      {
-        deviceId: DEVICE_ID,
-        proof: signProof(registrationMessage({ gatewaySessionId, connectionId, generation })),
-      },
-      gatewayAgent,
-    );
-    const registeredResult = successfulRecord(registered);
-    assert.equal(isRecord(registeredResult.record), true);
-    if (!isRecord(registeredResult.record) || !isRecord(registeredResult.record.ref)) {
-      throw new Error('registration response missing canonical DeviceRef');
+      const injected = await postJson(
+        address.gateway.port,
+        '/v1/device/voice/candidates/evaluate',
+        { ...candidate, tenantId: 'ten_attacker', retryAuthorized: true },
+        gatewayAgent,
+      );
+      assert.equal(injected.statusCode, 400);
+      assert.equal(JSON.stringify(injected.body).includes('true'), false);
+    } finally {
+      bootstrapAgent.destroy();
+      gatewayAgent.destroy();
+      await host.stop();
     }
-    assert.equal(registeredResult.record.state, 'REGISTERED');
-    assert.equal(registeredResult.record.authorizesExecution, false);
-
-    const activated = await postJson(
-      address.gateway.port,
-      '/v1/device/registrations/activate',
-      {},
-      gatewayAgent,
-    );
-    const activeResult = successfulRecord(activated);
-    assert.equal(isRecord(activeResult.record), true);
-    if (!isRecord(activeResult.record) || !isRecord(activeResult.record.ref)) {
-      throw new Error('activation response missing canonical DeviceRef');
-    }
-    const registrationVersion = Number(activeResult.record.ref.registrationVersion);
-    assert.equal(activeResult.record.state, 'ACTIVE');
-    assert.equal(registrationVersion, 2);
-
-    const trusted = await postJson(
-      address.gateway.port,
-      '/v1/device/sessions/open',
-      {
-        deviceSessionId: DEVICE_SESSION_ID,
-        proof: signProof(
-          attestationMessage({
-            gatewaySessionId,
-            connectionId,
-            generation,
-            registrationVersion,
-          }),
-        ),
-      },
-      gatewayAgent,
-    );
-    const trustResult = successfulRecord(trusted);
-    assert.equal(isRecord(trustResult.snapshot), true);
-    if (!isRecord(trustResult.snapshot)) throw new Error('device trust snapshot missing');
-    assert.equal(trustResult.snapshot.state, 'ACTIVE');
-    assert.equal(trustResult.snapshot.executionPreconditionSatisfied, true);
-    assert.equal(trustResult.snapshot.requiresCurrentAuthorityValidation, true);
-    assert.equal(trustResult.snapshot.authorizesExecution, false);
-
-    const candidate = {
-      commandId: COMMAND_ID,
-      capabilityId: CAPABILITY_ID,
-      normalizedTranscript: 'open camera',
-      requiresW07Authorization: true,
-      authorizesExecution: false,
-    } as const;
-    const voice = await postJson(
-      address.gateway.port,
-      '/v1/device/voice/candidates/evaluate',
-      candidate,
-      gatewayAgent,
-    );
-    assert.equal(voice.statusCode, 202);
-    assert.deepEqual(voice.body, {
-      ok: true,
-      acceptedForEvaluation: true,
-      authorizesExecution: false,
-      provesExecutionSuccess: false,
-      retryAuthorized: false,
-    });
-    assert.deepEqual(observedVoice, {
-      candidate,
-      context: {
-        tenantId: TENANT,
-        actorIdentityId: ACTOR,
-        correlationId: CORRELATION,
-        gatewaySessionId,
-        connectionId,
-        deviceSessionId: DEVICE_SESSION_ID,
-        deviceId: DEVICE_ID,
-        registrationVersion,
-      },
-    });
-
-    const injected = await postJson(
-      address.gateway.port,
-      '/v1/device/voice/candidates/evaluate',
-      { ...candidate, tenantId: 'ten_attacker', retryAuthorized: true },
-      gatewayAgent,
-    );
-    assert.equal(injected.statusCode, 400);
-    assert.equal(JSON.stringify(injected.body).includes('true'), false);
-  } finally {
-    bootstrapAgent.destroy();
-    gatewayAgent.destroy();
-    await host.stop();
-  }
-});
+  },
+);
