@@ -96,7 +96,7 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - name: Download all probe evidence
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: aurora-pro-plus-probe-*
           path: /tmp/aurora-pro-plus-probes
