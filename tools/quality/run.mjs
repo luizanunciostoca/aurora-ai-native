@@ -75,7 +75,27 @@ function typecheck() {
   return 0;
 }
 
-const formatCheck = () => runBinary('prettier', ['--check', '.']);
+const diagnosticFormatPaths = [
+  'services/executors/test/w15j-durable-current-safeguard-source.test.ts',
+  'services/mobile-gateway/src/physical-host/local-physical-host.ts',
+  'services/mobile-gateway/src/physical-host/test/local-physical-host-durable-state.test.ts',
+  'services/mobile-gateway/src/physical-host/test/w03-attempt-quota-source.test.ts',
+  'services/mobile-gateway/src/physical-host/w03-physical-execution-state-stage.ts',
+];
+function formatCheck() {
+  const status = runBinary('prettier', ['--write', ...diagnosticFormatPaths]);
+  if (status !== 0) return status;
+  console.log('AURORA_TEMP_PRETTIER_DIAGNOSTIC_BEGIN');
+  const diff = spawnSync('git', ['diff', '--no-ext-diff', '--', ...diagnosticFormatPaths], {
+    cwd: rootDir,
+    stdio: 'inherit',
+  });
+  console.log('AURORA_TEMP_PRETTIER_DIAGNOSTIC_END');
+  if (diff.error) {
+    console.error(`AURORA_TEMP_PRETTIER_DIAGNOSTIC_FAILED: ${diff.error.message}`);
+  }
+  return 1;
+}
 const formatWrite = () => runBinary('prettier', ['--write', '.']);
 const lint = () => runBinary('eslint', ['.', '--max-warnings=0']);
 function runAll() {
