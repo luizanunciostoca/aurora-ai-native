@@ -3,10 +3,11 @@
   "compilerOptions": {
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "baseUrl": ".",
     "paths": {
-      "@aurora/contracts": ["../../packages/contracts/src/index.ts"],
-      "@aurora/contracts/*": ["../../packages/contracts/src/*/index.ts"]
+      "@aurora/contracts": ["../../packages/contracts/dist/index.d.ts"],
+      "@aurora/contracts/*": ["../../packages/contracts/dist/*/index.d.ts"],
+      "@aurora/workflow": ["../../packages/workflow/dist/index.d.ts"],
+      "@aurora/workflow/*": ["../../packages/workflow/dist/*/index.d.ts"]
     }
   },
   "include": ["src/**/*.ts"],

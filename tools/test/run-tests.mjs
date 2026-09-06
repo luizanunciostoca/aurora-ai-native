@@ -20,12 +20,13 @@ function run(command, args) {
 }
 
 function tscCommand() {
-  return resolve(
+  const localTsc = resolve(
     repoRoot,
     'node_modules',
     '.bin',
     process.platform === 'win32' ? 'tsc.cmd' : 'tsc',
   );
+  return existsSync(localTsc) ? localTsc : 'tsc';
 }
 
 function typecheckProjects(projectPaths) {

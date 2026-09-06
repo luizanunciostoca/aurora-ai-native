@@ -26,6 +26,10 @@ export function workflowLeaseKey(workflowKey: string): string {
   return `workflow:${nonEmpty(workflowKey, 'workflowKey')}`;
 }
 
+export function circuitProbeLeaseKey(targetScope: string): string {
+  return `circuit:probe:${nonEmpty(targetScope, 'targetScope')}`;
+}
+
 /**
  * Schedules at most one active timer for tenant + scheduleKey. The transaction-level
  * advisory lock closes the race that a plain NOT EXISTS check would leave open.

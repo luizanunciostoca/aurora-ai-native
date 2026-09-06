@@ -13,6 +13,7 @@ export {
   acquireLeaseStatement,
   cancelClaimedTimerStatement,
   cancelScheduledTimerStatement,
+  circuitProbeLeaseKey,
   claimDueTimerStatement,
   completeClaimedTimerStatement,
   heartbeatLeaseStatement,

@@ -1,6 +1,7 @@
 import type { ActionIntent } from '@aurora/contracts/actions';
-import type { Rfc3339Timestamp } from '@aurora/contracts/context';
+import type { Rfc3339Timestamp, TenantContext } from '@aurora/contracts/context';
 import type { ContractVersion } from '@aurora/contracts/versioning';
+import type { SqlStatement } from '@aurora/workflow';
 
 export type CircuitState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
@@ -134,4 +135,126 @@ export interface KillSwitchTransitionResult {
   readonly snapshot: KillSwitchSnapshot;
   readonly reasons: readonly KillSwitchTransitionReason[];
   readonly authorizesExecution: false;
+}
+
+export interface AcquireProbeFenceRequest {
+  readonly schemaVersion: ContractVersion;
+  readonly tenantId: TenantContext['tenantId'];
+  readonly targetScope: string;
+  readonly probeActionIntentId: ActionIntent['actionIntentId'];
+  readonly now: Rfc3339Timestamp;
+  readonly ttlSeconds?: number;
+}
+
+export type ProbeFenceAcquireReason =
+  | 'INVALID_TIME'
+  | 'INVALID_TTL'
+  | 'INVALID_TENANT_ID'
+  | 'INVALID_TARGET_SCOPE'
+  | 'INVALID_PROBE_ACTION_INTENT_ID'
+  | 'PROBE_FENCE_ALREADY_ACTIVE'
+  | 'PROBE_FENCE_STORE_FAILED';
+
+export interface AcquireProbeFenceResult {
+  readonly kind: 'ACQUIRE_PROBE_FENCE_RESULT';
+  readonly acquired: boolean;
+  readonly leaseKey: string;
+  readonly probeActionIntentId: ActionIntent['actionIntentId'];
+  readonly expiresAt?: Rfc3339Timestamp;
+  readonly reasons: readonly ProbeFenceAcquireReason[];
+  /** Containment fencing only. Never grants execution authority. */
+  readonly authorizesExecution: false;
+}
+
+export interface HeartbeatProbeFenceRequest {
+  readonly schemaVersion: ContractVersion;
+  readonly tenantId: TenantContext['tenantId'];
+  readonly targetScope: string;
+  readonly probeActionIntentId: ActionIntent['actionIntentId'];
+  readonly now: Rfc3339Timestamp;
+  readonly ttlSeconds?: number;
+}
+
+export type ProbeFenceHeartbeatReason =
+  | 'INVALID_TIME'
+  | 'INVALID_TTL'
+  | 'INVALID_TENANT_ID'
+  | 'INVALID_TARGET_SCOPE'
+  | 'INVALID_PROBE_ACTION_INTENT_ID'
+  | 'PROBE_FENCE_NOT_ACTIVE'
+  | 'PROBE_FENCE_OWNER_MISMATCH'
+  | 'PROBE_FENCE_EXPIRED'
+  | 'PROBE_FENCE_STORE_FAILED';
+
+export interface HeartbeatProbeFenceResult {
+  readonly kind: 'HEARTBEAT_PROBE_FENCE_RESULT';
+  readonly renewed: boolean;
+  readonly leaseKey: string;
+  readonly probeActionIntentId: ActionIntent['actionIntentId'];
+  readonly expiresAt?: Rfc3339Timestamp;
+  readonly reasons: readonly ProbeFenceHeartbeatReason[];
+  /** Containment fencing only. Never grants execution authority. */
+  readonly authorizesExecution: false;
+}
+
+export interface ReleaseProbeFenceRequest {
+  readonly schemaVersion: ContractVersion;
+  readonly tenantId: TenantContext['tenantId'];
+  readonly targetScope: string;
+  readonly probeActionIntentId: ActionIntent['actionIntentId'];
+  readonly now: Rfc3339Timestamp;
+}
+
+export type ProbeFenceReleaseReason =
+  | 'INVALID_TIME'
+  | 'INVALID_TENANT_ID'
+  | 'INVALID_TARGET_SCOPE'
+  | 'INVALID_PROBE_ACTION_INTENT_ID'
+  | 'PROBE_FENCE_NOT_ACTIVE'
+  | 'PROBE_FENCE_OWNER_MISMATCH'
+  | 'PROBE_FENCE_STORE_FAILED';
+
+export interface ReleaseProbeFenceResult {
+  readonly kind: 'RELEASE_PROBE_FENCE_RESULT';
+  readonly released: boolean;
+  readonly leaseKey: string;
+  readonly probeActionIntentId: ActionIntent['actionIntentId'];
+  readonly reasons: readonly ProbeFenceReleaseReason[];
+  /** Containment fencing only. Never grants execution authority. */
+  readonly authorizesExecution: false;
+}
+
+export interface HalfOpenProbeFencePort {
+  acquireProbeFence(
+    request: AcquireProbeFenceRequest,
+  ): Promise<AcquireProbeFenceResult> | AcquireProbeFenceResult;
+  heartbeatProbeFence(
+    request: HeartbeatProbeFenceRequest,
+  ): Promise<HeartbeatProbeFenceResult> | HeartbeatProbeFenceResult;
+  releaseProbeFence(
+    request: ReleaseProbeFenceRequest,
+  ): Promise<ReleaseProbeFenceResult> | ReleaseProbeFenceResult;
+}
+
+export interface W03LeaseRow {
+  readonly lease_id?: string;
+  readonly tenant_id: string;
+  readonly lease_key: string;
+  readonly owner_token: string;
+  readonly subject_type: string;
+  readonly subject_id: string;
+  readonly status: 'active' | 'released' | 'expired';
+  readonly acquired_at: string;
+  readonly expires_at: string;
+  readonly heartbeat_at: string;
+  readonly last_error?: string | null;
+}
+
+export interface W03LeaseExecutor {
+  query(statement: SqlStatement): Promise<readonly W03LeaseRow[]> | readonly W03LeaseRow[];
+}
+
+export interface W03HalfOpenProbeFenceAdapterOptions {
+  readonly leaseExecutor?: W03LeaseExecutor;
+  readonly defaultTtlSeconds?: number;
 }

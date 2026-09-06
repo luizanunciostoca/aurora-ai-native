@@ -3,7 +3,13 @@ export {
   transitionCircuit,
   transitionKillSwitch,
 } from './failure-containment.js';
+export {
+  createInMemoryW03LeaseExecutor,
+  createW03HalfOpenProbeFenceAdapter,
+} from './probe-fence.js';
 export type {
+  AcquireProbeFenceRequest,
+  AcquireProbeFenceResult,
   CancellationDisposition,
   CircuitEvent,
   CircuitSnapshot,
@@ -17,6 +23,9 @@ export type {
   FailureContainmentReason,
   FailureContainmentResult,
   FailureContainmentSnapshot,
+  HalfOpenProbeFencePort,
+  HeartbeatProbeFenceRequest,
+  HeartbeatProbeFenceResult,
   KillSwitchCommand,
   KillSwitchSnapshot,
   KillSwitchState,
@@ -24,5 +33,13 @@ export type {
   KillSwitchTransitionRequest,
   KillSwitchTransitionResult,
   NonAuthoritativeExecutionSignals,
+  ProbeFenceAcquireReason,
+  ProbeFenceHeartbeatReason,
+  ProbeFenceReleaseReason,
   RecoveryGate,
+  ReleaseProbeFenceRequest,
+  ReleaseProbeFenceResult,
+  W03HalfOpenProbeFenceAdapterOptions,
+  W03LeaseExecutor,
+  W03LeaseRow,
 } from './types.js';
