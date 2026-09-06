@@ -24,7 +24,11 @@ class FakeSql implements W03SyncSqlExecutor {
 }
 
 function row(quotaLimit = '5', quotaUsed = '1'): string {
-  return [TENANT, ACTION, EXECUTION, '2', '4', quotaLimit, quotaUsed, '7', String(UPDATED_MS)].join('\t') + '\n';
+  return (
+    [TENANT, ACTION, EXECUTION, '2', '4', quotaLimit, quotaUsed, '7', String(UPDATED_MS)].join(
+      '\t',
+    ) + '\n'
+  );
 }
 
 const lookup = { tenantId: TENANT, actionIntentId: ACTION, executionRef: EXECUTION } as const;
