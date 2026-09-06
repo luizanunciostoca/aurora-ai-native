@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "w15j-attestation-v1",
+  "role": "INDEPENDENT_REVIEWER",
+  "identity": "REQUIRED_TRIMMED_BOUNDED_REVIEWER_IDENTITY_DISTINCT_FROM_OPERATOR",
+  "observedAtUtc": "REQUIRED_RFC3339_UTC_AT_OR_AFTER_FINALIZE_NOT_FUTURE",
+  "androidCandidateSha": "REQUIRED_40_HEX",
+  "hostCandidateSha": "REQUIRED_40_HEX",
+  "reconciledMainSha": "REQUIRED_40_HEX",
+  "packagingHeadSha": "REQUIRED_40_HEX",
+  "artifactId": "REQUIRED",
+  "apkSha256": "REQUIRED_64_HEX",
+  "hostInstanceId": "REQUIRED_whi_<64-lowercase-hex>",
+  "evidenceManifestSha256": "REQUIRED_FINAL_EVIDENCE_MANIFEST_64_HEX",
+  "statement": "REQUIRED_TRIMMED_BOUNDED_REVIEW_STATEMENT"
+}

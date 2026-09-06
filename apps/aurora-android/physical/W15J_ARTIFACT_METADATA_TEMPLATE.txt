@@ -1,0 +1,4 @@
+packaging_head_sha=REQUIRED_40_HEX
+artifact_id=REQUIRED_GITHUB_ARTIFACT_ID
+artifact_name=REQUIRED_GITHUB_ARTIFACT_NAME
+artifact_zip_sha256=REQUIRED_RECOMPUTED_64_HEX

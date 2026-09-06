@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 COLLECTOR="$SCRIPT_DIR/collect-w15j-physical-evidence.sh"
 SERIAL=""
 BOOTSTRAP_MAPPING_OWNED=0
+DEVICE_MAPPING_OWNED=0
 COMPLETED=0
 
 fail() {
@@ -22,6 +23,9 @@ cleanup_on_exit() {
   trap - EXIT
   if [[ "$COMPLETED" != "1" && "$BOOTSTRAP_MAPPING_OWNED" == "1" && -n "$SERIAL" ]]; then
     "$ADB_BIN" -s "$SERIAL" reverse --remove "tcp:$BOOTSTRAP_PORT" >/dev/null 2>&1 || true
+  fi
+  if [[ "$COMPLETED" != "1" && "$DEVICE_MAPPING_OWNED" == "1" && -n "$SERIAL" ]]; then
+    "$ADB_BIN" -s "$SERIAL" reverse --remove "tcp:$DEVICE_GATEWAY_PORT" >/dev/null 2>&1 || true
   fi
   exit "$status"
 }
@@ -68,6 +72,7 @@ if [[ "$MODE" == "preflight" ]]; then
   AURORA_GATEWAY_PORT="$DEVICE_GATEWAY_PORT" \
     AURORA_CONFIGURE_ADB_REVERSE=1 \
     "$COLLECTOR"
+  DEVICE_MAPPING_OWNED=1
 
   "$ADB_BIN" -s "$SERIAL" reverse --list >"$OUTPUT_DIR/adb-reverse-dual-port-preflight.txt"
   mapping_present "$DEVICE_GATEWAY_PORT" "$OUTPUT_DIR/adb-reverse-dual-port-preflight.txt" || \
@@ -88,6 +93,7 @@ else
   "$ADB_BIN" -s "$SERIAL" reverse --list >"$OUTPUT_DIR/adb-reverse-dual-port-before-finalize.txt"
   mapping_present "$DEVICE_GATEWAY_PORT" "$OUTPUT_DIR/adb-reverse-dual-port-before-finalize.txt" || \
     fail "authenticated device-plane reverse mapping is missing before finalize"
+  DEVICE_MAPPING_OWNED=1
   mapping_present "$BOOTSTRAP_PORT" "$OUTPUT_DIR/adb-reverse-dual-port-before-finalize.txt" || \
     fail "bootstrap reverse mapping is missing before finalize"
   BOOTSTRAP_MAPPING_OWNED=1
@@ -95,6 +101,7 @@ else
   AURORA_GATEWAY_PORT="$DEVICE_GATEWAY_PORT" \
     AURORA_CONFIGURE_ADB_REVERSE=0 \
     "$COLLECTOR"
+  DEVICE_MAPPING_OWNED=0
 
   "$ADB_BIN" -s "$SERIAL" reverse --remove "tcp:$BOOTSTRAP_PORT"
   BOOTSTRAP_MAPPING_OWNED=0

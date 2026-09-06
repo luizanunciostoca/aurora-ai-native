@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "w15j-control-tower-tuple-v1",
+  "repository": "luizanunciostoca/aurora-ai-native",
+  "workflowRun": {
+    "id": "REQUIRED_GITHUB_WORKFLOW_RUN_ID",
+    "url": "REQUIRED_EXACT_GITHUB_WORKFLOW_RUN_URL",
+    "status": "SUCCESS",
+    "headSha": "REQUIRED_PACKAGING_HEAD_40_HEX",
+    "sourceRef": "REQUIRED_RUN_URL_FRAGMENT_REFERENCE"
+  },
+  "androidCandidateSha": "REQUIRED_40_HEX",
+  "hostCandidateSha": "REQUIRED_40_HEX",
+  "reconciledMainSha": "REQUIRED_40_HEX",
+  "packagingHeadSha": "REQUIRED_40_HEX",
+  "artifact": {
+    "id": "REQUIRED_GITHUB_ARTIFACT_ID",
+    "name": "REQUIRED_GITHUB_ARTIFACT_NAME",
+    "zipSha256": "REQUIRED_RECOMPUTED_64_HEX",
+    "digestSourceRef": "REQUIRED_RUN_URL_ARTIFACT_ID_FRAGMENT_REFERENCE"
+  },
+  "apk": {
+    "applicationId": "REQUIRED",
+    "variant": "REQUIRED",
+    "versionCode": "REQUIRED",
+    "versionName": "REQUIRED",
+    "sha256": "REQUIRED_64_HEX"
+  }
+}
