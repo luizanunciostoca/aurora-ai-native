@@ -128,3 +128,20 @@ test('compare-and-swap statement rejects a non-positive-integer expected version
     /expectedVersion must be a positive integer/,
   );
 });
+
+test('compare-and-swap statement rejects a mismatched quota pair', () => {
+  assert.throws(
+    () =>
+      delivery.buildCompareAndSwapExecutionAttemptQuotaStatement({
+        tenantId: tenantA,
+        actionIntentId,
+        executionRef,
+        attemptNumber: 2,
+        maxAttempts: 5,
+        quotaUsed: 3,
+        now,
+        expectedVersion: 1,
+      }),
+    /quotaLimit and quotaUsed must both be present or both be absent/,
+  );
+});

@@ -2,10 +2,19 @@ import type { ActionIntent } from '@aurora/contracts/actions';
 import type { ExecutionQuotaSnapshot } from './types.js';
 
 /**
- * W03-owned durable key for the execution-attempt/quota state consumed by
- * the W07-C safeguard gate. Bound to tenant + canonical ActionIntentId +
- * executionRef so a lookup cannot cross tenants, ActionIntents or unrelated
- * execution attempts.
+ * W07-C-owned lookup key, structurally identical to the W03-owned
+ * `ExecutionAttemptQuotaKey` in `packages/events/src/delivery/attempt-quota.ts`
+ * by design (both bind tenant + canonical ActionIntentId + executionRef so a
+ * lookup/row cannot cross tenants, ActionIntents or unrelated execution
+ * attempts). The two are declared independently rather than imported from a
+ * single module because `packages/events/src/index.ts` is an explicit
+ * coordinator-owned publication surface ("Parallel W03 leaf tasks must not
+ * edit this file; exports are reconciled only after independent
+ * acceptance."): this task is not authorized to make services/executors
+ * consume packages/events as a published dependency ahead of that
+ * reconciliation. Both types derive their tenant/ActionIntentId fields from
+ * the same canonical `@aurora/contracts` source, so no new ID vocabulary is
+ * introduced here.
  */
 export interface ExecutionAttemptQuotaLookup {
   readonly tenantId: ActionIntent['tenant']['tenantId'];
