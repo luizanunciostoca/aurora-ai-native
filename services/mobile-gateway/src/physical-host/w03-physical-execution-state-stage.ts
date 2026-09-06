@@ -180,7 +180,8 @@ export class W03PostgresPhysicalExecutionStateStager {
 
   stage(input: W15JPhysicalExecutionStateSeed): W15JPhysicalExecutionStateStageResult {
     const updatedAtMs = timestampMs(input.updatedAt);
-    const containment = updatedAtMs === null ? null : containmentVariables(input.containment, updatedAtMs);
+    const containment =
+      updatedAtMs === null ? null : containmentVariables(input.containment, updatedAtMs);
     if (
       !TENANT_ID.test(input.tenantId) ||
       !ACTION_INTENT_ID.test(input.actionIntentId) ||
