@@ -1,0 +1,48 @@
+name: W15-J PostgreSQL Reality Gate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/w15j-postgres-reality-gate.yml"
+      - "migrations/001_w03_postgres_baseline.sql"
+      - "migrations/002_w03_execution_attempt_quota.sql"
+      - "migrations/003_w03_execution_containment_state.sql"
+      - "services/mobile-gateway/src/physical-host/test/w03-half-open-probe-postgres-reality-gate.sh"
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-reality:
+    runs-on: ubuntu-latest
+    env:
+      CANDIDATE_SHA: d548838b1540ae0017cd96b82892c13a1af419e7
+      DATABASE_URL: postgresql://aurora:aurora@127.0.0.1:5432/aurora
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aurora
+          POSTGRES_PASSWORD: aurora
+          POSTGRES_DB: aurora
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U aurora -d aurora"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Bind evidence branch to exact runtime candidate
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD^)" = "$CANDIDATE_SHA"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/w15j-postgres-reality-gate.yml"
+      - name: Run real PostgreSQL lease and atomic-staging gate
+        shell: bash
+        run: services/mobile-gateway/src/physical-host/test/w03-half-open-probe-postgres-reality-gate.sh
