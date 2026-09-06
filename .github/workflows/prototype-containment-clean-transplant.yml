@@ -72,6 +72,14 @@ jobs:
           s = s.replace("changedAt: '2026-09-06T00:29:59.000Z'", "changedAt: '2026-09-06T00:29:59.000Z' as Rfc3339Timestamp")
           s = s.replace("policyTokenId: 'ptk_01ARZ3NDEKTSV4RRFFQ69G5FAV'", "policyTokenId: 'ptk_test_fixture'")
           p.write_text(s)
+
+          p = Path('services/mobile-gateway/src/physical-host/w03-containment-state.ts')
+          s = p.read_text()
+          s = s.replace(
+              "const probeOwner = probeInFlight ? probeOwnerRaw : null;",
+              "const probeOwner: string | null =\n    probeInFlight && typeof probeOwnerRaw === 'string' ? probeOwnerRaw : null;",
+          )
+          p.write_text(s)
           PY
           npx prettier --write "${files[@]:1}"
           if ! npm test > /tmp/containment-test.log 2>&1; then
