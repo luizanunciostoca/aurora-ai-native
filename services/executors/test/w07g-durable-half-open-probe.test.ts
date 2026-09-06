@@ -8,6 +8,7 @@ import type { Rfc3339Timestamp } from '@aurora/contracts/context';
 import type { TenantId } from '@aurora/contracts/ids';
 
 import {
+  heartbeatDurableHalfOpenProbe,
   releaseDurableHalfOpenProbe,
   reserveDurableHalfOpenProbe,
   type DurableHalfOpenProbePort,
@@ -22,7 +23,7 @@ const CIRCUIT_KEY = 'provider:device-plane:local';
 const LEASE = 'w03-lease:w07g:half-open:provider:device-plane:local';
 
 function success(
-  disposition: 'ACQUIRED' | 'ALREADY_OWNED' | 'RELEASED',
+  disposition: 'ACQUIRED' | 'ALREADY_OWNED' | 'RENEWED' | 'RELEASED',
 ): DurableHalfOpenProbePortResult {
   return {
     ok: true,
@@ -40,6 +41,7 @@ function success(
 function port(overrides: Partial<DurableHalfOpenProbePort> = {}): DurableHalfOpenProbePort {
   return {
     reserve: () => success('ACQUIRED'),
+    heartbeat: () => success('RENEWED'),
     release: () => success('RELEASED'),
     ...overrides,
   };
@@ -87,6 +89,30 @@ test('accepts idempotent ownership by the same canonical ActionIntent', () => {
   assert.equal(result.disposition, 'ALREADY_OWNED');
 });
 
+test('renews only the exact durable HALF_OPEN owner', () => {
+  const renewed = heartbeatDurableHalfOpenProbe(reserveInput(), port());
+  assert.equal(renewed.ok, true);
+  if (!renewed.ok) throw new Error('owner heartbeat should succeed');
+  assert.equal(renewed.disposition, 'RENEWED');
+  assert.equal(renewed.expiresAt, EXPIRES_AT);
+
+  const notOwner = heartbeatDurableHalfOpenProbe(
+    reserveInput(),
+    port({
+      heartbeat: () => ({
+        ok: false,
+        code: 'NOT_CURRENT_OWNER',
+        authorizesExecution: false,
+        provesExecutionSuccess: false,
+        retryAuthorized: false,
+      }),
+    }),
+  );
+  assert.equal(notOwner.ok, false);
+  if (notOwner.ok) throw new Error('foreign heartbeat must fail');
+  assert.equal(notOwner.code, 'NOT_CURRENT_OWNER');
+});
+
 test('passes through competing durable ownership as a closed gate', () => {
   const result = reserveDurableHalfOpenProbe(
     reserveInput(),
@@ -129,7 +155,11 @@ test('rejects malformed timing before calling the durable owner', () => {
 test('fails closed when durable owner throws or returns mismatched ownership', () => {
   const unavailable = reserveDurableHalfOpenProbe(
     reserveInput(),
-    port({ reserve: () => { throw new Error('db unavailable'); } }),
+    port({
+      reserve: () => {
+        throw new Error('db unavailable');
+      },
+    }),
   );
   assert.equal(unavailable.ok, false);
   if (unavailable.ok) throw new Error('throw must fail closed');
