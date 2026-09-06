@@ -192,7 +192,7 @@ WITH lock_scope AS (
     1,
     to_timestamp((:'updated_at_ms')::double precision / 1000.0),
     to_timestamp((:'updated_at_ms')::double precision / 1000.0)
-  FROM attempt_insert
+  FROM lock_scope
   ON CONFLICT (tenant_id, action_intent_id, execution_ref) DO NOTHING
   RETURNING 1
 ), containment_insert AS (
@@ -211,7 +211,7 @@ WITH lock_scope AS (
     (:'current_in_flight')::integer, (:'max_in_flight')::integer,
     (:'retry_depth')::integer, (:'max_retry_depth')::integer,
     to_timestamp((:'updated_at_ms')::double precision / 1000.0)
-  FROM lock_scope
+  FROM attempt_insert
   ON CONFLICT (tenant_id, circuit_key) DO NOTHING
   RETURNING 1
 )
