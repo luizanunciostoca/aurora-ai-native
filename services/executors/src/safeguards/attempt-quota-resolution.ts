@@ -26,6 +26,13 @@ export type AttemptQuotaResolution =
     }>
   | Readonly<{ readonly status: 'REJECTED'; readonly reason: AttemptQuotaRejectionReason }>;
 
+export type CurrentAttemptQuotaSnapshotResolution =
+  | Readonly<{
+      readonly status: 'RESOLVED';
+      readonly snapshot: ExecutionAttemptQuotaSnapshot;
+    }>
+  | Readonly<{ readonly status: 'REJECTED'; readonly reason: AttemptQuotaRejectionReason }>;
+
 export interface ResolveCurrentAttemptQuotaInput {
   readonly source: ExecutionAttemptQuotaSource;
   readonly lookup: ExecutionAttemptQuotaLookup;
@@ -102,9 +109,9 @@ function isValidSnapshotShape(value: unknown): value is ExecutionAttemptQuotaSna
  * `evaluateExecutionSafeguards`, and no retry/authority permission is ever
  * produced here.
  */
-export function resolveCurrentAttemptQuota(
+export function resolveCurrentAttemptQuotaSnapshot(
   input: ResolveCurrentAttemptQuotaInput,
-): AttemptQuotaResolution {
+): CurrentAttemptQuotaSnapshotResolution {
   if (!isPlainObject(input) || typeof input.source !== 'object' || input.source === null) {
     return { status: 'REJECTED', reason: 'LOOKUP_INVALID' };
   }
@@ -153,10 +160,24 @@ export function resolveCurrentAttemptQuota(
     return { status: 'REJECTED', reason: 'STATE_STALE' };
   }
 
+  return { status: 'RESOLVED', snapshot };
+}
+
+/**
+ * Public W07-C gate projection. Lifecycle coordinators use
+ * `resolveCurrentAttemptQuotaSnapshot` when they also need the durable
+ * version/freshness provenance for a fenced mutation; ordinary safeguard
+ * consumers receive only the counters that the deterministic gate accepts.
+ */
+export function resolveCurrentAttemptQuota(
+  input: ResolveCurrentAttemptQuotaInput,
+): AttemptQuotaResolution {
+  const resolved = resolveCurrentAttemptQuotaSnapshot(input);
+  if (resolved.status === 'REJECTED') return resolved;
   return {
     status: 'RESOLVED',
-    attemptNumber: snapshot.attemptNumber,
-    maxAttempts: snapshot.maxAttempts,
-    ...(snapshot.quota === undefined ? {} : { quota: snapshot.quota }),
+    attemptNumber: resolved.snapshot.attemptNumber,
+    maxAttempts: resolved.snapshot.maxAttempts,
+    ...(resolved.snapshot.quota === undefined ? {} : { quota: resolved.snapshot.quota }),
   };
 }

@@ -1,12 +1,24 @@
 import type { W14GovernedDeviceDispatchPort } from '../device-dispatch/governed-device-dispatch.js';
+import {
+  W07DurableContainmentLifecycleCoordinator,
+  type W07ContainmentLifecyclePort,
+} from '../failure-containment/durable-containment-lifecycle.js';
 import type {
   ActionIntentContainmentKeySource,
   DurableContainmentStateSource,
 } from '../failure-containment/durable-containment-state.js';
+import type { DurableContainmentWritePort } from '../failure-containment/durable-containment-transitions.js';
+import type { DurableHalfOpenProbePort } from '../failure-containment/durable-half-open-probe.js';
 import {
   W07DeviceReceiptObservationAdapter,
   type TrustedDeviceExecutionMaterialSource,
 } from '../readback/device-receipt-observer.js';
+import {
+  DurableExecutionAttemptLifecycle,
+  type AttemptAdvanceResult,
+  type AttemptTerminalResult,
+  type ExecutionAttemptQuotaCasPort,
+} from '../reconciliation/durable-attempt-lifecycle.js';
 import type { ExecutionAttemptQuotaSource } from '../safeguards/attempt-quota-source.js';
 import type { IdempotencyFencePort, PreconditionEvaluator } from '../safeguards/types.js';
 import type { CurrentAuthorityValidator } from '../sdk/types.js';
@@ -52,7 +64,22 @@ export interface W15JDispatchingPhysicalHostW07Ports {
     attemptQuotaState: ExecutionAttemptQuotaSource,
     containmentState: DurableContainmentStateSource,
   ) => W15JPhysicalHostVoiceIntakePort;
+  readonly createContainmentLifecycle: (
+    containmentState: DurableContainmentStateSource,
+    containmentStore: DurableContainmentWritePort,
+    halfOpenProbeFence: DurableHalfOpenProbePort,
+  ) => W07ContainmentLifecyclePort;
+  readonly createAttemptLifecycle: (
+    attemptQuotaState: ExecutionAttemptQuotaSource,
+    attemptQuotaPersistence: ExecutionAttemptQuotaCasPort,
+  ) => W15JPhysicalHostAttemptLifecyclePort;
   readonly receiptEvidenceIngress: W07DeviceReceiptObservationAdapter;
+}
+
+/** Server-only W07 reconciliation surface; the request remains W07-owned and runtime-validated. */
+export interface W15JPhysicalHostAttemptLifecyclePort {
+  reconcileAndAdvance(input: object): AttemptAdvanceResult;
+  reconcileAndSealTerminal(input: object): AttemptTerminalResult;
 }
 
 export interface W15JPhysicalHostW07PortConfig {
@@ -153,5 +180,42 @@ export function createW15JDispatchingPhysicalHostW07Ports(
     });
   };
 
-  return Object.freeze({ createVoiceIntake, receiptEvidenceIngress });
+  const createContainmentLifecycle = (
+    containmentState: DurableContainmentStateSource,
+    containmentStore: DurableContainmentWritePort,
+    halfOpenProbeFence: DurableHalfOpenProbePort,
+  ): W07ContainmentLifecyclePort =>
+    new W07DurableContainmentLifecycleCoordinator({
+      source: containmentState,
+      store: containmentStore,
+      halfOpenProbeFence,
+    });
+
+  const createAttemptLifecycle = (
+    attemptQuotaState: ExecutionAttemptQuotaSource,
+    attemptQuotaPersistence: ExecutionAttemptQuotaCasPort,
+  ): W15JPhysicalHostAttemptLifecyclePort => {
+    const lifecycle = new DurableExecutionAttemptLifecycle({
+      source: attemptQuotaState,
+      persistence: attemptQuotaPersistence,
+      maxAgeMs: config.safeguardMaxAgeMs,
+    });
+    return Object.freeze({
+      reconcileAndAdvance: (input: object): AttemptAdvanceResult =>
+        lifecycle.reconcileAndAdvance(
+          input as Parameters<DurableExecutionAttemptLifecycle['reconcileAndAdvance']>[0],
+        ),
+      reconcileAndSealTerminal: (input: object): AttemptTerminalResult =>
+        lifecycle.reconcileAndSealTerminal(
+          input as Parameters<DurableExecutionAttemptLifecycle['reconcileAndSealTerminal']>[0],
+        ),
+    });
+  };
+
+  return Object.freeze({
+    createVoiceIntake,
+    createContainmentLifecycle,
+    createAttemptLifecycle,
+    receiptEvidenceIngress,
+  });
 }

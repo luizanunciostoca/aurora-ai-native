@@ -68,6 +68,9 @@ test('stages explicit attempt/quota and containment state in one server-owned SQ
   assert.ok(request);
   assert.match(request.sql, /INSERT INTO w03_execution_attempt_quota/u);
   assert.match(request.sql, /INSERT INTO w03_execution_containment/u);
+  assert.match(request.sql, /NULLIF\(:'quota_limit', '-'\)::integer/u);
+  assert.match(request.sql, /NULLIF\(:'quota_used', '-'\)::integer/u);
+  assert.match(request.sql, /NULLIF\(:'opened_at_ms', '-'\)::double precision/u);
   assert.equal(request.variables.tenant_id, TENANT);
   assert.equal(request.variables.action_intent_id, ACTION);
   assert.equal(request.variables.execution_ref, EXECUTION);
@@ -83,7 +86,7 @@ test('stages explicit attempt/quota and containment state in one server-owned SQ
 
 test('rejects re-staging an existing execution instead of resetting current counters', () => {
   const sql = new FakeSql();
-  sql.output = 'ATTEMPT_EXISTS\tCONTAINMENT_EXISTS\n';
+  sql.output = 'ATTEMPT_EXISTS\tCONTAINMENT_NOT_TOUCHED\n';
   const result = new W03PostgresPhysicalExecutionStateStager(sql).stage(seed());
   assert.deepEqual(result, {
     ok: false,
@@ -92,6 +95,29 @@ test('rejects re-staging an existing execution instead of resetting current coun
     provesExecutionSuccess: false,
     retryAuthorized: false,
   });
+});
+
+test('an existing attempt cannot commit a missing containment row', () => {
+  const sql = new FakeSql();
+  sql.output = 'ATTEMPT_EXISTS\tCONTAINMENT_NOT_TOUCHED\n';
+  const result = new W03PostgresPhysicalExecutionStateStager(sql).stage(seed());
+
+  assert.deepEqual(result, {
+    ok: false,
+    code: 'ATTEMPT_ALREADY_EXISTS',
+    authorizesExecution: false,
+    provesExecutionSuccess: false,
+    retryAuthorized: false,
+  });
+
+  const statement = sql.requests[0]?.sql;
+  assert.equal(typeof statement, 'string');
+  if (statement === undefined) throw new Error('expected staging SQL');
+  const containmentInsert = statement.match(/containment_insert AS \([\s\S]*?\n\),?\nSELECT/u)?.[0];
+  assert.ok(containmentInsert, 'expected containment_insert CTE');
+  assert.match(containmentInsert, /FROM attempt_insert/u);
+  assert.doesNotMatch(containmentInsert, /FROM lock_scope/u);
+  assert.match(statement, /ELSE 'CONTAINMENT_NOT_TOUCHED'/u);
 });
 
 test('rejects malformed trusted seeds before touching durable state', () => {

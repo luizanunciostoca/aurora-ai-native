@@ -22,8 +22,8 @@ WITH lock_scope AS (
   SELECT
     :'tenant_id', :'action_intent_id', :'execution_ref',
     (:'attempt_number')::integer, (:'max_attempts')::integer,
-    CASE WHEN :'quota_limit' = '-' THEN NULL ELSE (:'quota_limit')::integer END,
-    CASE WHEN :'quota_used' = '-' THEN NULL ELSE (:'quota_used')::integer END,
+    NULLIF(:'quota_limit', '-')::integer,
+    NULLIF(:'quota_used', '-')::integer,
     1,
     to_timestamp((:'updated_at_ms')::double precision / 1000.0),
     to_timestamp((:'updated_at_ms')::double precision / 1000.0)
@@ -38,15 +38,17 @@ WITH lock_scope AS (
   )
   SELECT
     :'tenant_id', :'circuit_key', 1, :'circuit_state', (:'consecutive_failures')::integer,
-    CASE WHEN :'opened_at_ms' = '-' THEN NULL
-         ELSE to_timestamp((:'opened_at_ms')::double precision / 1000.0) END,
+    to_timestamp(NULLIF(:'opened_at_ms', '-')::double precision / 1000.0),
     :'kill_switch_state',
     to_timestamp((:'kill_switch_changed_at_ms')::double precision / 1000.0),
     :'dependency_health', (:'cancellation_requested')::boolean,
     (:'current_in_flight')::integer, (:'max_in_flight')::integer,
     (:'retry_depth')::integer, (:'max_retry_depth')::integer,
     to_timestamp((:'updated_at_ms')::double precision / 1000.0)
-  FROM lock_scope
+  -- The containment row belongs to the same logical initial-stage operation.
+  -- Gate it on a successful attempt insert so an existing attempt cannot
+  -- commit a new caller-supplied containment snapshot before we reject it.
+  FROM attempt_insert
   ON CONFLICT (tenant_id, circuit_key) DO NOTHING
   RETURNING 1
 )
@@ -57,7 +59,8 @@ SELECT
   END,
   CASE
     WHEN EXISTS (SELECT 1 FROM containment_insert) THEN 'CONTAINMENT_INITIALIZED'
-    ELSE 'CONTAINMENT_EXISTS'
+    WHEN EXISTS (SELECT 1 FROM attempt_insert) THEN 'CONTAINMENT_EXISTS'
+    ELSE 'CONTAINMENT_NOT_TOUCHED'
   END;
 `.trim();
 

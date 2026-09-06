@@ -60,6 +60,28 @@ WHERE tenant_id = :'tenant_id'
 LIMIT 1;
 `.trim();
 
+const READ_CURRENT_AFTER_ACQUIRE_CONFLICT_SQL = String.raw`
+SELECT
+  CASE
+    WHEN owner_token = :'owner_token'
+     AND subject_type = :'subject_type'
+     AND subject_id = :'subject_id'
+     AND status = 'active'
+     AND expires_at > to_timestamp((:'now_ms')::double precision / 1000.0)
+    THEN 'ALREADY_OWNED'
+    ELSE 'OWNED_BY_OTHER'
+  END,
+  owner_token,
+  subject_type,
+  subject_id,
+  status,
+  floor(extract(epoch FROM expires_at) * 1000)::bigint
+FROM w03_lease
+WHERE tenant_id = :'tenant_id'
+  AND lease_key = :'lease_key'
+LIMIT 1;
+`.trim();
+
 const HEARTBEAT_SQL = String.raw`
 WITH renewed AS (
   UPDATE w03_lease
@@ -247,23 +269,28 @@ export class W03PostgresHalfOpenProbeLease {
     const expiresMs = timestampMs(input.leaseExpiresAt);
     if (nowMs === null || expiresMs === null || expiresMs <= nowMs) return failure('MALFORMED');
 
+    const variables = {
+      tenant_id: input.tenantId,
+      lease_key: leaseKey(input.circuitKey),
+      owner_token: input.probeActionIntentId,
+      subject_type: SUBJECT_TYPE,
+      subject_id: input.probeActionIntentId,
+      now_ms: String(nowMs),
+      expires_ms: String(expiresMs),
+    };
     let row: LeaseRow | null;
     try {
-      row = parseRow(
-        this.#sql.query({
-          sql: ACQUIRE_SQL,
-          variables: {
-            tenant_id: input.tenantId,
-            lease_key: leaseKey(input.circuitKey),
-            owner_token: input.probeActionIntentId,
-            subject_type: SUBJECT_TYPE,
-            subject_id: input.probeActionIntentId,
-            now_ms: String(nowMs),
-            expires_ms: String(expiresMs),
-          },
-        }),
-        true,
-      );
+      const acquiredOutput = this.#sql.query({ sql: ACQUIRE_SQL, variables });
+      row = parseRow(acquiredOutput, true);
+      if (row === null && acquiredOutput.trim() === '') {
+        // PostgreSQL takes the INSERT statement snapshot before waiting on a
+        // concurrent unique-key owner. Observe the committed winner in a new
+        // statement; never repeat the mutating acquire.
+        row = parseRow(
+          this.#sql.query({ sql: READ_CURRENT_AFTER_ACQUIRE_CONFLICT_SQL, variables }),
+          true,
+        );
+      }
     } catch {
       return failure('UNAVAILABLE');
     }

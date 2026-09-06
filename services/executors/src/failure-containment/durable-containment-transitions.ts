@@ -238,15 +238,24 @@ export function transitionDurableCircuit(input: {
     };
   }
 
-  const write = input.store.compareAndSet({
-    tenantId: input.tenantId,
-    circuitKey: input.circuitKey,
-    expectedVersion: current.version,
-    state: storedState(current.snapshot, transition.snapshot),
-    updatedAt: input.observedAt,
-    authorizesExecution: false,
-  });
-  if (!write.ok) return circuitFailure('STATE_CONFLICT');
+  let write: DurableContainmentCompareAndSetResult;
+  try {
+    write = input.store.compareAndSet({
+      tenantId: input.tenantId,
+      circuitKey: input.circuitKey,
+      expectedVersion: current.version,
+      state: storedState(current.snapshot, transition.snapshot),
+      updatedAt: input.observedAt,
+      authorizesExecution: false,
+    });
+  } catch {
+    return circuitFailure('STATE_UNAVAILABLE');
+  }
+  if (!write.ok) {
+    return circuitFailure(
+      write.code === 'VERSION_CONFLICT' ? 'STATE_CONFLICT' : 'STATE_UNAVAILABLE',
+    );
+  }
 
   let probeLeaseCleanupRequired = false;
   if (
@@ -310,18 +319,25 @@ export function transitionDurableKillSwitch(input: {
   });
   if (!transition.accepted) return killFailure('TRANSITION_REJECTED', transition.reasons);
 
-  const write = input.store.compareAndSet({
-    tenantId: input.tenantId,
-    circuitKey: input.circuitKey,
-    expectedVersion: current.version,
-    state: {
-      ...storedState(current.snapshot),
-      killSwitch: transition.snapshot,
-    },
-    updatedAt: input.changedAt,
-    authorizesExecution: false,
-  });
-  if (!write.ok) return killFailure('STATE_CONFLICT');
+  let write: DurableContainmentCompareAndSetResult;
+  try {
+    write = input.store.compareAndSet({
+      tenantId: input.tenantId,
+      circuitKey: input.circuitKey,
+      expectedVersion: current.version,
+      state: {
+        ...storedState(current.snapshot),
+        killSwitch: transition.snapshot,
+      },
+      updatedAt: input.changedAt,
+      authorizesExecution: false,
+    });
+  } catch {
+    return killFailure('STATE_UNAVAILABLE');
+  }
+  if (!write.ok) {
+    return killFailure(write.code === 'VERSION_CONFLICT' ? 'STATE_CONFLICT' : 'STATE_UNAVAILABLE');
+  }
 
   return {
     ok: true,

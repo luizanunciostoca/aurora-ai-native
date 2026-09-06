@@ -60,6 +60,7 @@ test('explicitly initializes one containment row without authority semantics', (
   });
   assert.equal(sql.requests.length, 1);
   assert.match(sql.requests[0]?.sql ?? '', /ON CONFLICT \(tenant_id, circuit_key\) DO NOTHING/u);
+  assert.match(sql.requests[0]?.sql ?? '', /NULLIF\(:'opened_at_ms', '-'\)::double precision/u);
   assert.equal(sql.requests[0]?.variables.tenant_id, TENANT);
   assert.equal(sql.requests[0]?.variables.circuit_key, CIRCUIT);
 });
@@ -92,6 +93,7 @@ test('CAS advances exactly one version and binds the expected version in SQL', (
   assert.equal(sql.requests[0]?.variables.expected_version, '4');
   assert.match(sql.requests[0]?.sql ?? '', /AND version = \(:'expected_version'\)::bigint/u);
   assert.match(sql.requests[0]?.sql ?? '', /SET version = version \+ 1/u);
+  assert.match(sql.requests[0]?.sql ?? '', /NULLIF\(:'opened_at_ms', '-'\)::double precision/u);
 });
 
 test('stale competing CAS reports the current version and never retries itself', () => {
