@@ -19,12 +19,12 @@ jobs:
       - name: Checkout exact W15-J candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
+          ref: d84b2e6a98189a0f63ba14fd7177400532a338d3
           persist-credentials: false
       - name: Assert exact source candidate
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d"
+          test "$(git rev-parse HEAD)" = "d84b2e6a98189a0f63ba14fd7177400532a338d3"
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
@@ -59,7 +59,7 @@ jobs:
           )
           cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<'EOF'
           artifact_purpose=W15-J-DP5-physical-evidence-input
-          source_candidate_sha=6c247d2331f4aa4b4cee5455d8658a6fbdad3f4d
+          source_candidate_sha=d84b2e6a98189a0f63ba14fd7177400532a338d3
           source_branch=wave/15j-physical-device-integration-acceptance
           apk_variant=localDebug
           package_id=ai.aurora.device.local
@@ -68,9 +68,9 @@ jobs:
           dp5_status=INCOMPLETE
           EOF
       - name: Upload exact W15-J candidate APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-physical-apk-6c247d23
+          name: aurora-w15j-physical-apk-d84b2e6a
           path: /tmp/w15j-physical-apk
           if-no-files-found: error
           retention-days: 14
