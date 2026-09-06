@@ -18,7 +18,11 @@ function intent(): ActionIntent {
     schemaVersion: '1.0.0',
     actionIntentId: ACTION,
     capability: { capability: 'camera.open', actionType: 'OPEN_CAMERA' },
-    executionTarget: { schemaVersion: '1.0.0', kind: 'DEVICE', bindingReference: 'dvc_01ARZ3NDEKTSV4RRFFQ69G5FAV' },
+    executionTarget: {
+      schemaVersion: '1.0.0',
+      kind: 'DEVICE',
+      bindingReference: 'dvc_01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    },
     tenant: { tenantId: TENANT },
     actor: { kind: 'HUMAN', identityId: 'idn_01ARZ3NDEKTSV4RRFFQ69G5FAV' },
     requestOrigin: { kind: 'HUMAN', identityId: 'idn_01ARZ3NDEKTSV4RRFFQ69G5FAV' },
@@ -59,8 +63,16 @@ test('re-reads current durable attempt/quota for the server-preissued execution 
       };
     },
   };
-  const adapter = new DurableCurrentVoiceSafeguardStateSource({ durableState: source, maxAgeMs: 5_000 });
-  const result = adapter.resolve({ actionIntent: intent(), tenantId: TENANT, executionRef: EXECUTION, evaluatedAt: NOW });
+  const adapter = new DurableCurrentVoiceSafeguardStateSource({
+    durableState: source,
+    maxAgeMs: 5_000,
+  });
+  const result = adapter.resolve({
+    actionIntent: intent(),
+    tenantId: TENANT,
+    executionRef: EXECUTION,
+    evaluatedAt: NOW,
+  });
   assert.deepEqual(result, { attemptNumber: 2, maxAttempts: 4, authorizesExecution: false });
   assert.equal(seenExecutionRef, EXECUTION);
 });
@@ -70,21 +82,51 @@ test('stale, absent and malformed durable state fail closed without defaults', (
     durableState: durable('2026-09-06T05:30:00.000Z'),
     maxAgeMs: 5_000,
   });
-  assert.equal(stale.resolve({ actionIntent: intent(), tenantId: TENANT, executionRef: EXECUTION, evaluatedAt: NOW }), null);
+  assert.equal(
+    stale.resolve({
+      actionIntent: intent(),
+      tenantId: TENANT,
+      executionRef: EXECUTION,
+      evaluatedAt: NOW,
+    }),
+    null,
+  );
 
   const absent = new DurableCurrentVoiceSafeguardStateSource({
     durableState: { lookup: () => null },
     maxAgeMs: 5_000,
   });
-  assert.equal(absent.resolve({ actionIntent: intent(), tenantId: TENANT, executionRef: EXECUTION, evaluatedAt: NOW }), null);
+  assert.equal(
+    absent.resolve({
+      actionIntent: intent(),
+      tenantId: TENANT,
+      executionRef: EXECUTION,
+      evaluatedAt: NOW,
+    }),
+    null,
+  );
 
   const malformed = new DurableCurrentVoiceSafeguardStateSource({
     durableState: {
-      lookup: (lookup) => ({ ...lookup, attemptNumber: 0, maxAttempts: 3, version: 1, updatedAt: NOW }),
+      lookup: (lookup) => ({
+        ...lookup,
+        attemptNumber: 0,
+        maxAttempts: 3,
+        version: 1,
+        updatedAt: NOW,
+      }),
     },
     maxAgeMs: 5_000,
   });
-  assert.equal(malformed.resolve({ actionIntent: intent(), tenantId: TENANT, executionRef: EXECUTION, evaluatedAt: NOW }), null);
+  assert.equal(
+    malformed.resolve({
+      actionIntent: intent(),
+      tenantId: TENANT,
+      executionRef: EXECUTION,
+      evaluatedAt: NOW,
+    }),
+    null,
+  );
 });
 
 test('tenant drift and Android-like malformed execution ref fail before durable read', () => {
@@ -107,6 +149,14 @@ test('tenant drift and Android-like malformed execution ref fail before durable 
     }),
     null,
   );
-  assert.equal(adapter.resolve({ actionIntent: intent(), tenantId: TENANT, executionRef: 'bad ref', evaluatedAt: NOW }), null);
+  assert.equal(
+    adapter.resolve({
+      actionIntent: intent(),
+      tenantId: TENANT,
+      executionRef: 'bad ref',
+      evaluatedAt: NOW,
+    }),
+    null,
+  );
   assert.equal(calls, 0);
 });
