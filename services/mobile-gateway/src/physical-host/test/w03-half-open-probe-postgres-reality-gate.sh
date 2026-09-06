@@ -268,9 +268,9 @@ SQL
 "${PSQL[@]}" -f "$ROOT/migrations/002_w03_execution_attempt_quota.sql" >/dev/null
 "${PSQL[@]}" -f "$ROOT/migrations/003_w03_execution_containment_state.sql" >/dev/null
 
-TENANT='ten_01K0M0M0M0M0M0M0M0M0M0M0M0'
-OWNER_A='act_01K0M0M0M0M0M0M0M0M0M0M0A1'
-OWNER_B='act_01K0M0M0M0M0M0M0M0M0M0M0B2'
+TENANT='ten_01ARZ3NDEKTSV4RRFFQ69G5FAV'
+OWNER_A='act_01ARZ3NDEKTSV4RRFFQ69G5FAV'
+OWNER_B='act_01ARZ3NDEKTSV4RRFFQ69G5FAW'
 CIRCUIT='device.camera.half-open-reality'
 T0_MS='1788652800000'
 T1_MS='1788652830000'
@@ -315,8 +315,8 @@ assert_eq 'ACQUIRED' "$(acquire_probe "$TENANT" "$CIRCUIT" "$winner" "$T4_MS" "$
 
 # A duplicate attempt must make the complete initial stage a no-op. In particular, it must not
 # manufacture a containment row for a new circuit after attempt insertion loses its conflict.
-STAGE_ACTION='act_01K0M0M0M0M0M0M0M0M0M0C3'
-STAGE_EXECUTION='exe_01K0M0M0M0M0M0M0M0M0M0D4'
+STAGE_ACTION='act_01ARZ3NDEKTSV4RRFFQ69G5FAX'
+STAGE_EXECUTION='exe_01ARZ3NDEKTSV4RRFFQ69G5FAY'
 STAGE_CIRCUIT='device.camera.atomic-stage-reality'
 run_sql "INSERT INTO w03_execution_attempt_quota (tenant_id,action_intent_id,execution_ref,attempt_number,max_attempts,created_at,updated_at) VALUES ('$TENANT','$STAGE_ACTION','$STAGE_EXECUTION',2,3,'2026-09-06T00:00:00Z','2026-09-06T00:00:00Z');" >/dev/null
 assert_eq 0 "$(run_sql "SELECT count(*) FROM w03_execution_containment WHERE tenant_id='$TENANT' AND circuit_key='$STAGE_CIRCUIT';")" INITIAL_STAGE_PRECONDITION_NO_CONTAINMENT
