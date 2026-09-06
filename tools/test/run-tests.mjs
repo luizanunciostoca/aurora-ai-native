@@ -57,7 +57,7 @@ function compileAndRunServiceTests(servicePath, testFiles) {
   return serviceStatus;
 }
 
-function compileAndRunW15JCompositionTest() {
+function compileAndRunW15JCompositionTests() {
   const outputRoot = resolve(repoRoot, 'tools/test/dist-w15j-composition');
   rmSync(outputRoot, { recursive: true, force: true });
   let compositionStatus = run(tscCommand(), [
@@ -70,6 +70,7 @@ function compileAndRunW15JCompositionTest() {
     compositionStatus = run(process.execPath, [
       '--test',
       join(outputRoot, 'tools/test/w15j-real-w07-composition.test.js'),
+      join(outputRoot, 'tools/test/w15j-half-open-probe-composition.test.js'),
     ]);
   }
   rmSync(outputRoot, { recursive: true, force: true });
@@ -157,7 +158,7 @@ if (status === 0) {
 }
 
 if (status === 0) {
-  status = compileAndRunW15JCompositionTest();
+  status = compileAndRunW15JCompositionTests();
 }
 
 if (status === 0) {
@@ -174,6 +175,6 @@ if (status === 0) {
 
 const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 console.log(
-  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} w15j_composition_tests=1 context_tests=${contextTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
+  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} w15j_composition_tests=2 context_tests=${contextTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
 );
 process.exit(status);

@@ -16,6 +16,6 @@
     "declarationMap": false,
     "sourceMap": false
   },
-  "include": ["w15j-real-w07-composition.test.ts"],
+  "include": ["w15j-real-w07-composition.test.ts", "w15j-half-open-probe-composition.test.ts"],
   "exclude": ["dist-w15j-composition", "node_modules"]
 }
