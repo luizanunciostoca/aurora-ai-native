@@ -32,10 +32,17 @@ import {
   type LocalCurrentVoiceTargetBindingSource,
 } from './current-device-target-source.js';
 import { W14LocalGovernedDeviceDispatchPort } from './governed-device-dispatch.js';
+import { W03PostgresExecutionAttemptQuotaSource } from './w03-attempt-quota-source.js';
+import { W03PostgresCurrentContainmentStateSource } from './w03-containment-state.js';
 import {
   W03PostgresExecutionIdempotencyFence,
   type LocalW07IdempotencyFencePort,
 } from './w03-execution-fence.js';
+import {
+  W03PostgresPhysicalExecutionStateStager,
+  type W15JPhysicalExecutionStateSeed,
+  type W15JPhysicalExecutionStateStageResult,
+} from './w03-physical-execution-state-stage.js';
 import {
   PsqlW03SyncExecutor,
   W03PostgresDeviceReservationAdapter,
@@ -61,13 +68,15 @@ export type W15JLocalPhysicalHostDependencies = W15JLocalPhysicalHostDependencyB
     | Readonly<{
         /**
          * W07-owned immutable factory invoked only after current W14 managers/dispatch, W03-C
-         * business idempotency and current W14 DEVICE target-source ports exist. It resolves
-         * composition without mutable setters.
+         * business idempotency, W14 DEVICE target source, durable W03 attempt/quota and durable
+         * W03 containment sources exist. It resolves composition without mutable setters.
          */
         createVoiceIntake: (
           governedDeviceDispatch: W14LocalGovernedDeviceDispatchPort,
           idempotencyFence: LocalW07IdempotencyFencePort,
           targetBindings: LocalCurrentVoiceTargetBindingSource,
+          attemptQuotaState: W03PostgresExecutionAttemptQuotaSource,
+          containmentState: W03PostgresCurrentContainmentStateSource,
         ) => VoiceCandidateIntakePort;
         voiceIntake?: never;
       }>
@@ -107,11 +116,19 @@ function resolveVoiceIntake(
   dispatch: W14LocalGovernedDeviceDispatchPort,
   idempotencyFence: LocalW07IdempotencyFencePort,
   targetBindings: LocalCurrentVoiceTargetBindingSource,
+  attemptQuotaState: W03PostgresExecutionAttemptQuotaSource,
+  containmentState: W03PostgresCurrentContainmentStateSource,
 ): VoiceCandidateIntakePort {
   if ('createVoiceIntake' in dependencies && dependencies.createVoiceIntake !== undefined) {
     let intake: VoiceCandidateIntakePort;
     try {
-      intake = dependencies.createVoiceIntake(dispatch, idempotencyFence, targetBindings);
+      intake = dependencies.createVoiceIntake(
+        dispatch,
+        idempotencyFence,
+        targetBindings,
+        attemptQuotaState,
+        containmentState,
+      );
     } catch {
       throw new Error('W15-J W07 voice intake factory failed.');
     }
@@ -126,11 +143,11 @@ function resolveVoiceIntake(
 /**
  * Controlled W15-J LOCAL physical host composition.
  *
- * W14 owns gateway/device/session/trust/transport state. W03 owns durable idempotency through the
- * accepted Postgres schema. W07 ports are injected as already-composed owner adapters. The host
- * exposes W14 transport dispatch, W03 business-idempotency and current W14 DEVICE target-source
- * structural ports for W07 only after creating their current owners; it never bypasses W07,
- * promotes a receipt to VERIFIED, decides retry, or synthesizes physical acceptance evidence.
+ * W14 owns gateway/device/session/trust/transport state. W03 owns durable idempotency, current
+ * attempt/quota and current containment state through the accepted Postgres schema. W07 ports are
+ * injected as already-composed owner adapters. The host exposes structural current-owner ports only
+ * after creating their owners; it never bypasses W07, promotes a receipt to VERIFIED, decides
+ * retry, or synthesizes physical acceptance evidence.
  */
 export class W15JLocalPhysicalHost {
   readonly governedDeviceDispatch: W14LocalGovernedDeviceDispatchPort;
@@ -138,6 +155,7 @@ export class W15JLocalPhysicalHost {
   readonly #gatewayPort: number;
   readonly #bootstrapPort: number;
   readonly #bootstrapDelivery: GatewayBootstrapDeliveryBroker;
+  readonly #executionStateStager: W03PostgresPhysicalExecutionStateStager;
   readonly #gatewayTransport: GatewayHttpNetworkTransport;
   readonly #bootstrapServer: GatewayBootstrapHttpExchangeServer;
   #started = false;
@@ -177,6 +195,9 @@ export class W15JLocalPhysicalHost {
     });
     const durableReservations = new W03PostgresDeviceReservationAdapter(sql);
     const executionIdempotencyFence = new W03PostgresExecutionIdempotencyFence(sql);
+    const executionAttemptQuota = new W03PostgresExecutionAttemptQuotaSource(sql);
+    const currentContainment = new W03PostgresCurrentContainmentStateSource(sql);
+    this.#executionStateStager = new W03PostgresPhysicalExecutionStateStager(sql);
     const deliveries = new DeviceCommandDeliveryManager(durableReservations);
     const receiptIngress = new DeviceReceiptIngressManager({
       sessionTrust: deviceSessions,
@@ -199,6 +220,8 @@ export class W15JLocalPhysicalHost {
       this.governedDeviceDispatch,
       executionIdempotencyFence,
       currentDeviceTargets,
+      executionAttemptQuota,
+      currentContainment,
     );
     const voiceCandidates = new VoiceCandidateNetworkBoundary(voiceIntake);
     const devicePlane = new GatewayVoiceDevicePlaneNetworkHandler(
@@ -222,6 +245,10 @@ export class W15JLocalPhysicalHost {
       host: LOOPBACK_HOST,
       clock: this.#clock,
     });
+  }
+
+  stageExecutionState(seed: W15JPhysicalExecutionStateSeed): W15JPhysicalExecutionStateStageResult {
+    return this.#executionStateStager.stage(seed);
   }
 
   stageBootstrap(principal: AuthenticatedGatewayBootstrapPrincipal): GatewayBootstrapStageResult {

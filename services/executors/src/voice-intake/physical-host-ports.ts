@@ -1,16 +1,21 @@
 import type { W14GovernedDeviceDispatchPort } from '../device-dispatch/governed-device-dispatch.js';
+import type {
+  ActionIntentContainmentKeySource,
+  DurableContainmentStateSource,
+} from '../failure-containment/durable-containment-state.js';
 import {
   W07DeviceReceiptObservationAdapter,
   type TrustedDeviceExecutionMaterialSource,
 } from '../readback/device-receipt-observer.js';
+import type { ExecutionAttemptQuotaSource } from '../safeguards/attempt-quota-source.js';
 import type { IdempotencyFencePort, PreconditionEvaluator } from '../safeguards/types.js';
 import type { CurrentAuthorityValidator } from '../sdk/types.js';
 import { W15JDispatchingVoiceCandidateIntake } from './dispatching-intake.js';
+import { DurableCurrentVoiceContainmentStateSource } from './durable-current-containment-source.js';
+import { DurableCurrentVoiceSafeguardStateSource } from './durable-current-safeguard-source.js';
 import { evaluateVoiceCandidate } from './intake.js';
 import {
   OwnerBackedVoiceExecutionStateSource,
-  type CurrentVoiceContainmentStateSource,
-  type CurrentVoiceSafeguardStateSource,
   type CurrentVoiceTargetBindingSource,
   type PreissuedVoiceExecutionIdentity,
 } from './owner-backed-execution-state-source.js';
@@ -44,6 +49,8 @@ export interface W15JDispatchingPhysicalHostW07Ports {
     w14Dispatch: W14GovernedDeviceDispatchPort,
     idempotencyFence: IdempotencyFencePort,
     targetBindings: CurrentVoiceTargetBindingSource,
+    attemptQuotaState: ExecutionAttemptQuotaSource,
+    containmentState: DurableContainmentStateSource,
   ) => W15JPhysicalHostVoiceIntakePort;
   readonly receiptEvidenceIngress: W07DeviceReceiptObservationAdapter;
 }
@@ -61,10 +68,10 @@ export interface W15JPhysicalHostW07PortConfig {
 export interface W15JDispatchingPhysicalHostW07PortConfig extends W15JPhysicalHostW07PortConfig {
   /** Immutable server-issued command/execution/order/hash identity; never sourced from Android. */
   readonly executionIdentities: readonly PreissuedVoiceExecutionIdentity[];
-  /** Current W07 attempt/quota owner. Missing current state fails closed. */
-  readonly safeguardStateSource: CurrentVoiceSafeguardStateSource;
-  /** Current W07 circuit/kill/dependency/cancellation owner. No healthy defaults are permitted. */
-  readonly containmentStateSource: CurrentVoiceContainmentStateSource;
+  /** Explicit W07-C freshness bound for the durable attempt/quota row. */
+  readonly safeguardMaxAgeMs: number;
+  /** Server-owned ActionIntent -> circuit identity mapping. */
+  readonly containmentCircuitKeys: ActionIntentContainmentKeySource;
   /** Current W07 precondition evaluator; Android cannot supply precondition truth. */
   readonly evaluatePrecondition: PreconditionEvaluator;
 }
@@ -104,9 +111,10 @@ export function createW15JPhysicalHostW07Ports(
  * W07-owned dispatching adapter bundle for the controlled W15-J physical host.
  *
  * The factory receives current structural runtime ports only after the host creates them: W14
- * transport dispatch, W03 business idempotency and W14 DEVICE target availability. W07 builds its
- * current execution-state source around those owners plus current safeguard/containment owners.
- * No raw credential, verified outcome or retry permission crosses this boundary.
+ * transport dispatch, W03 business idempotency, current W14 DEVICE target availability, W03
+ * durable attempt/quota and W03 durable containment. W07 then constructs fresh fail-closed read
+ * adapters around those owners. No raw credential, verified outcome or retry permission crosses
+ * this boundary.
  */
 export function createW15JDispatchingPhysicalHostW07Ports(
   config: W15JDispatchingPhysicalHostW07PortConfig,
@@ -118,12 +126,22 @@ export function createW15JDispatchingPhysicalHostW07Ports(
     w14Dispatch: W14GovernedDeviceDispatchPort,
     idempotencyFence: IdempotencyFencePort,
     targetBindings: CurrentVoiceTargetBindingSource,
+    attemptQuotaState: ExecutionAttemptQuotaSource,
+    containmentState: DurableContainmentStateSource,
   ): W15JPhysicalHostVoiceIntakePort => {
+    const safeguards = new DurableCurrentVoiceSafeguardStateSource({
+      durableState: attemptQuotaState,
+      maxAgeMs: config.safeguardMaxAgeMs,
+    });
+    const containment = new DurableCurrentVoiceContainmentStateSource({
+      circuitKeys: config.containmentCircuitKeys,
+      durableState: containmentState,
+    });
     const executionStateSource = new OwnerBackedVoiceExecutionStateSource({
       identities: config.executionIdentities,
       targetBindings,
-      safeguards: config.safeguardStateSource,
-      containment: config.containmentStateSource,
+      safeguards,
+      containment,
     });
     return new W15JDispatchingVoiceCandidateIntake({
       resolver,
