@@ -46,7 +46,8 @@ export interface ExecutionAttemptQuotaSource {
 export type ExecutionAttemptQuotaRejectionReason =
   | 'ATTEMPT_QUOTA_SOURCE_UNAVAILABLE'
   | 'ATTEMPT_QUOTA_STATE_MALFORMED'
-  | 'ATTEMPT_QUOTA_TENANT_MISMATCH'
+  | 'ATTEMPT_QUOTA_LOOKUP_INVALID'
+  | 'ATTEMPT_QUOTA_CONTEXT_MISMATCH'
   | 'ATTEMPT_QUOTA_TIME_INVALID';
 
 export type ExecutionAttemptQuotaResolution =

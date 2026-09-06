@@ -68,7 +68,8 @@ New leaf files under `services/executors/src/safeguards/**` (W07-C exclusive own
   fail-closed `ExecutionAttemptQuotaResolution` vocabulary.
 - `attempt-quota-resolution.ts` — `resolveCurrentAttemptQuota`, a deterministic fail-closed
   guard that re-reads the source at the gate and rejects on outage/throw, state absence,
-  malformed state, tenant mismatch or invalid evaluation time. It validates shape only; the
+  malformed state, lookup `tenantId`/`actionIntentId` context mismatch, malformed lookup
+  reference or invalid evaluation time. It validates shape and context binding only; the
   existing `evaluateExecutionSafeguards` remains the owner of `ATTEMPT_LIMIT_REACHED` /
   `QUOTA_EXHAUSTED` verdicts.
 

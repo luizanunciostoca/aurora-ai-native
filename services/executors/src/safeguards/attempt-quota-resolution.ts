@@ -26,8 +26,7 @@ function validLookup(lookup: ExecutionAttemptQuotaLookup): boolean {
   return (
     boundedText(lookup.tenantId) &&
     boundedText(lookup.actionIntentId) &&
-    EXECUTION_REF.test(lookup.executionRef) &&
-    parseTime(lookup.evaluatedAt) !== undefined
+    EXECUTION_REF.test(lookup.executionRef)
   );
 }
 
@@ -62,21 +61,30 @@ function rejected(
  * tenant + ActionIntent-scoped attempt/quota value; this resolver never invents
  * a default such as attempt=1/maxAttempts=3.
  *
- * Fails closed (`REJECTED`) when the source is absent, throws (outage), returns
- * no record (state absence), returns malformed state, returns a tenant that
- * does not match the ActionIntent execution context, or when the evaluation
- * time is invalid. The result never grants authority or retry eligibility.
+ * Fails closed (`REJECTED`) before any source read when the evaluation time is
+ * invalid, when the lookup reference is malformed (empty/untrimmed ids or an
+ * executionRef outside the bounded reference shape), or when the lookup
+ * `tenantId`/`actionIntentId` do not match the ActionIntent execution context.
+ * After the lookup is validated, fails closed when the source is absent, throws
+ * (outage), returns no record (state absence) or returns malformed state. The
+ * result never grants authority or retry eligibility.
  */
 export function resolveCurrentAttemptQuota(
   lookup: ExecutionAttemptQuotaLookup,
   actionIntent: ActionIntent,
   source: ExecutionAttemptQuotaSource | undefined,
 ): ExecutionAttemptQuotaResolution {
-  if (parseTime(lookup.evaluatedAt) === undefined || !validLookup(lookup)) {
+  if (parseTime(lookup.evaluatedAt) === undefined) {
     return rejected('ATTEMPT_QUOTA_TIME_INVALID');
   }
-  if (lookup.tenantId !== actionIntent.tenant.tenantId) {
-    return rejected('ATTEMPT_QUOTA_TENANT_MISMATCH');
+  if (!validLookup(lookup)) {
+    return rejected('ATTEMPT_QUOTA_LOOKUP_INVALID');
+  }
+  if (
+    lookup.tenantId !== actionIntent.tenant.tenantId ||
+    lookup.actionIntentId !== actionIntent.actionIntentId
+  ) {
+    return rejected('ATTEMPT_QUOTA_CONTEXT_MISMATCH');
   }
   if (source === undefined) {
     return rejected('ATTEMPT_QUOTA_SOURCE_UNAVAILABLE');

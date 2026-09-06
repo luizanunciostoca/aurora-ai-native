@@ -199,17 +199,33 @@ test('boundary: quota used == limit resolves structurally; the gate enforces QUO
   assert.equal(result.status, 'RESOLVED');
 });
 
-test('negative: tenant lookup that does not match the ActionIntent context fails closed', () => {
-  const result = resolveCurrentAttemptQuota(
+test('negative: lookup context that does not match the ActionIntent fails closed', () => {
+  let calls = 0;
+  const counting: ExecutionAttemptQuotaSource = {
+    resolveCurrent: () => {
+      calls += 1;
+      return snapshot();
+    },
+  };
+
+  const wrongTenant = resolveCurrentAttemptQuota(
     lookup({ tenantId: 'tenant:other' as ExecutionAttemptQuotaLookup['tenantId'] }),
     actionIntent(),
-    sourceReturning(snapshot()),
+    counting,
+  );
+  const wrongIntent = resolveCurrentAttemptQuota(
+    lookup({ actionIntentId: 'action-intent:2' as ExecutionAttemptQuotaLookup['actionIntentId'] }),
+    actionIntent(),
+    counting,
   );
 
-  assert.equal(result.status, 'REJECTED');
-  assert.deepEqual(result.status === 'REJECTED' ? result.reasons : [], [
-    'ATTEMPT_QUOTA_TENANT_MISMATCH',
-  ]);
+  for (const result of [wrongTenant, wrongIntent]) {
+    assert.equal(result.status, 'REJECTED');
+    assert.deepEqual(result.status === 'REJECTED' ? result.reasons : [], [
+      'ATTEMPT_QUOTA_CONTEXT_MISMATCH',
+    ]);
+  }
+  assert.equal(calls, 0);
 });
 
 test('negative/stale: invalid evaluation time fails closed before any source read', () => {
@@ -251,6 +267,9 @@ test('negative: malformed lookup references fail closed before any source read',
   for (const bad of badRefs) {
     const result = resolveCurrentAttemptQuota(bad, actionIntent(), counting);
     assert.equal(result.status, 'REJECTED', JSON.stringify(bad.executionRef));
+    assert.deepEqual(result.status === 'REJECTED' ? result.reasons : [], [
+      'ATTEMPT_QUOTA_LOOKUP_INVALID',
+    ]);
   }
   assert.equal(calls, 0);
 });
