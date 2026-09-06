@@ -22,7 +22,10 @@ import type {
   AuthorityEvaluationRequest,
   AuthorityEvaluationResult,
 } from '../../packages/contracts/src/policy-validation/index.js';
-import type { PolicyRule, PolicySnapshot } from '../../packages/contracts/src/policy-engine/index.js';
+import type {
+  PolicyRule,
+  PolicySnapshot,
+} from '../../packages/contracts/src/policy-engine/index.js';
 import { evaluateAuthority } from '../../packages/policy/src/authority/authority-evaluation.js';
 import {
   createW15JPhysicalHostW07Ports,
@@ -246,7 +249,10 @@ function policySnapshot(allows: boolean): PolicySnapshot {
   return { kind: 'PolicySnapshot', policy: POLICY, state: 'ACTIVE', rules };
 }
 
-function authorityEvaluation(evaluatedAt: Rfc3339Timestamp, allows: boolean): AuthorityEvaluationRequest {
+function authorityEvaluation(
+  evaluatedAt: Rfc3339Timestamp,
+  allows: boolean,
+): AuthorityEvaluationRequest {
   return {
     kind: 'AuthorityEvaluationRequest',
     policyEvaluation: {
@@ -404,12 +410,7 @@ test('real W14 same-socket voice route reaches concrete W07-B and canonical W02 
       ),
     );
     const activated = successfulRecord(
-      await postJson(
-        address.gateway.port,
-        '/v1/device/registrations/activate',
-        {},
-        gatewayAgent,
-      ),
+      await postJson(address.gateway.port, '/v1/device/registrations/activate', {}, gatewayAgent),
     );
     if (!isRecord(activated.record) || !isRecord(activated.record.ref)) {
       throw new Error('activation response missing DeviceRef');
