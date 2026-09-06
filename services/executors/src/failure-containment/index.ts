@@ -26,3 +26,16 @@ export type {
   NonAuthoritativeExecutionSignals,
   RecoveryGate,
 } from './types.js';
+export {
+  PostgresContainmentStateStore,
+  readContainmentStateStatement,
+  updateContainmentStateStatement,
+} from './durable-state.js';
+export type {
+  ContainmentQueryClient,
+  ContainmentQueryResult,
+  ContainmentStateKey,
+  ContainmentStateRead,
+  ContainmentStateWrite,
+  DurableContainmentState,
+} from './durable-state.js';

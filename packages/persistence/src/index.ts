@@ -17,6 +17,8 @@ export const W03_POSTGRES_TABLES = {
   lease: 'w03_lease',
 } as const;
 
+export const W03_POSTGRES_CURRENT_STATE_TABLE = 'w03_failure_containment_state';
+
 export const W03_POSTGRES_BASELINE = {
   migrationId: '001_w03_postgres_baseline',
   name: 'W03 Postgres baseline',
