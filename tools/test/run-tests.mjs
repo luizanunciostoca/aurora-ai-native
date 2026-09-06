@@ -57,6 +57,25 @@ function compileAndRunServiceTests(servicePath, testFiles) {
   return serviceStatus;
 }
 
+function compileAndRunW15JCompositionTest() {
+  const outputRoot = resolve(repoRoot, 'tools/test/dist-w15j-composition');
+  rmSync(outputRoot, { recursive: true, force: true });
+  let compositionStatus = run(tscCommand(), [
+    '--project',
+    'tools/test/tsconfig.w15j-composition.json',
+    '--pretty',
+    'false',
+  ]);
+  if (compositionStatus === 0) {
+    compositionStatus = run(process.execPath, [
+      '--test',
+      join(outputRoot, 'tools/test/w15j-real-w07-composition.test.js'),
+    ]);
+  }
+  rmSync(outputRoot, { recursive: true, force: true });
+  return compositionStatus;
+}
+
 const controlTests = [];
 collectTests(resolve(repoRoot, 'packages/control/test'), controlTests);
 controlTests.sort();
@@ -138,6 +157,10 @@ if (status === 0) {
 }
 
 if (status === 0) {
+  status = compileAndRunW15JCompositionTest();
+}
+
+if (status === 0) {
   status = compileAndRunServiceTests('packages/context', contextTests);
 }
 
@@ -151,6 +174,6 @@ if (status === 0) {
 
 const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 console.log(
-  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} context_tests=${contextTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
+  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} w15j_composition_tests=1 context_tests=${contextTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
 );
 process.exit(status);
