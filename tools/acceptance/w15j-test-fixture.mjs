@@ -20,6 +20,7 @@ export const TUPLE = Object.freeze({
   hostCandidateSha: 'b'.repeat(40),
   reconciledMainSha: 'c'.repeat(40),
   packagingHeadSha: 'd'.repeat(40),
+  packagingRunId: '34058522663',
   artifactId: '9996740380',
   artifactName: 'aurora-w15j-physical-apk-test',
   apkVariant: 'localDebug',
@@ -36,7 +37,7 @@ export const evidence = (status = 'PASS', reference = 'evidence.txt') => ({
 });
 
 export function controlTowerTuple(zipSha256, apkSha256) {
-  const runId = '34058522663';
+  const runId = TUPLE.packagingRunId;
   const url = `https://github.com/luizanunciostoca/aurora-ai-native/actions/runs/${runId}`;
   return {
     schemaVersion: 'w15j-control-tower-tuple-v1',
@@ -46,6 +47,8 @@ export function controlTowerTuple(zipSha256, apkSha256) {
       url,
       status: 'SUCCESS',
       headSha: TUPLE.packagingHeadSha,
+      headBranch: 'prototype/w15j-physical-apk-artifact',
+      eventName: 'push',
       sourceRef: `${url}#exact-head-and-status`,
     },
     androidCandidateSha: TUPLE.androidCandidateSha,
@@ -327,6 +330,13 @@ export function createFinalizedEvidenceFixture() {
     source_branch: 'wave/15j-physical-device-integration-acceptance',
     paired_local_host_candidate_sha: TUPLE.hostCandidateSha,
     reconciled_main_parent_sha: TUPLE.reconciledMainSha,
+    packaging_head_sha: TUPLE.packagingHeadSha,
+    packaging_branch: 'prototype/w15j-physical-apk-artifact',
+    packaging_run_id: TUPLE.packagingRunId,
+    gateway_environment: 'LOCAL',
+    device_gateway_port: '8080',
+    bootstrap_port: '8081',
+    gateway_transport_scope: 'LOCAL_ADB_REVERSE_ONLY',
     apk_variant: TUPLE.apkVariant,
     package_id: TUPLE.applicationId,
     version_code: TUPLE.versionCode,
@@ -349,6 +359,7 @@ export function createFinalizedEvidenceFixture() {
     join(directory, 'artifact-metadata.txt'),
     metadata({
       packaging_head_sha: TUPLE.packagingHeadSha,
+      packaging_run_id: TUPLE.packagingRunId,
       artifact_id: TUPLE.artifactId,
       artifact_name: TUPLE.artifactName,
       artifact_zip_sha256: zipSha256,
@@ -359,6 +370,7 @@ export function createFinalizedEvidenceFixture() {
     host_candidate_sha: TUPLE.hostCandidateSha,
     reconciled_main_sha: TUPLE.reconciledMainSha,
     packaging_head_sha: TUPLE.packagingHeadSha,
+    packaging_run_id: TUPLE.packagingRunId,
     artifact_id: TUPLE.artifactId,
     artifact_name: TUPLE.artifactName,
     artifact_zip_sha256: zipSha256,

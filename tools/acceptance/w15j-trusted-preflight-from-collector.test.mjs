@@ -38,6 +38,9 @@ test('builds the exact trusted tuple from finalized manifested collector evidenc
     assert.equal(result.expected.hostCandidateSha, TUPLE.hostCandidateSha);
     assert.equal(result.expected.reconciledMainSha, TUPLE.reconciledMainSha);
     assert.equal(result.expected.packagingHeadSha, TUPLE.packagingHeadSha);
+    assert.equal(result.expected.packagingRunId, TUPLE.packagingRunId);
+    assert.equal(result.expected.workflowRun.headBranch, 'prototype/w15j-physical-apk-artifact');
+    assert.equal(result.expected.workflowRun.eventName, 'push');
     assert.equal(result.expected.artifact.id, TUPLE.artifactId);
     assert.equal(result.expected.artifact.zipSha256, zipSha256);
     assert.equal(result.expected.apk.sha256, apkSha256);
@@ -72,6 +75,12 @@ test('requires an independent successful Control Tower run tuple', () =>
         value.workflowRun.headSha = '1'.repeat(40);
       },
       (value) => {
+        value.workflowRun.headBranch = 'refs/heads/untrusted';
+      },
+      (value) => {
+        value.workflowRun.eventName = 'workflow_dispatch';
+      },
+      (value) => {
         value.workflowRun.sourceRef = 'https://example.invalid/run';
       },
       (value) => {
@@ -84,6 +93,31 @@ test('requires an independent successful Control Tower run tuple', () =>
       const changed = JSON.parse(JSON.stringify(controlTower));
       mutate(changed);
       assert.throws(() => buildTrustedW15JPreflight(directory, changed));
+    }
+  }));
+
+test('rejects extra keys at every Control Tower tuple level', () =>
+  withFixture(({ directory, controlTower }) => {
+    for (const mutate of [
+      (value) => {
+        value.policyToken = 'forbidden';
+      },
+      (value) => {
+        value.workflowRun.actor = 'untrusted';
+      },
+      (value) => {
+        value.artifact.downloadUrl = 'https://example.invalid/artifact';
+      },
+      (value) => {
+        value.apk.signingSecret = 'forbidden';
+      },
+    ]) {
+      const changed = JSON.parse(JSON.stringify(controlTower));
+      mutate(changed);
+      assert.throws(
+        () => buildTrustedW15JPreflight(directory, changed),
+        /must contain exactly the canonical keys/,
+      );
     }
   }));
 
@@ -170,7 +204,7 @@ test('fails closed on wrong host, main, packaging, or artifact metadata even if 
       'artifact-metadata.txt',
       TUPLE.packagingHeadSha,
       '1'.repeat(40),
-      /packagingHeadSha does not match independent Control Tower tuple/,
+      /BUILD_IDENTITY\.packaging_head_sha does not match canonical packaging provenance/,
     ],
     [
       'artifact-metadata.txt',
@@ -188,15 +222,101 @@ test('fails closed on wrong host, main, packaging, or artifact metadata even if 
 
 test('fails closed when copied BUILD_IDENTITY differs from embedded ZIP identity', () =>
   withFixture(({ directory, controlTower }) => {
-    replace(
-      join(directory, 'BUILD_IDENTITY.txt'),
-      'source_branch=wave/',
-      'source_branch=tampered/',
-    );
+    const identityPath = join(directory, 'BUILD_IDENTITY.txt');
+    const identityLines = readFileSync(identityPath, 'utf8').trimEnd().split('\n');
+    writeFileSync(identityPath, `${identityLines.slice(1).join('\n')}\n${identityLines[0]}\n`);
     rewriteManifest(directory);
     assert.throws(
       () => buildTrustedW15JPreflight(directory, controlTower),
       /BUILD_IDENTITY.txt differs from the embedded artifact/,
+    );
+  }));
+
+test('requires canonical embedded packaging and LOCAL transport self-binding', () => {
+  for (const [from, to, error] of [
+    [
+      `packaging_head_sha=${TUPLE.packagingHeadSha}`,
+      `packaging_head_sha=${'1'.repeat(40)}`,
+      /BUILD_IDENTITY\.packaging_head_sha/,
+    ],
+    [
+      `packaging_run_id=${TUPLE.packagingRunId}`,
+      'packaging_run_id=1234',
+      /BUILD_IDENTITY\.packaging_run_id/,
+    ],
+    [
+      'packaging_branch=prototype/w15j-physical-apk-artifact',
+      'packaging_branch=refs/heads/untrusted',
+      /BUILD_IDENTITY\.packaging_branch/,
+    ],
+    ['gateway_environment=LOCAL', 'gateway_environment=STAGING', /gateway_environment/],
+    ['device_gateway_port=8080', 'device_gateway_port=9090', /device_gateway_port/],
+    ['bootstrap_port=8081', 'bootstrap_port=9091', /bootstrap_port/],
+    [
+      'gateway_transport_scope=LOCAL_ADB_REVERSE_ONLY',
+      'gateway_transport_scope=PUBLIC_NETWORK',
+      /gateway_transport_scope/,
+    ],
+  ]) {
+    withFixture(({ directory, controlTower }) => {
+      replace(join(directory, 'BUILD_IDENTITY.txt'), from, to);
+      rewriteManifest(directory);
+      assert.throws(() => buildTrustedW15JPreflight(directory, controlTower), error);
+    });
+  }
+});
+
+test('requires exact five-key artifact metadata including packaging run id', () =>
+  withFixture(({ directory, controlTower }) => {
+    replace(
+      join(directory, 'artifact-metadata.txt'),
+      `packaging_run_id=${TUPLE.packagingRunId}\n`,
+      '',
+    );
+    rewriteManifest(directory);
+    assert.throws(
+      () => buildTrustedW15JPreflight(directory, controlTower),
+      /artifact metadata must contain exactly the canonical keys/,
+    );
+  }));
+
+test('rejects BUILD_IDENTITY extra keys and canonical purpose/source branch drift', () => {
+  for (const mutate of [
+    (identity) => `${identity}policy_token=forbidden\n`,
+    (identity) =>
+      identity.replace(
+        'artifact_purpose=W15-J-DP5-physical-evidence-input',
+        'artifact_purpose=generic-build',
+      ),
+    (identity) =>
+      identity.replace(
+        'source_branch=wave/15j-physical-device-integration-acceptance',
+        'source_branch=refs/heads/untrusted',
+      ),
+  ]) {
+    withFixture(({ directory, controlTower }) => {
+      const path = join(directory, 'BUILD_IDENTITY.txt');
+      writeFileSync(path, mutate(readFileSync(path, 'utf8')));
+      rewriteManifest(directory);
+      assert.throws(
+        () => buildTrustedW15JPreflight(directory, controlTower),
+        /BUILD_IDENTITY must contain exactly the canonical keys|artifact_purpose|source_branch/,
+      );
+    });
+  }
+});
+
+test('cross-checks packaging run id against the independent Control Tower run', () =>
+  withFixture(({ directory, controlTower }) => {
+    const changed = JSON.parse(JSON.stringify(controlTower));
+    changed.workflowRun.id = '34058522664';
+    changed.workflowRun.url =
+      'https://github.com/luizanunciostoca/aurora-ai-native/actions/runs/34058522664';
+    changed.workflowRun.sourceRef = `${changed.workflowRun.url}#exact-head-and-status`;
+    changed.artifact.digestSourceRef = `${changed.workflowRun.url}#artifact-${changed.artifact.id}-digest`;
+    assert.throws(
+      () => buildTrustedW15JPreflight(directory, changed),
+      /packagingRunId does not match independent Control Tower workflow run/,
     );
   }));
 
