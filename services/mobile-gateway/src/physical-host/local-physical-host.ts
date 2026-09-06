@@ -39,6 +39,11 @@ import {
   type LocalW07IdempotencyFencePort,
 } from './w03-execution-fence.js';
 import {
+  W03PostgresPhysicalExecutionStateStager,
+  type W15JPhysicalExecutionStateSeed,
+  type W15JPhysicalExecutionStateStageResult,
+} from './w03-physical-execution-state-stage.js';
+import {
   PsqlW03SyncExecutor,
   W03PostgresDeviceReservationAdapter,
 } from './w03-postgres-reservations.js';
@@ -150,6 +155,7 @@ export class W15JLocalPhysicalHost {
   readonly #gatewayPort: number;
   readonly #bootstrapPort: number;
   readonly #bootstrapDelivery: GatewayBootstrapDeliveryBroker;
+  readonly #executionStateStager: W03PostgresPhysicalExecutionStateStager;
   readonly #gatewayTransport: GatewayHttpNetworkTransport;
   readonly #bootstrapServer: GatewayBootstrapHttpExchangeServer;
   #started = false;
@@ -191,6 +197,7 @@ export class W15JLocalPhysicalHost {
     const executionIdempotencyFence = new W03PostgresExecutionIdempotencyFence(sql);
     const executionAttemptQuota = new W03PostgresExecutionAttemptQuotaSource(sql);
     const currentContainment = new W03PostgresCurrentContainmentStateSource(sql);
+    this.#executionStateStager = new W03PostgresPhysicalExecutionStateStager(sql);
     const deliveries = new DeviceCommandDeliveryManager(durableReservations);
     const receiptIngress = new DeviceReceiptIngressManager({
       sessionTrust: deviceSessions,
@@ -238,6 +245,12 @@ export class W15JLocalPhysicalHost {
       host: LOOPBACK_HOST,
       clock: this.#clock,
     });
+  }
+
+  stageExecutionState(
+    seed: W15JPhysicalExecutionStateSeed,
+  ): W15JPhysicalExecutionStateStageResult {
+    return this.#executionStateStager.stage(seed);
   }
 
   stageBootstrap(principal: AuthenticatedGatewayBootstrapPrincipal): GatewayBootstrapStageResult {
