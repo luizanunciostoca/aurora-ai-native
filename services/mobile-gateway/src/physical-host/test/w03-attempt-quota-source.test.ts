@@ -69,6 +69,12 @@ test('missing/malformed rows and database outage fail closed', () => {
   sql.output = row('5', '-');
   assert.equal(source.lookup(lookup), null);
 
+  sql.output = row('1', '2');
+  assert.equal(source.lookup(lookup), null);
+
+  sql.output = row().replace('\t2\t4\t', '\t5\t4\t');
+  assert.equal(source.lookup(lookup), null);
+
   sql.error = new Error('postgres unavailable');
   assert.equal(source.lookup(lookup), null);
 });

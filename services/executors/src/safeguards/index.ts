@@ -13,9 +13,13 @@ export type {
   ExecutionAttemptQuotaSnapshot,
   ExecutionAttemptQuotaSource,
 } from './attempt-quota-source.js';
-export { resolveCurrentAttemptQuota } from './attempt-quota-resolution.js';
+export {
+  resolveCurrentAttemptQuota,
+  resolveCurrentAttemptQuotaSnapshot,
+} from './attempt-quota-resolution.js';
 export type {
   AttemptQuotaRejectionReason,
   AttemptQuotaResolution,
+  CurrentAttemptQuotaSnapshotResolution,
   ResolveCurrentAttemptQuotaInput,
 } from './attempt-quota-resolution.js';

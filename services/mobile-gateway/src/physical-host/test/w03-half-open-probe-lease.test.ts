@@ -104,6 +104,21 @@ test('same owner is idempotent while competing active owner is rejected', () => 
   assert.equal(competing.retryAuthorized, false);
 });
 
+test('concurrent conflict uses one read-only observation and never repeats acquire', () => {
+  const sql = new FakeSql();
+  sql.outputs.push('', row('OWNED_BY_OTHER', OTHER_ACTION));
+  const result = new W03PostgresHalfOpenProbeLease(sql).reserve(acquireInput());
+
+  assert.equal(result.ok, false);
+  if (result.ok) throw new Error('concurrent competing owner must remain closed');
+  assert.equal(result.code, 'OWNED_BY_OTHER');
+  assert.equal(sql.requests.length, 2);
+  assert.match(sql.requests[0]?.sql ?? '', /INSERT INTO w03_lease/u);
+  assert.doesNotMatch(sql.requests[1]?.sql ?? '', /INSERT|UPDATE|DELETE/u);
+  assert.match(sql.requests[1]?.sql ?? '', /SELECT/u);
+  assert.deepEqual(sql.requests[1]?.variables, sql.requests[0]?.variables);
+});
+
 test('heartbeat extends only an exact current unexpired owner', () => {
   const sql = new FakeSql();
   sql.outputs.push(

@@ -71,6 +71,7 @@ function compileAndRunW15JCompositionTests() {
       '--test',
       join(outputRoot, 'tools/test/w15j-real-w07-composition.test.js'),
       join(outputRoot, 'tools/test/w15j-half-open-probe-composition.test.js'),
+      join(outputRoot, 'tools/test/w15j-full-chain-software-e2e.test.js'),
     ]);
   }
   rmSync(outputRoot, { recursive: true, force: true });
@@ -135,6 +136,9 @@ if (
 ) {
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   status = run(npm, ['run', 'build', '--workspace', '@aurora/contracts']);
+  if (status === 0) {
+    status = run(npm, ['run', 'build', '--workspace', '@aurora/events']);
+  }
 }
 
 if (status === 0) {
@@ -175,6 +179,6 @@ if (status === 0) {
 
 const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 console.log(
-  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} w15j_composition_tests=2 context_tests=${contextTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
+  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} w15j_composition_tests=3 context_tests=${contextTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
 );
 process.exit(status);

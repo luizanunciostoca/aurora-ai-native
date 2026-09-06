@@ -51,7 +51,9 @@ function nonNegativeInteger(value: string | undefined): number | null {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function parseSnapshot(output: string): W03ExecutionAttemptQuotaSnapshot | null {
+export function parseW03ExecutionAttemptQuotaSnapshot(
+  output: string,
+): W03ExecutionAttemptQuotaSnapshot | null {
   const lines = output.trim().split(/\r?\n/u).filter(Boolean);
   if (lines.length !== 1) return null;
   const fields = lines[0]?.split('\t') ?? [];
@@ -84,12 +86,14 @@ function parseSnapshot(output: string): W03ExecutionAttemptQuotaSnapshot | null 
   if (attemptNumber === null || maxAttempts === null || version === null || updatedAtMs === null) {
     return null;
   }
+  if (attemptNumber > maxAttempts) return null;
   const quotaAbsent = quotaLimitRaw === '-' && quotaUsedRaw === '-';
   const quotaPresent = quotaLimitRaw !== '-' && quotaUsedRaw !== '-';
   if (!quotaAbsent && !quotaPresent) return null;
   const quotaLimit = quotaPresent ? positiveInteger(quotaLimitRaw) : null;
   const quotaUsed = quotaPresent ? nonNegativeInteger(quotaUsedRaw) : null;
   if (quotaPresent && (quotaLimit === null || quotaUsed === null)) return null;
+  if (quotaLimit !== null && quotaUsed !== null && quotaUsed > quotaLimit) return null;
 
   return {
     tenantId: tenantId as TenantId,
@@ -128,7 +132,7 @@ export class W03PostgresExecutionAttemptQuotaSource {
       return null;
     }
     try {
-      const snapshot = parseSnapshot(
+      const snapshot = parseW03ExecutionAttemptQuotaSnapshot(
         this.#sql.query({
           sql: SELECT_CURRENT_SQL,
           variables: {

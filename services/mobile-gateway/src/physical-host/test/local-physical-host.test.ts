@@ -59,6 +59,47 @@ const receiptEvidenceIngress: W07DeviceReceiptEvidenceIngressPort = {
   }),
 };
 
+const createContainmentLifecycle = () => ({
+  transitionCircuit: () => ({
+    ok: false,
+    code: 'STATE_UNAVAILABLE' as const,
+    authorizesExecution: false as const,
+    provesExecutionSuccess: false as const,
+    retryAuthorized: false as const,
+  }),
+  transitionKillSwitch: () => ({
+    ok: false,
+    code: 'STATE_UNAVAILABLE' as const,
+    authorizesExecution: false as const,
+    provesExecutionSuccess: false as const,
+    retryAuthorized: false as const,
+  }),
+  transitionOperational: () => ({
+    ok: false as const,
+    code: 'STATE_UNAVAILABLE' as const,
+    authorizesExecution: false as const,
+    provesExecutionSuccess: false as const,
+    retryAuthorized: false as const,
+  }),
+});
+
+const createAttemptLifecycle = () => ({
+  reconcileAndAdvance: () => ({
+    status: 'REJECTED' as const,
+    reason: 'PERSISTENCE_UNAVAILABLE',
+    authorizesExecution: false as const,
+    provesExecutionSuccess: false as const,
+    retryAuthorized: false as const,
+  }),
+  reconcileAndSealTerminal: () => ({
+    status: 'REJECTED' as const,
+    reason: 'PERSISTENCE_UNAVAILABLE',
+    authorizesExecution: false as const,
+    provesExecutionSuccess: false as const,
+    retryAuthorized: false as const,
+  }),
+});
+
 async function post(
   port: number,
   path: string,
@@ -171,6 +212,8 @@ test('builds W07 voice intake only after exact host-owned W14 dispatch W03 fence
         capturedTargets = targetBindings;
         return voiceIntake;
       },
+      createContainmentLifecycle,
+      createAttemptLifecycle,
       receiptEvidenceIngress,
     },
   );
@@ -197,6 +240,8 @@ test('voice intake factory failure aborts host construction fail closed', () => 
           createVoiceIntake: () => {
             throw new Error('W07 unavailable');
           },
+          createContainmentLifecycle,
+          createAttemptLifecycle,
           receiptEvidenceIngress,
         },
       ),
