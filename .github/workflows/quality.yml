@@ -21,11 +21,6 @@ jobs:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
-      - name: Diagnostic canonical Prettier diff
-        run: |
-          npx prettier --write services/mobile-gateway/src/physical-host/test/local-physical-host-same-socket-voice.test.ts
-          git --no-pager diff -- services/mobile-gateway/src/physical-host/test/local-physical-host-same-socket-voice.test.ts
-          git checkout -- services/mobile-gateway/src/physical-host/test/local-physical-host-same-socket-voice.test.ts
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
