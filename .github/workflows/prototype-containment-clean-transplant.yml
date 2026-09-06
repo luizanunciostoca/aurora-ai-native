@@ -74,7 +74,10 @@ jobs:
           p.write_text(s)
           PY
           npx prettier --write "${files[@]:1}"
-          npm test
+          if ! npm test > /tmp/containment-test.log 2>&1; then
+            tail -250 /tmp/containment-test.log
+            exit 1
+          fi
           rm .github/workflows/prototype-containment-clean-transplant.yml
           git config user.name 'Idebook Digital'
           git config user.email 'luizanunciostoca@gmail.com'
