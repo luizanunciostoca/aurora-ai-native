@@ -53,6 +53,8 @@ export interface CurrentVoiceSafeguardStateSource {
   resolve(request: {
     readonly actionIntent: ActionIntent;
     readonly tenantId: string;
+    /** Server-preissued execution context; never supplied by Android/STT/W14 ACK. */
+    readonly executionRef: string;
     readonly evaluatedAt: string;
   }): CurrentVoiceSafeguardState | null;
 }
@@ -189,6 +191,7 @@ export class OwnerBackedVoiceExecutionStateSource implements TrustedVoiceExecuti
       safeguards = this.#safeguards.resolve({
         actionIntent: lookup.actionIntent,
         tenantId: lookup.context.tenantId,
+        executionRef: identity.executionId,
         evaluatedAt: lookup.evaluatedAt,
       });
       containment = this.#containment.resolve({
