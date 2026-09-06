@@ -61,7 +61,7 @@ jobs:
           artifact_purpose=W15-J-DP5-physical-evidence-input
           source_candidate_sha=9fecc9e174ce01b324977fa25c342af079be2acb
           source_branch=wave/15j-physical-device-integration-acceptance
-          paired_local_host_candidate_sha=6b83b264e302ee8cfe7e1fc539c4c24f5703f032
+          paired_local_host_candidate_sha=22eb3c7a0a0d9dc03f11e3e99a0684969660c7b8
           reconciled_main_parent_sha=59abbc3cb9d1fd61ff4a52a0dd7c3ae54db95785
           apk_variant=localDebug
           package_id=ai.aurora.device.local
@@ -74,7 +74,7 @@ jobs:
       - name: Upload exact W15-J candidate APK
         uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-physical-apk-9fecc9e1
+          name: aurora-w15j-physical-apk-9fecc9e1-host-22eb3c7a
           path: /tmp/w15j-physical-apk
           if-no-files-found: error
           retention-days: 14
