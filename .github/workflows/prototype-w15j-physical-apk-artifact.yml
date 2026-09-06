@@ -19,12 +19,12 @@ jobs:
       - name: Checkout exact W15-J candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 11781e0fa7017d031a97f477490f160f62ff4dbd
+          ref: 9fecc9e174ce01b324977fa25c342af079be2acb
           persist-credentials: false
       - name: Assert exact source candidate
         shell: bash
         run: |
-          test "$(git rev-parse HEAD)" = "11781e0fa7017d031a97f477490f160f62ff4dbd"
+          test "$(git rev-parse HEAD)" = "9fecc9e174ce01b324977fa25c342af079be2acb"
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
@@ -59,10 +59,10 @@ jobs:
           )
           cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<'EOF'
           artifact_purpose=W15-J-DP5-physical-evidence-input
-          source_candidate_sha=11781e0fa7017d031a97f477490f160f62ff4dbd
+          source_candidate_sha=9fecc9e174ce01b324977fa25c342af079be2acb
           source_branch=wave/15j-physical-device-integration-acceptance
-          paired_local_host_candidate_sha=3efc2d741d0498dcd5aa3996019b115df390315e
-          reconciled_main_parent_sha=958381223d857fc821657fc1026d92bc48055456
+          paired_local_host_candidate_sha=6b83b264e302ee8cfe7e1fc539c4c24f5703f032
+          reconciled_main_parent_sha=59abbc3cb9d1fd61ff4a52a0dd7c3ae54db95785
           apk_variant=localDebug
           package_id=ai.aurora.device.local
           version_code=1
@@ -74,7 +74,7 @@ jobs:
       - name: Upload exact W15-J candidate APK
         uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-physical-apk-11781e0f
+          name: aurora-w15j-physical-apk-9fecc9e1
           path: /tmp/w15j-physical-apk
           if-no-files-found: error
           retention-days: 14
