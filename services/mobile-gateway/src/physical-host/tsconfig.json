@@ -10,7 +10,8 @@
       "@aurora/contracts/execution-target": [
         "../../../../packages/contracts/src/execution-target/index.ts"
       ],
-      "@aurora/contracts/ids": ["../../../../packages/contracts/src/ids/index.ts"]
+      "@aurora/contracts/ids": ["../../../../packages/contracts/src/ids/index.ts"],
+      "@aurora/events/delivery": ["../../../../packages/events/src/delivery/index.ts"]
     }
   },
   "include": ["*.ts"],

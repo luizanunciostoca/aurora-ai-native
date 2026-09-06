@@ -46,7 +46,10 @@ WITH lock_scope AS (
     (:'current_in_flight')::integer, (:'max_in_flight')::integer,
     (:'retry_depth')::integer, (:'max_retry_depth')::integer,
     to_timestamp((:'updated_at_ms')::double precision / 1000.0)
-  FROM lock_scope
+  -- The containment row belongs to the same logical initial-stage operation.
+  -- Gate it on a successful attempt insert so an existing attempt cannot
+  -- commit a new caller-supplied containment snapshot before we reject it.
+  FROM attempt_insert
   ON CONFLICT (tenant_id, circuit_key) DO NOTHING
   RETURNING 1
 )
@@ -57,7 +60,8 @@ SELECT
   END,
   CASE
     WHEN EXISTS (SELECT 1 FROM containment_insert) THEN 'CONTAINMENT_INITIALIZED'
-    ELSE 'CONTAINMENT_EXISTS'
+    WHEN EXISTS (SELECT 1 FROM attempt_insert) THEN 'CONTAINMENT_EXISTS'
+    ELSE 'CONTAINMENT_NOT_TOUCHED'
   END;
 `.trim();
 

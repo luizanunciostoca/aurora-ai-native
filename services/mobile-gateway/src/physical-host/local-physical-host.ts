@@ -1,3 +1,8 @@
+import type { ActionIntent } from '@aurora/contracts/actions';
+import type { Rfc3339Timestamp } from '@aurora/contracts/context';
+import type { TenantId } from '@aurora/contracts/ids';
+import type { ContractVersion } from '@aurora/contracts/versioning';
+
 import { DeviceCommandDeliveryManager } from '../device-command-delivery/manager.js';
 import { InMemoryDeviceRegistry } from '../device/registry.js';
 import { DeviceReceiptIngressManager } from '../device-receipt-ingress/manager.js';
@@ -32,12 +37,15 @@ import {
   type LocalCurrentVoiceTargetBindingSource,
 } from './current-device-target-source.js';
 import { W14LocalGovernedDeviceDispatchPort } from './governed-device-dispatch.js';
+import { W03PostgresExecutionAttemptQuotaCas } from './w03-attempt-quota-cas.js';
 import { W03PostgresExecutionAttemptQuotaSource } from './w03-attempt-quota-source.js';
 import { W03PostgresCurrentContainmentStateSource } from './w03-containment-state.js';
+import { W03PostgresContainmentStateStore } from './w03-containment-state-write.js';
 import {
   W03PostgresExecutionIdempotencyFence,
   type LocalW07IdempotencyFencePort,
 } from './w03-execution-fence.js';
+import { W03PostgresHalfOpenProbeLease } from './w03-half-open-probe-lease.js';
 import {
   W03PostgresPhysicalExecutionStateStager,
   type W15JPhysicalExecutionStateSeed,
@@ -56,6 +64,155 @@ const MAX_DATE_MS = 8_640_000_000_000_000;
 interface W15JLocalPhysicalHostDependencyBase {
   /** Concrete W07 Receipt/Evidence observer. W14 never decides outcome or retry. */
   readonly receiptEvidenceIngress: W07DeviceReceiptEvidenceIngressPort;
+}
+
+export interface W15JServerContainmentCircuitRequest {
+  readonly tenantId: TenantId;
+  readonly circuitKey: string;
+  readonly observedAt: Rfc3339Timestamp;
+  readonly event: 'SUCCESS' | 'FAILURE' | 'RECOVERY_WINDOW_ELAPSED' | 'HALF_OPEN_PROBE_STARTED';
+  readonly failureThreshold: number;
+  readonly recoveryAfterMs: number;
+  readonly probeActionIntentId?: ActionIntent['actionIntentId'];
+  readonly probeLeaseExpiresAt?: Rfc3339Timestamp;
+}
+
+export interface W15JServerContainmentKillSwitchRequest {
+  readonly tenantId: TenantId;
+  readonly circuitKey: string;
+  readonly changedAt: Rfc3339Timestamp;
+  readonly command: 'ACTIVATE' | 'DEACTIVATE';
+  readonly recoveryGate: 'NOT_REQUIRED' | 'VALIDATED' | 'NOT_VALIDATED';
+}
+
+type W15JServerReconciliationReason =
+  | 'RECONCILIATION_REQUIRED'
+  | 'RECONCILIATION_SCHEMA_MISMATCH'
+  | 'RECONCILIATION_ACTION_INTENT_MISMATCH'
+  | 'RECONCILIATION_CORRELATION_MISMATCH'
+  | 'RECONCILIATION_UNCERTAINTY_INVALID'
+  | 'RECONCILIATION_TIME_INVALID'
+  | 'RECONCILIATION_TIME_ORDER_INVALID'
+  | 'EFFECT_ALREADY_OBSERVED'
+  | 'RECONCILIATION_INDETERMINATE'
+  | 'RETRY_ATTEMPT_LIMIT_REACHED'
+  | 'RETRY_GUARDS_REQUIRED'
+  | 'RETRY_GUARDS_TIME_INVALID'
+  | 'RETRY_GUARDS_STALE'
+  | 'RETRY_GUARDS_ATTEMPT_MISMATCH'
+  | 'RETRY_GUARDS_BLOCKED';
+
+export interface W15JServerReconciliationProof {
+  readonly kind: 'EXECUTION_RECONCILIATION_RESULT';
+  readonly schemaVersion: ContractVersion;
+  readonly actionIntentId: ActionIntent['actionIntentId'];
+  readonly state:
+    | 'STILL_UNCERTAIN'
+    | 'EFFECT_OBSERVED'
+    | 'NO_EFFECT_CONFIRMED_RETRY_BLOCKED'
+    | 'NO_EFFECT_CONFIRMED_RETRY_ELIGIBLE';
+  readonly reasons: readonly W15JServerReconciliationReason[];
+  readonly reconciliationRequired: boolean;
+  readonly retryEligibleAfterFreshGuards: boolean;
+  readonly nextAttemptNumber?: number;
+  readonly authorizesExecution: false;
+}
+
+interface W15JServerContainmentOperationalBase {
+  readonly tenantId: TenantId;
+  readonly circuitKey: string;
+  readonly observedAt: Rfc3339Timestamp;
+  readonly authorizesExecution: false;
+}
+
+export type W15JServerContainmentOperationalRequest =
+  | (W15JServerContainmentOperationalBase & Readonly<{ readonly command: 'REQUEST_CANCELLATION' }>)
+  | (W15JServerContainmentOperationalBase &
+      Readonly<{
+        readonly command: 'CLEAR_CANCELLATION';
+        readonly reconciliationGate: 'COMPLETED' | 'NOT_COMPLETED';
+      }>)
+  | (W15JServerContainmentOperationalBase &
+      Readonly<{ readonly command: 'BEGIN_IN_FLIGHT' | 'END_IN_FLIGHT' }>)
+  | (W15JServerContainmentOperationalBase &
+      Readonly<{
+        readonly command: 'UPDATE_DEPENDENCY_HEALTH';
+        readonly observation: Readonly<{
+          readonly kind: 'SERVER_DEPENDENCY_HEALTH_OBSERVATION';
+          readonly tenantId: TenantId;
+          readonly circuitKey: string;
+          readonly observedAt: Rfc3339Timestamp;
+          readonly health: 'HEALTHY' | 'DEGRADED' | 'UNAVAILABLE';
+          readonly authorizesExecution: false;
+        }>;
+      }>)
+  | (W15JServerContainmentOperationalBase &
+      Readonly<{
+        readonly command: 'ADVANCE_RETRY_DEPTH';
+        readonly actionIntentId: ActionIntent['actionIntentId'];
+        readonly expectedRetryDepth: number;
+        readonly retryEligibility: W15JServerReconciliationProof;
+      }>)
+  | (W15JServerContainmentOperationalBase &
+      Readonly<{
+        readonly command: 'RESET_RETRY_DEPTH';
+        readonly actionIntentId: ActionIntent['actionIntentId'];
+        readonly terminalReconciliation: W15JServerReconciliationProof;
+      }>);
+
+export type W15JServerContainmentLifecycleResult =
+  | Readonly<{
+      ok: true;
+      authorizesExecution: false;
+      provesExecutionSuccess: false;
+      retryAuthorized: false;
+    }>
+  | Readonly<{
+      ok: false;
+      code:
+        | 'STATE_UNAVAILABLE'
+        | 'STATE_CONFLICT'
+        | 'TRANSITION_REJECTED'
+        | 'PROBE_FENCE_REJECTED'
+        | 'PROOF_REJECTED';
+      authorizesExecution: false;
+      provesExecutionSuccess: false;
+      retryAuthorized: false;
+    }>;
+
+export interface LocalW07ContainmentLifecyclePort {
+  transitionCircuit(
+    input: W15JServerContainmentCircuitRequest,
+  ): W15JServerContainmentLifecycleResult;
+  transitionKillSwitch(
+    input: W15JServerContainmentKillSwitchRequest,
+  ): W15JServerContainmentLifecycleResult;
+  transitionOperational(
+    input: W15JServerContainmentOperationalRequest,
+  ): W15JServerContainmentLifecycleResult;
+}
+
+export type W15JServerAttemptLifecycleResult =
+  | Readonly<{
+      status: 'ADVANCED' | 'SEALED';
+      attemptNumber: number;
+      maxAttempts: number;
+      version: number;
+      authorizesExecution: false;
+      provesExecutionSuccess: false;
+      retryAuthorized: false;
+    }>
+  | Readonly<{
+      status: 'REJECTED';
+      reason: string;
+      authorizesExecution: false;
+      provesExecutionSuccess: false;
+      retryAuthorized: false;
+    }>;
+
+export interface LocalW07AttemptLifecyclePort {
+  reconcileAndAdvance(input: object): W15JServerAttemptLifecycleResult;
+  reconcileAndSealTerminal(input: object): W15JServerAttemptLifecycleResult;
 }
 
 export type W15JLocalPhysicalHostDependencies = W15JLocalPhysicalHostDependencyBase &
@@ -78,6 +235,15 @@ export type W15JLocalPhysicalHostDependencies = W15JLocalPhysicalHostDependencyB
           attemptQuotaState: W03PostgresExecutionAttemptQuotaSource,
           containmentState: W03PostgresCurrentContainmentStateSource,
         ) => VoiceCandidateIntakePort;
+        createContainmentLifecycle: (
+          containmentState: W03PostgresCurrentContainmentStateSource,
+          containmentStore: W03PostgresContainmentStateStore,
+          halfOpenProbeFence: W03PostgresHalfOpenProbeLease,
+        ) => LocalW07ContainmentLifecyclePort;
+        createAttemptLifecycle: (
+          attemptQuotaState: W03PostgresExecutionAttemptQuotaSource,
+          attemptQuotaPersistence: W03PostgresExecutionAttemptQuotaCas,
+        ) => LocalW07AttemptLifecyclePort;
         voiceIntake?: never;
       }>
   );
@@ -140,6 +306,26 @@ function resolveVoiceIntake(
   return dependencies.voiceIntake;
 }
 
+function unavailableContainmentLifecycle(): W15JServerContainmentLifecycleResult {
+  return {
+    ok: false,
+    code: 'STATE_UNAVAILABLE',
+    authorizesExecution: false,
+    provesExecutionSuccess: false,
+    retryAuthorized: false,
+  };
+}
+
+function unavailableAttemptLifecycle(): W15JServerAttemptLifecycleResult {
+  return {
+    status: 'REJECTED',
+    reason: 'PERSISTENCE_UNAVAILABLE',
+    authorizesExecution: false,
+    provesExecutionSuccess: false,
+    retryAuthorized: false,
+  };
+}
+
 /**
  * Controlled W15-J LOCAL physical host composition.
  *
@@ -156,6 +342,8 @@ export class W15JLocalPhysicalHost {
   readonly #bootstrapPort: number;
   readonly #bootstrapDelivery: GatewayBootstrapDeliveryBroker;
   readonly #executionStateStager: W03PostgresPhysicalExecutionStateStager;
+  readonly #attemptLifecycle: LocalW07AttemptLifecyclePort | null;
+  readonly #containmentLifecycle: LocalW07ContainmentLifecyclePort | null;
   readonly #gatewayTransport: GatewayHttpNetworkTransport;
   readonly #bootstrapServer: GatewayBootstrapHttpExchangeServer;
   #started = false;
@@ -196,7 +384,10 @@ export class W15JLocalPhysicalHost {
     const durableReservations = new W03PostgresDeviceReservationAdapter(sql);
     const executionIdempotencyFence = new W03PostgresExecutionIdempotencyFence(sql);
     const executionAttemptQuota = new W03PostgresExecutionAttemptQuotaSource(sql);
+    const executionAttemptQuotaCas = new W03PostgresExecutionAttemptQuotaCas(sql);
     const currentContainment = new W03PostgresCurrentContainmentStateSource(sql);
+    const containmentStore = new W03PostgresContainmentStateStore(sql);
+    const halfOpenProbeFence = new W03PostgresHalfOpenProbeLease(sql);
     this.#executionStateStager = new W03PostgresPhysicalExecutionStateStager(sql);
     const deliveries = new DeviceCommandDeliveryManager(durableReservations);
     const receiptIngress = new DeviceReceiptIngressManager({
@@ -214,6 +405,45 @@ export class W15JLocalPhysicalHost {
       realtimeCommands,
       deliveries,
     });
+
+    if ('createContainmentLifecycle' in dependencies) {
+      try {
+        const lifecycle = dependencies.createContainmentLifecycle(
+          currentContainment,
+          containmentStore,
+          halfOpenProbeFence,
+        );
+        if (
+          lifecycle === null ||
+          typeof lifecycle !== 'object' ||
+          typeof lifecycle.transitionCircuit !== 'function' ||
+          typeof lifecycle.transitionKillSwitch !== 'function' ||
+          typeof lifecycle.transitionOperational !== 'function'
+        ) {
+          throw new Error('invalid port');
+        }
+        this.#containmentLifecycle = lifecycle;
+
+        const attemptLifecycle = dependencies.createAttemptLifecycle(
+          executionAttemptQuota,
+          executionAttemptQuotaCas,
+        );
+        if (
+          attemptLifecycle === null ||
+          typeof attemptLifecycle !== 'object' ||
+          typeof attemptLifecycle.reconcileAndAdvance !== 'function' ||
+          typeof attemptLifecycle.reconcileAndSealTerminal !== 'function'
+        ) {
+          throw new Error('invalid attempt lifecycle port');
+        }
+        this.#attemptLifecycle = attemptLifecycle;
+      } catch {
+        throw new Error('W15-J W07 durable lifecycle factory failed.');
+      }
+    } else {
+      this.#containmentLifecycle = null;
+      this.#attemptLifecycle = null;
+    }
 
     const voiceIntake = resolveVoiceIntake(
       dependencies,
@@ -249,6 +479,62 @@ export class W15JLocalPhysicalHost {
 
   stageExecutionState(seed: W15JPhysicalExecutionStateSeed): W15JPhysicalExecutionStateStageResult {
     return this.#executionStateStager.stage(seed);
+  }
+
+  /** Server-side DP5 control surface; it is not mounted on the Android/gateway HTTP boundary. */
+  transitionContainmentCircuit(
+    input: W15JServerContainmentCircuitRequest,
+  ): W15JServerContainmentLifecycleResult {
+    if (this.#containmentLifecycle === null) return unavailableContainmentLifecycle();
+    try {
+      return this.#containmentLifecycle.transitionCircuit(input);
+    } catch {
+      return unavailableContainmentLifecycle();
+    }
+  }
+
+  /** Server-side DP5 control surface; W07 still requires recovery evidence for deactivation. */
+  transitionContainmentKillSwitch(
+    input: W15JServerContainmentKillSwitchRequest,
+  ): W15JServerContainmentLifecycleResult {
+    if (this.#containmentLifecycle === null) return unavailableContainmentLifecycle();
+    try {
+      return this.#containmentLifecycle.transitionKillSwitch(input);
+    } catch {
+      return unavailableContainmentLifecycle();
+    }
+  }
+
+  /** Server-only W07-F/C surface. A successful CAS still does not authorize a retry. */
+  reconcileAndAdvanceExecutionAttempt(input: object): W15JServerAttemptLifecycleResult {
+    if (this.#attemptLifecycle === null) return unavailableAttemptLifecycle();
+    try {
+      return this.#attemptLifecycle.reconcileAndAdvance(input);
+    } catch {
+      return unavailableAttemptLifecycle();
+    }
+  }
+
+  /** Server-only terminal seal after W07-F reconciliation; never a verified-outcome claim. */
+  reconcileAndSealExecutionAttempt(input: object): W15JServerAttemptLifecycleResult {
+    if (this.#attemptLifecycle === null) return unavailableAttemptLifecycle();
+    try {
+      return this.#attemptLifecycle.reconcileAndSealTerminal(input);
+    } catch {
+      return unavailableAttemptLifecycle();
+    }
+  }
+
+  /** Server-side DP5 control surface; operational facts remain W07-owned and non-authoritative. */
+  transitionContainmentOperational(
+    input: W15JServerContainmentOperationalRequest,
+  ): W15JServerContainmentLifecycleResult {
+    if (this.#containmentLifecycle === null) return unavailableContainmentLifecycle();
+    try {
+      return this.#containmentLifecycle.transitionOperational(input);
+    } catch {
+      return unavailableContainmentLifecycle();
+    }
   }
 
   stageBootstrap(principal: AuthenticatedGatewayBootstrapPrincipal): GatewayBootstrapStageResult {
