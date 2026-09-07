@@ -43,7 +43,7 @@ test('dossier doctor binds live local worktrees', () => {
   for (const value of required) {
     expectSource(value);
   }
-  assert.equal(source.includes('== "a45c349c840b6c5125867fee3c7294ad61998cc3"'), false);
+  assert.equal(source.includes('a45c349c840b6c5125867fee3c7294ad61998cc3'), false);
 });
 
 test('dossier doctor requires complete tablet dossier lint', () => {
@@ -65,5 +65,5 @@ test('dossier doctor requires complete tablet dossier lint', () => {
   for (const value of required) {
     expectSource(value);
   }
-  assert.equal(source.includes('complete_dossier_lint=PASS_ACCEPTED'), false);
+  assert.equal(source.includes('PASS_ACCEPTED'), false);
 });
