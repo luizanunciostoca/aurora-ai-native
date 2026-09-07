@@ -1,0 +1,51 @@
+name: Diagnostic W15-J Tablet Loopback Final Format
+
+on:
+  push:
+    branches:
+      - diagnostic/w15j-tablet-loopback-final-format
+    paths:
+      - '.github/workflows/diagnostic-w15j-tablet-loopback-final-format.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - name: Format exact files with repository Prettier
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx prettier --write \
+            tools/acceptance/w15j-tablet-loopback-preflight.test.mjs \
+            tools/test/run-tests.mjs >/dev/null
+          npx prettier --check \
+            tools/acceptance/w15j-tablet-loopback-preflight.test.mjs \
+            tools/test/run-tests.mjs
+      - name: Run W15-J acceptance suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tools/acceptance/w15j-*.test.mjs
+      - name: Commit exact formatted bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            tools/acceptance/w15j-tablet-loopback-preflight.test.mjs \
+            tools/test/run-tests.mjs
+          git commit -m 'style(W15-J): format tablet-loopback acceptance tests'
+          git push origin HEAD:diagnostic/w15j-tablet-loopback-final-format
