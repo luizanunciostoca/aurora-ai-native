@@ -48,7 +48,7 @@ set -e
 chmod 600 "$RESULT" "$TUPLE"
 
 schema="$(jq -er '.schemaVersion' "$RESULT")"
-accepted="$(jq -er '.physicallyAccepted' "$RESULT")"
+accepted="$(jq -r '.physicallyAccepted' "$RESULT")"
 transport="$(jq -er '.transportBindings.gatewayTransport' "$RESULT")"
 control_plane="$(jq -er '.transportBindings.controlPlane' "$RESULT")"
 live_requirement="$(jq -er '.trustRoot.liveGitHubRevalidation' "$RESULT")"
