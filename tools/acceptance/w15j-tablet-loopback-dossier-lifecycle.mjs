@@ -1,10 +1,4 @@
-import {
-  lstatSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 const SHA256 = /^[a-f0-9]{64}$/u;
@@ -101,7 +95,8 @@ function validateControlTowerTuple(input) {
   if (input.schemaVersion !== 'w15j-control-tower-tuple-v1') {
     throw new Error('Control Tower schema invalid');
   }
-  if (input.repository !== CANONICAL_REPOSITORY) throw new Error('Control Tower repository invalid');
+  if (input.repository !== CANONICAL_REPOSITORY)
+    throw new Error('Control Tower repository invalid');
   if (input.workflowRun.status !== 'SUCCESS') throw new Error('packaging workflow must be SUCCESS');
   if (input.workflowRun.headBranch !== 'prototype/w15j-physical-apk-artifact') {
     throw new Error('packaging branch invalid');
@@ -181,7 +176,11 @@ function boundMachineFields(tuple, preflight, apkIdentity) {
     required(preflight, 'collected_at_utc', 'preflight'),
     'preflight.collected_at_utc',
   );
-  const serialSha256 = exact(required(preflight, 'serial_sha256', 'preflight'), SHA256, 'serial SHA');
+  const serialSha256 = exact(
+    required(preflight, 'serial_sha256', 'preflight'),
+    SHA256,
+    'serial SHA',
+  );
   return {
     candidateSha: tuple.androidCandidateSha,
     provenance: {
