@@ -8,10 +8,13 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', name), 'utf8');
 
 const MAIN_SHA = 'd2089407e88480686b879928cf2863c0dc81718e';
-const ANDROID_SHA = 'a45c349c840b6c5125867fee3c7294ad61998cc3';
+const ANDROID_SHA = '6d44480eae9b99467b20df44290b5c9b17626c3e';
 const HOST_SHA = 'e280e742321638a852c68346b26cd0cdd69010eb';
-const PACKAGING_SHA = '12231a4070178d12c3812e05fa9e3179aefa68ac';
-const APK_SHA = '5135a164d551c8f93e0dcfcfdf80ad66b60e69131d51d504ee7c000babbbb993';
+const PACKAGING_SHA = 'c2375e555caf719130755979b69a57e3133246f6';
+const APK_SHA = '7e09c3473fa235a8f442f275ed99f33a136ceb2c63bd80c5a2eb03cbfaa6eb82';
+const ARTIFACT_ID = '10030765116';
+const RUN_ID = '34155218889';
+const ZIP_SHA = '785668c03552c66f2dcfecca71ac961afe1f96f77ceb4739816d2b42f9094afe';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -61,11 +64,9 @@ test('artifact fetch emits five-key metadata and binds the exact tablet-loopback
   ]) {
     assert.match(source, new RegExp(`^${key}=`, 'm'));
   }
-  assert.match(source, new RegExp(escaped(PACKAGING_SHA)));
-  assert.match(source, new RegExp(escaped(ANDROID_SHA)));
-  assert.match(source, new RegExp(escaped(HOST_SHA)));
-  assert.match(source, new RegExp(escaped(MAIN_SHA)));
-  assert.match(source, new RegExp(escaped(APK_SHA)));
+  for (const value of [PACKAGING_SHA, ANDROID_SHA, HOST_SHA, MAIN_SHA, APK_SHA, ARTIFACT_ID, RUN_ID, ZIP_SHA]) {
+    assert.match(source, new RegExp(escaped(value)));
+  }
   assert.doesNotMatch(source, /^apk_sha256=.*>.*ARTIFACT_METADATA/m);
   assert.match(source, /embedded packaging head drift/);
   assert.match(source, /embedded packaging run drift/);
@@ -84,13 +85,17 @@ test('worktrees default to the exact current tablet-loopback tuple', () => {
   assert.match(source, new RegExp(escaped(MAIN_SHA)));
 });
 
-test('tablet loopback preflight refuses reverse-port ambiguity and remains non-accepting', () => {
+test('tablet loopback preflight refuses reverse-port ambiguity and binds current exact tuple', () => {
   const source = read('tablet-preflight.sh');
   assert.match(source, /LOCAL_TABLET_LOOPBACK/);
   assert.match(source, /requires direct host listeners with no reverse/);
   assert.match(source, /TABLET_LOOPBACK_PREFLIGHT_READY_NOT_ACCEPTED/);
   assert.doesNotMatch(source, /PRE_ACCEPTANCE_ONLY_TRANSPORT_CONTRACT_RECONCILIATION_REQUIRED/);
   assert.match(source, /embedded transport scope must be LOCAL_TABLET_LOOPBACK/);
+  assert.match(source, new RegExp(escaped(APK_SHA)));
+  assert.match(source, new RegExp(escaped(ANDROID_SHA)));
+  assert.match(source, new RegExp(escaped(HOST_SHA)));
+  assert.match(source, new RegExp(escaped(MAIN_SHA)));
   assert.match(source, /authorizesExecution.*false/);
   assert.match(source, /provesExecutionSuccess.*false/);
   assert.match(source, /retryAuthorized.*false/);
@@ -190,11 +195,9 @@ test('live control-tower tuple capture revalidates GitHub and cannot self-accept
   assert.match(source, /actions\/artifacts\/\$ARTIFACT_ID/);
   assert.match(source, /sha256:\$ZIP_SHA/);
   assert.match(source, /open\/draft\/unmerged/);
-  assert.match(source, new RegExp(escaped(MAIN_SHA)));
-  assert.match(source, new RegExp(escaped(ANDROID_SHA)));
-  assert.match(source, new RegExp(escaped(HOST_SHA)));
-  assert.match(source, new RegExp(escaped(PACKAGING_SHA)));
-  assert.match(source, new RegExp(escaped(APK_SHA)));
+  for (const value of [MAIN_SHA, ANDROID_SHA, HOST_SHA, PACKAGING_SHA, APK_SHA, ARTIFACT_ID, RUN_ID, ZIP_SHA]) {
+    assert.match(source, new RegExp(escaped(value)));
+  }
   assert.match(source, /CONTROL_TOWER_TUPLE_CAPTURED_READY_NOT_ACCEPTED/);
   assert.match(source, /authorizes_execution=false/);
   assert.match(source, /physical_acceptance=false/);
@@ -209,6 +212,8 @@ test('dossier doctor requires finalized reviewer-bound evidence and remains non-
   assert.match(source, /wake-evidence\.json/);
   assert.match(source, /capture-control-tower-tuple\.sh/);
   assert.match(source, /w15j-tablet-loopback-trusted-preflight\.mjs/);
+  assert.match(source, /w15j-governed-execution-binding\.mjs/);
+  assert.match(source, /semantic_binding=PASS_7_ROLES_NOT_ACCEPTED/);
   assert.match(source, /physicallyAccepted/);
   assert.match(source, /EXTERNAL_REQUIRED_IMMEDIATELY_BEFORE_ACCEPTANCE/);
   assert.match(source, /LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED/);
