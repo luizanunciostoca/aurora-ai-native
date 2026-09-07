@@ -39,6 +39,7 @@ class WakeSetupActivity : Activity() {
     private val enrollmentStartRunnable = Runnable(::startEnrollmentWhenAudioIdle)
     private val nextEnrollmentSampleRunnable = Runnable(::captureNextEnrollmentSample)
     private val wakeRearmRunnable = Runnable(::rearmWakeWhenAudioIdle)
+    private val runtimeRefreshRunnable = Runnable(::refresh)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -102,17 +103,16 @@ class WakeSetupActivity : Activity() {
     }
 
     override fun onPause() {
-        val enrollmentContextExists =
-            enrollmentFlowActive ||
-                enrollmentRetryPending ||
-                enrollmentSamples.isNotEmpty() ||
-                wakeSuspendedForEnrollment
+        val enrollmentWasInterrupted =
+            enrollmentFlowActive || enrollmentRetryPending || enrollmentSamples.isNotEmpty()
+        val enrollmentContextExists = enrollmentWasInterrupted || wakeSuspendedForEnrollment
         if (enrollmentContextExists) {
             // Enrollment is explicitly user-visible and bounded. Leaving the Activity cancels all
             // pending capture work, drops derived partial samples and restores the previous detector
             // if training had temporarily stopped an enabled wake configuration.
             statusView.removeCallbacks(enrollmentStartRunnable)
             statusView.removeCallbacks(nextEnrollmentSampleRunnable)
+            statusView.removeCallbacks(runtimeRefreshRunnable)
             enrollment?.close()
             enrollment = null
             enrollmentSamples.clear()
@@ -132,6 +132,8 @@ class WakeSetupActivity : Activity() {
                     lastError =
                         if (restored) null else "wake re-arm failed while leaving enrollment",
                 )
+            } else if (enrollmentWasInterrupted) {
+                statusStore.update("ENROLLMENT_INTERRUPTED", modelStore.load()?.modelVersion)
             }
         }
         super.onPause()
@@ -142,6 +144,7 @@ class WakeSetupActivity : Activity() {
             statusView.removeCallbacks(enrollmentStartRunnable)
             statusView.removeCallbacks(nextEnrollmentSampleRunnable)
             statusView.removeCallbacks(wakeRearmRunnable)
+            statusView.removeCallbacks(runtimeRefreshRunnable)
         }
         enrollment?.close()
         enrollment = null
@@ -313,6 +316,7 @@ class WakeSetupActivity : Activity() {
         statusView.removeCallbacks(enrollmentStartRunnable)
         statusView.removeCallbacks(nextEnrollmentSampleRunnable)
         statusView.removeCallbacks(wakeRearmRunnable)
+        statusView.removeCallbacks(runtimeRefreshRunnable)
         wakeRearmAttempts = 0
         enrollment?.close()
         enrollment = null
@@ -329,6 +333,7 @@ class WakeSetupActivity : Activity() {
         if (enabled) {
             statusView.removeCallbacks(enrollmentStartRunnable)
             statusView.removeCallbacks(nextEnrollmentSampleRunnable)
+            statusView.removeCallbacks(runtimeRefreshRunnable)
             enrollment?.close()
             enrollment = null
             enrollmentSamples.clear()
@@ -354,6 +359,7 @@ class WakeSetupActivity : Activity() {
 
     private fun scheduleWakeRearmIfEnabled() {
         statusView.removeCallbacks(wakeRearmRunnable)
+        statusView.removeCallbacks(runtimeRefreshRunnable)
         wakeRearmAttempts = 0
         statusView.post(wakeRearmRunnable)
     }
@@ -397,6 +403,7 @@ class WakeSetupActivity : Activity() {
             )
         }.onSuccess {
             wakeSuspendedForEnrollment = false
+            statusView.postDelayed(runtimeRefreshRunnable, RUNTIME_REFRESH_DELAY_MS)
         }.onFailure { failure ->
             wakeSuspendedForEnrollment = false
             statusStore.update(
@@ -443,7 +450,7 @@ class WakeSetupActivity : Activity() {
     }
 
     private fun refresh() {
-        if (!::statusView.isInitialized) return
+        if (!::statusView.isInitialized || isFinishing || isDestroyed) return
         val runtime = statusStore.snapshot()
         val permissionGranted =
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -512,6 +519,7 @@ class WakeSetupActivity : Activity() {
         private const val MODEL_VERSION = "aurora-wake-local-v1"
         private const val AUDIO_TRANSITION_RETRY_MS = 100L
         private const val NEXT_SAMPLE_DELAY_MS = 900L
+        private const val RUNTIME_REFRESH_DELAY_MS = 600L
         private const val MAX_ENROLLMENT_START_ATTEMPTS = 30
         private const val MAX_WAKE_REARM_ATTEMPTS = 30
     }
