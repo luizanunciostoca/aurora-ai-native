@@ -164,6 +164,21 @@ The preflight requires the exact `LOCAL_TABLET_LOOPBACK` artifact, exact install
 
 This proves environment/readiness only. It does not close DP5, prove execution success, or authorize retry.
 
+## Finalized physical dossier lint
+
+Before the collector manifest is finalized, populate `w15j-evidence.json` inside the evidence directory from the current W15-J evidence template and the actual tablet evidence. It must carry all 48 mandatory physical scenarios, threat review, resource observations, wake evidence references, handoffs and integrated Risk Gates A-D.
+
+After finalization, operator attestation and the independent manifest-bound reviewer attestation are present, run:
+
+```bash
+AURORA_EVIDENCE_DIR="$HOME/aurora-devlab/evidence/w15j-dp5" \
+  bash tools/tablet-devlab/dossier-doctor.sh
+```
+
+The doctor revalidates GitHub live, binds the clean DevLab, Android and host worktrees to the freshly captured tuple, reconstructs trusted physical facts with `w15j-tablet-loopback-trusted-preflight.mjs`, then validates the complete `w15j-evidence.json` with `w15j-tablet-loopback-preflight.mjs`. It requires the canonical 48-scenario NOT_ACCEPTED disposition before it can report `LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED`.
+
+That result is review readiness only. It cannot mint W02/W07 authority, prove execution success by itself, authorize retry, declare physical acceptance, or unblock W16.
+
 ## Cloud build / tablet development
 
 Source editing, Git operations, PR creation and code review can happen in Termux. Android build/package can stay on GitHub Actions; the user does not need a PC. The resulting exact artifact is downloaded back to the tablet for physical testing.
@@ -181,11 +196,13 @@ Tablet-only means **no PC**, not "no independent reviewer". Final DP5 still requ
 - provider doctor PASS from the exact host candidate;
 - authenticated current W04/W15-G projection;
 - wake/STT -> W07 -> exactly one bounded permitted native effect -> Receipt/Evidence;
-- DENY, stale, kill, cancel, duplicate, uncertainty and reconciliation scenarios;
+- all 48 mandatory scenarios, including DENY, stale, kill, cancel, duplicate, uncertainty and reconciliation cases;
 - at least 100 deliberate wake attempts plus false-wake/noise/distance/voice/TTS/barge-in/audio-route/privacy/resource coverage;
+- threat review, resource observations and complete `w15j-evidence.json` inside the immutable collector manifest;
 - cleanup and manifest-bound evidence;
 - operator attestation;
 - independent reviewer identity and manifest-bound reviewer attestation;
-- integrated Risk Gates A-D.
+- integrated Risk Gates A-D;
+- final independent acceptance decision after a fresh live GitHub revalidation.
 
 Until that physical dossier is complete, W15-J remains unaccepted and W16 BUILD remains blocked.
