@@ -37,6 +37,7 @@ data class WakeSetupUiPresentation(
 object WakeSetupUiPolicy {
     fun present(input: WakeSetupUiInput): WakeSetupUiPresentation {
         require(input.acceptedEnrollmentSamples in 0..3)
+        val enrollmentActive = input.runtimeState in ENROLLMENT_ACTIVE_STATES
         val runtimeLabel =
             runtimeLabel(
                 state = input.runtimeState,
@@ -49,6 +50,8 @@ object WakeSetupUiPolicy {
                     "O modo de privacidade está ativo. Desative-o para usar o microfone ou treinar a palavra Aurora."
                 !input.microphoneGranted ->
                     "Conceda acesso ao microfone para treinar e detectar a palavra Aurora."
+                enrollmentActive ->
+                    "Treinamento em andamento. Mantenha esta tela visível e use o modo de privacidade para interromper com segurança."
                 input.enrollmentRetryPending ->
                     "A amostra atual não foi aceita. O modelo anterior, se existir, foi preservado. Repita somente esta amostra em ambiente mais silencioso."
                 !input.modelReady ->
@@ -64,6 +67,7 @@ object WakeSetupUiPolicy {
         val nextSample = (input.acceptedEnrollmentSamples + 1).coerceIn(1, 3)
         val enrollmentButtonLabel =
             when {
+                enrollmentActive -> "Treinamento em andamento…"
                 input.enrollmentRetryPending -> "Repetir amostra $nextSample de 3"
                 input.modelReady -> "Treinar novamente “Aurora” (3 amostras)"
                 else -> "Treinar “Aurora” (3 amostras)"
@@ -85,15 +89,17 @@ object WakeSetupUiPolicy {
             assistantButtonLabel = assistantButtonLabel,
             privacyButtonLabel =
                 if (input.privacyModeEnabled) "Desativar modo de privacidade" else "Ativar modo de privacidade",
-            canRequestMicrophone = !input.microphoneGranted,
-            canTrain = input.microphoneGranted && !input.privacyModeEnabled,
-            canRequestAssistantRole = input.assistantRoleAvailable && !input.assistantSelected,
+            canRequestMicrophone = !input.microphoneGranted && !enrollmentActive,
+            canTrain = input.microphoneGranted && !input.privacyModeEnabled && !enrollmentActive,
+            canRequestAssistantRole =
+                input.assistantRoleAvailable && !input.assistantSelected && !enrollmentActive,
             canEnableWake =
                 input.microphoneGranted &&
                     input.modelReady &&
                     !input.privacyModeEnabled &&
-                    !input.wakeEnabled,
-            canDisableWake = input.wakeEnabled,
+                    !input.wakeEnabled &&
+                    !enrollmentActive,
+            canDisableWake = input.wakeEnabled && !enrollmentActive,
         )
     }
 
@@ -107,6 +113,8 @@ object WakeSetupUiPolicy {
                 "Wake configurado; novo treinamento incompleto, modelo anterior preservado"
             state in ENROLLMENT_FAILURE_STATES && modelReady ->
                 "Novo treinamento incompleto; modelo anterior preservado"
+            state == "ENROLLMENT_STARTING" -> "Preparando treinamento local"
+            state == "ENROLLMENT_CAPTURING" -> "Treinamento local em andamento"
             state == "DISABLED" -> "Desativado"
             state == "INITIALIZING" -> "Inicializando detector local"
             state == "ARMED" || state == "HOTWORD_LISTENING" -> "Escutando por “Aurora”"
@@ -146,9 +154,17 @@ object WakeSetupUiPolicy {
                 "Para acordar a Aurora em segundo plano, configure Aurora como assistente padrão."
             message.contains("wake start failed", ignoreCase = true) ->
                 "O Android não conseguiu iniciar o detector local. Revise permissão, privacidade e tente ativar novamente."
+            message.contains("left foreground", ignoreCase = true) ->
+                "A interação de voz foi encerrada porque a tela saiu do primeiro plano."
             else -> "Diagnóstico local: ${message.take(180)}"
         }
     }
+
+    private val ENROLLMENT_ACTIVE_STATES =
+        setOf(
+            "ENROLLMENT_STARTING",
+            "ENROLLMENT_CAPTURING",
+        )
 
     private val ENROLLMENT_FAILURE_STATES =
         setOf(
