@@ -26,9 +26,14 @@ test('DP5 dossier preparation binds exact Android and tablet-loopback machine fa
   expectAll(prepare, [
     'w15j-tablet-loopback-dossier-lifecycle.mjs',
     'W15J_EVIDENCE_TEMPLATE.json',
+    'W15J_GOVERNED_EXECUTION_BINDING_TEMPLATE.json',
+    'governed-execution-binding.json',
+    'w15j-governed-execution-binding-v1',
+    'EVIDENCE_BINDING_ONLY',
     'preflight-metadata.txt',
     'apk-identity.txt',
     'refusing to overwrite existing operator dossier',
+    'refusing to overwrite existing governed execution binding',
     'Android worktree does not match the captured Control Tower tuple',
     'Android worktree must remain clean before dossier preparation',
     'LOCAL_TABLET_LOOPBACK',
@@ -36,6 +41,7 @@ test('DP5 dossier preparation binds exact Android and tablet-loopback machine fa
     '.environment.adbReversePort == null',
     '.environment.finalizedAtUtc == "REQUIRED"',
     'CLOSED_PHYSICAL_EVIDENCE_INCOMPLETE',
+    'seven-role governed execution binding',
     'DP5_DOSSIER_PREPARED_FOR_OPERATOR_MATRIX_NOT_ACCEPTED',
     'authorizes_execution=false',
     'physical_acceptance=false',
@@ -44,8 +50,12 @@ test('DP5 dossier preparation binds exact Android and tablet-loopback machine fa
   ]);
 });
 
-test('DP5 dossier sealing preserves collector predecessor and creates a reviewer boundary', () => {
+test('DP5 dossier sealing preserves collector predecessor, semantic binding and reviewer boundary', () => {
   expectAll(seal, [
+    'governed-execution-binding.json',
+    'governed_execution_binding_sha256=',
+    'governed execution binding changed after collector finalization',
+    'collector manifest did not bind governed-execution-binding.json',
     'collector-finalize-manifest.preseal.sha256',
     'dossier-seal-status.txt',
     'reviewer attestation must be created only after dossier sealing',
