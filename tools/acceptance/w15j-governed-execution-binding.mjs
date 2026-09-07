@@ -6,11 +6,7 @@ const SHA256 = /^[a-f0-9]{64}$/u;
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u;
 const BINDING_FILE = 'governed-execution-binding.json';
 const MAX_BINDING_BYTES = 1024 * 1024;
-const AUTHORITY_KINDS = new Set([
-  'POLICY_TOKEN',
-  'OWNER_DECISION',
-  'POLICY_AND_OWNER_DECISION',
-]);
+const AUTHORITY_KINDS = new Set(['POLICY_TOKEN', 'OWNER_DECISION', 'POLICY_AND_OWNER_DECISION']);
 
 const SCENARIO_EVIDENCE_REQUIREMENTS = Object.freeze({
   'governedNativeExecution.currentDeviceAuthorizationDispatchesExactlyOnce': [
@@ -104,7 +100,8 @@ function manifestEvidence(bindingRole, label, manifestFiles, evidenceDirectory, 
   );
   const sha256 = requiredString(bindingRole?.sourceEvidenceSha256, `${label}.sourceEvidenceSha256`);
   if (!SHA256.test(sha256)) throw new Error(`${label}.sourceEvidenceSha256 has invalid format`);
-  if (usedReferences.has(reference)) throw new Error(`${label} reuses another semantic evidence file`);
+  if (usedReferences.has(reference))
+    throw new Error(`${label} reuses another semantic evidence file`);
   usedReferences.add(reference);
   const manifest = manifestFiles?.[reference];
   if (!manifest || manifest.sizeBytes <= 0 || manifest.sha256 !== sha256) {
@@ -167,7 +164,8 @@ function validateAuthority(authority, rootActionIntentId, executionId) {
     if (decisionId !== null) throw new Error('POLICY_TOKEN authority must not carry decisionId');
   } else if (authority.authorityReferenceKind === 'OWNER_DECISION') {
     boundedId(decisionId, 'authority.decisionId');
-    if (policyTokenId !== null) throw new Error('OWNER_DECISION authority must not carry policyTokenId');
+    if (policyTokenId !== null)
+      throw new Error('OWNER_DECISION authority must not carry policyTokenId');
   } else {
     boundedId(policyTokenId, 'authority.policyTokenId');
     boundedId(decisionId, 'authority.decisionId');
@@ -261,7 +259,10 @@ export function validateW15JGovernedExecutionBinding(dossier, trusted, evidenceD
     ],
     'w14Session',
   );
-  const deviceSessionId = boundedId(binding.w14Session.deviceSessionId, 'w14Session.deviceSessionId');
+  const deviceSessionId = boundedId(
+    binding.w14Session.deviceSessionId,
+    'w14Session.deviceSessionId',
+  );
   if (
     binding.w14Session.trustState !== 'ACTIVE' ||
     binding.w14Session.executionPreconditionSatisfied !== true
@@ -354,7 +355,9 @@ export function validateW15JGovernedExecutionBinding(dossier, trusted, evidenceD
     ],
     'nativeExecution',
   );
-  if (boundedId(binding.nativeExecution.executionId, 'nativeExecution.executionId') !== executionId) {
+  if (
+    boundedId(binding.nativeExecution.executionId, 'nativeExecution.executionId') !== executionId
+  ) {
     throw new Error('native executionId drift');
   }
   if (
@@ -427,8 +430,7 @@ export function validateW15JGovernedExecutionBinding(dossier, trusted, evidenceD
   if (
     binding.receiptIngress.reportedState !== 'COMPLETED' ||
     binding.receiptIngress.requiresW07Reconciliation !== true ||
-    binding.receiptIngress.authoritySemantics !==
-      'EVIDENCE_INPUT_ONLY_W07_OWNS_OUTCOME_AND_RETRY'
+    binding.receiptIngress.authoritySemantics !== 'EVIDENCE_INPUT_ONLY_W07_OWNS_OUTCOME_AND_RETRY'
   ) {
     throw new Error('receipt ingress must remain evidence-only and reconciliation-owned by W07');
   }

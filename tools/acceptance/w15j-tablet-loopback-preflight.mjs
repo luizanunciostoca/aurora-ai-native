@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { REQUIRED_DP5_SCENARIO_PATHS, REQUIRED_THREAT_REVIEW_KEYS } from './w15j-preflight.mjs';
 import { buildTrustedW15JTabletLoopbackPreflight } from './w15j-tablet-loopback-trusted-preflight.mjs';
+import { validateW15JGovernedExecutionBinding } from './w15j-governed-execution-binding.mjs';
 
 const SHA256 = /^[a-f0-9]{64}$/u;
 const GIT_SHA = /^[a-f0-9]{40}$/u;
@@ -411,8 +412,31 @@ export function validateW15JTabletLoopbackPreflight(dossier, trusted = {}) {
   });
 }
 
-export function loadAndValidateW15JTabletLoopbackPreflight(path, trusted = {}) {
-  return validateW15JTabletLoopbackPreflight(JSON.parse(readFileSync(path, 'utf8')), trusted);
+export function validateW15JTabletLoopbackCompleteGate(dossier, trusted, evidenceDirectory) {
+  const structural = validateW15JTabletLoopbackPreflight(dossier, trusted);
+  const semantic = validateW15JGovernedExecutionBinding(dossier, trusted, evidenceDirectory);
+  if (
+    semantic.evidenceRoleCount !== 7 ||
+    semantic.readyForIndependentReview !== true ||
+    semantic.physicallyAccepted !== false ||
+    semantic.authorizesExecution !== false ||
+    semantic.retryAuthorized !== false ||
+    semantic.w16BuildUnblocked !== false
+  ) {
+    throw new Error('governed execution semantic binding state is invalid');
+  }
+  return Object.freeze({
+    ...structural,
+    semanticEvidenceRoleCount: semantic.evidenceRoleCount,
+  });
+}
+
+export function loadAndValidateW15JTabletLoopbackPreflight(path, trusted = {}, evidenceDirectory) {
+  const dossier = JSON.parse(readFileSync(path, 'utf8'));
+  if (evidenceDirectory === undefined) {
+    return validateW15JTabletLoopbackPreflight(dossier, trusted);
+  }
+  return validateW15JTabletLoopbackCompleteGate(dossier, trusted, evidenceDirectory);
 }
 
 if (process.argv[1]?.endsWith('w15j-tablet-loopback-preflight.mjs')) {
@@ -430,7 +454,11 @@ if (process.argv[1]?.endsWith('w15j-tablet-loopback-preflight.mjs')) {
         evidenceDirectory,
         JSON.parse(readFileSync(controlTowerPath, 'utf8')),
       );
-      const result = loadAndValidateW15JTabletLoopbackPreflight(dossierPath, trusted);
+      const result = loadAndValidateW15JTabletLoopbackPreflight(
+        dossierPath,
+        trusted,
+        evidenceDirectory,
+      );
       console.log(
         `W15J_TABLET_LOOPBACK_LINT_READY_NOT_ACCEPTED candidate=${result.candidateSha} scenarios=${result.requiredScenarioCount}`,
       );

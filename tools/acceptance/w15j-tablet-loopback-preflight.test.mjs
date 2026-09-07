@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { validateW15JTabletLoopbackPreflight } from './w15j-tablet-loopback-preflight.mjs';
+import {
+  validateW15JTabletLoopbackCompleteGate,
+  validateW15JTabletLoopbackPreflight,
+} from './w15j-tablet-loopback-preflight.mjs';
 import {
   FINALIZED_AT,
   HOST_INSTANCE_ID,
@@ -186,5 +189,13 @@ test('tablet-loopback dossier rejects wake evidence below 100 deliberate attempt
   assert.throws(
     () => validateW15JTabletLoopbackPreflight(dossier, trusted),
     /wake deliberate attempts must be >=100/,
+  );
+});
+
+test('complete tablet-loopback gate cannot become lint-ready without semantic binding', () => {
+  const { dossier, trusted } = trustedTabletPreflight();
+  assert.throws(
+    () => validateW15JTabletLoopbackCompleteGate(dossier, trusted, '/semantic-binding-required'),
+    /trusted final manifest must contain governed-execution-binding.json/,
   );
 });
