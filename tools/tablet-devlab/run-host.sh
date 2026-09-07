@@ -51,7 +51,11 @@ cd /aurora-devlab/worktrees/host
 export AURORA_W15J_PROVIDER_MODULE=/aurora-devlab/config/trusted-w15j-provider.mjs
 export AURORA_W15J_HOST_READINESS_DIR=/aurora-devlab/host-readiness/$RUN_ID
 npm ci
+# The external provider imports only freshly compiled canonical owners from this exact host HEAD.
+# Do not rely on residual dist output from a previous run.
 npm run build --workspace @aurora/contracts
 npm run build --workspace @aurora/events
+npm run build --workspace @aurora/policy-core
+./node_modules/.bin/tsc --project services/executors/tsconfig.build.json --pretty false
 node tools/physical/run-w15j-local-host.mjs
 "
