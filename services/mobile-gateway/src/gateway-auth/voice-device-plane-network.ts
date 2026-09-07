@@ -11,6 +11,7 @@ import type {
 import { VOICE_PROJECTION_DEVICE_ROUTE } from './voice-projection-network.js';
 
 export const VOICE_CANDIDATE_DEVICE_ROUTE = '/v1/device/voice/candidates/evaluate' as const;
+const COMMAND_CLAIM_ROUTE = '/v1/device/commands/claim' as const;
 
 const DEVICE_ID = /^dvc_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const MAX_DATE_MS = 8_640_000_000_000_000;
@@ -18,7 +19,7 @@ const MAX_DATE_MS = 8_640_000_000_000_000;
 export interface GatewayVoiceDeviceRouteDependencies {
   /** Canonical W14-E trust reader. This route owns no trust cache or ledger. */
   readonly deviceSessions: object;
-  /** Accepted W15-G -> W07 sanitized candidate + provider-backed W04 projection boundary. */
+  /** Accepted W15-G -> W07 candidate, provider projection and W07 authorization boundary. */
   readonly voiceCandidates: VoiceCandidateNetworkBoundary;
 }
 
@@ -65,6 +66,19 @@ function projectionRouteError(statusCode: number, code: string): GatewayDevicePl
       voiceProjectionError: { code },
       authorizesExecution: false,
       provesExecutionSuccess: false,
+      retryAuthorized: false,
+    },
+  };
+}
+
+function executionAuthorizationError(code: string): GatewayDevicePlaneResponse {
+  return {
+    statusCode: 409,
+    body: {
+      ok: false,
+      devicePlaneError: { code },
+      authorizesExecution: false,
+      canGrantPermission: false,
       retryAuthorized: false,
     },
   };
@@ -202,12 +216,59 @@ function currentContext(
   return contextFromCurrentTrust(currentTrust, input, deviceSessionId, deviceRef);
 }
 
+function attachExecutionAuthorization(
+  response: GatewayDevicePlaneResponse,
+  input: GatewayDevicePlaneHandleInput,
+  dependencies: GatewayVoiceDeviceRouteDependencies,
+): GatewayDevicePlaneResponse {
+  if (response.statusCode !== 200 || !isPlainRecord(response.body) || response.body.ok !== true) {
+    return response;
+  }
+  const value = response.body.value;
+  if (!isPlainRecord(value)) return response;
+  const envelope = value.envelope;
+  if (envelope === undefined) return response;
+  if (
+    !isPlainRecord(envelope) ||
+    envelope.authorizesExecution !== false ||
+    envelope.provesExecutionSuccess !== false ||
+    typeof envelope.commandId !== 'string' ||
+    typeof envelope.executionId !== 'string'
+  ) {
+    return executionAuthorizationError('W07_EXECUTION_AUTHORIZATION_PROTOCOL_VIOLATION');
+  }
+  const context = currentContext(input, dependencies);
+  if (context === null) return executionAuthorizationError('AUTHENTICATED_CONTEXT_NOT_CURRENT');
+  const authorization = dependencies.voiceCandidates.currentExecutionAuthorization({
+    commandId: envelope.commandId,
+    executionId: envelope.executionId,
+    context,
+    nowMs: input.nowMs,
+  });
+  if (authorization === null) {
+    return executionAuthorizationError('W07_EXECUTION_AUTHORIZATION_UNAVAILABLE');
+  }
+  return {
+    statusCode: 200,
+    body: {
+      ...response.body,
+      value: {
+        ...value,
+        envelope: {
+          ...envelope,
+          executionAuthorization: authorization,
+        },
+      },
+    },
+  };
+}
+
 /**
  * Narrow W15-G/W07 composition wrapper over the accepted W14 device-plane handler.
  *
- * Existing W14 routes are delegated unchanged. Voice-candidate and voice-projection routes derive
- * identity/device/session context only from current W14 server state. Projection transport carries
- * catalog/capability eligibility only; it never mints authority, outcome truth or retry permission.
+ * Existing W14 routes are delegated unchanged. Voice routes derive identity/device/session context
+ * only from current W14 state. A successful claim is augmented with the exact short-lived W07
+ * authorization issued after all W07 gates; W14 transports it but cannot create/refresh it.
  */
 export class GatewayVoiceDevicePlaneNetworkHandler extends GatewayDevicePlaneNetworkHandler {
   readonly #voiceDependencies: GatewayVoiceDeviceRouteDependencies;
@@ -229,6 +290,10 @@ export class GatewayVoiceDevicePlaneNetworkHandler extends GatewayDevicePlaneNet
   }
 
   override async handle(input: GatewayDevicePlaneHandleInput): Promise<GatewayDevicePlaneResponse> {
+    if (input.path === COMMAND_CLAIM_ROUTE) {
+      const claimed = await super.handle(input);
+      return attachExecutionAuthorization(claimed, input, this.#voiceDependencies);
+    }
     if (
       input.path !== VOICE_CANDIDATE_DEVICE_ROUTE &&
       input.path !== VOICE_PROJECTION_DEVICE_ROUTE
