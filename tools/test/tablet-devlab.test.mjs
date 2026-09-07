@@ -42,6 +42,22 @@ test('tablet host remains fail closed until trusted provider is configured', () 
   assert.doesNotMatch(provider, /postgres(?:ql)?:\/\/[^\s]*:[^\s]*@/i);
 });
 
+test('artifact fetch emits the canonical five-key metadata contract', () => {
+  const source = read('fetch-current-artifact.sh');
+  for (const key of [
+    'packaging_head_sha',
+    'packaging_run_id',
+    'artifact_id',
+    'artifact_name',
+    'artifact_zip_sha256',
+  ]) {
+    assert.match(source, new RegExp(`^${key}=`, 'm'));
+  }
+  assert.doesNotMatch(source, /^apk_sha256=.*>.*ARTIFACT_METADATA/m);
+  assert.match(source, /embedded packaging head drift/);
+  assert.match(source, /embedded packaging run drift/);
+});
+
 test('tablet loopback preflight refuses reverse-port ambiguity and cannot claim acceptance', () => {
   const source = read('tablet-preflight.sh');
   assert.match(source, /LOCAL_TABLET_LOOPBACK/);
