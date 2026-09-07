@@ -32,6 +32,7 @@ class WakeSetupActivity : Activity() {
     private var enrollment: AuroraWakeEnrollmentRecorder? = null
     private val enrollmentSamples = mutableListOf<WakeFeatureVector>()
     private var enrollmentRetryPending = false
+    private var wakeSuspendedForEnrollment = false
     private var enrollmentStartAttempts = 0
     private var wakeRearmAttempts = 0
     private val enrollmentStartRunnable = Runnable(::startEnrollmentWhenAudioIdle)
@@ -98,6 +99,34 @@ class WakeSetupActivity : Activity() {
         refresh()
     }
 
+    override fun onPause() {
+        if (wakeSuspendedForEnrollment) {
+            // Enrollment temporarily stops the HOTWORD service to get exclusive microphone
+            // ownership. If the visible setup Activity is abandoned, never leave the persisted
+            // wake preference saying "enabled" while the detector remains silently stopped.
+            statusView.removeCallbacks(enrollmentStartRunnable)
+            enrollment?.close()
+            enrollment = null
+            enrollmentSamples.clear()
+            enrollmentRetryPending = false
+            wakeSuspendedForEnrollment = false
+            val shouldRestore =
+                preferences.wakeEnabled() &&
+                    !preferences.privacyModeEnabled() &&
+                    modelStore.hasValidModel()
+            if (shouldRestore) {
+                val restored = AuroraWakeForegroundService.rearmIfConfigured(this)
+                statusStore.update(
+                    if (restored) "INITIALIZING" else "WAKE_PLATFORM_BLOCKED",
+                    modelStore.load()?.modelVersion,
+                    lastError =
+                        if (restored) null else "wake re-arm failed while leaving enrollment",
+                )
+            }
+        }
+        super.onPause()
+    }
+
     override fun onDestroy() {
         if (::statusView.isInitialized) {
             statusView.removeCallbacks(enrollmentStartRunnable)
@@ -107,6 +136,7 @@ class WakeSetupActivity : Activity() {
         enrollment = null
         enrollmentSamples.clear()
         enrollmentRetryPending = false
+        wakeSuspendedForEnrollment = false
         super.onDestroy()
     }
 
@@ -141,6 +171,7 @@ class WakeSetupActivity : Activity() {
             return
         }
 
+        wakeSuspendedForEnrollment = preferences.wakeEnabled() && modelStore.hasValidModel()
         disableWakeServiceOnly()
         enrollment?.close()
         enrollment = null
@@ -254,6 +285,7 @@ class WakeSetupActivity : Activity() {
 
     private fun disableWake() {
         preferences.setWakeEnabled(false)
+        wakeSuspendedForEnrollment = false
         statusView.removeCallbacks(wakeRearmRunnable)
         wakeRearmAttempts = 0
         disableWakeServiceOnly()
@@ -269,6 +301,7 @@ class WakeSetupActivity : Activity() {
             enrollment = null
             enrollmentSamples.clear()
             enrollmentRetryPending = false
+            wakeSuspendedForEnrollment = false
             disableWakeServiceOnly()
             statusStore.update("WAKE_PRIVACY_BLOCKED", modelStore.load()?.modelVersion)
         } else if (preferences.wakeEnabled() && modelStore.hasValidModel()) {
@@ -294,12 +327,22 @@ class WakeSetupActivity : Activity() {
 
     private fun rearmWakeWhenAudioIdle() {
         if (isFinishing || isDestroyed) return
-        if (!preferences.wakeEnabled() || preferences.privacyModeEnabled()) return
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
-        if (!modelStore.hasValidModel()) return
+        if (!preferences.wakeEnabled() || preferences.privacyModeEnabled()) {
+            wakeSuspendedForEnrollment = false
+            return
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            wakeSuspendedForEnrollment = false
+            return
+        }
+        if (!modelStore.hasValidModel()) {
+            wakeSuspendedForEnrollment = false
+            return
+        }
 
         if (AuroraAudioRuntime.arbiter.snapshot().owners.isNotEmpty()) {
             if (wakeRearmAttempts >= MAX_WAKE_REARM_ATTEMPTS) {
+                wakeSuspendedForEnrollment = false
                 statusStore.update(
                     "WAKE_PLATFORM_BLOCKED",
                     modelStore.load()?.modelVersion,
@@ -319,7 +362,10 @@ class WakeSetupActivity : Activity() {
                     AuroraWakeForegroundService.ACTION_ARM,
                 ),
             )
+        }.onSuccess {
+            wakeSuspendedForEnrollment = false
         }.onFailure { failure ->
+            wakeSuspendedForEnrollment = false
             statusStore.update(
                 "WAKE_PLATFORM_BLOCKED",
                 modelStore.load()?.modelVersion,
