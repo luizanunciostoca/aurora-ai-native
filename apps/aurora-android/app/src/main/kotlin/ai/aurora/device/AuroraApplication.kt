@@ -8,6 +8,9 @@ import ai.aurora.device.bootstrap.GatewayBootstrapGrant
 import ai.aurora.device.bootstrap.ProcessLocalGatewayBootstrapRuntime
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.config.RuntimeEnvironmentConfig
+import ai.aurora.device.executor.AndroidAudioVolumeActionPort
+import ai.aurora.device.executor.W15JDeviceCommandConsumptionResult
+import ai.aurora.device.executor.W15JGatewayDeviceCommandConsumer
 import ai.aurora.device.lifecycle.AndroidPresenceCheckpointStore
 import ai.aurora.device.lifecycle.AndroidPresenceCoordinator
 import ai.aurora.device.lifecycle.PresenceEngine
@@ -25,8 +28,10 @@ import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionError
 import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionResult
 import ai.aurora.device.voice.GatewayVoiceRuntimeConnector
 import ai.aurora.device.voice.GovernedW07VoiceAuthorityIngress
+import ai.aurora.device.voice.InstalledGatewayVoiceProjection
 import ai.aurora.device.voice.OneShotGatewayCredentialProvider
 import ai.aurora.device.voice.WakeVoiceRuntimeRegistry
+import ai.aurora.device.voice.installableGatewayVoiceProjection
 import ai.aurora.device.voice.localGatewayBindingFrom
 
 class AuroraApplication : Application() {
@@ -40,6 +45,8 @@ class AuroraApplication : Application() {
     private var localGatewayBootstrapRuntime: ProcessLocalGatewayBootstrapRuntime? = null
     private var localGatewayVoiceRuntimeComposition: GatewayVoiceRuntimeComposition? = null
     private var activeGatewayDevicePlaneClient: GatewayDevicePlaneClient? = null
+    private var activeGatewayVoiceProjection: InstalledGatewayVoiceProjection? = null
+    private var activeGatewayCommandConsumer: W15JGatewayDeviceCommandConsumer? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -127,6 +134,14 @@ class AuroraApplication : Application() {
                 GatewayVoiceRuntimeCompositionError.LOCAL_RUNTIME_UNAVAILABLE,
             )
 
+    internal fun consumeLocalGovernedDeviceCommand(
+        commandId: String,
+    ): W15JDeviceCommandConsumptionResult =
+        activeGatewayCommandConsumer?.consume(commandId)
+            ?: W15JDeviceCommandConsumptionResult.NoEffect(
+                reason = "governed device command consumer is not composed",
+            )
+
     private fun connectLocalGatewayVoiceIngress(
         grant: GatewayBootstrapGrant,
         expectedRegistrationVersion: Int?,
@@ -167,13 +182,54 @@ class AuroraApplication : Application() {
             return false
         }
 
+        val projectionResult = runCatching { client.fetchVoiceProjection() }.getOrNull()
+        if (projectionResult !is GatewayDevicePlaneResult.Success) {
+            runCatching { client.close() }
+            return false
+        }
+        val installedProjection =
+            runCatching {
+                installableGatewayVoiceProjection(
+                    context = this,
+                    projection = projectionResult.value,
+                    expectedTenantId = grant.tenantId,
+                )
+            }.getOrNull()
+        if (installedProjection == null) {
+            runCatching { client.close() }
+            return false
+        }
+
+        val consumer =
+            runCatching {
+                W15JGatewayDeviceCommandConsumer(
+                    client = client,
+                    capabilityBridge = installedProjection.capabilityBridge,
+                    permissionContext = this,
+                    actionPort = AndroidAudioVolumeActionPort(this),
+                )
+            }.getOrNull()
+        if (consumer == null) {
+            runCatching { client.close() }
+            return false
+        }
+
+        // Projection and native availability are installed before the W07 ingress becomes reachable.
+        // None of these local objects is authority; the side-effect consumer still requires the
+        // short-lived W07 authorization carried in the exact W14 claim envelope.
+        WakeVoiceRuntimeRegistry.projectionStore.replace(installedProjection.bundle)
         activeGatewayDevicePlaneClient = client
+        activeGatewayVoiceProjection = installedProjection
+        activeGatewayCommandConsumer = consumer
         WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
         return true
     }
 
     private fun clearLocalGatewayVoiceRuntime() {
         WakeVoiceRuntimeRegistry.clearAuthorityIngress()
+        WakeVoiceRuntimeRegistry.projectionStore.clear()
+        activeGatewayCommandConsumer = null
+        activeGatewayVoiceProjection = null
         runCatching { activeGatewayDevicePlaneClient?.close() }
         activeGatewayDevicePlaneClient = null
     }
