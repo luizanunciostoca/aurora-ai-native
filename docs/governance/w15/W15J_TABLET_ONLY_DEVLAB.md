@@ -55,13 +55,14 @@ For tablet-loopback mode, no `adb reverse` mapping for 8080/8081 may exist.
 
 ```text
 main      d2089407e88480686b879928cf2863c0dc81718e
-android   a45c349c840b6c5125867fee3c7294ad61998cc3
+android   6d44480eae9b99467b20df44290b5c9b17626c3e
 host      e280e742321638a852c68346b26cd0cdd69010eb
-packaging 12231a4070178d12c3812e05fa9e3179aefa68ac
-run       34093517317
-artifact  10007765042
-zip       2bc3fe221eb36a07146d2a9fb05f505e715c4a52e0b2488a9bc65d1b6cb005d5
-apk       5135a164d551c8f93e0dcfcfdf80ad66b60e69131d51d504ee7c000babbbb993
+packaging c2375e555caf719130755979b69a57e3133246f6
+run       34155218889
+artifact  10030765116
+name      aurora-w15j-tablet-loopback-apk-6d44480e-host-e280e742
+zip       785668c03552c66f2dcfecca71ac961afe1f96f77ceb4739816d2b42f9094afe
+apk       7e09c3473fa235a8f442f275ed99f33a136ceb2c63bd80c5a2eb03cbfaa6eb82
 transport LOCAL_TABLET_LOOPBACK
 control   SELF_ADB_WIRELESS_DEBUGGING
 ```
@@ -123,6 +124,10 @@ This prevents unattended CI/automation from opening the normal physical-effect c
 
 Its disposition is `TABLET_LOOPBACK_PREFLIGHT_READY_NOT_ACCEPTED`. This is readiness evidence only and cannot close DP5.
 
+The physical dossier is now structurally and semantically gated. `prepare-dp5-dossier.sh` creates both `w15j-evidence.json` and `governed-execution-binding.json`. The latter must be populated from real final-manifest evidence for exactly seven owner roles: W02/W07 authority, W14 session, W14 delivery, W03 durable state, Android native execution, Receipt/Evidence ingress and W07 outcome reconciliation.
+
+`seal-dp5-dossier.sh` refuses to seal unless the semantic binding is present before collector finalization and carries it into the sealed manifest. `dossier-doctor.sh` independently executes both the 48-scenario complete dossier validator and `w15j-governed-execution-binding.mjs`; readiness requires `roles=7` while preserving `authorizesExecution=false`, `provesExecutionSuccess=false`, `retryAuthorized=false`, `physicalAcceptance=false` and `w16BuildUnblocked=false`.
+
 ## Final DP5 requirements
 
 Final DP5 still requires:
@@ -135,7 +140,8 @@ Final DP5 still requires:
 - authenticated current W04/W15-G projection;
 - wake/STT -> W07 -> one bounded permitted native effect -> Receipt/Evidence;
 - DENY, stale authority, duplicate, kill, cancellation, uncertainty, late receipt and reconciliation negatives;
-- complete mandatory physical scenario matrix;
+- complete mandatory 48-scenario physical matrix;
+- sealed seven-role governed execution semantic binding;
 - wake matrix with at least 100 deliberate attempts plus false-wake/noise/distance/voice/TTS/barge-in/audio-route coverage;
 - privacy/raw-PCM/resource/threat evidence;
 - cleanup and immutable final manifest;
