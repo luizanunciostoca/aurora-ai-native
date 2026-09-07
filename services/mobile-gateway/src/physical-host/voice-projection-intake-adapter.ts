@@ -8,7 +8,9 @@ import type {
 } from '../gateway-auth/voice-projection-network.js';
 
 type VoiceEvaluationInput = Parameters<VoiceCandidateIntakePort['evaluate']>[0];
-type VoiceProjectionInput = Parameters<NonNullable<VoiceCandidateIntakePort['currentProjection']>>[0];
+type VoiceProjectionInput = Parameters<
+  NonNullable<VoiceCandidateIntakePort['currentProjection']>
+>[0];
 
 /**
  * Adds a trusted provider-owned current voice projection to the already-composed W07 intake.
