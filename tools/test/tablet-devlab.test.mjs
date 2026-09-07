@@ -181,6 +181,42 @@ test('provider doctor validates owner-backed composition but remains software-on
   assert.match(source, /physical_acceptance=false/);
 });
 
+test('live control-tower tuple capture revalidates GitHub and cannot self-accept DP5', () => {
+  const source = read('capture-control-tower-tuple.sh');
+  assert.match(source, /branches\/main/);
+  assert.match(source, /pulls\/\$number/);
+  assert.match(source, /compare\/\$MAIN_SHA\.\.\.\$expected_head/);
+  assert.match(source, /actions\/runs\/\$RUN_ID/);
+  assert.match(source, /actions\/artifacts\/\$ARTIFACT_ID/);
+  assert.match(source, /sha256:\$ZIP_SHA/);
+  assert.match(source, /open\/draft\/unmerged/);
+  assert.match(source, new RegExp(escaped(MAIN_SHA)));
+  assert.match(source, new RegExp(escaped(ANDROID_SHA)));
+  assert.match(source, new RegExp(escaped(HOST_SHA)));
+  assert.match(source, new RegExp(escaped(PACKAGING_SHA)));
+  assert.match(source, new RegExp(escaped(APK_SHA)));
+  assert.match(source, /CONTROL_TOWER_TUPLE_CAPTURED_READY_NOT_ACCEPTED/);
+  assert.match(source, /authorizes_execution=false/);
+  assert.match(source, /physical_acceptance=false/);
+  assert.match(source, /retry_authorized=false/);
+});
+
+test('dossier doctor requires finalized reviewer-bound evidence and remains non-accepting', () => {
+  const source = read('dossier-doctor.sh');
+  assert.match(source, /evidence-manifest\.sha256/);
+  assert.match(source, /reviewer-attestation\.json/);
+  assert.match(source, /operator-attestation\.json/);
+  assert.match(source, /wake-evidence\.json/);
+  assert.match(source, /capture-control-tower-tuple\.sh/);
+  assert.match(source, /w15j-tablet-loopback-trusted-preflight\.mjs/);
+  assert.match(source, /physicallyAccepted/);
+  assert.match(source, /EXTERNAL_REQUIRED_IMMEDIATELY_BEFORE_ACCEPTANCE/);
+  assert.match(source, /LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED/);
+  assert.match(source, /authorizes_execution=false/);
+  assert.match(source, /physical_acceptance=false/);
+  assert.match(source, /w16_build_unblocked=false/);
+});
+
 test('tablet devlab documentation keeps independent reviewer and exact tuple requirements', () => {
   const source = read('README.md');
   assert.match(source, /no PC/i);
