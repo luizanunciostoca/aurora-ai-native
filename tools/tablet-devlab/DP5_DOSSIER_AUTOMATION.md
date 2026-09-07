@@ -28,7 +28,7 @@ adbReversePort=null
 controlPlane=SELF_ADB_WIRELESS_DEBUGGING
 ```
 
-## 3. Prepare the exact operator dossier
+## 3. Prepare the exact operator dossier and semantic binding
 
 After preflight and Control Tower tuple capture, run:
 
@@ -40,7 +40,9 @@ AURORA_CONTROL_TOWER_TUPLE="$HOME/aurora-devlab/evidence/control-tower-tuple.jso
 
 This command uses the exact Android candidate's `w15j-tablet-loopback-dossier-lifecycle.mjs` binder. It refuses stale or dirty Android worktrees, refuses overwrite and converts the canonical W15-J template into the exact same-tablet physical tuple. Machine-owned fields are bound to Control Tower + collector preflight rather than operator text.
 
-At this stage `environment.finalizedAtUtc` deliberately remains `REQUIRED` and DP5 remains incomplete.
+Preparation also creates `governed-execution-binding.json` from the exact Android candidate's `W15J_GOVERNED_EXECUTION_BINDING_TEMPLATE.json`. The file is deliberately incomplete and non-authoritative at creation time, but it must exist before the physical collector is finalized so its final bytes can be included in the immutable manifest.
+
+At this stage `environment.finalizedAtUtc` deliberately remains `REQUIRED`, DP5 remains incomplete and all binding authority/acceptance flags remain false.
 
 The operator then records the real physical matrix in `w15j-evidence.json`, including:
 
@@ -53,15 +55,25 @@ The operator then records the real physical matrix in `w15j-evidence.json`, incl
 - integrated Risk Gates A-D;
 - final handoffs and references.
 
-No preparation output grants execution authority, retry permission or physical acceptance.
+The operator must also populate `governed-execution-binding.json` from those real evidence files. It binds exactly seven semantic owner roles:
+
+1. current W02/W07 authority;
+2. W14 current trusted session;
+3. W14 command/delivery identity;
+4. W03 durable command/receipt state;
+5. Android native bounded execution observation;
+6. non-authoritative Receipt/Evidence ingress;
+7. W07 final outcome reconciliation.
+
+Each semantic role references a distinct final-manifest evidence file and SHA-256. The binding itself remains `EVIDENCE_BINDING_ONLY`; it cannot grant execution authority, prove success by itself, authorize retry, declare physical acceptance or unblock W16.
 
 ## 4. Finalize the physical collector window
 
-Run the canonical tablet-loopback collector finalize only after the physical matrix is complete. The collector writes its own exact `finalized_at_utc` and its immutable first final manifest.
+Run the canonical tablet-loopback collector finalize only after the 48-scenario matrix **and governed execution binding** are complete. The collector writes its own exact `finalized_at_utc` and its immutable first final manifest.
 
 That collector manifest is intentionally treated as **pre-seal provenance**, because its manifested `w15j-evidence.json` still contains `environment.finalizedAtUtc=REQUIRED`; the operator cannot safely predict the collector-owned timestamp in advance.
 
-Do not create `reviewer-attestation.json` yet.
+Do not modify `governed-execution-binding.json` after collector finalize. Do not create `reviewer-attestation.json` yet.
 
 ## 5. Seal the dossier to the collector-owned finalization fact
 
@@ -73,15 +85,16 @@ AURORA_CONTROL_TOWER_TUPLE="$HOME/aurora-devlab/evidence/control-tower-tuple.jso
   bash tools/tablet-devlab/seal-dp5-dossier.sh
 ```
 
-The sealer fails closed unless the first collector final manifest verifies byte-for-byte and includes the pre-seal dossier. It then:
+The sealer fails closed unless the first collector final manifest verifies byte-for-byte and includes both the pre-seal dossier and `governed-execution-binding.json`. It then:
 
 1. preserves the original collector manifest as `collector-finalize-manifest.preseal.sha256`;
 2. records the pre-seal dossier digest;
 3. invokes the exact Android binder to inject only the collector-owned `finalized_at_utc` while revalidating all machine-owned tuple/device fields;
-4. writes `dossier-seal-status.txt` with predecessor/sealed hashes and non-authority flags;
-5. creates a new sealed `evidence-manifest.sha256` covering the complete final evidence, predecessor manifest, seal record and sealed dossier;
-6. verifies the sealed manifest with `sha256sum -c`;
-7. remains explicitly `NOT_ACCEPTED` and keeps W16 blocked.
+4. verifies that the semantic binding remained immutable across the seal;
+5. writes `dossier-seal-status.txt` with predecessor/sealed hashes and non-authority flags;
+6. creates a new sealed `evidence-manifest.sha256` covering the complete final evidence, semantic binding, predecessor manifest, seal record and sealed dossier;
+7. verifies the sealed manifest with `sha256sum -c`;
+8. remains explicitly `NOT_ACCEPTED` and keeps W16 blocked.
 
 A second seal is refused. A reviewer attestation present before sealing is also refused.
 
@@ -106,6 +119,7 @@ The doctor now requires and verifies the full provenance chain:
 
 ```text
 collector final manifest
+→ governed-execution-binding.json already manifested
 → preserved pre-seal manifest
 → pre-seal dossier hash
 → exact collector finalized_at_utc
@@ -115,9 +129,10 @@ collector final manifest
 → independent reviewer sidecar bound to sealed manifest
 → trusted physical reconstruction
 → complete 48-scenario dossier lint
+→ independent seven-role governed execution semantic validation
 ```
 
-It also re-captures GitHub live, requires clean exact DevLab/Android/host worktrees, runs `w15j-tablet-loopback-trusted-preflight.mjs`, runs `w15j-tablet-loopback-preflight.mjs`, requires `scenarios=48` and still refuses any self-declared physical acceptance.
+It also re-captures GitHub live, requires clean exact DevLab/Android/host worktrees, runs `w15j-tablet-loopback-trusted-preflight.mjs`, runs `w15j-tablet-loopback-preflight.mjs`, requires `scenarios=48`, then runs `w15j-governed-execution-binding.mjs` and requires `roles=7`. It still refuses any self-declared physical acceptance.
 
 Its strongest disposition remains:
 
@@ -128,6 +143,7 @@ LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED
 with:
 
 ```text
+semantic_binding=PASS_7_ROLES_NOT_ACCEPTED
 authorizes_execution=false
 proves_execution_success=false
 retry_authorized=false
@@ -137,6 +153,6 @@ w16_build_unblocked=false
 
 ## Acceptance boundary
 
-Preparation, sealing, reviewer attestation, doctor and both validators are evidence tooling only. The final acceptance controller must still independently review the representative-tablet dossier and revalidate GitHub live immediately before any W15-J acceptance decision.
+Preparation, sealing, reviewer attestation, doctor and all validators are evidence tooling only. The final acceptance controller must still independently review the representative-tablet dossier and revalidate GitHub live immediately before any W15-J acceptance decision.
 
 Until genuine physical evidence satisfies that boundary: **#413/#462/#499 remain unmerged, W15-J remains unaccepted and W16 BUILD remains blocked.**
