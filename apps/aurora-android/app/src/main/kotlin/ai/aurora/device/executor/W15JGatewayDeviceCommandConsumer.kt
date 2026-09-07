@@ -6,8 +6,11 @@ import ai.aurora.device.capability.NativeCapabilityBridge
 import ai.aurora.device.capability.NativeCapabilityResolution
 import ai.aurora.device.network.DeviceReceiptReportedState
 import ai.aurora.device.network.GatewayCommandDeliveryView
+import ai.aurora.device.network.GatewayCommandEnvelopeView
 import ai.aurora.device.network.GatewayDevicePlaneClient
+import ai.aurora.device.network.GatewayDevicePlaneClientError
 import ai.aurora.device.network.GatewayDevicePlaneResult
+import ai.aurora.device.network.GatewayDevicePlaneSnapshot
 import ai.aurora.device.network.GatewayReceiptEvidence
 import ai.aurora.device.network.GatewayReceiptIngressView
 import ai.aurora.device.network.GatewayW07DeviceExecutionAuthorizationView
@@ -43,6 +46,24 @@ sealed interface W15JDeviceCommandConsumptionResult {
     }
 }
 
+internal interface W15JGatewayDeviceCommandPort {
+    fun currentSnapshot(): GatewayDevicePlaneResult<GatewayDevicePlaneSnapshot>
+
+    fun claimCommand(commandId: String): GatewayDevicePlaneResult<GatewayCommandDeliveryView>
+
+    fun acknowledgeCommand(
+        commandId: String,
+        deliveryReference: String,
+        ackReference: String,
+    ): GatewayDevicePlaneResult<GatewayCommandDeliveryView>
+
+    fun submitReceipt(evidence: GatewayReceiptEvidence): GatewayDevicePlaneResult<GatewayReceiptIngressView>
+}
+
+internal fun interface CurrentNativeCapabilityResolution {
+    fun current(capabilityId: String): NativeCapabilityResolution
+}
+
 /**
  * Final W15-J Android consumer between authenticated W14 delivery and the accepted W15-F executor.
  *
@@ -51,10 +72,11 @@ sealed interface W15JDeviceCommandConsumptionResult {
  * target-bound W07 view carried in the claimed envelope. Any post-effect receipt loss or ambiguous
  * native result requires W07 reconciliation and never grants a blind retry.
  */
-class W15JGatewayDeviceCommandConsumer(
-    private val client: GatewayDevicePlaneClient,
-    private val capabilityBridge: NativeCapabilityBridge,
-    private val permissionContext: Context,
+class W15JGatewayDeviceCommandConsumer internal constructor(
+    private val gateway: W15JGatewayDeviceCommandPort,
+    private val capabilityResolution: CurrentNativeCapabilityResolution,
+    private val capabilityObservation: CurrentNativeCapabilityObservation,
+    private val permissionObservation: CurrentRuntimePermissionObservation,
     private val actionPort: DeviceActionPort,
     private val idFactory: CanonicalLocalEvidenceIdFactory = CanonicalLocalEvidenceIdFactory(),
     private val control: DeviceExecutionControl = DeviceExecutionControl { DeviceExecutionControlSnapshot() },
@@ -65,7 +87,7 @@ class W15JGatewayDeviceCommandConsumer(
     @Synchronized
     fun consume(commandId: String): W15JDeviceCommandConsumptionResult {
         val snapshot =
-            when (val current = client.currentSnapshot()) {
+            when (val current = gateway.currentSnapshot()) {
                 is GatewayDevicePlaneResult.Success -> current.value
                 is GatewayDevicePlaneResult.Rejected ->
                     return noEffect(
@@ -75,7 +97,7 @@ class W15JGatewayDeviceCommandConsumer(
             }
 
         val claimed =
-            when (val result = runCatching { client.claimCommand(commandId) }.getOrNull()) {
+            when (val result = runCatching { gateway.claimCommand(commandId) }.getOrNull()) {
                 is GatewayDevicePlaneResult.Success -> result.value
                 is GatewayDevicePlaneResult.Rejected ->
                     return noEffect(
@@ -85,6 +107,13 @@ class W15JGatewayDeviceCommandConsumer(
                 null -> return noEffect("command claim failed")
             }
         val envelope = validateClaim(claimed, commandId) ?: return noEffect("claimed envelope rejected")
+        if (
+            envelope.tenantId != snapshot.gateway.tenantId ||
+            envelope.deviceId != snapshot.registration.ref.deviceId ||
+            envelope.deviceSessionId != snapshot.deviceSession.deviceSessionId
+        ) {
+            return noEffect("claimed envelope does not match current W14 binding")
+        }
 
         if (envelope.deliveryReference in consumedDeliveryReferences) {
             return noEffect("duplicate delivery fenced locally")
@@ -94,7 +123,7 @@ class W15JGatewayDeviceCommandConsumer(
             when (
                 val result =
                     runCatching {
-                        client.acknowledgeCommand(
+                        gateway.acknowledgeCommand(
                             commandId = envelope.commandId,
                             deliveryReference = envelope.deliveryReference,
                             ackReference = "android:w15j:ack:${envelope.executionId}",
@@ -120,13 +149,12 @@ class W15JGatewayDeviceCommandConsumer(
 
         rememberDelivery(envelope.deliveryReference)
 
-        val native = capabilityBridge.resolve(envelope.executionAuthorization.capabilityId)
+        val native = capabilityResolution.current(envelope.executionAuthorization.capabilityId)
         if (native !is NativeCapabilityResolution.Ready) {
             return submitPreEffectFailure(envelope, "native capability is not current")
         }
-        val binding = native.binding
         val permissionRequirements =
-            binding.requiredPermissions.sorted().map { permission ->
+            native.binding.requiredPermissions.sorted().map { permission ->
                 RuntimePermissionRequirement(permission = permission)
             }
 
@@ -140,17 +168,15 @@ class W15JGatewayDeviceCommandConsumer(
                     }
                 },
                 sessionTrust = CurrentDeviceSessionTrust { deviceSessionId ->
-                    val current = client.currentSnapshot()
+                    val current = gateway.currentSnapshot()
                     if (current is GatewayDevicePlaneResult.Success) {
                         current.value.deviceSession.takeIf { it.deviceSessionId == deviceSessionId }
                     } else {
                         null
                     }
                 },
-                capabilityObservation = CurrentNativeCapabilityObservation { capabilityId ->
-                    capabilityBridge.discover(capabilityId)
-                },
-                permissionObservation = CurrentRuntimePermissionObservation(::permissionObservation),
+                capabilityObservation = capabilityObservation,
+                permissionObservation = permissionObservation,
                 appIntegration = CurrentAppIntegrationDescriptor { null },
                 control = control,
                 actionPort = actionPort,
@@ -184,7 +210,7 @@ class W15JGatewayDeviceCommandConsumer(
     private fun validateClaim(
         delivery: GatewayCommandDeliveryView,
         expectedCommandId: String,
-    ) =
+    ): GatewayCommandEnvelopeView? =
         delivery.envelope?.takeIf { envelope ->
             delivery.disposition == "DELIVER" &&
                 delivery.state == "DELIVERED" &&
@@ -198,7 +224,7 @@ class W15JGatewayDeviceCommandConsumer(
         }
 
     private fun submitPreEffectFailure(
-        envelope: ai.aurora.device.network.GatewayCommandEnvelopeView,
+        envelope: GatewayCommandEnvelopeView,
         reason: String,
     ): W15JDeviceCommandConsumptionResult {
         val submitted = submitReceipt(envelope, DeviceReceiptReportedState.FAILED)
@@ -206,7 +232,7 @@ class W15JGatewayDeviceCommandConsumer(
     }
 
     private fun submitCompleted(
-        envelope: ai.aurora.device.network.GatewayCommandEnvelopeView,
+        envelope: GatewayCommandEnvelopeView,
         decision: DeviceExecutionDecision.Completed,
     ): W15JDeviceCommandConsumptionResult {
         val reportedState =
@@ -230,12 +256,12 @@ class W15JGatewayDeviceCommandConsumer(
     }
 
     private fun submitReceipt(
-        envelope: ai.aurora.device.network.GatewayCommandEnvelopeView,
+        envelope: GatewayCommandEnvelopeView,
         state: DeviceReceiptReportedState,
     ): GatewayDevicePlaneResult<GatewayReceiptIngressView> {
         val capturedAtMs = nowMs()
         return runCatching {
-            client.submitReceipt(
+            gateway.submitReceipt(
                 GatewayReceiptEvidence(
                     receiptId = idFactory.receiptId(),
                     evidenceId = idFactory.evidenceId(),
@@ -249,26 +275,10 @@ class W15JGatewayDeviceCommandConsumer(
             )
         }.getOrElse {
             GatewayDevicePlaneResult.Rejected(
-                error = ai.aurora.device.network.GatewayDevicePlaneClientError.TRANSPORT_UNCERTAIN,
+                error = GatewayDevicePlaneClientError.TRANSPORT_UNCERTAIN,
                 requiresReconciliation = true,
             )
         }
-    }
-
-    private fun permissionObservation(
-        requirement: RuntimePermissionRequirement,
-    ): RuntimePermissionObservation {
-        val observedAtMs = nowMs()
-        val granted =
-            permissionContext.checkSelfPermission(requirement.permission) ==
-                PackageManager.PERMISSION_GRANTED
-        return RuntimePermissionObservation(
-            requirement = requirement,
-            state = if (granted) RuntimePermissionState.GRANTED else RuntimePermissionState.DENIED,
-            observedAtMs = observedAtMs,
-            expiresAtMs = saturatingAdd(observedAtMs, PERMISSION_SNAPSHOT_AGE_MS),
-            shouldShowRationale = false,
-        )
     }
 
     private fun rememberDelivery(deliveryReference: String) {
@@ -288,8 +298,63 @@ class W15JGatewayDeviceCommandConsumer(
             requiresReconciliation = requiresReconciliation,
         )
 
-    private fun saturatingAdd(left: Long, right: Long): Long =
-        if (left > Long.MAX_VALUE - right) Long.MAX_VALUE else left + right
+    companion object {
+        fun forAndroid(
+            client: GatewayDevicePlaneClient,
+            capabilityBridge: NativeCapabilityBridge,
+            permissionContext: Context,
+            actionPort: DeviceActionPort,
+            idFactory: CanonicalLocalEvidenceIdFactory = CanonicalLocalEvidenceIdFactory(),
+            control: DeviceExecutionControl =
+                DeviceExecutionControl { DeviceExecutionControlSnapshot() },
+            nowMs: () -> Long = { System.currentTimeMillis() },
+        ): W15JGatewayDeviceCommandConsumer {
+            val gateway =
+                object : W15JGatewayDeviceCommandPort {
+                    override fun currentSnapshot() = client.currentSnapshot()
+
+                    override fun claimCommand(commandId: String) = client.claimCommand(commandId)
+
+                    override fun acknowledgeCommand(
+                        commandId: String,
+                        deliveryReference: String,
+                        ackReference: String,
+                    ) = client.acknowledgeCommand(commandId, deliveryReference, ackReference)
+
+                    override fun submitReceipt(evidence: GatewayReceiptEvidence) =
+                        client.submitReceipt(evidence)
+                }
+            val permissionObservation =
+                CurrentRuntimePermissionObservation { requirement ->
+                    val observedAtMs = nowMs()
+                    val granted =
+                        permissionContext.checkSelfPermission(requirement.permission) ==
+                            PackageManager.PERMISSION_GRANTED
+                    RuntimePermissionObservation(
+                        requirement = requirement,
+                        state =
+                            if (granted) {
+                                RuntimePermissionState.GRANTED
+                            } else {
+                                RuntimePermissionState.DENIED
+                            },
+                        observedAtMs = observedAtMs,
+                        expiresAtMs = saturatingAdd(observedAtMs, PERMISSION_SNAPSHOT_AGE_MS),
+                        shouldShowRationale = false,
+                    )
+                }
+            return W15JGatewayDeviceCommandConsumer(
+                gateway = gateway,
+                capabilityResolution = CurrentNativeCapabilityResolution(capabilityBridge::resolve),
+                capabilityObservation = CurrentNativeCapabilityObservation(capabilityBridge::discover),
+                permissionObservation = permissionObservation,
+                actionPort = actionPort,
+                idFactory = idFactory,
+                control = control,
+                nowMs = nowMs,
+            )
+        }
+    }
 }
 
 private object NoEffectResult {
@@ -324,3 +389,6 @@ private fun GatewayW07DeviceExecutionAuthorizationView.toExecutorView(): W07Auth
         authorizesExecution = authorizesExecution,
         cancelled = cancelled,
     )
+
+private fun saturatingAdd(left: Long, right: Long): Long =
+    if (left > Long.MAX_VALUE - right) Long.MAX_VALUE else left + right
