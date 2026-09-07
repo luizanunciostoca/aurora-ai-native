@@ -46,20 +46,31 @@ test('dossier doctor binds live local worktrees', () => {
   assert.equal(source.includes('a45c349c840b6c5125867fee3c7294ad61998cc3'), false);
 });
 
-test('dossier doctor requires complete tablet dossier lint', () => {
+test('dossier doctor requires sealed complete tablet dossier lint', () => {
   const required = [
     'AURORA_W15J_DOSSIER',
     'w15j-evidence.json',
-    'finalized w15j-evidence.json operator dossier is required',
+    'collector-finalize-manifest.preseal.sha256',
+    'dossier-seal-status.txt',
+    'w15j-tablet-loopback-dossier-seal-v1',
+    'pre-seal collector manifest digest drift',
+    'sealed dossier digest drift',
+    'pre-seal collector manifest does not bind the recorded dossier predecessor',
+    'sealed dossier finalization timestamp drift',
+    'sealed final evidence manifest digest verification failed',
     'w15j-tablet-loopback-trusted-preflight.mjs',
     'w15j-tablet-loopback-preflight.mjs',
+    'trusted preflight did not bind the sealed final manifest',
     'node "$DOSSIER_VALIDATOR" "$DOSSIER" "$EVIDENCE_DIR" "$TUPLE"',
     'W15J_TABLET_LOOPBACK_LINT_READY_NOT_ACCEPTED',
     'scenarios=48',
     'required_physical_scenarios=48',
     'complete_dossier_lint=PASS_NOT_ACCEPTED',
+    'collector_preseal_manifest_sha256=$preseal_manifest_file_sha',
+    'dossier_seal_status_sha256=$seal_status_sha',
     'operator_dossier_sha256=$dossier_sha',
     'complete_dossier_lint_sha256=$dossier_lint_sha',
+    'sealed_dossier_provenance=VERIFIED',
   ];
 
   for (const value of required) {
