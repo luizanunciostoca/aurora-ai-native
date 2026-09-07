@@ -202,7 +202,7 @@ class AuroraApplication : Application() {
 
         val consumer =
             runCatching {
-                W15JGatewayDeviceCommandConsumer(
+                W15JGatewayDeviceCommandConsumer.forAndroid(
                     client = client,
                     capabilityBridge = installedProjection.capabilityBridge,
                     permissionContext = this,
