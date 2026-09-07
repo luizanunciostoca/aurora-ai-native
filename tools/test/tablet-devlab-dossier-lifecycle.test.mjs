@@ -1,19 +1,26 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const prepare = readFileSync(
-  resolve(repoRoot, 'tools/tablet-devlab/prepare-dp5-dossier.sh'),
-  'utf8',
-);
-const seal = readFileSync(resolve(repoRoot, 'tools/tablet-devlab/seal-dp5-dossier.sh'), 'utf8');
+const preparePath = resolve(repoRoot, 'tools/tablet-devlab/prepare-dp5-dossier.sh');
+const sealPath = resolve(repoRoot, 'tools/tablet-devlab/seal-dp5-dossier.sh');
+const prepare = readFileSync(preparePath, 'utf8');
+const seal = readFileSync(sealPath, 'utf8');
 
 function expectAll(source, values) {
   for (const value of values) assert.equal(source.includes(value), true, value);
 }
+
+test('DP5 dossier lifecycle shell scripts parse with bash', () => {
+  for (const path of [preparePath, sealPath]) {
+    const parsed = spawnSync('bash', ['-n', path], { cwd: repoRoot, encoding: 'utf8' });
+    assert.equal(parsed.status, 0, `${path}: ${parsed.stderr}`);
+  }
+});
 
 test('DP5 dossier preparation binds exact Android and tablet-loopback machine facts', () => {
   expectAll(prepare, [
