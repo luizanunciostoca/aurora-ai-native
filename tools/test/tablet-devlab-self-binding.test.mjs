@@ -5,10 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const source = readFileSync(
-  resolve(repoRoot, 'tools/tablet-devlab/dossier-doctor.sh'),
-  'utf8',
-);
+const source = readFileSync(resolve(repoRoot, 'tools/tablet-devlab/dossier-doctor.sh'), 'utf8');
 
 test('dossier doctor binds itself to the live clean DevLab PR head', () => {
   assert.match(source, /for cmd in git node jq mktemp sha256sum gh/);
