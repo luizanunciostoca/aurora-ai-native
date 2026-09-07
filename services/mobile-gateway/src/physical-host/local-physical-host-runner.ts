@@ -7,6 +7,7 @@ import {
   type W15JLocalPhysicalHostAddress,
   type W15JLocalPhysicalHostConfig,
   type W15JLocalPhysicalHostDependencies,
+  type W15JPhysicalExecutionStateSeed,
 } from './local-physical-host.js';
 
 export type W15JLocalPhysicalHostSignal = 'SIGINT' | 'SIGTERM';
@@ -47,6 +48,8 @@ export interface W15JLocalPhysicalHostRunnerInput {
   readonly dependencies: W15JLocalPhysicalHostDependencies;
   /** Already-authenticated server-side W14 bootstrap principal; never supplied by Android. */
   readonly principal: AuthenticatedGatewayBootstrapPrincipal;
+  /** Optional server-side DP5 seed written through the existing W03 physical stager. */
+  readonly executionStateSeed?: W15JPhysicalExecutionStateSeed;
   readonly hooks?: W15JLocalPhysicalHostRunnerHooks;
 }
 
@@ -105,19 +108,27 @@ function announcement(
 }
 
 /**
- * Starts the controlled LOCAL W15-J host, stages one opaque bootstrap reference, emits only
+ * Starts the controlled LOCAL W15-J host, optionally stages one server-owned W03 execution-state
+ * fixture through the existing W03 stager, stages one opaque bootstrap reference, emits only
  * allowlisted non-secret runtime metadata, and installs idempotent SIGINT/SIGTERM cleanup.
  *
- * The runner does not load policy, identity, authority or execution state itself. Those owners must
- * already be composed in `dependencies`. It never prints the staged principal, gateway credential,
- * authentication reference, policy material, verified outcome or retry permission. A successful
- * start is still software readiness only; physical DP5 remains NOT_RUN until real-device evidence.
+ * The runner does not infer policy, identity, authority or retry state. The provider supplies the
+ * owner-backed dependencies and optional DP5 seed; W03 validates/persists the seed before either
+ * LOCAL listener is opened. A successful start is still software readiness only.
  */
 export async function startW15JLocalPhysicalHostRunner(
   input: W15JLocalPhysicalHostRunnerInput,
 ): Promise<W15JLocalPhysicalHostRunnerHandle> {
   const hooks = input.hooks ?? defaultHooks();
   const host = new W15JLocalPhysicalHost(input.host, input.dependencies);
+
+  if (input.executionStateSeed !== undefined) {
+    const seeded = host.stageExecutionState(input.executionStateSeed);
+    if (!seeded.ok) {
+      throw new Error(`W15-J LOCAL W03 state staging failed: ${seeded.code}`);
+    }
+  }
+
   const address = await host.start();
 
   const staged = host.stageBootstrap(input.principal);
