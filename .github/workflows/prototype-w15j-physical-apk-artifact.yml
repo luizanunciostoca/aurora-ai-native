@@ -1,4 +1,4 @@
-name: Prototype W15-J Physical APK Artifact
+name: Prototype W15-J Tablet Loopback APK Artifact
 
 on:
   push:
@@ -25,13 +25,13 @@ jobs:
       - name: Checkout exact W15-J candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: e9bd9f0b7ac51844edc52214135992c305aa479e
+          ref: 5c955eac4cdcd92bc2e0604d50f9feb339095d6a
           persist-credentials: false
       - name: Assert exact source candidate
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "e9bd9f0b7ac51844edc52214135992c305aa479e"
+          test "$(git rev-parse HEAD)" = "5c955eac4cdcd92bc2e0604d50f9feb339095d6a"
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
@@ -49,7 +49,7 @@ jobs:
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - name: Test, assemble and self-bind exact localDebug candidate
+      - name: Test, assemble and self-bind exact tablet-loopback localDebug candidate
         shell: bash
         run: |
           set -euo pipefail
@@ -71,18 +71,18 @@ jobs:
           test "$VERSION_CODE" = "1"
           test "$VERSION_NAME" = "0.15.0-alpha.1-local"
 
-          ARTIFACT_DIR=/tmp/w15j-physical-apk
+          ARTIFACT_DIR=/tmp/w15j-tablet-loopback-apk
           mkdir -p "$ARTIFACT_DIR"
-          cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-Physical-localDebug.apk"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-TabletLoopback-localDebug.apk"
           (
             cd "$ARTIFACT_DIR"
-            sha256sum Aurora-W15J-Physical-localDebug.apk > SHA256SUMS.txt
+            sha256sum Aurora-W15J-TabletLoopback-localDebug.apk > SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
 
           cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
           artifact_purpose=W15-J-DP5-physical-evidence-input
-          source_candidate_sha=e9bd9f0b7ac51844edc52214135992c305aa479e
+          source_candidate_sha=5c955eac4cdcd92bc2e0604d50f9feb339095d6a
           source_branch=wave/15j-physical-device-integration-acceptance
           paired_local_host_candidate_sha=3c7c3aa917c00d91d738121dee5fd32ed07b5444
           reconciled_main_parent_sha=d2089407e88480686b879928cf2863c0dc81718e
@@ -92,7 +92,7 @@ jobs:
           gateway_environment=LOCAL
           device_gateway_port=8080
           bootstrap_port=8081
-          gateway_transport_scope=LOCAL_ADB_REVERSE_ONLY
+          gateway_transport_scope=LOCAL_TABLET_LOOPBACK
           apk_variant=localDebug
           package_id=${PACKAGE_ID}
           version_code=${VERSION_CODE}
@@ -103,11 +103,13 @@ jobs:
           EOF
 
           test "$(wc -l < "$ARTIFACT_DIR/BUILD_IDENTITY.txt" | tr -d ' ')" = "19"
+          grep -Fxq 'gateway_transport_scope=LOCAL_TABLET_LOOPBACK' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           test "$(find "$ARTIFACT_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
-      - name: Upload exact W15-J candidate APK
+          printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-TabletLoopback-localDebug.apk" | awk '{print $1}')"
+      - name: Upload exact W15-J tablet-loopback candidate APK
         uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-physical-apk-e9bd9f0b-host-3c7c3aa9
-          path: /tmp/w15j-physical-apk
+          name: aurora-w15j-tablet-loopback-apk-5c955eac-host-3c7c3aa9
+          path: /tmp/w15j-tablet-loopback-apk
           if-no-files-found: error
           retention-days: 14
