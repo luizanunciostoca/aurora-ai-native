@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test-build:
@@ -15,122 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          persist-credentials: true
-          fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
-      - name: Finalize W15-J semantic evidence gate
-        env:
-          TARGET_BRANCH: wave/15j-physical-device-integration-acceptance
-          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          git fetch origin "${TARGET_BRANCH}"
-          git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
-          test "$(git rev-parse HEAD)" = "${EXPECTED_HEAD}"
-          node <<'NODE'
-          const fs = require('node:fs');
-
-          const preflightPath = 'tools/acceptance/w15j-tablet-loopback-preflight.mjs';
-          let preflight = fs.readFileSync(preflightPath, 'utf8');
-          const trustedImport = "import { buildTrustedW15JTabletLoopbackPreflight } from './w15j-tablet-loopback-trusted-preflight.mjs';\n";
-          const binderImport = "import { validateW15JGovernedExecutionBinding } from './w15j-governed-execution-binding.mjs';\n";
-          if (!preflight.includes(binderImport)) {
-            if (!preflight.includes(trustedImport)) throw new Error('trusted preflight import anchor drift');
-            preflight = preflight.replace(trustedImport, `${trustedImport}${binderImport}`);
-          }
-
-          const oldLoader = `export function loadAndValidateW15JTabletLoopbackPreflight(path, trusted = {}) {
-            return validateW15JTabletLoopbackPreflight(JSON.parse(readFileSync(path, 'utf8')), trusted);
-          }`;
-          const newLoader = `export function validateW15JTabletLoopbackCompleteGate(
-            dossier,
-            trusted,
-            evidenceDirectory,
-          ) {
-            const structural = validateW15JTabletLoopbackPreflight(dossier, trusted);
-            const semantic = validateW15JGovernedExecutionBinding(dossier, trusted, evidenceDirectory);
-            if (
-              semantic.evidenceRoleCount !== 7 ||
-              semantic.readyForIndependentReview !== true ||
-              semantic.physicallyAccepted !== false ||
-              semantic.authorizesExecution !== false ||
-              semantic.retryAuthorized !== false ||
-              semantic.w16BuildUnblocked !== false
-            ) {
-              throw new Error('governed execution semantic binding state is invalid');
-            }
-            return Object.freeze({
-              ...structural,
-              semanticEvidenceRoleCount: semantic.evidenceRoleCount,
-            });
-          }
-
-          export function loadAndValidateW15JTabletLoopbackPreflight(
-            path,
-            trusted = {},
-            evidenceDirectory,
-          ) {
-            const dossier = JSON.parse(readFileSync(path, 'utf8'));
-            if (evidenceDirectory === undefined) {
-              return validateW15JTabletLoopbackPreflight(dossier, trusted);
-            }
-            return validateW15JTabletLoopbackCompleteGate(dossier, trusted, evidenceDirectory);
-          }`;
-          if (!preflight.includes('export function validateW15JTabletLoopbackCompleteGate(')) {
-            if (!preflight.includes(oldLoader)) throw new Error('preflight loader anchor drift');
-            preflight = preflight.replace(oldLoader, newLoader);
-          }
-          const oldCli = 'const result = loadAndValidateW15JTabletLoopbackPreflight(dossierPath, trusted);';
-          const newCli = 'const result = loadAndValidateW15JTabletLoopbackPreflight(\n        dossierPath,\n        trusted,\n        evidenceDirectory,\n      );';
-          if (!preflight.includes(newCli)) {
-            if (!preflight.includes(oldCli)) throw new Error('preflight CLI anchor drift');
-            preflight = preflight.replace(oldCli, newCli);
-          }
-          fs.writeFileSync(preflightPath, preflight);
-
-          const testPath = 'tools/acceptance/w15j-tablet-loopback-preflight.test.mjs';
-          let test = fs.readFileSync(testPath, 'utf8');
-          const oldImport = "import { validateW15JTabletLoopbackPreflight } from './w15j-tablet-loopback-preflight.mjs';";
-          const newImport = `import {
-            validateW15JTabletLoopbackCompleteGate,
-            validateW15JTabletLoopbackPreflight,
-          } from './w15j-tablet-loopback-preflight.mjs';`;
-          if (!test.includes('validateW15JTabletLoopbackCompleteGate,')) {
-            if (!test.includes(oldImport)) throw new Error('preflight test import anchor drift');
-            test = test.replace(oldImport, newImport);
-          }
-          const regressionName = 'complete tablet-loopback gate cannot become lint-ready without semantic binding';
-          if (!test.includes(regressionName)) {
-            test += `\n\ntest('${regressionName}', () => {
-              const { dossier, trusted } = trustedTabletPreflight();
-              assert.throws(
-                () => validateW15JTabletLoopbackCompleteGate(dossier, trusted, '/semantic-binding-required'),
-                /trusted final manifest must contain governed-execution-binding.json/,
-              );
-            });\n`;
-          }
-          fs.writeFileSync(testPath, test);
-          NODE
-          ./node_modules/.bin/prettier --write \
-            tools/acceptance/w15j-governed-execution-binding.mjs \
-            tools/acceptance/w15j-tablet-loopback-preflight.mjs \
-            tools/acceptance/w15j-tablet-loopback-preflight.test.mjs
-          rm -f tools/acceptance/w15j-prettier-diagnostic.test.mjs
-          if git diff --quiet; then
-            echo 'W15-J semantic gate already finalized.'
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add tools/acceptance/w15j-governed-execution-binding.mjs \
-            tools/acceptance/w15j-tablet-loopback-preflight.mjs \
-            tools/acceptance/w15j-tablet-loopback-preflight.test.mjs \
-            tools/acceptance/w15j-prettier-diagnostic.test.mjs
-          git commit -m 'fix(W15-J): bind complete DP5 lint to semantic evidence'
-          git push origin "HEAD:${TARGET_BRANCH}"
       - run: npm test
       - run: npm run build
       - run: npm run audit:cleanup
