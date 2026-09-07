@@ -83,6 +83,24 @@ test('tablet loopback preflight refuses reverse-port ambiguity and remains non-a
   assert.match(source, /retryAuthorized.*false/);
 });
 
+test('exact APK installer reads back first and requires explicit destructive replacement opt-in', () => {
+  const source = read('install-exact-apk.sh');
+  assert.match(source, /AURORA_ALLOW_CLEAN_INSTALL:-NO/);
+  assert.match(source, /AURORA_ALLOW_CLEAN_INSTALL=YES/);
+  assert.match(source, /installed APK readback failed before any mutation/);
+  assert.match(source, /installed package is split\/non-canonical/);
+  assert.match(source, /da605b277fb4c7f9a3820c417fe126a5b617b7c34d9e7f2b48f67da40114cb9a/);
+  assert.match(source, /LOCAL_TABLET_LOOPBACK/);
+  assert.match(source, /adb -s/);
+  assert.match(source, /uninstall.*\$PACKAGE_ID/);
+  assert.match(source, /installed APK differs byte-for-byte from exact artifact/);
+  assert.match(source, /EXACT_APK_INSTALLED_READY_NOT_ACCEPTED/);
+  assert.match(source, /authorizesExecution.*false/);
+  assert.match(source, /provesExecutionSuccess.*false/);
+  assert.match(source, /retryAuthorized.*false/);
+  assert.doesNotMatch(source, /device_serial=/);
+});
+
 test('tablet devlab documentation keeps independent reviewer and exact tuple requirements', () => {
   const source = read('README.md');
   assert.match(source, /no PC/i);
@@ -91,4 +109,5 @@ test('tablet devlab documentation keeps independent reviewer and exact tuple req
   assert.match(source, /LOCAL_TABLET_LOOPBACK/);
   assert.match(source, /da605b277fb4c7f9a3820c417fe126a5b617b7c34d9e7f2b48f67da40114cb9a/);
   assert.match(source, /clean uninstall\/install/i);
+  assert.match(source, /install-exact-apk\.sh/);
 });
