@@ -7,8 +7,8 @@ import {
   type W15JLocalPhysicalHostAddress,
   type W15JLocalPhysicalHostConfig,
   type W15JLocalPhysicalHostDependencies,
-  type W15JPhysicalExecutionStateSeed,
 } from './local-physical-host.js';
+import type { W15JPhysicalExecutionStateSeed } from './w03-physical-execution-state-stage.js';
 
 export type W15JLocalPhysicalHostSignal = 'SIGINT' | 'SIGTERM';
 
