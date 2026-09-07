@@ -1,9 +1,6 @@
 import { readFileSync } from 'node:fs';
 
-import {
-  REQUIRED_DP5_SCENARIO_PATHS,
-  REQUIRED_THREAT_REVIEW_KEYS,
-} from './w15j-preflight.mjs';
+import { REQUIRED_DP5_SCENARIO_PATHS, REQUIRED_THREAT_REVIEW_KEYS } from './w15j-preflight.mjs';
 import { buildTrustedW15JTabletLoopbackPreflight } from './w15j-tablet-loopback-trusted-preflight.mjs';
 
 const SHA256 = /^[a-f0-9]{64}$/u;
@@ -127,7 +124,8 @@ function observedRecord(record, label, allowed, files, window, primaryReferences
     evidenceReference(reference, `${label}.evidenceReferences[${index}]`, files),
   );
   const primary = record.evidenceReferences[0];
-  if (primaryReferences.has(primary)) throw new Error(`${label} reuses another record's primary evidence`);
+  if (primaryReferences.has(primary))
+    throw new Error(`${label} reuses another record's primary evidence`);
   primaryReferences.add(primary);
 }
 
@@ -137,14 +135,18 @@ function scenario(dossier, path) {
 }
 
 export function validateW15JTabletLoopbackPreflight(dossier, trusted = {}) {
-  if (!dossier || typeof dossier !== 'object') throw new Error('canonical W15-J dossier is required');
+  if (!dossier || typeof dossier !== 'object')
+    throw new Error('canonical W15-J dossier is required');
   if (dossier.schemaVersion !== '1.2.0' || dossier.wave !== 'W15-J') {
     throw new Error('W15-J dossier schemaVersion 1.2.0 is required');
   }
   if (dossier.authorityInvariant !== 'INTELLIGENCE != AUTHORITY != EXECUTION') {
     throw new Error('authority invariant is invalid');
   }
-  if (dossier.dp4Status !== 'OPEN' || dossier.dp4PublicationReference !== 'issue:115#issuecomment-5547053471') {
+  if (
+    dossier.dp4Status !== 'OPEN' ||
+    dossier.dp4PublicationReference !== 'issue:115#issuecomment-5547053471'
+  ) {
     throw new Error('canonical DP4 publication is required');
   }
   if (dossier.dp5Status !== 'CLOSED_PHYSICAL_EVIDENCE_INCOMPLETE') {
@@ -155,14 +157,14 @@ export function validateW15JTabletLoopbackPreflight(dossier, trusted = {}) {
   }
   if (
     trusted.physicallyAccepted !== false ||
-    trusted.trustRoot?.liveGitHubRevalidation !==
-      'EXTERNAL_REQUIRED_IMMEDIATELY_BEFORE_ACCEPTANCE'
+    trusted.trustRoot?.liveGitHubRevalidation !== 'EXTERNAL_REQUIRED_IMMEDIATELY_BEFORE_ACCEPTANCE'
   ) {
     throw new Error('trusted preflight must preserve external final Control Tower revalidation');
   }
 
   const expected = trusted.expected;
-  if (!expected || typeof expected !== 'object') throw new Error('trusted expected tuple is required');
+  if (!expected || typeof expected !== 'object')
+    throw new Error('trusted expected tuple is required');
   const files = trusted.evidenceManifest?.files;
   if (!files || trusted.evidenceManifest?.fileName !== 'evidence-manifest.sha256') {
     throw new Error('trusted final evidence manifest is required');
@@ -170,16 +172,23 @@ export function validateW15JTabletLoopbackPreflight(dossier, trusted = {}) {
   exact(trusted.evidenceManifest.sha256, SHA256, 'evidence manifest SHA');
 
   const candidateSha = exact(dossier.candidateSha, GIT_SHA, 'candidateSha');
-  if (candidateSha !== expected.androidCandidateSha) throw new Error('candidate SHA differs from trusted tuple');
+  if (candidateSha !== expected.androidCandidateSha)
+    throw new Error('candidate SHA differs from trusted tuple');
 
   const provenance = dossier.provenance;
-  if (provenance?.repository !== expected.repository) throw new Error('repository provenance drift');
+  if (provenance?.repository !== expected.repository)
+    throw new Error('repository provenance drift');
   for (const field of ['id', 'url', 'status', 'headSha', 'sourceRef']) {
     if (provenance.workflowRun?.[field] !== expected.workflowRun?.[field]) {
       throw new Error(`workflowRun.${field} provenance drift`);
     }
   }
-  for (const field of ['androidCandidateSha', 'hostCandidateSha', 'reconciledMainSha', 'packagingHeadSha']) {
+  for (const field of [
+    'androidCandidateSha',
+    'hostCandidateSha',
+    'reconciledMainSha',
+    'packagingHeadSha',
+  ]) {
     if (exact(provenance?.[field], GIT_SHA, `provenance.${field}`) !== expected[field]) {
       throw new Error(`provenance.${field} drift`);
     }
@@ -196,7 +205,8 @@ export function validateW15JTabletLoopbackPreflight(dossier, trusted = {}) {
       throw new Error(`apk.${field} drift`);
     }
   }
-  if (exact(apk?.sha256, SHA256, 'apk.sha256') !== expected.apk.sha256) throw new Error('APK SHA drift');
+  if (exact(apk?.sha256, SHA256, 'apk.sha256') !== expected.apk.sha256)
+    throw new Error('APK SHA drift');
 
   const device = dossier.device;
   if (exact(device?.serialSha256, SHA256, 'device.serialSha256') !== expected.device.serialSha256) {
@@ -207,14 +217,21 @@ export function validateW15JTabletLoopbackPreflight(dossier, trusted = {}) {
       throw new Error(`device.${field} drift`);
     }
   }
-  if (device?.physicalDeviceVerified !== true) throw new Error('physical device must be independently verified');
+  if (device?.physicalDeviceVerified !== true)
+    throw new Error('physical device must be independently verified');
 
   const environment = dossier.environment;
-  if (environment?.gatewayTransport !== TRANSPORT) throw new Error(`gatewayTransport must be ${TRANSPORT}`);
-  if (environment?.adbReversePort !== null) throw new Error('adbReversePort must be null for tablet loopback');
-  if (environment?.controlPlane !== CONTROL_PLANE) throw new Error(`controlPlane must be ${CONTROL_PLANE}`);
+  if (environment?.gatewayTransport !== TRANSPORT)
+    throw new Error(`gatewayTransport must be ${TRANSPORT}`);
+  if (environment?.adbReversePort !== null)
+    throw new Error('adbReversePort must be null for tablet loopback');
+  if (environment?.controlPlane !== CONTROL_PLANE)
+    throw new Error(`controlPlane must be ${CONTROL_PLANE}`);
   for (const field of ['gatewayIdentity', 'gatewayVersion', 'hostInstanceId', 'operator']) {
-    if (requiredString(environment?.[field], `environment.${field}`) !== expected[field === 'operator' ? 'operator' : 'environment']?.[field]) {
+    if (
+      requiredString(environment?.[field], `environment.${field}`) !==
+      expected[field === 'operator' ? 'operator' : 'environment']?.[field]
+    ) {
       throw new Error(`environment.${field} drift`);
     }
   }
