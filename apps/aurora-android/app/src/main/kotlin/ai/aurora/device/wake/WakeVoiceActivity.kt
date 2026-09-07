@@ -6,7 +6,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.TextView
+import ai.aurora.device.AuroraApplication
 import ai.aurora.device.MainActivity
+import ai.aurora.device.executor.DeviceExecutionOutcome
+import ai.aurora.device.executor.W15JDeviceCommandConsumptionResult
 import ai.aurora.device.ui.AuroraActivityUi
 import ai.aurora.device.voice.BoundedSpeechRecognitionFailure
 import ai.aurora.device.voice.BoundedSpeechRecognizer
@@ -15,8 +18,8 @@ import ai.aurora.device.voice.WakeVoiceRuntimeRegistry
 
 /**
  * Foreground handoff after an acoustic wake or explicit system-assistant invocation. It makes the
- * accepted W15-G foreground lifecycle gate observable before STT. It does not execute commands or
- * hold authority.
+ * accepted W15-G foreground lifecycle gate observable before STT. It never grants authority; an
+ * accepted deterministic candidate may be handed to the separately governed W15-J consumer.
  */
 class WakeVoiceActivity : Activity() {
     private lateinit var statusView: TextView
@@ -40,7 +43,7 @@ class WakeVoiceActivity : Activity() {
         screen.content.addView(
             AuroraActivityUi.body(
                 this,
-                "A fala será enviada somente ao fluxo governado de interpretação/autoridade. Esta tela não executa ações diretamente.",
+                "A fala segue o fluxo governado de interpretação, autoridade e execução. Esta tela não concede autoridade nem valida resultados.",
                 centered = true,
             ),
         )
@@ -70,11 +73,7 @@ class WakeVoiceActivity : Activity() {
                                 transcriptConfidence = result.confidence,
                             )
                         when (route) {
-                            is WakeVoiceRoute.AuthoritySubmitted ->
-                                complete(
-                                    "W07_EVALUATION_SUBMITTED",
-                                    "Comando enviado apenas para avaliação de autoridade",
-                                )
+                            is WakeVoiceRoute.AuthoritySubmitted -> consumeGovernedDispatch(route)
                             is WakeVoiceRoute.ConversationFallback ->
                                 complete(
                                     "VOICE_FALLBACK_${route.reason.name}",
@@ -123,6 +122,56 @@ class WakeVoiceActivity : Activity() {
         completionRunnable?.let(mainHandler::removeCallbacks)
         completionRunnable = null
         super.onDestroy()
+    }
+
+    private fun consumeGovernedDispatch(route: WakeVoiceRoute.AuthoritySubmitted) {
+        val application = application as? AuroraApplication
+        if (application == null) {
+            complete("W15_DEVICE_CONSUMER_UNAVAILABLE", "Executor governado indisponível")
+            return
+        }
+        val consumption =
+            runCatching {
+                application.consumeLocalGovernedDeviceCommand(route.dispatch.commandId)
+            }.getOrElse {
+                W15JDeviceCommandConsumptionResult.NoEffect(
+                    reason = "governed device consumer raised before confirmed effect",
+                    requiresReconciliation = true,
+                )
+            }
+        when (consumption) {
+            is W15JDeviceCommandConsumptionResult.NoEffect ->
+                complete(
+                    if (consumption.requiresReconciliation) {
+                        "W15_DEVICE_NO_EFFECT_RECONCILIATION_REQUIRED"
+                    } else {
+                        "W15_DEVICE_NO_EFFECT"
+                    },
+                    if (consumption.requiresReconciliation) {
+                        "Ação não confirmada; reconciliação W07 necessária"
+                    } else {
+                        "Ação governada não executada"
+                    },
+                )
+            is W15JDeviceCommandConsumptionResult.Executed ->
+                when (consumption.outcome) {
+                    DeviceExecutionOutcome.SUCCEEDED ->
+                        complete(
+                            "W15_DEVICE_LOCAL_EFFECT_OBSERVED",
+                            "Efeito local observado; evidência enviada ao fluxo W07",
+                        )
+                    DeviceExecutionOutcome.FAILED ->
+                        complete(
+                            "W15_DEVICE_LOCAL_EFFECT_FAILED",
+                            "Efeito local falhou; evidência enviada ao fluxo W07",
+                        )
+                    DeviceExecutionOutcome.EXECUTION_UNCERTAIN ->
+                        complete(
+                            "W15_DEVICE_EXECUTION_UNCERTAIN",
+                            "Resultado local incerto; reconciliação W07 necessária",
+                        )
+                }
+        }
     }
 
     private fun complete(state: String, display: String) {
