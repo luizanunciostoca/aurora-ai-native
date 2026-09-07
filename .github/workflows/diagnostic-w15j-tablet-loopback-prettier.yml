@@ -8,16 +8,16 @@ on:
       - '.github/workflows/diagnostic-w15j-tablet-loopback-prettier.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  prettier-diff:
+  prettier-commit:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          persist-credentials: false
+          persist-credentials: true
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: '22.16.0'
@@ -30,12 +30,18 @@ jobs:
           npx prettier --write \
             tools/acceptance/w15j-tablet-loopback-preflight.mjs \
             tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs
-      - name: Upload exact formatted files
-        uses: actions/upload-artifact@v7
-        with:
-          name: w15j-tablet-loopback-prettier-output
-          path: |
-            tools/acceptance/w15j-tablet-loopback-preflight.mjs
+      - name: Commit exact formatted bytes to diagnostic branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            tools/acceptance/w15j-tablet-loopback-preflight.mjs \
             tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs
-          if-no-files-found: error
-          retention-days: 1
+          if git diff --cached --quiet; then
+            echo 'No formatting changes remain.'
+            exit 0
+          fi
+          git commit -m 'chore(diagnostic): apply canonical tablet-loopback prettier output'
+          git push origin HEAD:diagnostic/w15j-tablet-loopback-prettier
