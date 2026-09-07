@@ -236,7 +236,9 @@ test('malformed server-owned command identifiers and ordering fail closed before
 
 test('expired command deadline prevents minting W07 execution authorization', () => {
   const port = new CapturingW14Port();
-  const adapter = new W07GovernedDeviceDispatchAdapter(port, () => Date.parse('2026-09-05T21:00:00.000Z'));
+  const adapter = new W07GovernedDeviceDispatchAdapter(port, () =>
+    Date.parse('2026-09-05T21:00:00.000Z'),
+  );
   const result = adapter.dispatch({ command: command(), context: context(), gates: gates() });
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.code, 'MATERIAL_MISMATCH');

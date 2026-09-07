@@ -287,7 +287,11 @@ export class VoiceCandidateNetworkBoundary {
     readonly context: VoiceCandidateSocketContext;
     readonly nowMs: number;
   }): VoiceDeviceExecutionAuthorization | null {
-    if (!validContext(input.context) || !boundedText(input.commandId) || !EXECUTION_ID.test(input.executionId)) {
+    if (
+      !validContext(input.context) ||
+      !boundedText(input.commandId) ||
+      !EXECUTION_ID.test(input.executionId)
+    ) {
       return null;
     }
     if (typeof this.#intake.currentExecutionAuthorization !== 'function') return null;

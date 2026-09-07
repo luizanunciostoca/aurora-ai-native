@@ -147,7 +147,9 @@ function validCommand(binding: VoiceCommandProjectionBinding): boolean {
     binding.phrases.length > 0 &&
     binding.phrases.length <= MAX_PHRASES &&
     unique(binding.phrases) &&
-    binding.phrases.every((value) => boundedText(value.toLowerCase(), 256) && value === value.trim())
+    binding.phrases.every(
+      (value) => boundedText(value.toLowerCase(), 256) && value === value.trim(),
+    )
   );
 }
 
@@ -210,7 +212,9 @@ function validProjection(
   const commands = projection.vocabulary.bindings.map((binding) => binding.commandId);
   const nativeCapabilities = projection.nativeBindings.map((binding) => binding.capabilityId);
   if (!unique(capabilities) || !unique(commands) || !unique(nativeCapabilities)) return false;
-  if (!projection.registry.entries.every((entry) => validCapability(entry, context.tenantId, nowMs))) {
+  if (
+    !projection.registry.entries.every((entry) => validCapability(entry, context.tenantId, nowMs))
+  ) {
     return false;
   }
   if (!projection.vocabulary.bindings.every(validCommand)) return false;

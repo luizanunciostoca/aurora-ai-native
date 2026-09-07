@@ -214,7 +214,8 @@ function gatesAllow(
   if (resolvedTarget.bindingReference !== executionTarget.bindingReference) return false;
   if (!gates.target.resolved) return false;
   if (gates.target.binding.target.kind !== 'DEVICE') return false;
-  if (gates.target.binding.target.bindingReference !== executionTarget.bindingReference) return false;
+  if (gates.target.binding.target.bindingReference !== executionTarget.bindingReference)
+    return false;
 
   return (
     gates.authority.kind === 'EXECUTOR_AUTHORITY_GATE' &&

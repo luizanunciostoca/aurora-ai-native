@@ -101,8 +101,7 @@ function hasExactKeys(value: Readonly<Record<string, unknown>>, expected: Readon
 
 function providerKeysValid(value: Readonly<Record<string, unknown>>): boolean {
   return (
-    hasExactKeys(value, PROVIDER_INPUT_KEYS) ||
-    hasExactKeys(value, PROVIDER_INPUT_WITH_SEED_KEYS)
+    hasExactKeys(value, PROVIDER_INPUT_KEYS) || hasExactKeys(value, PROVIDER_INPUT_WITH_SEED_KEYS)
   );
 }
 
@@ -194,8 +193,7 @@ function validateProviderInput(
       validDatabaseUrl(value.databaseUrl) &&
       validDependencies(value.dependencies) &&
       validPrincipal(value.principal, nowMs) &&
-      (value.executionStateSeed === undefined ||
-        validExecutionStateSeed(value.executionStateSeed))
+      (value.executionStateSeed === undefined || validExecutionStateSeed(value.executionStateSeed))
     ) {
       return value as unknown as W15JLocalPhysicalHostOperatorProviderInput;
     }
