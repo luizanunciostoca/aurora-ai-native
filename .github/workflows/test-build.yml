@@ -24,3 +24,12 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npm run audit:cleanup
+      - name: Render canonical W15-J semantic binder
+        run: ./node_modules/.bin/prettier tools/acceptance/w15j-governed-execution-binding.mjs > /tmp/w15j-governed-execution-binding.mjs
+      - name: Upload canonical W15-J semantic binder
+        uses: actions/upload-artifact@v7
+        with:
+          name: w15j-semantic-binder-prettier
+          path: /tmp/w15j-governed-execution-binding.mjs
+          if-no-files-found: error
+          retention-days: 1
