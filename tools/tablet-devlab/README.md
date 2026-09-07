@@ -84,7 +84,23 @@ bash tools/tablet-devlab/worktrees.sh
 bash tools/tablet-devlab/fetch-current-artifact.sh
 ```
 
-7. Put the operator-controlled provider module at:
+7. Verify/install the exact APK:
+
+```bash
+bash tools/tablet-devlab/install-exact-apk.sh
+```
+
+The installer first pulls and hashes the currently installed Aurora APK before any mutation. If the exact artifact is already installed, it exits without reinstalling. If a different Aurora APK is installed, it fails without modifying the tablet.
+
+Because the current CI debug signer differs from the earlier physical candidate, replacement requires an explicit clean-install opt-in:
+
+```bash
+AURORA_ALLOW_CLEAN_INSTALL=YES bash tools/tablet-devlab/install-exact-apk.sh
+```
+
+That explicit mode uninstalls only package `ai.aurora.device.local`, which removes Aurora's local application data, installs the exact APK, then independently pulls `/base.apk` and requires byte-for-byte equality with the artifact. The resulting evidence remains `READY_NOT_ACCEPTED` and is not execution authority.
+
+8. Put the operator-controlled provider module at:
 
 ```text
 ~/aurora-devlab/config/trusted-w15j-provider.mjs
@@ -92,7 +108,7 @@ bash tools/tablet-devlab/fetch-current-artifact.sh
 
 Never put credentials or secrets in that file. It may read an external managed secret/runtime channel; it must return existing W03/W07/W14 owners and an already-authenticated non-authoritative W14 principal.
 
-8. Start the exact host in another Termux session:
+9. Start the exact host in another Termux session:
 
 ```bash
 bash tools/tablet-devlab/run-host.sh
