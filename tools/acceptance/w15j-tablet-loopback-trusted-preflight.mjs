@@ -221,7 +221,12 @@ function snapshotEvidence(directory) {
   const rootReal = realpathSync(directory);
   const manifestName = 'evidence-manifest.sha256';
   const reviewerName = 'reviewer-attestation.json';
-  const manifest = secureRead(rootReal, join(directory, manifestName), manifestName, MAX_MANIFEST_BYTES);
+  const manifest = secureRead(
+    rootReal,
+    join(directory, manifestName),
+    manifestName,
+    MAX_MANIFEST_BYTES,
+  );
   const files = Object.create(null);
   const bytes = Object.create(null);
   const states = Object.create(null);
@@ -306,7 +311,8 @@ function assertExitZero(snapshot, name) {
 function assertNoReverse(textValue, label) {
   for (const port of [8080, 8081]) {
     const pattern = new RegExp(`tcp:${port}\\s+tcp:[0-9]+|tcp:[0-9]+\\s+tcp:${port}`, 'u');
-    if (pattern.test(textValue)) throw new Error(`${label} contains forbidden adb reverse port ${port}`);
+    if (pattern.test(textValue))
+      throw new Error(`${label} contains forbidden adb reverse port ${port}`);
   }
 }
 
@@ -331,19 +337,26 @@ function validateControlTowerTuple(input) {
     ['id', 'url', 'status', 'headSha', 'headBranch', 'eventName', 'sourceRef'],
     'Control Tower workflowRun',
   );
-  exactKeys(input.artifact, ['id', 'name', 'zipSha256', 'digestSourceRef'], 'Control Tower artifact');
+  exactKeys(
+    input.artifact,
+    ['id', 'name', 'zipSha256', 'digestSourceRef'],
+    'Control Tower artifact',
+  );
   exactKeys(
     input.apk,
     ['applicationId', 'variant', 'versionCode', 'versionName', 'sha256'],
     'Control Tower APK',
   );
-  if (input.schemaVersion !== 'w15j-control-tower-tuple-v1') throw new Error('Control Tower schema invalid');
-  if (input.repository !== CANONICAL_REPOSITORY) throw new Error('Control Tower repository invalid');
+  if (input.schemaVersion !== 'w15j-control-tower-tuple-v1')
+    throw new Error('Control Tower schema invalid');
+  if (input.repository !== CANONICAL_REPOSITORY)
+    throw new Error('Control Tower repository invalid');
   if (input.workflowRun.status !== 'SUCCESS') throw new Error('packaging workflow must be SUCCESS');
   if (input.workflowRun.headBranch !== 'prototype/w15j-physical-apk-artifact') {
     throw new Error('packaging workflow branch is not canonical');
   }
-  if (input.workflowRun.eventName !== 'push') throw new Error('packaging workflow event must be push');
+  if (input.workflowRun.eventName !== 'push')
+    throw new Error('packaging workflow event must be push');
   const runId = exact(input.workflowRun.id, POSITIVE_INTEGER, 'workflow run id');
   const runUrl = `https://github.com/${CANONICAL_REPOSITORY}/actions/runs/${runId}`;
   if (input.workflowRun.url !== runUrl || !input.workflowRun.sourceRef.startsWith(`${runUrl}#`)) {
@@ -384,7 +397,13 @@ function validateArtifact(snapshot, controlTower) {
   const artifact = kv(snapshot, 'artifact-metadata.txt');
   exactKeys(
     artifact,
-    ['packaging_head_sha', 'packaging_run_id', 'artifact_id', 'artifact_name', 'artifact_zip_sha256'],
+    [
+      'packaging_head_sha',
+      'packaging_run_id',
+      'artifact_id',
+      'artifact_name',
+      'artifact_zip_sha256',
+    ],
     'artifact metadata',
   );
   const build = kv(snapshot, 'BUILD_IDENTITY.txt');
@@ -447,19 +466,26 @@ function validateArtifact(snapshot, controlTower) {
       versionName: build.version_name,
     },
   };
-  if (build.packaging_head_sha !== tuple.packagingHeadSha) throw new Error('embedded packaging head drift');
-  if (build.packaging_run_id !== artifact.packaging_run_id) throw new Error('embedded packaging run drift');
-  if (digest(snapshot.bytes['artifact.zip']) !== tuple.artifact.zipSha256) throw new Error('artifact ZIP digest drift');
-  if (tuple.packagingHeadSha !== controlTower.packagingHeadSha) throw new Error('packaging head differs from Control Tower');
-  if (artifact.packaging_run_id !== controlTower.workflowRun.id) throw new Error('packaging run differs from Control Tower');
+  if (build.packaging_head_sha !== tuple.packagingHeadSha)
+    throw new Error('embedded packaging head drift');
+  if (build.packaging_run_id !== artifact.packaging_run_id)
+    throw new Error('embedded packaging run drift');
+  if (digest(snapshot.bytes['artifact.zip']) !== tuple.artifact.zipSha256)
+    throw new Error('artifact ZIP digest drift');
+  if (tuple.packagingHeadSha !== controlTower.packagingHeadSha)
+    throw new Error('packaging head differs from Control Tower');
+  if (artifact.packaging_run_id !== controlTower.workflowRun.id)
+    throw new Error('packaging run differs from Control Tower');
   for (const key of ['androidCandidateSha', 'hostCandidateSha', 'reconciledMainSha']) {
     if (tuple[key] !== controlTower[key]) throw new Error(`${key} differs from Control Tower`);
   }
   for (const key of ['id', 'name', 'zipSha256']) {
-    if (tuple.artifact[key] !== controlTower.artifact[key]) throw new Error(`artifact.${key} differs from Control Tower`);
+    if (tuple.artifact[key] !== controlTower.artifact[key])
+      throw new Error(`artifact.${key} differs from Control Tower`);
   }
   for (const key of ['applicationId', 'variant', 'versionCode', 'versionName']) {
-    if (tuple.apk[key] !== controlTower.apk[key]) throw new Error(`apk.${key} differs from Control Tower`);
+    if (tuple.apk[key] !== controlTower.apk[key])
+      throw new Error(`apk.${key} differs from Control Tower`);
   }
 
   const temp = mkdtempSync(join(tmpdir(), 'w15j-tablet-artifact-'));
@@ -482,11 +508,15 @@ function validateArtifact(snapshot, controlTower) {
     const extractedBuild = readFileSync(join(temp, 'BUILD_IDENTITY.txt'));
     const extractedSums = readFileSync(join(temp, 'SHA256SUMS.txt'));
     const extractedApk = readFileSync(join(temp, sumMatch[2]));
-    if (!extractedBuild.equals(snapshot.bytes['BUILD_IDENTITY.txt'])) throw new Error('BUILD_IDENTITY copy drift');
-    if (!extractedSums.equals(snapshot.bytes['SHA256SUMS.txt'])) throw new Error('SHA256SUMS copy drift');
-    if (!extractedApk.equals(snapshot.bytes['candidate.apk'])) throw new Error('candidate APK differs from artifact ZIP');
+    if (!extractedBuild.equals(snapshot.bytes['BUILD_IDENTITY.txt']))
+      throw new Error('BUILD_IDENTITY copy drift');
+    if (!extractedSums.equals(snapshot.bytes['SHA256SUMS.txt']))
+      throw new Error('SHA256SUMS copy drift');
+    if (!extractedApk.equals(snapshot.bytes['candidate.apk']))
+      throw new Error('candidate APK differs from artifact ZIP');
     const apkSha = digest(extractedApk);
-    if (apkSha !== sumMatch[1] || apkSha !== controlTower.apk.sha256) throw new Error('APK SHA drift');
+    if (apkSha !== sumMatch[1] || apkSha !== controlTower.apk.sha256)
+      throw new Error('APK SHA drift');
     return Object.freeze({ ...tuple, apk: Object.freeze({ ...tuple.apk, sha256: apkSha }) });
   } finally {
     rmSync(temp, { recursive: true, force: true });
@@ -516,9 +546,11 @@ function validateAttestation(snapshot, name, role, tuple, window, operator) {
   ];
   if (role === 'INDEPENDENT_REVIEWER') keys.push('evidenceManifestSha256');
   exactKeys(value, keys, name);
-  if (value.schemaVersion !== 'w15j-attestation-v1' || value.role !== role) throw new Error(`${name} role/schema invalid`);
+  if (value.schemaVersion !== 'w15j-attestation-v1' || value.role !== role)
+    throw new Error(`${name} role/schema invalid`);
   const identity = requiredString(value.identity, `${name}.identity`);
-  if (identity !== identity.trim() || identity.length > 256) throw new Error(`${name}.identity invalid`);
+  if (identity !== identity.trim() || identity.length > 256)
+    throw new Error(`${name}.identity invalid`);
   if (role === 'OPERATOR' ? identity !== operator : identity === operator) {
     throw new Error(`${name} identity is not correctly operator/reviewer separated`);
   }
@@ -536,19 +568,33 @@ function validateAttestation(snapshot, name, role, tuple, window, operator) {
   }
   const observed = semanticUtc(value.observedAtUtc, `${name}.observedAtUtc`);
   if (role === 'OPERATOR') {
-    if (observed < window.start || observed > window.finish) throw new Error(`${name} outside collector window`);
+    if (observed < window.start || observed > window.finish)
+      throw new Error(`${name} outside collector window`);
   } else {
-    if (value.evidenceManifestSha256 !== snapshot.manifest.sha256) throw new Error(`${name} manifest binding drift`);
-    if (observed < window.finish || observed > Date.now()) throw new Error(`${name} reviewer timestamp invalid`);
+    if (value.evidenceManifestSha256 !== snapshot.manifest.sha256)
+      throw new Error(`${name} manifest binding drift`);
+    if (observed < window.finish || observed > Date.now())
+      throw new Error(`${name} reviewer timestamp invalid`);
   }
-  return Object.freeze({ reference: name, identity, observedAtUtc: value.observedAtUtc, sha256: digest(snapshot.bytes[name]) });
+  return Object.freeze({
+    reference: name,
+    identity,
+    observedAtUtc: value.observedAtUtc,
+    sha256: digest(snapshot.bytes[name]),
+  });
 }
 
 function validateHostAndTransport(snapshot, tuple) {
   const transport = kv(snapshot, 'transport-metadata.txt');
   exactKeys(
     transport,
-    ['transport_scope', 'control_plane', 'device_gateway_port', 'bootstrap_port', 'adb_reverse_8080_8081'],
+    [
+      'transport_scope',
+      'control_plane',
+      'device_gateway_port',
+      'bootstrap_port',
+      'adb_reverse_8080_8081',
+    ],
     'transport metadata',
   );
   if (
@@ -570,7 +616,8 @@ function validateHostAndTransport(snapshot, tuple) {
   }
   for (const file of ['adb-control-preflight.txt', 'adb-control-finalize.txt']) {
     assertExitZero(snapshot, file);
-    if (text(snapshot, file).trim() !== 'device') throw new Error(`${file} must prove authorized self-ADB device state`);
+    if (text(snapshot, file).trim() !== 'device')
+      throw new Error(`${file} must prove authorized self-ADB device state`);
   }
 
   const ready = kv(snapshot, 'host-ready-announcement.txt');
@@ -590,10 +637,14 @@ function validateHostAndTransport(snapshot, tuple) {
     'host ready announcement',
   );
   if (ready.host_candidate_sha !== tuple.hostCandidateSha) throw new Error('host ready SHA drift');
-  if (ready.gateway_identity !== 'aurora-w15j-local-host') throw new Error('host ready identity drift');
-  if (ready.gateway_version !== `git:${tuple.hostCandidateSha}`) throw new Error('host ready version drift');
-  if (ready.device_gateway_port !== '8080' || ready.bootstrap_port !== '8081') throw new Error('host ready port drift');
-  if (ready.physical_evidence_status !== 'NOT_RUN') throw new Error('host ready cannot claim physical PASS');
+  if (ready.gateway_identity !== 'aurora-w15j-local-host')
+    throw new Error('host ready identity drift');
+  if (ready.gateway_version !== `git:${tuple.hostCandidateSha}`)
+    throw new Error('host ready version drift');
+  if (ready.device_gateway_port !== '8080' || ready.bootstrap_port !== '8081')
+    throw new Error('host ready port drift');
+  if (ready.physical_evidence_status !== 'NOT_RUN')
+    throw new Error('host ready cannot claim physical PASS');
   if (!HOST_INSTANCE.test(ready.host_instance_id)) throw new Error('host instance id invalid');
   if (!POSITIVE_INTEGER.test(ready.process_id)) throw new Error('host process id invalid');
   semanticUtc(ready.started_at_utc, 'host.started_at_utc');
@@ -679,8 +730,14 @@ export function buildTrustedW15JTabletLoopbackPreflight(evidenceDirectory, contr
   const finalize = kv(snapshot, 'finalize-metadata.txt');
   const apk = kv(snapshot, 'apk-identity.txt');
   const apkFinalize = kv(snapshot, 'apk-identity-finalize.txt');
-  const preflightTime = semanticUtc(required(preflight, 'collected_at_utc', 'preflight'), 'preflight time');
-  const finalizeTime = semanticUtc(required(finalize, 'finalized_at_utc', 'finalize'), 'finalize time');
+  const preflightTime = semanticUtc(
+    required(preflight, 'collected_at_utc', 'preflight'),
+    'preflight time',
+  );
+  const finalizeTime = semanticUtc(
+    required(finalize, 'finalized_at_utc', 'finalize'),
+    'finalize time',
+  );
   if (preflightTime > finalizeTime) throw new Error('collector window is reversed');
 
   const tupleBindings = {
@@ -708,23 +765,40 @@ export function buildTrustedW15JTabletLoopbackPreflight(evidenceDirectory, contr
     operator: required(preflight, 'operator', 'preflight'),
   };
   exact(tupleBindings.serial_sha256, SHA256, 'device serial SHA');
-  if (required(preflight, 'ro.kernel.qemu', 'preflight') === '1') throw new Error('emulator evidence rejected');
-  if (required(preflight, 'apk_path_sha256', 'preflight') !== tuple.apk.sha256) throw new Error('preflight APK SHA drift');
+  if (required(preflight, 'ro.kernel.qemu', 'preflight') === '1')
+    throw new Error('emulator evidence rejected');
+  if (required(preflight, 'apk_path_sha256', 'preflight') !== tuple.apk.sha256)
+    throw new Error('preflight APK SHA drift');
   for (const [key, expected] of Object.entries(tupleBindings)) {
-    if (required(preflight, key, 'preflight') !== expected) throw new Error(`preflight ${key} drift`);
+    if (required(preflight, key, 'preflight') !== expected)
+      throw new Error(`preflight ${key} drift`);
     const finalizeKey = key === 'apk_path_sha256' ? 'apk_sha256' : key;
-    if (Object.hasOwn(finalize, finalizeKey) && required(finalize, finalizeKey, 'finalize') !== expected) {
+    if (
+      Object.hasOwn(finalize, finalizeKey) &&
+      required(finalize, finalizeKey, 'finalize') !== expected
+    ) {
       throw new Error(`finalize ${finalizeKey} drift`);
     }
   }
-  if (required(finalize, 'apk_sha256', 'finalize') !== tuple.apk.sha256) throw new Error('finalize APK SHA drift');
-  if (required(finalize, 'host_instance_id', 'finalize') !== required(preflight, 'host_instance_id', 'preflight')) {
+  if (required(finalize, 'apk_sha256', 'finalize') !== tuple.apk.sha256)
+    throw new Error('finalize APK SHA drift');
+  if (
+    required(finalize, 'host_instance_id', 'finalize') !==
+    required(preflight, 'host_instance_id', 'preflight')
+  ) {
     throw new Error('host instance drift across window');
   }
   if (required(finalize, 'adb_reverse_8080_8081', 'finalize') !== 'ABSENT_VERIFIED') {
     throw new Error('finalize must prove adb reverse absence');
   }
-  for (const field of ['candidate_sha', 'application_id', 'variant', 'version_code', 'version_name', 'apk_sha256']) {
+  for (const field of [
+    'candidate_sha',
+    'application_id',
+    'variant',
+    'version_code',
+    'version_name',
+    'apk_sha256',
+  ]) {
     if (required(apk, field, 'preflight APK') !== required(apkFinalize, field, 'final APK')) {
       throw new Error(`installed APK identity drift: ${field}`);
     }
@@ -756,7 +830,14 @@ export function buildTrustedW15JTabletLoopbackPreflight(evidenceDirectory, contr
   const window = { start: preflightTime, finish: finalizeTime };
   const attestationTuple = { ...tuple, hostInstanceId: host.hostInstanceId };
   const attestations = Object.freeze({
-    operator: validateAttestation(snapshot, 'operator-attestation.json', 'OPERATOR', attestationTuple, window, operator),
+    operator: validateAttestation(
+      snapshot,
+      'operator-attestation.json',
+      'OPERATOR',
+      attestationTuple,
+      window,
+      operator,
+    ),
     reviewer: validateAttestation(
       snapshot,
       'reviewer-attestation.json',
@@ -771,7 +852,10 @@ export function buildTrustedW15JTabletLoopbackPreflight(evidenceDirectory, contr
     ...tuple,
     repository: controlTower.repository,
     workflowRun: controlTower.workflowRun,
-    artifact: Object.freeze({ ...tuple.artifact, digestSourceRef: controlTower.artifact.digestSourceRef }),
+    artifact: Object.freeze({
+      ...tuple.artifact,
+      digestSourceRef: controlTower.artifact.digestSourceRef,
+    }),
     device,
     environment,
     operator,
