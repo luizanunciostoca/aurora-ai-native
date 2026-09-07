@@ -108,17 +108,27 @@ bash tools/tablet-devlab/setup-postgres.sh
 
 The generated database environment file remains local, mode `0600`, outside Git. Database readiness does not authorize execution and does not constitute physical acceptance.
 
-9. Open the explicit operator-controlled positive-effect window and prepare the short-lived DP5 provider material:
+9. On the physical tablet, record an interactive exact-tuple operator consent for the one bounded positive-effect window:
+
+```bash
+bash tools/tablet-devlab/authorize-dp5-effect.sh
+```
+
+This command requires an interactive TTY and a one-time challenge response. It writes a mode-`0600` consent record for the exact main/Android/host tuple, limited to `ONE_BOUNDED_MEDIA_VOLUME_STEP_UP`, expiring after 10 minutes. The record explicitly carries `authorizesExecution=false`, `retryAuthorized=false`, and `physicalAcceptance=false`.
+
+Unattended CI or automation cannot create this consent through the normal tooling path because the consent command refuses non-interactive execution. The consent is a human permission boundary for the physical test window; it is still not W02/W07 execution authority.
+
+10. Prepare the short-lived DP5 provider material from that fresh consent record:
 
 ```bash
 AURORA_DP5_EFFECT_APPROVED=YES bash tools/tablet-devlab/prepare-dp5-provider.sh
 ```
 
-This opt-in is intentionally required for material that can be used in the single bounded positive physical-effect scenario. CI and unattended automation must not manufacture this consent. The generated material expires after 90 minutes, stays outside Git, is mode `0600`, and contains `authorizesExecution=false` and `canGrantPermission=false`.
+The environment opt-in is necessary but not sufficient: a fresh, secure, unconsumed interactive consent record must also exist and match the exact tuple. Preparation consumes that record into an immutable timestamped local copy and binds its approval reference into the existing host provider material. The generated material remains outside Git, is mode `0600`, and contains `authorizesExecution=false` and `canGrantPermission=false`.
 
 The generated provider module composes the existing W03/W07/W14 owners and already-authenticated principal. It must not introduce another authority evaluator, mint permissions, or treat Receipt/Evidence as execution authorization.
 
-10. Run the provider composition doctor before starting the host:
+11. Run the provider composition doctor before starting the host:
 
 ```bash
 bash tools/tablet-devlab/provider-doctor.sh
@@ -126,7 +136,7 @@ bash tools/tablet-devlab/provider-doctor.sh
 
 A PASS here means `PASS_SOFTWARE_ONLY`. It verifies current host identity, secure external state, W03 database connectivity, owner-backed provider shape and non-authoritative receipt/evidence ingress. It does not prove a physical effect, authorize retry, or close DP5.
 
-11. Start the exact host in another Termux session:
+12. Start the exact host in another Termux session:
 
 ```bash
 bash tools/tablet-devlab/run-host.sh
@@ -167,6 +177,7 @@ Tablet-only means **no PC**, not "no independent reviewer". Final DP5 still requ
 - exact current APK install/readback on the representative physical tablet;
 - local PostgreSQL with W03 migrations and durable state owners;
 - current W02/W07 authority and W14 transport/session truth;
+- fresh interactive exact-tuple operator consent for the one bounded positive-effect window;
 - provider doctor PASS from the exact host candidate;
 - authenticated current W04/W15-G projection;
 - wake/STT -> W07 -> exactly one bounded permitted native effect -> Receipt/Evidence;
