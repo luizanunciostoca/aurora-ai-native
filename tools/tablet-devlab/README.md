@@ -17,7 +17,7 @@ Samsung / Android tablet
    ├─ /usr/bin/git (fixed Linux path required by W15-J host fencing)
    ├─ Node 22 >=22.16 <23
    ├─ npm/build tooling
-   ├─ optional PostgreSQL/runtime
+   ├─ PostgreSQL for the W03 durable state owners
    └─ exact W15-J LOCAL host
 ```
 
@@ -40,17 +40,17 @@ Current exact tuple defaults:
 
 ```text
 main      d2089407e88480686b879928cf2863c0dc81718e
-android   5c955eac4cdcd92bc2e0604d50f9feb339095d6a
-host      3c7c3aa917c00d91d738121dee5fd32ed07b5444
-packaging 694ebdc9715cb95cee3307237daa1ce1bf4e421f
-run       34080729689
-artifact  10003625251
-zip       bca3a8c98f741ead4d827963ee1694316ddf74aab034dd7317e3a6d0302eee62
-apk       da605b277fb4c7f9a3820c417fe126a5b617b7c34d9e7f2b48f67da40114cb9a
+android   a45c349c840b6c5125867fee3c7294ad61998cc3
+host      e280e742321638a852c68346b26cd0cdd69010eb
+packaging 12231a4070178d12c3812e05fa9e3179aefa68ac
+run       34093517317
+artifact  10007765042
+zip       2bc3fe221eb36a07146d2a9fb05f505e715c4a52e0b2488a9bc65d1b6cb005d5
+apk       5135a164d551c8f93e0dcfcfdf80ad66b60e69131d51d504ee7c000babbbb993
 transport LOCAL_TABLET_LOOPBACK
 ```
 
-The exact APK is signed with a CI-generated debug signing identity that differs from the earlier physical candidate. A clean uninstall/install is therefore required before byte-exact DP5 readback.
+The exact APK is signed with a CI-generated debug signing identity. If a different Aurora debug build is already installed, a clean uninstall/install may be required before byte-exact DP5 readback.
 
 ## One-time setup
 
@@ -92,7 +92,7 @@ bash tools/tablet-devlab/install-exact-apk.sh
 
 The installer first pulls and hashes the currently installed Aurora APK before any mutation. If the exact artifact is already installed, it exits without reinstalling. If a different Aurora APK is installed, it fails without modifying the tablet.
 
-Because the current CI debug signer differs from the earlier physical candidate, replacement requires an explicit clean-install opt-in:
+When clean replacement is required, use the explicit opt-in:
 
 ```bash
 AURORA_ALLOW_CLEAN_INSTALL=YES bash tools/tablet-devlab/install-exact-apk.sh
@@ -100,15 +100,33 @@ AURORA_ALLOW_CLEAN_INSTALL=YES bash tools/tablet-devlab/install-exact-apk.sh
 
 That explicit mode uninstalls only package `ai.aurora.device.local`, which removes Aurora's local application data, installs the exact APK, then independently pulls `/base.apk` and requires byte-for-byte equality with the artifact. The resulting evidence remains `READY_NOT_ACCEPTED` and is not execution authority.
 
-8. Put the operator-controlled provider module at:
+8. Prepare the LOCAL PostgreSQL state owned by W03 and apply the exact W03 migrations:
 
-```text
-~/aurora-devlab/config/trusted-w15j-provider.mjs
+```bash
+bash tools/tablet-devlab/setup-postgres.sh
 ```
 
-Never put credentials or secrets in that file. It may read an external managed secret/runtime channel; it must return existing W03/W07/W14 owners and an already-authenticated non-authoritative W14 principal.
+The generated database environment file remains local, mode `0600`, outside Git. Database readiness does not authorize execution and does not constitute physical acceptance.
 
-9. Start the exact host in another Termux session:
+9. Open the explicit operator-controlled positive-effect window and prepare the short-lived DP5 provider material:
+
+```bash
+AURORA_DP5_EFFECT_APPROVED=YES bash tools/tablet-devlab/prepare-dp5-provider.sh
+```
+
+This opt-in is intentionally required for material that can be used in the single bounded positive physical-effect scenario. CI and unattended automation must not manufacture this consent. The generated material expires after 90 minutes, stays outside Git, is mode `0600`, and contains `authorizesExecution=false` and `canGrantPermission=false`.
+
+The generated provider module composes the existing W03/W07/W14 owners and already-authenticated principal. It must not introduce another authority evaluator, mint permissions, or treat Receipt/Evidence as execution authorization.
+
+10. Run the provider composition doctor before starting the host:
+
+```bash
+bash tools/tablet-devlab/provider-doctor.sh
+```
+
+A PASS here means `PASS_SOFTWARE_ONLY`. It verifies current host identity, secure external state, W03 database connectivity, owner-backed provider shape and non-authoritative receipt/evidence ingress. It does not prove a physical effect, authorize retry, or close DP5.
+
+11. Start the exact host in another Termux session:
 
 ```bash
 bash tools/tablet-devlab/run-host.sh
@@ -146,10 +164,17 @@ This is the preferred long-term model because Android's official Linux SDK/build
 
 Tablet-only means **no PC**, not "no independent reviewer". Final DP5 still requires:
 
-- exact new APK clean install and readback;
-- real trusted W03/W07/W14 provider composition;
-- every mandatory physical scenario PASS;
+- exact current APK install/readback on the representative physical tablet;
+- local PostgreSQL with W03 migrations and durable state owners;
+- current W02/W07 authority and W14 transport/session truth;
+- provider doctor PASS from the exact host candidate;
+- authenticated current W04/W15-G projection;
+- wake/STT -> W07 -> exactly one bounded permitted native effect -> Receipt/Evidence;
+- DENY, stale, kill, cancel, duplicate, uncertainty and reconciliation scenarios;
 - at least 100 deliberate wake attempts plus false-wake/noise/distance/voice/TTS/barge-in/audio-route/privacy/resource coverage;
+- cleanup and manifest-bound evidence;
 - operator attestation;
 - independent reviewer identity and manifest-bound reviewer attestation;
 - integrated Risk Gates A-D.
+
+Until that physical dossier is complete, W15-J remains unaccepted and W16 BUILD remains blocked.
