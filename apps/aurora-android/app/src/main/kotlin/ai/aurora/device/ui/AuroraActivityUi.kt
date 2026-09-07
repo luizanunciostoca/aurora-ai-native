@@ -150,10 +150,10 @@ object AuroraActivityUi {
         val horizontal = dp(activity, 24)
         val vertical = dp(activity, 20)
         view.setOnApplyWindowInsetsListener { target, insets ->
-            val left: Int
-            val top: Int
-            val right: Int
-            val bottom: Int
+            var left = 0
+            var top = 0
+            var right = 0
+            var bottom = 0
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val bars =
                     insets.getInsets(
@@ -165,12 +165,17 @@ object AuroraActivityUi {
                 bottom = bars.bottom
             } else {
                 @Suppress("DEPRECATION")
-                run {
-                    left = insets.systemWindowInsetLeft
-                    top = insets.systemWindowInsetTop
-                    right = insets.systemWindowInsetRight
-                    bottom = insets.systemWindowInsetBottom
-                }
+                val legacyLeft = insets.systemWindowInsetLeft
+                @Suppress("DEPRECATION")
+                val legacyTop = insets.systemWindowInsetTop
+                @Suppress("DEPRECATION")
+                val legacyRight = insets.systemWindowInsetRight
+                @Suppress("DEPRECATION")
+                val legacyBottom = insets.systemWindowInsetBottom
+                left = legacyLeft
+                top = legacyTop
+                right = legacyRight
+                bottom = legacyBottom
             }
             target.setPadding(
                 horizontal + left,
