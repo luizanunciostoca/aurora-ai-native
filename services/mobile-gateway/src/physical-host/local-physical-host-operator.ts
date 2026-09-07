@@ -3,10 +3,8 @@ import {
   startW15JLocalPhysicalHostRunner,
   type W15JLocalPhysicalHostRunnerHandle,
 } from './local-physical-host-runner.js';
-import type {
-  W15JLocalPhysicalHostDependencies,
-  W15JPhysicalExecutionStateSeed,
-} from './local-physical-host.js';
+import type { W15JLocalPhysicalHostDependencies } from './local-physical-host.js';
+import type { W15JPhysicalExecutionStateSeed } from './w03-physical-execution-state-stage.js';
 
 const PROVIDER_FACTORY_EXPORT = 'createW15JLocalPhysicalHostOperatorInput';
 const PROVIDER_INPUT_KEYS = new Set(['databaseUrl', 'dependencies', 'principal']);
@@ -102,7 +100,10 @@ function hasExactKeys(value: Readonly<Record<string, unknown>>, expected: Readon
 }
 
 function providerKeysValid(value: Readonly<Record<string, unknown>>): boolean {
-  return hasExactKeys(value, PROVIDER_INPUT_KEYS) || hasExactKeys(value, PROVIDER_INPUT_WITH_SEED_KEYS);
+  return (
+    hasExactKeys(value, PROVIDER_INPUT_KEYS) ||
+    hasExactKeys(value, PROVIDER_INPUT_WITH_SEED_KEYS)
+  );
 }
 
 function boundedToken(value: unknown, maximum: number): value is string {
@@ -193,7 +194,8 @@ function validateProviderInput(
       validDatabaseUrl(value.databaseUrl) &&
       validDependencies(value.dependencies) &&
       validPrincipal(value.principal, nowMs) &&
-      (value.executionStateSeed === undefined || validExecutionStateSeed(value.executionStateSeed))
+      (value.executionStateSeed === undefined ||
+        validExecutionStateSeed(value.executionStateSeed))
     ) {
       return value as unknown as W15JLocalPhysicalHostOperatorProviderInput;
     }
