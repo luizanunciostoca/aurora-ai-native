@@ -62,6 +62,7 @@ collectTests(resolve(repoRoot, 'packages/control/test'), controlTests);
 controlTests.sort();
 
 const testFiles = [
+  'tools/test/prettier-diagnostic.test.mjs',
   'tools/test/smoke.test.mjs',
   'tools/test/tablet-devlab.test.mjs',
   'tools/test/tablet-devlab-jq-boolean.test.mjs',
