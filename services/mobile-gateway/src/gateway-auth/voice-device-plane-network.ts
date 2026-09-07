@@ -8,10 +8,7 @@ import type {
   VoiceCandidateNetworkBoundary,
   VoiceCandidateSocketContext,
 } from './voice-candidate-network.js';
-import {
-  VOICE_PROJECTION_DEVICE_ROUTE,
-  type VoiceProjectionNetworkBoundary,
-} from './voice-projection-network.js';
+import { VOICE_PROJECTION_DEVICE_ROUTE } from './voice-projection-network.js';
 
 export const VOICE_CANDIDATE_DEVICE_ROUTE = '/v1/device/voice/candidates/evaluate' as const;
 
@@ -21,10 +18,8 @@ const MAX_DATE_MS = 8_640_000_000_000_000;
 export interface GatewayVoiceDeviceRouteDependencies {
   /** Canonical W14-E trust reader. This route owns no trust cache or ledger. */
   readonly deviceSessions: object;
-  /** Accepted W15-G -> W07 sanitized candidate boundary. */
+  /** Accepted W15-G -> W07 sanitized candidate + provider-backed W04 projection boundary. */
   readonly voiceCandidates: VoiceCandidateNetworkBoundary;
-  /** Current non-authoritative W04/W15-G projection boundary. */
-  readonly voiceProjection: VoiceProjectionNetworkBoundary;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -211,8 +206,8 @@ function currentContext(
  * Narrow W15-G/W07 composition wrapper over the accepted W14 device-plane handler.
  *
  * Existing W14 routes are delegated unchanged. Voice-candidate and voice-projection routes derive
- * identity/device/session context only from current W14 server state. The projection route carries
- * catalog/capability eligibility only; it never mints W07 authority, verified outcome or retry.
+ * identity/device/session context only from current W14 server state. Projection transport carries
+ * catalog/capability eligibility only; it never mints authority, outcome truth or retry permission.
  */
 export class GatewayVoiceDevicePlaneNetworkHandler extends GatewayDevicePlaneNetworkHandler {
   readonly #voiceDependencies: GatewayVoiceDeviceRouteDependencies;
@@ -253,7 +248,7 @@ export class GatewayVoiceDevicePlaneNetworkHandler extends GatewayDevicePlaneNet
         return projectionRouteError(400, 'BODY_MALFORMED');
       }
       try {
-        return this.#voiceDependencies.voiceProjection.current(context, input.nowMs);
+        return this.#voiceDependencies.voiceCandidates.currentProjection(context, input.nowMs);
       } catch {
         return projectionRouteError(503, 'VOICE_PROJECTION_UNAVAILABLE');
       }
