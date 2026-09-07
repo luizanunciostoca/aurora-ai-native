@@ -19,11 +19,7 @@ function collectW15JAcceptanceTests(tests) {
   const directory = resolve(repoRoot, 'tools/acceptance');
   if (!existsSync(directory)) return;
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
-    if (
-      entry.isFile() &&
-      entry.name.startsWith('w15j-') &&
-      entry.name.endsWith('.test.mjs')
-    ) {
+    if (entry.isFile() && entry.name.startsWith('w15j-') && entry.name.endsWith('.test.mjs')) {
       tests.push(join(directory, entry.name));
     }
   }
