@@ -3,6 +3,7 @@ package ai.aurora.device.voice
 import android.content.Context
 import ai.aurora.device.capability.AndroidRuntimeCapabilityProbe
 import ai.aurora.device.capability.NativeCapabilityBridge
+import ai.aurora.device.capability.NativeRuntimeProbe
 import ai.aurora.device.network.GatewayGovernedVoiceProjection
 
 data class InstalledGatewayVoiceProjection(
@@ -22,6 +23,7 @@ fun installableGatewayVoiceProjection(
     projection: GatewayGovernedVoiceProjection,
     expectedTenantId: String,
     nowMs: () -> Long = { System.currentTimeMillis() },
+    runtimeProbe: NativeRuntimeProbe = AndroidRuntimeCapabilityProbe(context, clockMs = nowMs),
 ): InstalledGatewayVoiceProjection {
     require(projection.activeTenantId == expectedTenantId) { "voice projection tenant mismatch" }
     val currentMs = nowMs()
@@ -36,7 +38,7 @@ fun installableGatewayVoiceProjection(
     val capabilityBridge =
         NativeCapabilityBridge(
             bindings = projection.nativeBindings,
-            runtimeProbe = AndroidRuntimeCapabilityProbe(context, clockMs = nowMs),
+            runtimeProbe = runtimeProbe,
             nowMs = nowMs,
         )
     val nativeObservations = capabilityBridge.discoverAll()
