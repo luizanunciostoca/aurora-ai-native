@@ -7,7 +7,7 @@ fail() {
 }
 
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
-for cmd in git node jq mktemp sha256sum gh unzip; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
+for cmd in git node jq mktemp sha256sum gh unzip awk grep; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
 gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated; run: gh auth login"
 
 REPO="${AURORA_REPOSITORY:-luizanunciostoca/aurora-ai-native}"
@@ -18,6 +18,9 @@ ANDROID_WORKTREE="$DEVLAB_ROOT/worktrees/android"
 HOST_WORKTREE="$DEVLAB_ROOT/worktrees/host"
 EVIDENCE_DIR="${AURORA_EVIDENCE_DIR:-$DEVLAB_ROOT/evidence/w15j-dp5}"
 DOSSIER="${AURORA_W15J_DOSSIER:-$EVIDENCE_DIR/w15j-evidence.json}"
+FINAL_MANIFEST="$EVIDENCE_DIR/evidence-manifest.sha256"
+PRESEAL_MANIFEST="$EVIDENCE_DIR/collector-finalize-manifest.preseal.sha256"
+SEAL_STATUS="$EVIDENCE_DIR/dossier-seal-status.txt"
 RESULT_DIR="${AURORA_DOSSIER_DOCTOR_DIR:-$DEVLAB_ROOT/evidence/doctor}"
 
 [[ -d "$DEVLAB_WORKTREE" ]] || fail "DevLab worktree missing; run worktrees.sh"
@@ -27,11 +30,55 @@ RESULT_DIR="${AURORA_DOSSIER_DOCTOR_DIR:-$DEVLAB_ROOT/evidence/doctor}"
 [[ -d "$HOST_WORKTREE" ]] || fail "exact host worktree missing; run worktrees.sh"
 [[ -d "$HOST_WORKTREE/.git" || -f "$HOST_WORKTREE/.git" ]] || fail "host worktree is not a git worktree"
 [[ -d "$EVIDENCE_DIR" && ! -L "$EVIDENCE_DIR" ]] || fail "finalized evidence directory is required"
-[[ -f "$EVIDENCE_DIR/evidence-manifest.sha256" ]] || fail "finalized evidence-manifest.sha256 is required"
-[[ -f "$EVIDENCE_DIR/reviewer-attestation.json" ]] || fail "independent reviewer-attestation.json is required"
-[[ -f "$EVIDENCE_DIR/operator-attestation.json" ]] || fail "operator-attestation.json is required"
-[[ -f "$EVIDENCE_DIR/wake-evidence.json" ]] || fail "wake-evidence.json is required"
-[[ -f "$DOSSIER" && ! -L "$DOSSIER" ]] || fail "finalized w15j-evidence.json operator dossier is required"
+for path in \
+  "$FINAL_MANIFEST" \
+  "$PRESEAL_MANIFEST" \
+  "$SEAL_STATUS" \
+  "$EVIDENCE_DIR/reviewer-attestation.json" \
+  "$EVIDENCE_DIR/operator-attestation.json" \
+  "$EVIDENCE_DIR/wake-evidence.json" \
+  "$DOSSIER"; do
+  [[ -f "$path" && ! -L "$path" ]] || fail "required final evidence file missing or unsafe: $path"
+done
+
+seal_value() {
+  local key="$1"
+  [[ "$(grep -c "^${key}=" "$SEAL_STATUS")" -eq 1 ]] || fail "seal status must contain exactly one $key"
+  awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print}' "$SEAL_STATUS"
+}
+
+seal_schema="$(seal_value schema)"
+collector_manifest_sha="$(seal_value collector_manifest_sha256)"
+dossier_preseal_sha="$(seal_value dossier_preseal_sha256)"
+dossier_sealed_sha="$(seal_value dossier_sealed_sha256)"
+seal_finalized_at="$(seal_value finalized_at_utc)"
+[[ "$seal_schema" == "w15j-tablet-loopback-dossier-seal-v1" ]] || fail "dossier seal schema drift"
+for sha in "$collector_manifest_sha" "$dossier_preseal_sha" "$dossier_sealed_sha"; do
+  [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || fail "dossier seal contains malformed SHA-256"
+done
+for key in authorizes_execution proves_execution_success retry_authorized physical_acceptance w16_build_unblocked; do
+  [[ "$(seal_value "$key")" == "false" ]] || fail "dossier seal must keep $key=false"
+done
+[[ "$(sha256sum "$PRESEAL_MANIFEST" | awk '{print $1}')" == "$collector_manifest_sha" ]] || \
+  fail "pre-seal collector manifest digest drift"
+[[ "$(sha256sum "$DOSSIER" | awk '{print $1}')" == "$dossier_sealed_sha" ]] || \
+  fail "sealed dossier digest drift"
+preseal_dossier_sha="$(awk '$2 == "w15j-evidence.json" {print $1}' "$PRESEAL_MANIFEST")"
+[[ "$preseal_dossier_sha" == "$dossier_preseal_sha" ]] || \
+  fail "pre-seal collector manifest does not bind the recorded dossier predecessor"
+[[ "$(jq -er '.environment.finalizedAtUtc' "$DOSSIER")" == "$seal_finalized_at" ]] || \
+  fail "sealed dossier finalization timestamp drift"
+(
+  cd "$EVIDENCE_DIR"
+  sha256sum -c "$(basename "$FINAL_MANIFEST")" >/dev/null
+) || fail "sealed final evidence manifest digest verification failed"
+for required in \
+  "$(basename "$PRESEAL_MANIFEST")" \
+  "$(basename "$SEAL_STATUS")" \
+  "$(basename "$DOSSIER")"; do
+  [[ "$(awk -v name="$required" '$2 == name {count++} END {print count+0}' "$FINAL_MANIFEST")" -eq 1 ]] || \
+    fail "sealed final manifest must contain exactly one $required entry"
+done
 
 devlab_head="$(git -C "$DEVLAB_WORKTREE" rev-parse HEAD)"
 [[ "$devlab_head" =~ ^[0-9a-f]{40}$ ]] || fail "DevLab worktree HEAD is malformed"
@@ -101,6 +148,8 @@ live_requirement="$(jq -er '.trustRoot.liveGitHubRevalidation' "$RESULT")"
 [[ "$transport" == "LOCAL_TABLET_LOOPBACK" ]] || fail "trusted-preflight transport drift"
 [[ "$control_plane" == "SELF_ADB_WIRELESS_DEBUGGING" ]] || fail "trusted-preflight control-plane drift"
 [[ "$live_requirement" == "EXTERNAL_REQUIRED_IMMEDIATELY_BEFORE_ACCEPTANCE" ]] || fail "live GitHub acceptance revalidation requirement missing"
+[[ "$(jq -er '.evidenceManifest.sha256' "$RESULT")" == "$(sha256sum "$FINAL_MANIFEST" | awk '{print $1}')" ]] || \
+  fail "trusted preflight did not bind the sealed final manifest"
 
 set +e
 node "$DOSSIER_VALIDATOR" "$DOSSIER" "$EVIDENCE_DIR" "$TUPLE" >"$DOSSIER_LINT" 2>&1
@@ -113,8 +162,10 @@ expected_dossier_line="W15J_TABLET_LOOPBACK_LINT_READY_NOT_ACCEPTED candidate=$a
 [[ "${#dossier_lines[@]}" -eq 1 && "${dossier_lines[0]}" == "$expected_dossier_line" ]] || \
   fail "complete dossier validator did not emit the canonical 48-scenario NOT_ACCEPTED disposition"
 
-manifest_sha="$(sha256sum "$EVIDENCE_DIR/evidence-manifest.sha256" | awk '{print $1}')"
+manifest_sha="$(sha256sum "$FINAL_MANIFEST" | awk '{print $1}')"
 dossier_sha="$(sha256sum "$DOSSIER" | awk '{print $1}')"
+seal_status_sha="$(sha256sum "$SEAL_STATUS" | awk '{print $1}')"
+preseal_manifest_file_sha="$(sha256sum "$PRESEAL_MANIFEST" | awk '{print $1}')"
 tuple_sha="$(sha256sum "$TUPLE" | awk '{print $1}')"
 result_sha="$(sha256sum "$RESULT" | awk '{print $1}')"
 dossier_lint_sha="$(sha256sum "$DOSSIER_LINT" | awk '{print $1}')"
@@ -128,6 +179,8 @@ host_candidate_sha=$host_sha
 required_physical_scenarios=48
 complete_dossier_lint=PASS_NOT_ACCEPTED
 manifest_file_sha256=$manifest_sha
+collector_preseal_manifest_sha256=$preseal_manifest_file_sha
+dossier_seal_status_sha256=$seal_status_sha
 operator_dossier_sha256=$dossier_sha
 control_tower_tuple_sha256=$tuple_sha
 trusted_preflight_sha256=$result_sha
@@ -146,4 +199,5 @@ printf 'result_dir=%s\n' "$RESULT_DIR"
 printf 'devlab_candidate_sha=%s\nandroid_candidate_sha=%s\nhost_candidate_sha=%s\n' \
   "$devlab_head" "$android_sha" "$host_sha"
 printf 'required_physical_scenarios=48\ncomplete_dossier_lint=PASS_NOT_ACCEPTED\n'
+printf 'sealed_dossier_provenance=VERIFIED\n'
 printf 'authorizes_execution=false\nphysical_acceptance=false\nretry_authorized=false\nw16_build_unblocked=false\n'
