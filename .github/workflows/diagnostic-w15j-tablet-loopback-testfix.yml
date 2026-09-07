@@ -1,0 +1,54 @@
+name: Diagnostic W15-J Tablet Loopback Test Fix
+
+on:
+  push:
+    branches:
+      - diagnostic/w15j-tablet-loopback-testfix
+    paths:
+      - '.github/workflows/diagnostic-w15j-tablet-loopback-testfix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - name: Apply exact operator binding correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tools/acceptance/w15j-tablet-loopback-preflight.mjs')
+          text = path.read_text()
+          old = """  for (const field of ['gatewayIdentity', 'gatewayVersion', 'hostInstanceId', 'operator']) {\n    if (\n      requiredString(environment?.[field], `environment.${field}`) !==\n      expected[field === 'operator' ? 'operator' : 'environment']?.[field]\n    ) {\n      throw new Error(`environment.${field} drift`);\n    }\n  }\n"""
+          new = """  for (const field of ['gatewayIdentity', 'gatewayVersion', 'hostInstanceId', 'operator']) {\n    const expectedValue = field === 'operator' ? expected.operator : expected.environment?.[field];\n    if (requiredString(environment?.[field], `environment.${field}`) !== expectedValue) {\n      throw new Error(`environment.${field} drift`);\n    }\n  }\n"""
+          if text.count(old) != 1:
+              raise SystemExit('expected operator binding block not found exactly once')
+          path.write_text(text.replace(old, new))
+          PY
+          npx prettier --write tools/acceptance/w15j-tablet-loopback-preflight.mjs >/dev/null
+      - name: Run all W15-J acceptance tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test tools/acceptance/w15j-*.test.mjs
+      - name: Commit validated exact bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tools/acceptance/w15j-tablet-loopback-preflight.mjs
+          git commit -m 'fix(W15-J): bind tablet-loopback operator identity correctly'
+          git push origin HEAD:diagnostic/w15j-tablet-loopback-testfix
