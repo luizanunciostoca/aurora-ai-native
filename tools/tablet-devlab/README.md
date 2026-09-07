@@ -40,13 +40,14 @@ Current exact tuple defaults:
 
 ```text
 main      d2089407e88480686b879928cf2863c0dc81718e
-android   a45c349c840b6c5125867fee3c7294ad61998cc3
+android   6d44480eae9b99467b20df44290b5c9b17626c3e
 host      e280e742321638a852c68346b26cd0cdd69010eb
-packaging 12231a4070178d12c3812e05fa9e3179aefa68ac
-run       34093517317
-artifact  10007765042
-zip       2bc3fe221eb36a07146d2a9fb05f505e715c4a52e0b2488a9bc65d1b6cb005d5
-apk       5135a164d551c8f93e0dcfcfdf80ad66b60e69131d51d504ee7c000babbbb993
+packaging c2375e555caf719130755979b69a57e3133246f6
+run       34155218889
+artifact  10030765116
+name      aurora-w15j-tablet-loopback-apk-6d44480e-host-e280e742
+zip       785668c03552c66f2dcfecca71ac961afe1f96f77ceb4739816d2b42f9094afe
+apk       7e09c3473fa235a8f442f275ed99f33a136ceb2c63bd80c5a2eb03cbfaa6eb82
 transport LOCAL_TABLET_LOOPBACK
 ```
 
@@ -164,18 +165,40 @@ The preflight requires the exact `LOCAL_TABLET_LOOPBACK` artifact, exact install
 
 This proves environment/readiness only. It does not close DP5, prove execution success, or authorize retry.
 
-## Finalized physical dossier lint
+## Governed physical dossier and semantic binding
 
-Before the collector manifest is finalized, populate `w15j-evidence.json` inside the evidence directory from the current W15-J evidence template and the actual tablet evidence. It must carry all 48 mandatory physical scenarios, threat review, resource observations, wake evidence references, handoffs and integrated Risk Gates A-D.
+After capturing a fresh Control Tower tuple and collector preflight, create the operator dossier with:
 
-After finalization, operator attestation and the independent manifest-bound reviewer attestation are present, run:
+```bash
+AURORA_EVIDENCE_DIR="$HOME/aurora-devlab/evidence/w15j-dp5" \
+AURORA_CONTROL_TOWER_TUPLE="$HOME/aurora-devlab/evidence/control-tower-tuple.json" \
+  bash tools/tablet-devlab/prepare-dp5-dossier.sh
+```
+
+Preparation creates `w15j-evidence.json` from the exact Android candidate and also creates `governed-execution-binding.json` from `W15J_GOVERNED_EXECUTION_BINDING_TEMPLATE.json`. Both remain incomplete, non-authoritative operator evidence until real physical observations are recorded.
+
+The operator must populate the 48 mandatory physical scenarios and the seven semantic owner roles bound by the final manifest:
+
+- current W02/W07 authority proof;
+- W14 current session proof;
+- W14 delivery/command identity proof;
+- W03 durable idempotency/receipt state proof;
+- Android native execution observation;
+- Receipt/Evidence ingress proof;
+- W07 final outcome reconciliation proof.
+
+The semantic binding is evidence-only. Its own fields must preserve `authorizesExecution=false`, `provesExecutionSuccess=false`, `retryAuthorized=false`, `physicalAcceptance=false` and `w16BuildUnblocked=false`.
+
+After the physical collector finalizes, `seal-dp5-dossier.sh` preserves the predecessor manifest, binds the collector-owned finalization time into the dossier, and requires `governed-execution-binding.json` to be part of the sealed evidence inventory. The independent reviewer sidecar is created only after sealing.
+
+Then run:
 
 ```bash
 AURORA_EVIDENCE_DIR="$HOME/aurora-devlab/evidence/w15j-dp5" \
   bash tools/tablet-devlab/dossier-doctor.sh
 ```
 
-The doctor revalidates GitHub live, binds the clean DevLab, Android and host worktrees to the freshly captured tuple, reconstructs trusted physical facts with `w15j-tablet-loopback-trusted-preflight.mjs`, then validates the complete `w15j-evidence.json` with `w15j-tablet-loopback-preflight.mjs`. It requires the canonical 48-scenario NOT_ACCEPTED disposition before it can report `LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED`.
+The doctor revalidates GitHub live, binds clean DevLab/Android/host worktrees to the fresh tuple, reconstructs trusted physical facts with `w15j-tablet-loopback-trusted-preflight.mjs`, validates all 48 scenarios with `w15j-tablet-loopback-preflight.mjs`, and independently runs `w15j-governed-execution-binding.mjs`. It requires exactly seven semantic evidence roles and still emits only `LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED`.
 
 That result is review readiness only. It cannot mint W02/W07 authority, prove execution success by itself, authorize retry, declare physical acceptance, or unblock W16.
 
@@ -197,6 +220,7 @@ Tablet-only means **no PC**, not "no independent reviewer". Final DP5 still requ
 - authenticated current W04/W15-G projection;
 - wake/STT -> W07 -> exactly one bounded permitted native effect -> Receipt/Evidence;
 - all 48 mandatory scenarios, including DENY, stale, kill, cancel, duplicate, uncertainty and reconciliation cases;
+- seven-role governed execution evidence binding in the sealed manifest;
 - at least 100 deliberate wake attempts plus false-wake/noise/distance/voice/TTS/barge-in/audio-route/privacy/resource coverage;
 - threat review, resource observations and complete `w15j-evidence.json` inside the immutable collector manifest;
 - cleanup and manifest-bound evidence;
