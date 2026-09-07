@@ -23,13 +23,19 @@ jobs:
           node-version: '22.16.0'
           cache: npm
       - run: npm ci
-      - name: Print canonical Prettier diff
+      - name: Format exact files with repository Prettier
         shell: bash
         run: |
           set -euo pipefail
           npx prettier --write \
             tools/acceptance/w15j-tablet-loopback-preflight.mjs \
-            tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs >/dev/null
-          git --no-pager diff -- \
-            tools/acceptance/w15j-tablet-loopback-preflight.mjs \
             tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs
+      - name: Upload exact formatted files
+        uses: actions/upload-artifact@v7
+        with:
+          name: w15j-tablet-loopback-prettier-output
+          path: |
+            tools/acceptance/w15j-tablet-loopback-preflight.mjs
+            tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs
+          if-no-files-found: error
+          retention-days: 1
