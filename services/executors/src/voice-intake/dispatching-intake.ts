@@ -3,8 +3,10 @@ import type { CausationId, CommandId, ExecutionId } from '@aurora/contracts/ids'
 
 import {
   W07GovernedDeviceDispatchAdapter,
+  type CurrentW07DeviceExecutionAuthorizationLookup,
   type GovernedDeviceCommandMaterial,
   type GovernedDeviceDispatchResult,
+  type W07DeviceExecutionAuthorization,
   type W14GovernedDeviceDispatchPort,
 } from '../device-dispatch/governed-device-dispatch.js';
 import { evaluateFailureContainment } from '../failure-containment/failure-containment.js';
@@ -309,6 +311,17 @@ export class W15JDispatchingVoiceCandidateIntake {
       },
     });
     return resultWithDispatch(evaluated.result, toDispatchObservation(state.commandId, dispatch));
+  }
+
+  /**
+   * Returns only the still-current W07 artifact minted by this same intake after a successful
+   * governed dispatch. The exact authenticated W14 context must match; this method cannot mint,
+   * renew or widen authority.
+   */
+  currentExecutionAuthorization(
+    input: CurrentW07DeviceExecutionAuthorizationLookup,
+  ): W07DeviceExecutionAuthorization | null {
+    return this.#dispatch.currentExecutionAuthorization(input);
   }
 }
 
