@@ -1,3 +1,9 @@
+import {
+  VoiceProjectionNetworkBoundary,
+  type GovernedVoiceProjection,
+  type VoiceProjectionNetworkResponse,
+} from './voice-projection-network.js';
+
 const VOICE_CANDIDATE_KEYS = new Set([
   'commandId',
   'capabilityId',
@@ -33,6 +39,11 @@ export interface VoiceCandidateIntakePort {
     readonly candidate: VoiceCandidateForEvaluation;
     readonly context: VoiceCandidateSocketContext;
   }): unknown;
+  /** Optional composition leaf supplied by the trusted provider/W04 projection owner. */
+  currentProjection?(input: {
+    readonly context: VoiceCandidateSocketContext;
+    readonly nowMs: number;
+  }): GovernedVoiceProjection | null;
 }
 
 export interface VoiceCandidateNetworkResponse {
@@ -120,12 +131,11 @@ function parseCandidate(body: unknown): VoiceCandidateForEvaluation | null {
 }
 
 /**
- * W14-owned transport composition leaf for W15-G -> W07 voice evaluation.
+ * W14-owned transport composition leaf for W15-G -> W07 voice evaluation and current W04/W15-G
+ * projection delivery.
  *
- * The caller must provide current context derived from the already-authenticated
- * W14 socket/device session. This boundary never accepts identity, trust, policy,
- * ActionIntent, authority, server-time, outcome, or retry fields from Android.
- * It intentionally strips all W07 gate details from the network response.
+ * The caller supplies current context from the authenticated W14 socket/device session. Projection
+ * delivery remains non-authoritative; W14 validates protocol/freshness but cannot grant authority.
  */
 export class VoiceCandidateNetworkBoundary {
   readonly #intake: VoiceCandidateIntakePort;
@@ -179,5 +189,40 @@ export class VoiceCandidateNetworkBoundary {
     }
 
     return { statusCode: 202, body: nonAuthorityBody(true, true) };
+  }
+
+  currentProjection(
+    context: VoiceCandidateSocketContext,
+    nowMs: number,
+  ): VoiceProjectionNetworkResponse {
+    if (!validContext(context)) {
+      return {
+        statusCode: 409,
+        body: {
+          ok: false,
+          voiceProjectionError: { code: 'AUTHENTICATED_CONTEXT_NOT_CURRENT' },
+          authorizesExecution: false,
+          provesExecutionSuccess: false,
+          retryAuthorized: false,
+        },
+      };
+    }
+    if (typeof this.#intake.currentProjection !== 'function') {
+      return {
+        statusCode: 409,
+        body: {
+          ok: false,
+          voiceProjectionError: { code: 'VOICE_PROJECTION_UNAVAILABLE' },
+          authorizesExecution: false,
+          provesExecutionSuccess: false,
+          retryAuthorized: false,
+        },
+      };
+    }
+    const boundary = new VoiceProjectionNetworkBoundary({
+      current: ({ context: requested, nowMs: requestedNow }) =>
+        this.#intake.currentProjection?.({ context: requested, nowMs: requestedNow }) ?? null,
+    });
+    return boundary.current(context, nowMs);
   }
 }
