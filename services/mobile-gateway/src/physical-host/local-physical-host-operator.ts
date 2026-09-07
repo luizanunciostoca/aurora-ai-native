@@ -3,10 +3,19 @@ import {
   startW15JLocalPhysicalHostRunner,
   type W15JLocalPhysicalHostRunnerHandle,
 } from './local-physical-host-runner.js';
-import type { W15JLocalPhysicalHostDependencies } from './local-physical-host.js';
+import type {
+  W15JLocalPhysicalHostDependencies,
+  W15JPhysicalExecutionStateSeed,
+} from './local-physical-host.js';
 
 const PROVIDER_FACTORY_EXPORT = 'createW15JLocalPhysicalHostOperatorInput';
 const PROVIDER_INPUT_KEYS = new Set(['databaseUrl', 'dependencies', 'principal']);
+const PROVIDER_INPUT_WITH_SEED_KEYS = new Set([
+  'databaseUrl',
+  'dependencies',
+  'principal',
+  'executionStateSeed',
+]);
 const DEPENDENCY_KEYS = new Set([
   'receiptEvidenceIngress',
   'createVoiceIntake',
@@ -53,6 +62,8 @@ export interface W15JLocalPhysicalHostOperatorProviderInput {
   readonly dependencies: W15JLocalPhysicalHostDependencies;
   /** Already-authenticated server-side W14 principal; never accepted from Android. */
   readonly principal: AuthenticatedGatewayBootstrapPrincipal;
+  /** Optional DP5 fixture; the runner writes it only through W03's existing physical stager. */
+  readonly executionStateSeed?: W15JPhysicalExecutionStateSeed;
 }
 
 export interface W15JLocalPhysicalHostOperatorProviderModule {
@@ -88,6 +99,10 @@ function hasExactKeys(value: Readonly<Record<string, unknown>>, expected: Readon
   } catch {
     return false;
   }
+}
+
+function providerKeysValid(value: Readonly<Record<string, unknown>>): boolean {
+  return hasExactKeys(value, PROVIDER_INPUT_KEYS) || hasExactKeys(value, PROVIDER_INPUT_WITH_SEED_KEYS);
 }
 
 function boundedToken(value: unknown, maximum: number): value is string {
@@ -158,6 +173,13 @@ function validDatabaseUrl(value: unknown): value is string {
   }
 }
 
+function validExecutionStateSeed(value: unknown): value is W15JPhysicalExecutionStateSeed {
+  if (!plainDataRecord(value)) return false;
+  // Full canonical validation remains owned by W03PostgresPhysicalExecutionStateStager.
+  // The operator only rejects active objects/getters and explicit authority-bearing input early.
+  return value.authorizesExecution === false;
+}
+
 function validateProviderInput(
   value: unknown,
   nowMs: number,
@@ -167,10 +189,11 @@ function validateProviderInput(
       Number.isSafeInteger(nowMs) &&
       nowMs >= 0 &&
       plainDataRecord(value) &&
-      hasExactKeys(value, PROVIDER_INPUT_KEYS) &&
+      providerKeysValid(value) &&
       validDatabaseUrl(value.databaseUrl) &&
       validDependencies(value.dependencies) &&
-      validPrincipal(value.principal, nowMs)
+      validPrincipal(value.principal, nowMs) &&
+      (value.executionStateSeed === undefined || validExecutionStateSeed(value.executionStateSeed))
     ) {
       return value as unknown as W15JLocalPhysicalHostOperatorProviderInput;
     }
@@ -182,8 +205,9 @@ function validateProviderInput(
 
 /**
  * Validates a trusted external provider and starts the existing W15-J runner on its fixed LOCAL
- * ports. The provider is the only ingress for database configuration, owner-backed dependencies
- * and the already-authenticated server-side principal. No Android or argv field can supply them.
+ * ports. The provider is the only ingress for database configuration, owner-backed dependencies,
+ * the already-authenticated server-side principal and an optional W03-validated DP5 fixture. No
+ * Android or argv field can supply them.
  *
  * Successful startup is software readiness only. The runner announcement remains allowlisted and
  * `physicalEvidenceStatus` remains `NOT_RUN` until the real DP5 procedure supplies evidence.
@@ -235,6 +259,9 @@ export async function startW15JLocalPhysicalHostOperator(
       },
       dependencies: input.dependencies,
       principal: input.principal,
+      ...(input.executionStateSeed === undefined
+        ? {}
+        : { executionStateSeed: input.executionStateSeed }),
     });
   } catch {
     throw new W15JLocalPhysicalHostOperatorError('HOST_START_FAILED');
