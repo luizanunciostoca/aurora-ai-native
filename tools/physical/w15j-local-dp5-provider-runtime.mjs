@@ -384,12 +384,14 @@ export async function createW15JLocalDp5OperatorInput({ databaseUrl, materialPat
     throw new Error('AURORA_W15J_DATABASE_URL is missing or invalid.');
   }
   const material = loadAndValidateW15JDp5Material(materialPath);
-  const [{ evaluateAuthority }, portsModule, authorityModule, projectionModule] = await Promise.all([
-    import('@aurora/policy-core/authority'),
-    import('../../services/executors/dist/voice-intake/physical-host-ports.js'),
-    import('../../services/executors/dist/voice-intake/preissued-authority-source.js'),
-    import('../../services/mobile-gateway/dist/physical-host/voice-projection-intake-adapter.js'),
-  ]);
+  const [{ evaluateAuthority }, portsModule, authorityModule, projectionModule] = await Promise.all(
+    [
+      import('@aurora/policy-core/authority'),
+      import('../../services/executors/dist/voice-intake/physical-host-ports.js'),
+      import('../../services/executors/dist/voice-intake/preissued-authority-source.js'),
+      import('../../services/mobile-gateway/dist/physical-host/voice-projection-intake-adapter.js'),
+    ],
+  );
 
   if (
     typeof evaluateAuthority !== 'function' ||
@@ -509,7 +511,10 @@ export async function createW15JLocalDp5OperatorInput({ databaseUrl, materialPat
   const dependencies = Object.freeze({
     receiptEvidenceIngress: w07.receiptEvidenceIngress,
     createVoiceIntake: (...ports) =>
-      projectionModule.withCurrentVoiceProjection(w07.createVoiceIntake(...ports), projectionSource),
+      projectionModule.withCurrentVoiceProjection(
+        w07.createVoiceIntake(...ports),
+        projectionSource,
+      ),
     createContainmentLifecycle: w07.createContainmentLifecycle,
     createAttemptLifecycle: w07.createAttemptLifecycle,
   });
