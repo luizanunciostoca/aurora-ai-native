@@ -19,11 +19,11 @@ data class InstalledGatewayVoiceProjection(
  * authority object is accepted by this adapter.
  */
 fun installableGatewayVoiceProjection(
-    context: Context,
+    context: Context?,
     projection: GatewayGovernedVoiceProjection,
     expectedTenantId: String,
     nowMs: () -> Long = { System.currentTimeMillis() },
-    runtimeProbe: NativeRuntimeProbe = AndroidRuntimeCapabilityProbe(context, clockMs = nowMs),
+    runtimeProbe: NativeRuntimeProbe? = null,
 ): InstalledGatewayVoiceProjection {
     require(projection.activeTenantId == expectedTenantId) { "voice projection tenant mismatch" }
     val currentMs = nowMs()
@@ -35,10 +35,16 @@ fun installableGatewayVoiceProjection(
             currentMs < projection.vocabularyExpiresAtMs,
     ) { "voice vocabulary projection is not current" }
 
+    val effectiveProbe =
+        runtimeProbe
+            ?: AndroidRuntimeCapabilityProbe(
+                context = requireNotNull(context) { "Android context required for production probe" },
+                clockMs = nowMs,
+            )
     val capabilityBridge =
         NativeCapabilityBridge(
             bindings = projection.nativeBindings,
-            runtimeProbe = runtimeProbe,
+            runtimeProbe = effectiveProbe,
             nowMs = nowMs,
         )
     val nativeObservations = capabilityBridge.discoverAll()
