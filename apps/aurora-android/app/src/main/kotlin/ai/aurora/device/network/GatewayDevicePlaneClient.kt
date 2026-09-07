@@ -1,5 +1,6 @@
 package ai.aurora.device.network
 
+import ai.aurora.device.capability.NativeCapabilityBinding
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.config.RuntimeEnvironmentConfig
 import ai.aurora.device.security.AndroidKeystoreSigningKeyStore
@@ -112,11 +113,14 @@ data class GatewayCommandDeliveryView(
     val state: String,
     val envelopePresent: Boolean,
     val deadlineMs: Long?,
+    val envelope: GatewayCommandEnvelopeView? = null,
     val authorizesExecution: Boolean = false,
     val provesExecutionSuccess: Boolean = false,
     val retryAuthorized: Boolean = false,
 ) {
     init {
+        require(envelopePresent == (envelope != null))
+        require(deadlineMs == envelope?.deadlineMs)
         require(!authorizesExecution)
         require(!provesExecutionSuccess)
         require(!retryAuthorized)
@@ -197,10 +201,9 @@ internal class W15BDeviceSessionAcceptance(
  * truth, or retry eligibility. A lost response after a request write is surfaced as
  * [GatewayDevicePlaneClientError.TRANSPORT_UNCERTAIN] and requires upstream reconciliation.
  *
- * The same already-authenticated channel also realizes [GovernedVoiceCandidateTransport]. Voice
- * candidates therefore inherit the current W14 socket/device-session binding instead of opening a
- * second voice-only network stack. A 202 reply is only an acknowledgement of receipt for W07
- * evaluation; it is never action authority, proof of execution, verified outcome or retry grant.
+ * The same already-authenticated channel also realizes [GovernedVoiceCandidateTransport]. Voice,
+ * governed projections, command delivery and receipt evidence therefore inherit the same current
+ * W14 socket/device-session binding instead of opening parallel network stacks.
  */
 class GatewayDevicePlaneClient internal constructor(
     private val channelFactory: GatewayHttpChannelFactory,
@@ -300,9 +303,6 @@ class GatewayDevicePlaneClient internal constructor(
         }
         gateway = nextGateway
 
-        // W14 device bindings are socket-local. Rebind the already-accepted canonical DeviceRef
-        // on the fresh authenticated socket before asking W14-E to resume trust. This call cannot
-        // create a new local identity: any state/version drift fails closed.
         val rebindProof = proofFactory.sign(registrationMessage(nextGateway, currentContext.deviceId))
         val rebindResponse = post(
             "/v1/device/registrations/register",
@@ -360,6 +360,19 @@ class GatewayDevicePlaneClient internal constructor(
         }
         deviceSession = nextSession
         return GatewayDevicePlaneResult.Success(snapshot())
+    }
+
+    @Synchronized
+    fun fetchVoiceProjection(): GatewayDevicePlaneResult<GatewayGovernedVoiceProjection> {
+        if (context == null || gateway == null || registration == null || deviceSession == null) {
+            return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        }
+        val response = post(
+            VOICE_PROJECTION_DEVICE_ROUTE,
+            StrictJson.encodeObject(emptyList()),
+        ) ?: return transportRejected()
+        if (response.statusCode != 200) return protocolRejected(response)
+        return parseObjectResult(response) { root -> parseVoiceProjection(root.jsonObject("value")) }
     }
 
     @Synchronized
@@ -448,11 +461,6 @@ class GatewayDevicePlaneClient internal constructor(
         return parseReceipt(response)
     }
 
-    /**
-     * Submits one non-authoritative voice candidate over the current authenticated W14 socket.
-     * The body deliberately contains no tenant/actor/device/session/policy/authority/outcome/retry
-     * fields; the server-side W14 route derives all trusted context from the live connection.
-     */
     @Synchronized
     override fun submit(
         candidate: GovernedVoiceCandidateSubmission,
@@ -655,21 +663,143 @@ class GatewayDevicePlaneClient internal constructor(
             requireNoAuthority(delivery)
             require(delivery.jsonBoolean("provesExecutionSuccess") == false)
             val envelopeValue = value.fields["envelope"]
-            val envelope = envelopeValue as? JsonValue.ObjectValue
-            if (envelope != null) {
-                requireNoAuthority(envelope)
-                require(envelope.jsonBoolean("provesExecutionSuccess") == false)
-            }
+            val envelopeObject = envelopeValue as? JsonValue.ObjectValue
+            val parsedEnvelope = envelopeObject?.let(::parseCommandEnvelope)
             GatewayCommandDeliveryView(
                 disposition = value.jsonString("disposition"),
                 deliveryReference = delivery.jsonString("deliveryReference"),
                 commandId = delivery.jsonString("commandId"),
                 executionId = delivery.jsonString("executionId"),
                 state = delivery.jsonString("state"),
-                envelopePresent = envelope != null,
-                deadlineMs = envelope?.jsonLong("deadlineMs"),
+                envelopePresent = parsedEnvelope != null,
+                deadlineMs = parsedEnvelope?.deadlineMs,
+                envelope = parsedEnvelope,
             )
         }
+    }
+
+    private fun parseCommandEnvelope(envelope: JsonValue.ObjectValue): GatewayCommandEnvelopeView {
+        requireNoAuthority(envelope)
+        require(envelope.jsonBoolean("provesExecutionSuccess") == false)
+        val target = envelope.jsonObject("executionTarget")
+        val authorization = parseExecutionAuthorization(envelope.jsonObject("executionAuthorization"))
+        return GatewayCommandEnvelopeView(
+            deliveryReference = envelope.jsonString("deliveryReference"),
+            commandId = envelope.jsonString("commandId"),
+            executionId = envelope.jsonString("executionId"),
+            correlationId = envelope.jsonString("correlationId"),
+            tenantId = envelope.jsonString("tenantId"),
+            deviceSessionId = envelope.jsonString("deviceSessionId"),
+            deviceId = envelope.jsonString("deviceId"),
+            executionTargetKind = target.jsonString("kind"),
+            executionTargetBindingReference = target.jsonString("bindingReference"),
+            deadlineMs = envelope.jsonLong("deadlineMs"),
+            deliveryAttempt = envelope.jsonInt("deliveryAttempt"),
+            replay = envelope.jsonBoolean("replay"),
+            executionAuthorization = authorization,
+            authorizesExecution = envelope.jsonBoolean("authorizesExecution"),
+            provesExecutionSuccess = envelope.jsonBoolean("provesExecutionSuccess"),
+        )
+    }
+
+    private fun parseExecutionAuthorization(
+        value: JsonValue.ObjectValue,
+    ): GatewayW07DeviceExecutionAuthorizationView {
+        require(value.jsonString("kind") == "W07_DEVICE_EXECUTION_AUTHORIZATION")
+        val argumentsObject = value.jsonObject("arguments")
+        require(argumentsObject.fields.size <= 16)
+        val arguments = argumentsObject.fields.mapValues { (_, item) ->
+            (item as? JsonValue.StringValue)?.value ?: error("execution argument must be a string")
+        }
+        return GatewayW07DeviceExecutionAuthorizationView(
+            executionId = value.jsonString("executionId"),
+            tenantId = value.jsonString("tenantId"),
+            deviceId = value.jsonString("deviceId"),
+            capabilityId = value.jsonString("capabilityId"),
+            actionId = value.jsonString("actionId"),
+            arguments = arguments,
+            authorizedAtMs = value.jsonLong("authorizedAtMs"),
+            expiresAtMs = value.jsonLong("expiresAtMs"),
+            authorizesExecution = value.jsonBoolean("authorizesExecution"),
+            cancelled = value.jsonBoolean("cancelled"),
+            targetKind = value.jsonString("targetKind"),
+            authoritySource = value.jsonString("authoritySource"),
+        )
+    }
+
+    private fun parseVoiceProjection(value: JsonValue.ObjectValue): GatewayGovernedVoiceProjection {
+        require(value.jsonString("kind") == "GOVERNED_VOICE_PROJECTION")
+        requireNoAuthority(value)
+        require(value.jsonBoolean("provesExecutionSuccess") == false)
+        require(value.jsonBoolean("retryAuthorized") == false)
+        val registry = value.jsonObject("registry")
+        val vocabulary = value.jsonObject("vocabulary")
+        val registryProvenance = registry.jsonObject("provenance")
+        val vocabularyProvenance = vocabulary.jsonObject("provenance")
+        val entries = registry.jsonArray("entries").map { item ->
+            val entry = item as? JsonValue.ObjectValue ?: error("projection entry must be an object")
+            val targets = entry.jsonArray("supportedTargetKinds").map(::jsonStringValue)
+            require(targets.toSet().size == targets.size)
+            GatewayVoiceCapabilityEntry(
+                capabilityId = entry.jsonString("capabilityId"),
+                tenantId = entry.jsonOptionalString("tenantId"),
+                supportedTargetKinds = targets.toSet(),
+                currentAvailability = entry.jsonString("currentAvailability"),
+                riskClass = entry.jsonString("riskClass"),
+                observedAtMs = entry.jsonLong("observedAtMs"),
+                expiresAtMs = entry.jsonLong("expiresAtMs"),
+            )
+        }
+        val bindings = vocabulary.jsonArray("bindings").map { item ->
+            val binding = item as? JsonValue.ObjectValue ?: error("voice binding must be an object")
+            val phrases = binding.jsonArray("phrases").map(::jsonStringValue)
+            require(phrases.toSet().size == phrases.size)
+            GatewayVoiceCommandBinding(
+                commandId = binding.jsonString("commandId"),
+                phrases = phrases.toSet(),
+                capabilityId = binding.jsonString("capabilityId"),
+            )
+        }
+        val nativeBindings = value.jsonArray("nativeBindings").map { item ->
+            val binding = item as? JsonValue.ObjectValue ?: error("native binding must be an object")
+            val features = binding.jsonArray("requiredFeatures").map(::jsonStringValue)
+            val permissions = binding.jsonArray("requiredPermissions").map(::jsonStringValue)
+            require(features.toSet().size == features.size)
+            require(permissions.toSet().size == permissions.size)
+            NativeCapabilityBinding(
+                capabilityId = binding.jsonString("capabilityId"),
+                minApiLevel = binding.jsonInt("minApiLevel"),
+                requiredFeatures = features.toSet(),
+                requiredPermissions = permissions.toSet(),
+                maxSnapshotAgeMs = binding.jsonLong("maxSnapshotAgeMs"),
+            )
+        }
+        return GatewayGovernedVoiceProjection(
+            activeTenantId = value.jsonString("activeTenantId"),
+            registryKind = registry.jsonString("registryKind"),
+            registryVersion = registry.jsonString("registryVersion"),
+            registryObservedAtMs = registry.jsonLong("observedAtMs"),
+            registryExpiresAtMs = registry.jsonLong("expiresAtMs"),
+            registryProvenance =
+                GatewayProjectionProvenance(
+                    sourceRef = registryProvenance.jsonString("sourceRef"),
+                    contentSha256 = registryProvenance.jsonString("contentSha256"),
+                ),
+            entries = entries,
+            vocabularyVersion = vocabulary.jsonString("vocabularyVersion"),
+            vocabularyObservedAtMs = vocabulary.jsonLong("observedAtMs"),
+            vocabularyExpiresAtMs = vocabulary.jsonLong("expiresAtMs"),
+            vocabularyProvenance =
+                GatewayProjectionProvenance(
+                    sourceRef = vocabularyProvenance.jsonString("sourceRef"),
+                    contentSha256 = vocabularyProvenance.jsonString("contentSha256"),
+                ),
+            bindings = bindings,
+            nativeBindings = nativeBindings,
+            authorizesExecution = value.jsonBoolean("authorizesExecution"),
+            provesExecutionSuccess = value.jsonBoolean("provesExecutionSuccess"),
+            retryAuthorized = value.jsonBoolean("retryAuthorized"),
+        )
     }
 
     private fun parseReceipt(
@@ -782,6 +912,9 @@ class GatewayDevicePlaneClient internal constructor(
         val devicePlane = root.fields["devicePlaneError"] as? JsonValue.ObjectValue
         val devicePlaneCode = devicePlane?.jsonOptionalString("code")?.takeIf(::isSafeUpstreamCode)
         if (devicePlaneCode != null) return devicePlaneCode
+        val projection = root.fields["voiceProjectionError"] as? JsonValue.ObjectValue
+        val projectionCode = projection?.jsonOptionalString("code")?.takeIf(::isSafeUpstreamCode)
+        if (projectionCode != null) return projectionCode
         val transport = root.fields["transportError"] as? JsonValue.ObjectValue
         return transport?.jsonOptionalString("code")?.takeIf(::isSafeUpstreamCode)
     }
@@ -959,7 +1092,7 @@ class GatewayDevicePlaneClient internal constructor(
             )
         }
 
-        /** Physical DP5 path through `adb reverse tcp:<port> tcp:<port>`. */
+        /** Physical DP5 path through an accepted bounded LOCAL transport. */
         fun forPhysicalAdbReverse(
             config: RuntimeEnvironmentConfig,
             sessionClient: SecureDeviceSessionClient,
@@ -967,7 +1100,7 @@ class GatewayDevicePlaneClient internal constructor(
             nowMs: () -> Long = { System.currentTimeMillis() },
         ): GatewayDevicePlaneClient {
             require(config.environment == AuroraEnvironment.LOCAL && config.allowCleartextTraffic) {
-                "physical adb-reverse transport is restricted to explicit LOCAL cleartext acceptance"
+                "physical local transport is restricted to explicit LOCAL cleartext acceptance"
             }
             val keyStore = AndroidKeystoreSigningKeyStore()
             return GatewayDevicePlaneClient(
@@ -981,6 +1114,9 @@ class GatewayDevicePlaneClient internal constructor(
         }
     }
 }
+
+private fun jsonStringValue(value: JsonValue): String =
+    (value as? JsonValue.StringValue)?.value ?: error("array item must be a string")
 
 private fun rejected(
     error: GatewayDevicePlaneClientError,
@@ -1005,6 +1141,7 @@ private fun ByteArray.toHex(): String = joinToString(separator = "") { byte -> "
 private const val GATEWAY_PROTOCOL_VERSION = "1.0"
 private const val MAX_CREDENTIAL_LENGTH = 16 * 1024
 private const val VOICE_CANDIDATE_DEVICE_ROUTE = "/v1/device/voice/candidates/evaluate"
+private const val VOICE_PROJECTION_DEVICE_ROUTE = "/v1/device/voice/projection"
 private val VOICE_CANDIDATE_SUCCESS_RESPONSE_KEYS =
     setOf(
         "ok",
