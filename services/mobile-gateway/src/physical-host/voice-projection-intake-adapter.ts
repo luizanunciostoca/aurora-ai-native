@@ -7,6 +7,9 @@ import type {
   GovernedVoiceProjectionSource,
 } from '../gateway-auth/voice-projection-network.js';
 
+type VoiceEvaluationInput = Parameters<VoiceCandidateIntakePort['evaluate']>[0];
+type VoiceProjectionInput = Parameters<NonNullable<VoiceCandidateIntakePort['currentProjection']>>[0];
+
 /**
  * Adds a trusted provider-owned current voice projection to the already-composed W07 intake.
  *
@@ -31,8 +34,9 @@ export function withCurrentVoiceProjection(
 
   const currentExecutionAuthorization = intake.currentExecutionAuthorization;
   return Object.freeze({
-    evaluate: (input) => intake.evaluate(input),
-    currentProjection: (input): GovernedVoiceProjection | null => projectionSource.current(input),
+    evaluate: (input: VoiceEvaluationInput) => intake.evaluate(input),
+    currentProjection: (input: VoiceProjectionInput): GovernedVoiceProjection | null =>
+      projectionSource.current(input),
     ...(typeof currentExecutionAuthorization !== 'function'
       ? {}
       : {
