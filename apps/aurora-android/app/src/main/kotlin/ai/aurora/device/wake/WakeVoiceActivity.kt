@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.TextView
+import ai.aurora.device.ui.AuroraActivityUi
 import ai.aurora.device.voice.BoundedSpeechRecognitionFailure
 import ai.aurora.device.voice.BoundedSpeechRecognizer
 import ai.aurora.device.voice.WakeVoiceRoute
@@ -21,24 +22,37 @@ class WakeVoiceActivity : Activity() {
     private lateinit var preferences: WakeRuntimePreferences
     private var recognizer: BoundedSpeechRecognizer? = null
     private var started = false
+    private var completionRunnable: Runnable? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         statusStore = WakeRuntimeStatusStore(this)
         preferences = WakeRuntimePreferences(this)
-        statusView =
-            TextView(this).apply {
-                textSize = 22f
-                setPadding(48, 72, 48, 48)
-                text = "Aurora ativa — fale agora"
-            }
-        setContentView(statusView)
+
+        val screen = AuroraActivityUi.createScrollableScreen(this, maxContentWidthDp = 640)
+        screen.content.addView(AuroraActivityUi.heading(this, "Aurora ativa"))
+        statusView = AuroraActivityUi.body(this, "Fale agora", centered = true).apply { textSize = 22f }
+        screen.content.addView(statusView)
+        screen.content.addView(
+            AuroraActivityUi.body(
+                this,
+                "A fala será enviada somente ao fluxo governado de interpretação/autoridade. Esta tela não executa ações diretamente.",
+                centered = true,
+            ),
+        )
+        setContentView(screen.root)
     }
 
     override fun onResume() {
         super.onResume()
-        if (started) return
+        if (started) {
+            if (recognizer == null && statusStore.snapshot().state == "STT_LIFECYCLE_BLOCKED") {
+                statusView.text = "Interação encerrada ao sair do primeiro plano"
+                scheduleVisibleFinishAndRearm(LIFECYCLE_BLOCK_DISPLAY_MS)
+            }
+            return
+        }
         started = true
         if (preferences.privacyModeEnabled()) {
             complete("VOICE_PRIVACY_BLOCKED", "Privacidade ativa")
@@ -81,24 +95,50 @@ class WakeVoiceActivity : Activity() {
             }
     }
 
+    override fun onStop() {
+        // The wake-to-STT fast path is explicitly foreground-bound. If the Activity loses the
+        // foreground before a bounded result exists, abandon that interaction instead of allowing
+        // microphone capture to continue invisibly or replaying a stale wake on resume.
+        if (!isFinishing && completionRunnable == null && recognizer != null) {
+            recognizer?.close()
+            recognizer = null
+            statusStore.update(
+                "STT_LIFECYCLE_BLOCKED",
+                lastError = "voice interaction left foreground before completion",
+            )
+        }
+        super.onStop()
+    }
+
     override fun onDestroy() {
         recognizer?.close()
         recognizer = null
+        completionRunnable?.let(mainHandler::removeCallbacks)
+        completionRunnable = null
         super.onDestroy()
     }
 
     private fun complete(state: String, display: String) {
+        recognizer?.close()
+        recognizer = null
         statusStore.update(state)
         statusView.text = display
-        mainHandler.postDelayed(
-            {
-                // Start the microphone FGS while this Activity is still visibly foreground. Modern
-                // Android may reject microphone-FGS starts after finish() moves us to background.
+        scheduleVisibleFinishAndRearm(COMPLETION_DISPLAY_MS)
+    }
+
+    private fun scheduleVisibleFinishAndRearm(delayMs: Long) {
+        completionRunnable?.let(mainHandler::removeCallbacks)
+        val task =
+            Runnable {
+                completionRunnable = null
+                if (isFinishing || isDestroyed) return@Runnable
+                // Start the microphone FGS while this Activity is visibly foreground. Modern Android
+                // may reject microphone-FGS starts after finish() moves us to background.
                 rearmFromVisibleContext()
-                if (!isFinishing) finish()
-            },
-            COMPLETION_DISPLAY_MS,
-        )
+                finish()
+            }
+        completionRunnable = task
+        mainHandler.postDelayed(task, delayMs)
     }
 
     private fun rearmFromVisibleContext() {
@@ -137,5 +177,6 @@ class WakeVoiceActivity : Activity() {
         const val EXTRA_WAKE_ID = "ai.aurora.extra.WAKE_ID"
         const val EXTRA_WAKE_CONFIDENCE = "ai.aurora.extra.WAKE_CONFIDENCE"
         private const val COMPLETION_DISPLAY_MS = 900L
+        private const val LIFECYCLE_BLOCK_DISPLAY_MS = 450L
     }
 }
