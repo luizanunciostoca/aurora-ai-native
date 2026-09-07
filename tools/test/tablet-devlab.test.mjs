@@ -133,16 +133,32 @@ test('PostgreSQL setup is W03-owned, migration-complete and non-authoritative', 
   assert.match(source, /physical_acceptance=false/);
 });
 
-test('DP5 provider material requires explicit operator effect consent and cannot mint authority', () => {
+test('physical effect consent requires an interactive exact-tuple operator challenge', () => {
+  const source = read('authorize-dp5-effect.sh');
+  assert.match(source, /\[\[ -t 0 && -t 1 \]\]/);
+  assert.match(source, /APPROVE W15J DP5 \$CHALLENGE/);
+  assert.match(source, /ONE_BOUNDED_MEDIA_VOLUME_STEP_UP/);
+  assert.match(source, /timedelta\(minutes=10\)/);
+  assert.match(source, /'authorizesExecution': False/);
+  assert.match(source, /'retryAuthorized': False/);
+  assert.match(source, /'physicalAcceptance': False/);
+  assert.match(source, /os\.open\(temporary, os\.O_WRONLY \| os\.O_CREAT \| os\.O_EXCL, 0o600\)/);
+  assert.match(source, /unconsumed DP5 effect consent already exists/);
+});
+
+test('DP5 provider material requires both explicit opt-in and fresh interactive consent', () => {
   const source = read('prepare-dp5-provider.sh');
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED:-/);
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED=YES/);
-  assert.match(source, /timedelta\(minutes=90\)/);
+  assert.match(source, /dp5-effect-consent\.json/);
+  assert.match(source, /W15J_DP5_PHYSICAL_EFFECT_CONSENT/);
+  assert.match(source, /ONE_BOUNDED_MEDIA_VOLUME_STEP_UP/);
+  assert.match(source, /timedelta\(minutes=10\)/);
+  assert.match(source, /consent\['approvalReference'\]/);
   assert.match(source, /'authorizesExecution': False/);
   assert.match(source, /'canGrantPermission': False/);
-  assert.match(source, /operatorApprovalReference/);
-  assert.match(source, /os\.open\(temporary, os\.O_WRONLY \| os\.O_CREAT \| os\.O_EXCL, 0o600\)/);
-  assert.match(source, /effect_approval=EXPLICIT_OPERATOR_WINDOW/);
+  assert.match(source, /effect_approval=INTERACTIVE_EXACT_TUPLE_OPERATOR_WINDOW/);
+  assert.match(source, /dp5-effect-consent\.consumed-/);
   assert.match(source, /authorizes_execution=false/);
   assert.match(source, /physical_acceptance=false/);
 });
@@ -176,6 +192,7 @@ test('tablet devlab documentation keeps independent reviewer and exact tuple req
   assert.match(source, new RegExp(escaped(PACKAGING_SHA)));
   assert.match(source, new RegExp(escaped(APK_SHA)));
   assert.match(source, /setup-postgres\.sh/);
+  assert.match(source, /authorize-dp5-effect\.sh/);
   assert.match(source, /prepare-dp5-provider\.sh/);
   assert.match(source, /provider-doctor\.sh/);
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED=YES/);
