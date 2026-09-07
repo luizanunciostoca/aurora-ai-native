@@ -5,8 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const read = (name) =>
-  readFileSync(resolve(repoRoot, 'tools/tablet-devlab', name), 'utf8');
+const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', name), 'utf8');
 
 test('tablet devlab bootstrap installs external control plane prerequisites', () => {
   const source = read('bootstrap-termux.sh');
