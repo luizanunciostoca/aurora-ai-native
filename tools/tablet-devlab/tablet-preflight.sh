@@ -17,12 +17,19 @@ BUILD_IDENTITY="$ARTIFACT_DIR/BUILD_IDENTITY.txt"
 STATE_DIR="$DEVLAB_ROOT/state"
 EVIDENCE_ROOT="$DEVLAB_ROOT/evidence"
 READINESS_FILE="$STATE_DIR/last-readiness-termux.txt"
-EXPECTED_APK_SHA="${AURORA_APK_SHA256:-371d23846475765d04b87d9ba6e923e8d34e24edb440fde3813237c36842cd14}"
-EXPECTED_ANDROID_SHA="${AURORA_ANDROID_SHA:-e9bd9f0b7ac51844edc52214135992c305aa479e}"
+EXPECTED_APK_SHA="${AURORA_APK_SHA256:-da605b277fb4c7f9a3820c417fe126a5b617b7c34d9e7f2b48f67da40114cb9a}"
+EXPECTED_ANDROID_SHA="${AURORA_ANDROID_SHA:-5c955eac4cdcd92bc2e0604d50f9feb339095d6a}"
 EXPECTED_HOST_SHA="${AURORA_HOST_SHA:-3c7c3aa917c00d91d738121dee5fd32ed07b5444}"
+EXPECTED_MAIN_SHA="${AURORA_MAIN_SHA:-d2089407e88480686b879928cf2863c0dc81718e}"
+EXPECTED_TRANSPORT_SCOPE="LOCAL_TABLET_LOOPBACK"
 
 [[ -f "$APK" && -f "$BUILD_IDENTITY" ]] || fail "artifact is missing; run fetch-current-artifact.sh"
 [[ "$(sha256sum "$APK" | awk '{print $1}')" == "$EXPECTED_APK_SHA" ]] || fail "artifact APK hash drift"
+[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "19" ]] || fail "BUILD_IDENTITY must contain exactly 19 lines"
+
+grep -Fxq 'canonical_acceptance=false' "$BUILD_IDENTITY" || fail "artifact cannot self-declare acceptance"
+grep -Fxq 'physical_evidence_required=true' "$BUILD_IDENTITY" || fail "physical evidence requirement missing"
+grep -Fxq 'dp5_status=INCOMPLETE' "$BUILD_IDENTITY" || fail "artifact must remain DP5 incomplete before physical evidence"
 
 mapfile -t DEVICES < <(adb devices | awk 'NR > 1 && $2 == "device" {print $1}')
 [[ "${#DEVICES[@]}" -eq 1 ]] || fail "exactly one self-ADB device required; found ${#DEVICES[@]}"
@@ -80,8 +87,11 @@ FINGERPRINT="$("${ADB[@]}" shell getprop ro.build.fingerprint | tr -d '\r\n')"
 ARTIFACT_SCOPE="$(sed -n 's/^gateway_transport_scope=//p' "$BUILD_IDENTITY")"
 SOURCE_SHA="$(sed -n 's/^source_candidate_sha=//p' "$BUILD_IDENTITY")"
 HOST_SHA="$(sed -n 's/^paired_local_host_candidate_sha=//p' "$BUILD_IDENTITY")"
+MAIN_SHA="$(sed -n 's/^reconciled_main_parent_sha=//p' "$BUILD_IDENTITY")"
 [[ "$SOURCE_SHA" == "$EXPECTED_ANDROID_SHA" ]] || fail "embedded Android SHA drift"
 [[ "$HOST_SHA" == "$EXPECTED_HOST_SHA" ]] || fail "embedded host SHA drift"
+[[ "$MAIN_SHA" == "$EXPECTED_MAIN_SHA" ]] || fail "embedded main SHA drift"
+[[ "$ARTIFACT_SCOPE" == "$EXPECTED_TRANSPORT_SCOPE" ]] || fail "embedded transport scope must be LOCAL_TABLET_LOOPBACK"
 
 "${ADB[@]}" shell dumpsys meminfo "$PACKAGE_ID" >"$EVIDENCE_DIR/meminfo.txt"
 "${ADB[@]}" shell dumpsys cpuinfo >"$EVIDENCE_DIR/cpuinfo.txt"
@@ -91,11 +101,7 @@ printf '%s\n' "$REVERSE_LIST" >"$EVIDENCE_DIR/adb-reverse-list.txt"
 printf '%s\n' "$HOST_8080" >"$EVIDENCE_DIR/host-instance-8080.json"
 printf '%s\n' "$HOST_8081" >"$EVIDENCE_DIR/host-instance-8081.json"
 
-DISPOSITION="TABLET_LOOPBACK_TRANSPORT_CONTRACT_READY"
-if [[ "$ARTIFACT_SCOPE" != "LOCAL_TABLET_LOOPBACK" ]]; then
-  DISPOSITION="PRE_ACCEPTANCE_ONLY_TRANSPORT_CONTRACT_RECONCILIATION_REQUIRED"
-fi
-
+DISPOSITION="TABLET_LOOPBACK_PREFLIGHT_READY_NOT_ACCEPTED"
 cat >"$EVIDENCE_DIR/tablet-loopback-preflight.json" <<EOF
 {
   "kind": "AURORA_TABLET_ONLY_DEVLAB_PREFLIGHT",
@@ -104,6 +110,7 @@ cat >"$EVIDENCE_DIR/tablet-loopback-preflight.json" <<EOF
   "authorityInvariant": "INTELLIGENCE != AUTHORITY != EXECUTION",
   "androidCandidateSha": "$SOURCE_SHA",
   "hostCandidateSha": "$HOST_SHA",
+  "reconciledMainSha": "$MAIN_SHA",
   "apkSha256": "$INSTALLED_SHA",
   "artifactTransportScope": "$ARTIFACT_SCOPE",
   "actualTransportScope": "LOCAL_TABLET_LOOPBACK",
@@ -143,5 +150,5 @@ host_instance_id=$ID_8080
 artifact_transport_scope=$ARTIFACT_SCOPE
 actual_transport_scope=LOCAL_TABLET_LOOPBACK
 
-If disposition says TRANSPORT_CONTRACT_RECONCILIATION_REQUIRED, this evidence is useful for DevLab validation but cannot close DP5 yet.
+This preflight proves exact tablet-loopback readiness only. It cannot close DP5 or grant execution authority.
 EOF
