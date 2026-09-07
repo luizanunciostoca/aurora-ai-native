@@ -66,6 +66,7 @@ const testFiles = [
   'tools/test/tablet-devlab.test.mjs',
   'tools/test/tablet-devlab-jq-boolean.test.mjs',
   'tools/test/tablet-devlab-self-binding.test.mjs',
+  'tools/test/tablet-devlab-dossier-lifecycle.test.mjs',
   ...controlTests,
 ];
 let status = run(process.execPath, ['--experimental-strip-types', '--test', ...testFiles]);
