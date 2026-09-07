@@ -177,10 +177,7 @@ test('tablet-loopback dossier rejects missing self-ADB control-plane proof', () 
 test('tablet-loopback dossier rejects incomplete scenario matrix', () => {
   const { dossier, trusted } = trustedTabletPreflight();
   dossier.scenarios.voiceAndPresence.validDeterministicCommonCommand.status = 'NOT_RUN';
-  assert.throws(
-    () => validateW15JTabletLoopbackPreflight(dossier, trusted),
-    /must not be NOT_RUN/,
-  );
+  assert.throws(() => validateW15JTabletLoopbackPreflight(dossier, trusted), /must not be NOT_RUN/);
 });
 
 test('tablet-loopback dossier rejects wake evidence below 100 deliberate attempts', () => {
