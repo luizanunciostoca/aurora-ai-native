@@ -54,6 +54,10 @@ object WakeSetupUiPolicy {
                     "Treinamento em andamento. Mantenha esta tela visível e use o modo de privacidade para interromper com segurança."
                 input.enrollmentRetryPending ->
                     "A amostra atual não foi aceita. O modelo anterior, se existir, foi preservado. Repita somente esta amostra em ambiente mais silencioso."
+                input.runtimeState == "ENROLLMENT_INTERRUPTED" && input.modelReady ->
+                    "O treinamento foi interrompido ao sair da tela. O modelo anterior foi preservado; inicie um novo treinamento quando estiver pronto."
+                input.runtimeState == "ENROLLMENT_INTERRUPTED" ->
+                    "O treinamento foi interrompido ao sair da tela. Inicie novamente e mantenha esta tela visível durante as três amostras."
                 !input.modelReady ->
                     "Treine três amostras de Aurora antes de ativar a escuta local."
                 input.wakeEnabled && input.assistantRoleAvailable && !input.assistantSelected ->
@@ -115,6 +119,9 @@ object WakeSetupUiPolicy {
                 "Novo treinamento incompleto; modelo anterior preservado"
             state == "ENROLLMENT_STARTING" -> "Preparando treinamento local"
             state == "ENROLLMENT_CAPTURING" -> "Treinamento local em andamento"
+            state == "ENROLLMENT_INTERRUPTED" && modelReady ->
+                "Treinamento interrompido; modelo anterior preservado"
+            state == "ENROLLMENT_INTERRUPTED" -> "Treinamento interrompido"
             state == "DISABLED" -> "Desativado"
             state == "INITIALIZING" -> "Inicializando detector local"
             state == "ARMED" || state == "HOTWORD_LISTENING" -> "Escutando por “Aurora”"
