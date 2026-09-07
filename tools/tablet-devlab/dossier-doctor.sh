@@ -7,7 +7,7 @@ fail() {
 }
 
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
-for cmd in git node jq mktemp sha256sum gh; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
+for cmd in git node jq mktemp sha256sum gh unzip; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
 gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated; run: gh auth login"
 
 REPO="${AURORA_REPOSITORY:-luizanunciostoca/aurora-ai-native}"
@@ -17,6 +17,7 @@ DEVLAB_WORKTREE="$DEVLAB_ROOT/worktrees/devlab"
 ANDROID_WORKTREE="$DEVLAB_ROOT/worktrees/android"
 HOST_WORKTREE="$DEVLAB_ROOT/worktrees/host"
 EVIDENCE_DIR="${AURORA_EVIDENCE_DIR:-$DEVLAB_ROOT/evidence/w15j-dp5}"
+DOSSIER="${AURORA_W15J_DOSSIER:-$EVIDENCE_DIR/w15j-evidence.json}"
 RESULT_DIR="${AURORA_DOSSIER_DOCTOR_DIR:-$DEVLAB_ROOT/evidence/doctor}"
 
 [[ -d "$DEVLAB_WORKTREE" ]] || fail "DevLab worktree missing; run worktrees.sh"
@@ -30,6 +31,7 @@ RESULT_DIR="${AURORA_DOSSIER_DOCTOR_DIR:-$DEVLAB_ROOT/evidence/doctor}"
 [[ -f "$EVIDENCE_DIR/reviewer-attestation.json" ]] || fail "independent reviewer-attestation.json is required"
 [[ -f "$EVIDENCE_DIR/operator-attestation.json" ]] || fail "operator-attestation.json is required"
 [[ -f "$EVIDENCE_DIR/wake-evidence.json" ]] || fail "wake-evidence.json is required"
+[[ -f "$DOSSIER" && ! -L "$DOSSIER" ]] || fail "finalized w15j-evidence.json operator dossier is required"
 
 devlab_head="$(git -C "$DEVLAB_WORKTREE" rev-parse HEAD)"
 [[ "$devlab_head" =~ ^[0-9a-f]{40}$ ]] || fail "DevLab worktree HEAD is malformed"
@@ -39,8 +41,10 @@ mkdir -p "$RESULT_DIR"
 chmod 700 "$RESULT_DIR"
 TUPLE="$RESULT_DIR/control-tower-tuple.json"
 RESULT="$RESULT_DIR/trusted-preflight.json"
+DOSSIER_LINT="$RESULT_DIR/tablet-loopback-dossier-lint.txt"
 [[ ! -e "$TUPLE" ]] || fail "refusing to overwrite existing live control-tower tuple: $TUPLE"
 [[ ! -e "$RESULT" ]] || fail "refusing to overwrite existing trusted-preflight result: $RESULT"
+[[ ! -e "$DOSSIER_LINT" ]] || fail "refusing to overwrite existing dossier lint: $DOSSIER_LINT"
 
 AURORA_CONTROL_TOWER_TUPLE="$TUPLE" bash "$DEVLAB_WORKTREE/tools/tablet-devlab/capture-control-tower-tuple.sh"
 
@@ -56,8 +60,10 @@ done
 [[ "$(git -C "$HOST_WORKTREE" rev-parse HEAD)" == "$host_sha" ]] || fail "host worktree drift from captured live tuple"
 [[ -z "$(git -C "$HOST_WORKTREE" status --porcelain)" ]] || fail "host worktree must remain clean"
 
-VALIDATOR="$ANDROID_WORKTREE/tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs"
-[[ -f "$VALIDATOR" ]] || fail "tablet-loopback trusted preflight validator missing"
+TRUSTED_VALIDATOR="$ANDROID_WORKTREE/tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs"
+DOSSIER_VALIDATOR="$ANDROID_WORKTREE/tools/acceptance/w15j-tablet-loopback-preflight.mjs"
+[[ -f "$TRUSTED_VALIDATOR" ]] || fail "tablet-loopback trusted preflight validator missing"
+[[ -f "$DOSSIER_VALIDATOR" ]] || fail "tablet-loopback complete dossier validator missing"
 
 pr_payload="$(gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "/repos/$REPO/pulls/$DEVLAB_PR")"
 pr_head="$(jq -er '.head.sha' <<<"$pr_payload")"
@@ -77,7 +83,7 @@ behind="$(jq -er '.behind_by' <<<"$compare")"
   fail "DevLab worktree no longer reconciles exactly to the captured canonical main"
 
 set +e
-node "$VALIDATOR" "$EVIDENCE_DIR" "$TUPLE" "$RESULT"
+node "$TRUSTED_VALIDATOR" "$EVIDENCE_DIR" "$TUPLE" "$RESULT"
 validator_status=$?
 set -e
 (( validator_status == 0 )) || fail "tablet-loopback trusted preflight blocked; preserve dossier and inspect validator output"
@@ -96,9 +102,22 @@ live_requirement="$(jq -er '.trustRoot.liveGitHubRevalidation' "$RESULT")"
 [[ "$control_plane" == "SELF_ADB_WIRELESS_DEBUGGING" ]] || fail "trusted-preflight control-plane drift"
 [[ "$live_requirement" == "EXTERNAL_REQUIRED_IMMEDIATELY_BEFORE_ACCEPTANCE" ]] || fail "live GitHub acceptance revalidation requirement missing"
 
+set +e
+node "$DOSSIER_VALIDATOR" "$DOSSIER" "$EVIDENCE_DIR" "$TUPLE" >"$DOSSIER_LINT" 2>&1
+dossier_status=$?
+set -e
+chmod 600 "$DOSSIER_LINT"
+(( dossier_status == 0 )) || fail "complete tablet-loopback dossier lint blocked; inspect $DOSSIER_LINT"
+mapfile -t dossier_lines <"$DOSSIER_LINT"
+expected_dossier_line="W15J_TABLET_LOOPBACK_LINT_READY_NOT_ACCEPTED candidate=$android_sha scenarios=48"
+[[ "${#dossier_lines[@]}" -eq 1 && "${dossier_lines[0]}" == "$expected_dossier_line" ]] || \
+  fail "complete dossier validator did not emit the canonical 48-scenario NOT_ACCEPTED disposition"
+
 manifest_sha="$(sha256sum "$EVIDENCE_DIR/evidence-manifest.sha256" | awk '{print $1}')"
+dossier_sha="$(sha256sum "$DOSSIER" | awk '{print $1}')"
 tuple_sha="$(sha256sum "$TUPLE" | awk '{print $1}')"
 result_sha="$(sha256sum "$RESULT" | awk '{print $1}')"
+dossier_lint_sha="$(sha256sum "$DOSSIER_LINT" | awk '{print $1}')"
 cat >"$RESULT_DIR/DOCTOR_STATUS.txt" <<EOF
 status=LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED
 transport=LOCAL_TABLET_LOOPBACK
@@ -106,9 +125,13 @@ control_plane=SELF_ADB_WIRELESS_DEBUGGING
 devlab_candidate_sha=$devlab_head
 android_candidate_sha=$android_sha
 host_candidate_sha=$host_sha
+required_physical_scenarios=48
+complete_dossier_lint=PASS_NOT_ACCEPTED
 manifest_file_sha256=$manifest_sha
+operator_dossier_sha256=$dossier_sha
 control_tower_tuple_sha256=$tuple_sha
 trusted_preflight_sha256=$result_sha
+complete_dossier_lint_sha256=$dossier_lint_sha
 authorizes_execution=false
 proves_execution_success=false
 retry_authorized=false
@@ -122,4 +145,5 @@ printf 'DP5_DOSSIER_DOCTOR=LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_A
 printf 'result_dir=%s\n' "$RESULT_DIR"
 printf 'devlab_candidate_sha=%s\nandroid_candidate_sha=%s\nhost_candidate_sha=%s\n' \
   "$devlab_head" "$android_sha" "$host_sha"
+printf 'required_physical_scenarios=48\ncomplete_dossier_lint=PASS_NOT_ACCEPTED\n'
 printf 'authorizes_execution=false\nphysical_acceptance=false\nretry_authorized=false\nw16_build_unblocked=false\n'
