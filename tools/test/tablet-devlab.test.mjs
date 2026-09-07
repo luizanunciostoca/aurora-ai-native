@@ -64,7 +64,16 @@ test('artifact fetch emits five-key metadata and binds the exact tablet-loopback
   ]) {
     assert.match(source, new RegExp(`^${key}=`, 'm'));
   }
-  for (const value of [PACKAGING_SHA, ANDROID_SHA, HOST_SHA, MAIN_SHA, APK_SHA, ARTIFACT_ID, RUN_ID, ZIP_SHA]) {
+  for (const value of [
+    PACKAGING_SHA,
+    ANDROID_SHA,
+    HOST_SHA,
+    MAIN_SHA,
+    APK_SHA,
+    ARTIFACT_ID,
+    RUN_ID,
+    ZIP_SHA,
+  ]) {
     assert.match(source, new RegExp(escaped(value)));
   }
   assert.doesNotMatch(source, /^apk_sha256=.*>.*ARTIFACT_METADATA/m);
@@ -195,7 +204,16 @@ test('live control-tower tuple capture revalidates GitHub and cannot self-accept
   assert.match(source, /actions\/artifacts\/\$ARTIFACT_ID/);
   assert.match(source, /sha256:\$ZIP_SHA/);
   assert.match(source, /open\/draft\/unmerged/);
-  for (const value of [MAIN_SHA, ANDROID_SHA, HOST_SHA, PACKAGING_SHA, APK_SHA, ARTIFACT_ID, RUN_ID, ZIP_SHA]) {
+  for (const value of [
+    MAIN_SHA,
+    ANDROID_SHA,
+    HOST_SHA,
+    PACKAGING_SHA,
+    APK_SHA,
+    ARTIFACT_ID,
+    RUN_ID,
+    ZIP_SHA,
+  ]) {
     assert.match(source, new RegExp(escaped(value)));
   }
   assert.match(source, /CONTROL_TOWER_TUPLE_CAPTURED_READY_NOT_ACCEPTED/);
@@ -213,7 +231,8 @@ test('dossier doctor requires finalized reviewer-bound evidence and remains non-
   assert.match(source, /capture-control-tower-tuple\.sh/);
   assert.match(source, /w15j-tablet-loopback-trusted-preflight\.mjs/);
   assert.match(source, /w15j-governed-execution-binding\.mjs/);
-  assert.match(source, /semantic_binding=PASS_7_ROLES_NOT_ACCEPTED/);
+  assert.match(source, /required_semantic_evidence_roles=7/);
+  assert.match(source, /semantic_binding_lint=PASS_NOT_ACCEPTED/);
   assert.match(source, /physicallyAccepted/);
   assert.match(source, /EXTERNAL_REQUIRED_IMMEDIATELY_BEFORE_ACCEPTANCE/);
   assert.match(source, /LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED/);
