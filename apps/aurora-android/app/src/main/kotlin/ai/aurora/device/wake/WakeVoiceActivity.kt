@@ -91,7 +91,7 @@ class WakeVoiceActivity : Activity() {
     }
 
     override fun onPause() {
-        if (!isFinishing && !leavingAfterCompletion) {
+        if (!leavingAfterCompletion) {
             val pendingCompletion = completionRunnable != null
             completionRunnable?.let(mainHandler::removeCallbacks)
             completionRunnable = null
@@ -110,7 +110,7 @@ class WakeVoiceActivity : Activity() {
             // waiting until onStop/background can make modern Android reject the microphone FGS.
             rearmFromVisibleContext()
             leavingAfterCompletion = true
-            finish()
+            if (!isFinishing) finish()
         }
         super.onPause()
     }
