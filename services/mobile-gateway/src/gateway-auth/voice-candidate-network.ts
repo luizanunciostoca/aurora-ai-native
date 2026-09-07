@@ -14,6 +14,8 @@ const VOICE_CANDIDATE_KEYS = new Set([
 
 const MAX_IDENTIFIER_LENGTH = 256;
 const MAX_TRANSCRIPT_LENGTH = 512;
+const SAFE = /^[A-Za-z0-9._:/+-]+$/u;
+const EXECUTION_ID = /^exe_[0-9A-HJKMNP-TV-Z]{26}$/u;
 
 export interface VoiceCandidateSocketContext {
   readonly tenantId: string;
@@ -34,16 +36,39 @@ interface VoiceCandidateForEvaluation {
   readonly authorizesExecution: false;
 }
 
+export interface VoiceDeviceExecutionAuthorization {
+  readonly kind: 'W07_DEVICE_EXECUTION_AUTHORIZATION';
+  readonly executionId: string;
+  readonly tenantId: string;
+  readonly deviceId: string;
+  readonly capabilityId: string;
+  readonly targetKind: 'DEVICE';
+  readonly authoritySource: 'W07_CURRENT_EXECUTION_AUTHORITY';
+  readonly actionId: string;
+  readonly arguments: Readonly<Record<string, string>>;
+  readonly authorizedAtMs: number;
+  readonly expiresAtMs: number;
+  readonly authorizesExecution: true;
+  readonly cancelled: false;
+}
+
 export interface VoiceCandidateIntakePort {
   evaluate(input: {
     readonly candidate: VoiceCandidateForEvaluation;
     readonly context: VoiceCandidateSocketContext;
   }): unknown;
-  /** Optional composition leaf supplied by the trusted provider/W04 projection owner. */
+  /** Optional current W04 projection supplied by the trusted provider. */
   currentProjection?(input: {
     readonly context: VoiceCandidateSocketContext;
     readonly nowMs: number;
   }): GovernedVoiceProjection | null;
+  /** Optional W07-owned authorization issued only after the dispatch gates pass. */
+  currentExecutionAuthorization?(input: {
+    readonly commandId: string;
+    readonly executionId: string;
+    readonly context: VoiceCandidateSocketContext;
+    readonly nowMs: number;
+  }): VoiceDeviceExecutionAuthorization | null;
 }
 
 export interface VoiceCandidateNetworkResponse {
@@ -130,12 +155,42 @@ function parseCandidate(body: unknown): VoiceCandidateForEvaluation | null {
   };
 }
 
+function validExecutionAuthorization(
+  value: VoiceDeviceExecutionAuthorization,
+  input: {
+    readonly executionId: string;
+    readonly context: VoiceCandidateSocketContext;
+    readonly nowMs: number;
+  },
+): boolean {
+  return (
+    value.kind === 'W07_DEVICE_EXECUTION_AUTHORIZATION' &&
+    EXECUTION_ID.test(value.executionId) &&
+    value.executionId === input.executionId &&
+    value.tenantId === input.context.tenantId &&
+    value.deviceId === input.context.deviceId &&
+    boundedText(value.capabilityId) &&
+    value.targetKind === 'DEVICE' &&
+    value.authoritySource === 'W07_CURRENT_EXECUTION_AUTHORITY' &&
+    boundedText(value.actionId) &&
+    Object.entries(value.arguments).length <= 16 &&
+    Object.entries(value.arguments).every(
+      ([key, item]) => SAFE.test(key) && key.length <= 128 && SAFE.test(item) && item.length <= 256,
+    ) &&
+    Number.isSafeInteger(value.authorizedAtMs) &&
+    Number.isSafeInteger(value.expiresAtMs) &&
+    value.authorizedAtMs >= 0 &&
+    value.authorizedAtMs <= input.nowMs &&
+    input.nowMs < value.expiresAtMs &&
+    value.expiresAtMs - value.authorizedAtMs <= 30_000 &&
+    value.authorizesExecution === true &&
+    value.cancelled === false
+  );
+}
+
 /**
- * W14-owned transport composition leaf for W15-G -> W07 voice evaluation and current W04/W15-G
- * projection delivery.
- *
- * The caller supplies current context from the authenticated W14 socket/device session. Projection
- * delivery remains non-authoritative; W14 validates protocol/freshness but cannot grant authority.
+ * W14-owned transport composition leaf for W15-G -> W07 voice evaluation, current W04 projection,
+ * and transport of the short-lived W07 execution authorization after all W07 gates pass.
  */
 export class VoiceCandidateNetworkBoundary {
   readonly #intake: VoiceCandidateIntakePort;
@@ -224,5 +279,24 @@ export class VoiceCandidateNetworkBoundary {
         this.#intake.currentProjection?.({ context: requested, nowMs: requestedNow }) ?? null,
     });
     return boundary.current(context, nowMs);
+  }
+
+  currentExecutionAuthorization(input: {
+    readonly commandId: string;
+    readonly executionId: string;
+    readonly context: VoiceCandidateSocketContext;
+    readonly nowMs: number;
+  }): VoiceDeviceExecutionAuthorization | null {
+    if (!validContext(input.context) || !boundedText(input.commandId) || !EXECUTION_ID.test(input.executionId)) {
+      return null;
+    }
+    if (typeof this.#intake.currentExecutionAuthorization !== 'function') return null;
+    let value: VoiceDeviceExecutionAuthorization | null;
+    try {
+      value = this.#intake.currentExecutionAuthorization(input);
+    } catch {
+      return null;
+    }
+    return value !== null && validExecutionAuthorization(value, input) ? value : null;
   }
 }
