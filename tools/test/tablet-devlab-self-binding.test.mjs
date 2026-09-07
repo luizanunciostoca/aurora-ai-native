@@ -37,26 +37,25 @@ test('dossier doctor binds itself and local execution worktrees to the captured 
   assert.match(source, /w16_build_unblocked=false/);
 });
 
-test(
-  'dossier doctor requires and validates the complete tablet-loopback operator dossier',
-  () => {
-    assert.match(
-      source,
-      /AURORA_W15J_DOSSIER:-\$EVIDENCE_DIR\/w15j-evidence\.json/,
-    );
-    assert.match(source, /finalized w15j-evidence\.json operator dossier is required/);
-    assert.match(source, /w15j-tablet-loopback-trusted-preflight\.mjs/);
-    assert.match(source, /w15j-tablet-loopback-preflight\.mjs/);
-    assert.match(
-      source,
-      /node "\$DOSSIER_VALIDATOR" "\$DOSSIER" "\$EVIDENCE_DIR" "\$TUPLE"/,
-    );
-    assert.match(source, /W15J_TABLET_LOOPBACK_LINT_READY_NOT_ACCEPTED/);
-    assert.match(source, /scenarios=48/);
-    assert.match(source, /required_physical_scenarios=48/);
-    assert.match(source, /complete_dossier_lint=PASS_NOT_ACCEPTED/);
-    assert.match(source, /operator_dossier_sha256=\$dossier_sha/);
-    assert.match(source, /complete_dossier_lint_sha256=\$dossier_lint_sha/);
-    assert.doesNotMatch(source, /complete_dossier_lint=PASS_ACCEPTED/);
-  },
-);
+test('dossier doctor requires complete tablet-loopback dossier lint', () => {
+  const requiredPatterns = [
+    /AURORA_W15J_DOSSIER/,
+    /w15j-evidence\.json/,
+    /finalized w15j-evidence\.json operator dossier is required/,
+    /w15j-tablet-loopback-trusted-preflight\.mjs/,
+    /w15j-tablet-loopback-preflight\.mjs/,
+    /node "\$DOSSIER_VALIDATOR"/,
+    /"\$DOSSIER" "\$EVIDENCE_DIR" "\$TUPLE"/,
+    /W15J_TABLET_LOOPBACK_LINT_READY_NOT_ACCEPTED/,
+    /scenarios=48/,
+    /required_physical_scenarios=48/,
+    /complete_dossier_lint=PASS_NOT_ACCEPTED/,
+    /operator_dossier_sha256=\$dossier_sha/,
+    /complete_dossier_lint_sha256=\$dossier_lint_sha/,
+  ];
+
+  for (const pattern of requiredPatterns) {
+    assert.match(source, pattern);
+  }
+  assert.doesNotMatch(source, /complete_dossier_lint=PASS_ACCEPTED/);
+});
