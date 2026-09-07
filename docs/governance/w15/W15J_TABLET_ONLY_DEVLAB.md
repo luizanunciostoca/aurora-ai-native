@@ -1,12 +1,12 @@
 # W15-J Tablet-Only DevLab — governed physical development model
 
-Status: `TOOLING_PRE_ACCEPTANCE`
+Status: `TOOLING_READY / DP5_NOT_ACCEPTED`
 
 Issue: #498
 
 ## Objective
 
-Allow Aurora physical development, diagnosis and eventual DP5 execution to be operated from the representative Android tablet itself, without a PC, while retaining an external control plane and independent evidence review.
+Allow Aurora physical development, diagnosis and DP5 execution to be operated from the representative Android tablet itself, without a PC, while retaining an external control plane and independent evidence review.
 
 ## Separation model
 
@@ -28,13 +28,12 @@ The tablet hosts multiple security/ownership domains:
 | Representative Android tablet                             |
 |                                                           |
 |  Aurora APK                    Termux                      |
-|  127.0.0.1:8080  <----------> self-ADB control            |
-|  127.0.0.1:8081               Git / GitHub CLI            |
-|       |                        evidence workspace          |
-|       v                                                   |
-|  Debian/PRoot                                             |
-|  exact Node 22 W15-J LOCAL host                           |
-|  /usr/bin/git fixed host fence                            |
+|       |                         |                          |
+|       | 127.0.0.1:8080/8081    | self-ADB control         |
+|       v                         | Git / GitHub CLI         |
+|  Debian/PRoot <-----------------+ evidence workspace       |
+|  exact Node 22 W15-J LOCAL host                            |
+|  /usr/bin/git fixed host fence                             |
 +-----------------------------------------------------------+
 ```
 
@@ -44,30 +43,54 @@ The application transport for a same-tablet host is **direct loopback**, not ADB
 
 Self-ADB is a control/evidence plane only.
 
-## Why ADB reverse is not used
+## Transport status
 
-The accepted W15-J host owns `127.0.0.1:8080` and `127.0.0.1:8081`. On the same physical Android network namespace, an `adb reverse` listener on the same device ports would compete with those host listeners. Treating direct loopback as `LOCAL_ADB_REVERSE_ONLY` would therefore be false evidence.
+The bounded remediation #500 is software/provenance complete on canonical PR #413.
 
-The current exact artifact still embeds `LOCAL_ADB_REVERSE_ONLY`; tablet-only preflight must report `PRE_ACCEPTANCE_ONLY_TRANSPORT_CONTRACT_RECONCILIATION_REQUIRED` until the W15-J build identity/collector/trusted lint are explicitly extended to `LOCAL_TABLET_LOOPBACK`.
+Supported LOCAL physical modes are now explicitly distinct:
+
+- `LOCAL_ADB_REVERSE_ONLY` — external operator host;
+- `LOCAL_TABLET_LOOPBACK` — host and Aurora app on the same representative tablet.
+
+For tablet-loopback mode, no `adb reverse` mapping for 8080/8081 may exist.
+
+## Current exact tablet-loopback tuple
+
+```text
+main      d2089407e88480686b879928cf2863c0dc81718e
+android   5c955eac4cdcd92bc2e0604d50f9feb339095d6a
+host      3c7c3aa917c00d91d738121dee5fd32ed07b5444
+packaging 694ebdc9715cb95cee3307237daa1ce1bf4e421f
+run       34080729689
+artifact  10003625251
+zip       bca3a8c98f741ead4d827963ee1694316ddf74aab034dd7317e3a6d0302eee62
+apk       da605b277fb4c7f9a3820c417fe126a5b617b7c34d9e7f2b48f67da40114cb9a
+transport LOCAL_TABLET_LOOPBACK
+control   SELF_ADB_WIRELESS_DEBUGGING
+```
+
+The exact artifact remains `canonical_acceptance=false`, `physical_evidence_required=true`, `dp5_status=INCOMPLETE`.
+
+The previous physical APK and current APK contain the same 23 internal APK ZIP entries byte-for-byte. The APK Signing Block v2 differs because CI generated a different debug signer identity. Therefore the current exact tuple requires a clean uninstall/install before byte-exact installed-APK readback.
 
 ## Development model
 
 ### Source and review
 
-Termux provides Git and GitHub CLI. All code edits, commits, branches and PR operations can be performed on the tablet.
+Termux provides Git and GitHub CLI. Code edits, commits, branches and PR operations can be performed on the tablet.
 
 ### Build/package
 
-Android build/package stays reproducible in GitHub Actions. The tablet downloads the resulting exact artifact from GitHub and verifies artifact/APK SHA-256 before installation/readback. This avoids depending on whether a particular Android tablet can execute every official Linux Android SDK build-tool binary natively on ARM64.
+Android build/package stays reproducible in GitHub Actions. The tablet downloads the exact artifact from GitHub and verifies artifact/APK SHA-256 plus embedded candidate/host/main/transport identity before use.
 
 ### Physical control
 
-Wireless Debugging provides an external adbd endpoint. Termux `adb` connects back to the same tablet and can independently execute:
+Wireless Debugging provides an external adbd endpoint. Termux self-ADB can independently execute:
 
 - `pm path` + `adb pull` installed APK readback;
 - `am force-stop` and relaunch;
 - permission grant/revoke;
-- screen/background/reboot lifecycle operations;
+- lifecycle/process exercises;
 - `dumpsys meminfo`, `cpuinfo`, `battery`, package/service state;
 - screenshot/log capture.
 
@@ -92,13 +115,31 @@ Wake state, assistant role, microphone permission, self-ADB connection or tablet
 
 ## Evidence boundary
 
-The tooling in `tools/tablet-devlab` can independently prove tablet/device/APK/host facts. Until the W15-J canonical transport schema is reconciled, it is development/pre-acceptance evidence only.
+`tools/tablet-devlab/tablet-preflight.sh` now fails closed unless all of the following are true:
+
+- exact tablet-loopback APK bytes are installed;
+- embedded Android/host/main tuple matches the frozen candidate;
+- transport is exactly `LOCAL_TABLET_LOOPBACK`;
+- exactly one physical self-ADB device is connected;
+- 8080/8081 reverse mappings are absent;
+- the same host instance owns both canonical loopback listeners;
+- host instance metadata remains non-authoritative.
+
+Its disposition is `TABLET_LOOPBACK_PREFLIGHT_READY_NOT_ACCEPTED`.
+
+This is readiness evidence only and cannot close DP5.
+
+## Final DP5 requirements
 
 Final DP5 still requires:
 
-- canonical artifact/build identity matching the actual transport;
-- complete mandatory scenario matrix;
-- wake matrix and resource/privacy/threat evidence;
+- exact new APK clean install and installed-byte readback;
+- real trusted W03/W07/W14 provider composition;
+- complete mandatory physical scenario matrix;
+- wake matrix with at least 100 deliberate attempts plus false-wake/noise/distance/voice/TTS/barge-in/audio-route coverage;
+- privacy/raw-PCM/resource evidence;
+- real governed permitted native effect;
+- DENY, stale authority, cancellation, uncertainty and reconciliation negatives;
 - operator attestation;
 - independent reviewer sidecar;
 - integrated physical Risk Gates A-D;
@@ -106,11 +147,11 @@ Final DP5 still requires:
 
 ## Promotion rule
 
-Do not merge #498 into `main` while an active W15-J physical tuple is being evaluated if doing so would alter the reconciled main SHA required by that tuple. The tooling branch may be used directly on the tablet before merge. Promote only after Control Tower either:
+Do not merge #498/#499 into `main` while this active physical tuple is being evaluated because that would move the reconciled main SHA and supersede the tuple. The tooling branch may be used directly on the tablet.
+
+Promotion of DevLab tooling to main is safe only after Control Tower either:
 
 1. completes the active W15-J tuple; or
-2. explicitly supersedes it with a new tablet-loopback tuple.
+2. explicitly supersedes it with a new tuple anchored to the new main.
 
-## Next canonical change
-
-After the DevLab tooling is software-green, W15-J must receive a bounded acceptance-contract remediation to add `LOCAL_TABLET_LOOPBACK` as an explicit allowed LOCAL physical transport while retaining `LOCAL_ADB_REVERSE_ONLY` for external-host operation. That remediation must update build identity, collector/preflight/finalize/trusted lint and threat evidence without modifying W02/W03/W07/W14 ownership.
+W16 BUILD remains blocked until W15-J/DP5 genuine physical acceptance.
