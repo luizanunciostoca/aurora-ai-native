@@ -55,7 +55,12 @@ const MATERIAL_KEYS = new Set([
 ]);
 
 function plainRecord(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.getPrototypeOf(value) === Object.prototype
+  );
 }
 
 function exactKeys(value, expected) {
@@ -71,7 +76,12 @@ function timestamp(value) {
 }
 
 function safeToken(value, maximum = 256) {
-  return typeof value === 'string' && value.length > 0 && value.length <= maximum && SAFE_TOKEN.test(value);
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= maximum &&
+    SAFE_TOKEN.test(value)
+  );
 }
 
 function sha256Hex(value) {
@@ -95,7 +105,8 @@ function inspectMaterialFile(path) {
   if (metadata.isSymbolicLink() || !metadata.isFile() || realpathSync(path) !== path) {
     throw new Error('DP5 material file is not a direct regular file.');
   }
-  if ((metadata.mode & 0o077) !== 0) throw new Error('DP5 material must not be group/other accessible.');
+  if ((metadata.mode & 0o077) !== 0)
+    throw new Error('DP5 material must not be group/other accessible.');
   if (typeof process.getuid === 'function' && metadata.uid !== process.getuid()) {
     throw new Error('DP5 material must be owned by the current operator uid.');
   }
