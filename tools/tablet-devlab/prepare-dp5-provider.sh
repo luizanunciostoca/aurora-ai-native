@@ -9,6 +9,11 @@ fail() {
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
 command -v python >/dev/null 2>&1 || fail "python is missing"
 
+# Preparing dependencies is automatic; emitting short-lived authority material for the positive
+# physical side-effect scenario is not. A human operator must explicitly opt in for each window.
+[[ "${AURORA_DP5_EFFECT_APPROVED:-}" == "YES" ]] || \
+  fail "explicit physical-effect consent required: AURORA_DP5_EFFECT_APPROVED=YES"
+
 DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 HOST_DIR="$DEVLAB_ROOT/worktrees/host"
 CONFIG_DIR="$DEVLAB_ROOT/config"
@@ -128,6 +133,7 @@ state = '\n'.join([
     f'material_expires_at={material["expiresAt"]}',
     f'device_id={material["deviceId"]}',
     f'device_session_id={material["deviceSessionId"]}',
+    'effect_approval=EXPLICIT_OPERATOR_WINDOW',
     'provider_secrets_committed=false',
     'authorizes_execution=false',
     'physical_acceptance=false',
