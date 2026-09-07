@@ -48,6 +48,13 @@ export interface W07DeviceExecutionAuthorization {
   readonly cancelled: false;
 }
 
+export interface CurrentW07DeviceExecutionAuthorizationLookup {
+  readonly commandId: string;
+  readonly executionId: string;
+  readonly context: AuthenticatedVoiceEvaluationContext;
+  readonly nowMs: number;
+}
+
 export interface TransportReadyGovernedDeviceCommandMaterial extends GovernedDeviceCommandMaterial {
   readonly executionAuthorization: W07DeviceExecutionAuthorization;
 }
@@ -122,6 +129,12 @@ export type GovernedDeviceDispatchResult =
       retryAuthorized: false;
     }>;
 
+interface CurrentAuthorizationRecord {
+  readonly commandId: CommandId;
+  readonly context: AuthenticatedVoiceEvaluationContext;
+  readonly authorization: W07DeviceExecutionAuthorization;
+}
+
 function rejected(
   code: GovernedDeviceDispatchErrorCode,
   retryable = false,
@@ -147,6 +160,22 @@ function sameDeviceTarget(
     actionIntent.tenant.tenantId === context.tenantId &&
     actionIntent.actor.identityId === context.actorIdentityId &&
     actionIntent.correlation.correlationId === context.correlationId
+  );
+}
+
+function sameAuthenticatedContext(
+  left: AuthenticatedVoiceEvaluationContext,
+  right: AuthenticatedVoiceEvaluationContext,
+): boolean {
+  return (
+    left.tenantId === right.tenantId &&
+    left.actorIdentityId === right.actorIdentityId &&
+    left.correlationId === right.correlationId &&
+    left.gatewaySessionId === right.gatewaySessionId &&
+    left.connectionId === right.connectionId &&
+    left.deviceSessionId === right.deviceSessionId &&
+    left.deviceId === right.deviceId &&
+    left.registrationVersion === right.registrationVersion
   );
 }
 
@@ -266,6 +295,7 @@ function validW14Result(result: W14GovernedDeviceDispatchResult): boolean {
 export class W07GovernedDeviceDispatchAdapter {
   readonly #w14: W14GovernedDeviceDispatchPort;
   readonly #clock: () => number;
+  #currentAuthorization: CurrentAuthorizationRecord | null = null;
 
   constructor(w14: W14GovernedDeviceDispatchPort, clock: () => number = Date.now) {
     this.#w14 = w14;
@@ -273,6 +303,9 @@ export class W07GovernedDeviceDispatchAdapter {
   }
 
   dispatch(request: GovernedDeviceDispatchRequest): GovernedDeviceDispatchResult {
+    // A new evaluation can never reuse authority from a prior W07 decision.
+    this.#currentAuthorization = null;
+
     if (!materialMatches(request.command)) return rejected('MATERIAL_MISMATCH');
     if (!sameDeviceTarget(request.command.actionIntent, request.context)) {
       return rejected('CONTEXT_MISMATCH');
@@ -313,6 +346,12 @@ export class W07GovernedDeviceDispatchAdapter {
     if (!validW14Result(result)) return rejected('W14_PROTOCOL_VIOLATION');
     if (!result.ok) return rejected('W14_REJECTED', result.retryable);
 
+    this.#currentAuthorization = Object.freeze({
+      commandId: request.command.commandId,
+      context: Object.freeze({ ...request.context }),
+      authorization: executionAuthorization,
+    });
+
     return {
       ok: true,
       disposition: 'HANDED_TO_W14',
@@ -324,5 +363,25 @@ export class W07GovernedDeviceDispatchAdapter {
       provesExecutionSuccess: false,
       retryAuthorized: false,
     };
+  }
+
+  currentExecutionAuthorization(
+    input: CurrentW07DeviceExecutionAuthorizationLookup,
+  ): W07DeviceExecutionAuthorization | null {
+    const current = this.#currentAuthorization;
+    if (
+      current === null ||
+      !COMMAND_ID.test(input.commandId) ||
+      !EXECUTION_ID.test(input.executionId) ||
+      current.commandId !== input.commandId ||
+      current.authorization.executionId !== input.executionId ||
+      !sameAuthenticatedContext(current.context, input.context) ||
+      !Number.isSafeInteger(input.nowMs) ||
+      input.nowMs < current.authorization.authorizedAtMs ||
+      input.nowMs >= current.authorization.expiresAtMs
+    ) {
+      return null;
+    }
+    return current.authorization;
   }
 }
