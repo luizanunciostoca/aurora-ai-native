@@ -8,6 +8,7 @@ import type { TargetResolutionResult } from '../target-resolution/types.js';
 import type { AuthenticatedVoiceEvaluationContext } from '../voice-intake/types.js';
 
 const MAX_DATE_MS = 8_640_000_000_000_000;
+const MAX_DEVICE_AUTHORIZATION_AGE_MS = 30_000;
 const COMMAND_ID = /^cmd_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const EXECUTION_ID = /^exe_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const CAUSATION_ID = /^cau_[0-9A-HJKMNP-TV-Z]{26}$/u;
@@ -25,8 +26,34 @@ export interface GovernedDeviceCommandMaterial {
   readonly authorizesExecution: false;
 }
 
+/**
+ * W07-owned short-lived authorization consumed by W15 at the native effect boundary.
+ *
+ * This object is created only after current authority + target + safeguard/idempotency + containment
+ * gates pass. W14 may transport it but cannot create, widen, refresh or reinterpret it.
+ */
+export interface W07DeviceExecutionAuthorization {
+  readonly kind: 'W07_DEVICE_EXECUTION_AUTHORIZATION';
+  readonly executionId: ExecutionId;
+  readonly tenantId: string;
+  readonly deviceId: string;
+  readonly capabilityId: string;
+  readonly targetKind: 'DEVICE';
+  readonly authoritySource: 'W07_CURRENT_EXECUTION_AUTHORITY';
+  readonly actionId: string;
+  readonly arguments: Readonly<Record<string, string>>;
+  readonly authorizedAtMs: number;
+  readonly expiresAtMs: number;
+  readonly authorizesExecution: true;
+  readonly cancelled: false;
+}
+
+export interface TransportReadyGovernedDeviceCommandMaterial extends GovernedDeviceCommandMaterial {
+  readonly executionAuthorization: W07DeviceExecutionAuthorization;
+}
+
 export interface W14GovernedDeviceDispatchRequest {
-  readonly command: GovernedDeviceCommandMaterial;
+  readonly command: TransportReadyGovernedDeviceCommandMaterial;
   readonly context: AuthenticatedVoiceEvaluationContext;
   readonly dispatchedAtMs: number;
 }
@@ -137,7 +164,11 @@ function materialMatches(command: GovernedDeviceCommandMaterial): boolean {
     intent.kind === 'ACTION_INTENT' &&
     intent.executionTarget?.kind === 'DEVICE' &&
     intent.idempotency.mode === 'REQUIRED' &&
-    SAFE_REFERENCE.test(intent.idempotency.key)
+    SAFE_REFERENCE.test(intent.idempotency.key) &&
+    typeof intent.capability.capability === 'string' &&
+    SAFE_REFERENCE.test(intent.capability.capability) &&
+    typeof intent.capability.actionType === 'string' &&
+    SAFE_REFERENCE.test(intent.capability.actionType)
   );
 }
 
@@ -154,8 +185,7 @@ function gatesAllow(
   if (resolvedTarget.bindingReference !== executionTarget.bindingReference) return false;
   if (!gates.target.resolved) return false;
   if (gates.target.binding.target.kind !== 'DEVICE') return false;
-  if (gates.target.binding.target.bindingReference !== executionTarget.bindingReference)
-    return false;
+  if (gates.target.binding.target.bindingReference !== executionTarget.bindingReference) return false;
 
   return (
     gates.authority.kind === 'EXECUTOR_AUTHORITY_GATE' &&
@@ -178,6 +208,38 @@ function gatesAllow(
   );
 }
 
+function actionDeadlineMs(actionIntent: ActionIntent): number | null {
+  if (typeof actionIntent.deadlineAt !== 'string') return null;
+  const value = Date.parse(actionIntent.deadlineAt);
+  return Number.isSafeInteger(value) && value >= 0 && value <= MAX_DATE_MS ? value : null;
+}
+
+function buildExecutionAuthorization(
+  command: GovernedDeviceCommandMaterial,
+  context: AuthenticatedVoiceEvaluationContext,
+  authorizedAtMs: number,
+): W07DeviceExecutionAuthorization | null {
+  const deadlineAtMs = actionDeadlineMs(command.actionIntent);
+  if (deadlineAtMs === null || deadlineAtMs <= authorizedAtMs) return null;
+  const expiresAtMs = Math.min(deadlineAtMs, authorizedAtMs + MAX_DEVICE_AUTHORIZATION_AGE_MS);
+  if (expiresAtMs <= authorizedAtMs) return null;
+  return Object.freeze({
+    kind: 'W07_DEVICE_EXECUTION_AUTHORIZATION',
+    executionId: command.executionId,
+    tenantId: context.tenantId,
+    deviceId: context.deviceId,
+    capabilityId: command.actionIntent.capability.capability,
+    targetKind: 'DEVICE',
+    authoritySource: 'W07_CURRENT_EXECUTION_AUTHORITY',
+    actionId: command.actionIntent.capability.actionType,
+    arguments: Object.freeze({}),
+    authorizedAtMs,
+    expiresAtMs,
+    authorizesExecution: true,
+    cancelled: false,
+  });
+}
+
 function validW14Result(result: W14GovernedDeviceDispatchResult): boolean {
   if (
     result.authorizesExecution !== false ||
@@ -196,9 +258,10 @@ function validW14Result(result: W14GovernedDeviceDispatchResult): boolean {
 
 /**
  * W07-owned last barrier before a DEVICE command reaches W14 transport/session handling.
- * Passing gates are prerequisites only: neither this adapter nor W14 responses mint authority,
- * verified execution outcome, or retry permission. Delivery ordering is supplied as already
- * governed server material; W14 preserves it but does not invent scheduler semantics.
+ *
+ * Passing gates cause W07 to mint one short-lived, target-bound authorization view for W15. W14
+ * transports that view unchanged but remains non-authoritative. Delivery/ACK/Receipt never refresh
+ * the authorization, prove outcome or grant retry.
  */
 export class W07GovernedDeviceDispatchAdapter {
   readonly #w14: W14GovernedDeviceDispatchPort;
@@ -230,10 +293,17 @@ export class W07GovernedDeviceDispatchAdapter {
       return rejected('W14_UNAVAILABLE', true);
     }
 
+    const executionAuthorization = buildExecutionAuthorization(
+      request.command,
+      request.context,
+      dispatchedAtMs,
+    );
+    if (executionAuthorization === null) return rejected('MATERIAL_MISMATCH');
+
     let result: W14GovernedDeviceDispatchResult;
     try {
       result = this.#w14.dispatch({
-        command: request.command,
+        command: Object.freeze({ ...request.command, executionAuthorization }),
         context: request.context,
         dispatchedAtMs,
       });
