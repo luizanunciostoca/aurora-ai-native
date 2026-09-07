@@ -143,7 +143,8 @@ LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED
 with:
 
 ```text
-semantic_binding=PASS_7_ROLES_NOT_ACCEPTED
+required_semantic_evidence_roles=7
+semantic_binding_lint=PASS_NOT_ACCEPTED
 authorizes_execution=false
 proves_execution_success=false
 retry_authorized=false
