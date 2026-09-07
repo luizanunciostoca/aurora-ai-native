@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.TextView
+import ai.aurora.device.MainActivity
 import ai.aurora.device.ui.AuroraActivityUi
 import ai.aurora.device.voice.BoundedSpeechRecognitionFailure
 import ai.aurora.device.voice.BoundedSpeechRecognizer
@@ -13,8 +14,9 @@ import ai.aurora.device.voice.WakeVoiceRoute
 import ai.aurora.device.voice.WakeVoiceRuntimeRegistry
 
 /**
- * Foreground handoff after an acoustic wake. It makes the accepted W15-G foreground lifecycle gate
- * observable before STT. It does not execute commands or hold authority.
+ * Foreground handoff after an acoustic wake or explicit system-assistant invocation. It makes the
+ * accepted W15-G foreground lifecycle gate observable before STT. It does not execute commands or
+ * hold authority.
  */
 class WakeVoiceActivity : Activity() {
     private lateinit var statusView: TextView
@@ -141,10 +143,26 @@ class WakeVoiceActivity : Activity() {
                 // Android may reject microphone-FGS starts after finish() moves us to background.
                 rearmFromVisibleContext()
                 leavingAfterCompletion = true
+                openAuroraHome()
                 finish()
             }
         completionRunnable = task
         mainHandler.postDelayed(task, delayMs)
+    }
+
+    private fun openAuroraHome() {
+        val launch =
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra(MainActivity.EXTRA_OPENED_FROM_VOICE, true)
+            }
+        runCatching { startActivity(launch) }
+            .onFailure { failure ->
+                statusStore.update(
+                    "AURORA_UI_HANDOFF_FAILED",
+                    lastError = "Aurora home handoff failed: ${failure.javaClass.simpleName}",
+                )
+            }
     }
 
     private fun rearmFromVisibleContext() {
@@ -182,6 +200,7 @@ class WakeVoiceActivity : Activity() {
     companion object {
         const val EXTRA_WAKE_ID = "ai.aurora.extra.WAKE_ID"
         const val EXTRA_WAKE_CONFIDENCE = "ai.aurora.extra.WAKE_CONFIDENCE"
+        const val EXTRA_SYSTEM_ASSIST_INVOCATION = "ai.aurora.extra.SYSTEM_ASSIST_INVOCATION"
         private const val COMPLETION_DISPLAY_MS = 900L
     }
 }
