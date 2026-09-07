@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "w15j-governed-execution-binding-v1",
+  "authorityInvariant": "INTELLIGENCE != AUTHORITY != EXECUTION",
+  "actionIntentId": "REQUIRED",
+  "authority": {
+    "actionIntentId": "REQUIRED",
+    "authorityReferenceKind": "REQUIRED_POLICY_TOKEN_OR_OWNER_DECISION_OR_BOTH",
+    "policyTokenId": null,
+    "decisionId": null,
+    "currentAuthorityValidated": false,
+    "executionEligible": false,
+    "w07ExecutionAuthorizationExecutionId": "REQUIRED",
+    "w07ExecutionAuthorizationSource": "W07_CURRENT_EXECUTION_AUTHORITY",
+    "w07ExecutionAuthorizationAuthorizesExecution": false,
+    "w07ExecutionAuthorizationCancelled": true,
+    "bindingAuthorizesExecution": false,
+    "sourceEvidenceReference": "REQUIRED",
+    "sourceEvidenceSha256": "REQUIRED_64_HEX"
+  },
+  "w14Session": {
+    "deviceSessionId": "REQUIRED",
+    "trustState": "REQUIRED_ACTIVE",
+    "executionPreconditionSatisfied": false,
+    "bindingAuthorizesExecution": false,
+    "sourceEvidenceReference": "REQUIRED",
+    "sourceEvidenceSha256": "REQUIRED_64_HEX"
+  },
+  "w14Delivery": {
+    "commandId": "REQUIRED",
+    "executionId": "REQUIRED",
+    "deviceSessionId": "REQUIRED",
+    "deliveryReference": "REQUIRED",
+    "durableIdempotencyReference": "REQUIRED",
+    "bindingAuthorizesExecution": false,
+    "sourceEvidenceReference": "REQUIRED",
+    "sourceEvidenceSha256": "REQUIRED_64_HEX"
+  },
+  "w03DurableState": {
+    "commandDurableReference": "REQUIRED",
+    "receiptDurableReference": "REQUIRED",
+    "bindingAuthorizesExecution": false,
+    "sourceEvidenceReference": "REQUIRED",
+    "sourceEvidenceSha256": "REQUIRED_64_HEX"
+  },
+  "nativeExecution": {
+    "executionId": "REQUIRED",
+    "deviceSessionId": "REQUIRED",
+    "capabilityId": "REQUIRED",
+    "actionId": "REQUIRED",
+    "outcome": "REQUIRED_SUCCEEDED",
+    "requiresReconciliation": true,
+    "retryEligible": false,
+    "bindingAuthorizesExecution": false,
+    "sourceEvidenceReference": "REQUIRED",
+    "sourceEvidenceSha256": "REQUIRED_64_HEX"
+  },
+  "receiptIngress": {
+    "receiptId": "REQUIRED",
+    "evidenceId": "REQUIRED",
+    "commandId": "REQUIRED",
+    "executionId": "REQUIRED",
+    "deviceSessionId": "REQUIRED",
+    "deliveryReference": "REQUIRED",
+    "durableReference": "REQUIRED",
+    "reportedState": "REQUIRED_COMPLETED",
+    "requiresW07Reconciliation": true,
+    "authoritySemantics": "EVIDENCE_INPUT_ONLY_W07_OWNS_OUTCOME_AND_RETRY",
+    "bindingAuthorizesExecution": false,
+    "provesExecutionSuccess": false,
+    "retryAuthorized": false,
+    "sourceEvidenceReference": "REQUIRED",
+    "sourceEvidenceSha256": "REQUIRED_64_HEX"
+  },
+  "w07OutcomeReconciliation": {
+    "actionIntentId": "REQUIRED",
+    "executionId": "REQUIRED",
+    "receiptId": "REQUIRED",
+    "state": "REQUIRED_EFFECT_OBSERVED",
+    "reconciliationRequired": true,
+    "retryEligibleAfterFreshGuards": false,
+    "bindingAuthorizesExecution": false,
+    "sourceEvidenceReference": "REQUIRED",
+    "sourceEvidenceSha256": "REQUIRED_64_HEX"
+  },
+  "semantics": {
+    "kind": "EVIDENCE_BINDING_ONLY",
+    "authorizesExecution": false,
+    "provesExecutionSuccess": false,
+    "retryAuthorized": false,
+    "physicalAcceptance": false,
+    "w16BuildUnblocked": false
+  }
+}
