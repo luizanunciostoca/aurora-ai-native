@@ -228,10 +228,8 @@ export function validateW15JTabletLoopbackPreflight(dossier, trusted = {}) {
   if (environment?.controlPlane !== CONTROL_PLANE)
     throw new Error(`controlPlane must be ${CONTROL_PLANE}`);
   for (const field of ['gatewayIdentity', 'gatewayVersion', 'hostInstanceId', 'operator']) {
-    if (
-      requiredString(environment?.[field], `environment.${field}`) !==
-      expected[field === 'operator' ? 'operator' : 'environment']?.[field]
-    ) {
+    const expectedValue = field === 'operator' ? expected.operator : expected.environment?.[field];
+    if (requiredString(environment?.[field], `environment.${field}`) !== expectedValue) {
       throw new Error(`environment.${field} drift`);
     }
   }
