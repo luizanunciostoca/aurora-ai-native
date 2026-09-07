@@ -32,10 +32,12 @@ class WakeSetupActivity : Activity() {
     private var enrollment: AuroraWakeEnrollmentRecorder? = null
     private val enrollmentSamples = mutableListOf<WakeFeatureVector>()
     private var enrollmentRetryPending = false
+    private var enrollmentFlowActive = false
     private var wakeSuspendedForEnrollment = false
     private var enrollmentStartAttempts = 0
     private var wakeRearmAttempts = 0
     private val enrollmentStartRunnable = Runnable(::startEnrollmentWhenAudioIdle)
+    private val nextEnrollmentSampleRunnable = Runnable(::captureNextEnrollmentSample)
     private val wakeRearmRunnable = Runnable(::rearmWakeWhenAudioIdle)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -100,20 +102,28 @@ class WakeSetupActivity : Activity() {
     }
 
     override fun onPause() {
-        if (wakeSuspendedForEnrollment) {
-            // Enrollment temporarily stops the HOTWORD service to get exclusive microphone
-            // ownership. If the visible setup Activity is abandoned, never leave the persisted
-            // wake preference saying "enabled" while the detector remains silently stopped.
+        val enrollmentContextExists =
+            enrollmentFlowActive ||
+                enrollmentRetryPending ||
+                enrollmentSamples.isNotEmpty() ||
+                wakeSuspendedForEnrollment
+        if (enrollmentContextExists) {
+            // Enrollment is explicitly user-visible and bounded. Leaving the Activity cancels all
+            // pending capture work, drops derived partial samples and restores the previous detector
+            // if training had temporarily stopped an enabled wake configuration.
             statusView.removeCallbacks(enrollmentStartRunnable)
+            statusView.removeCallbacks(nextEnrollmentSampleRunnable)
             enrollment?.close()
             enrollment = null
             enrollmentSamples.clear()
             enrollmentRetryPending = false
-            wakeSuspendedForEnrollment = false
+            enrollmentFlowActive = false
             val shouldRestore =
-                preferences.wakeEnabled() &&
+                wakeSuspendedForEnrollment &&
+                    preferences.wakeEnabled() &&
                     !preferences.privacyModeEnabled() &&
                     modelStore.hasValidModel()
+            wakeSuspendedForEnrollment = false
             if (shouldRestore) {
                 val restored = AuroraWakeForegroundService.rearmIfConfigured(this)
                 statusStore.update(
@@ -130,12 +140,14 @@ class WakeSetupActivity : Activity() {
     override fun onDestroy() {
         if (::statusView.isInitialized) {
             statusView.removeCallbacks(enrollmentStartRunnable)
+            statusView.removeCallbacks(nextEnrollmentSampleRunnable)
             statusView.removeCallbacks(wakeRearmRunnable)
         }
         enrollment?.close()
         enrollment = null
         enrollmentSamples.clear()
         enrollmentRetryPending = false
+        enrollmentFlowActive = false
         wakeSuspendedForEnrollment = false
         super.onDestroy()
     }
@@ -172,6 +184,7 @@ class WakeSetupActivity : Activity() {
         }
 
         wakeSuspendedForEnrollment = preferences.wakeEnabled() && modelStore.hasValidModel()
+        enrollmentFlowActive = true
         disableWakeServiceOnly()
         enrollment?.close()
         enrollment = null
@@ -179,11 +192,12 @@ class WakeSetupActivity : Activity() {
         enrollmentRetryPending = false
         enrollmentStartAttempts = 0
         statusStore.update("ENROLLMENT_STARTING", modelStore.load()?.modelVersion)
+        refresh()
         startEnrollmentWhenAudioIdle()
     }
 
     private fun startEnrollmentWhenAudioIdle() {
-        if (isFinishing || isDestroyed) return
+        if (isFinishing || isDestroyed || !enrollmentFlowActive) return
         val owners = AuroraAudioRuntime.arbiter.snapshot().owners
         if (owners.isEmpty()) {
             enrollment = AuroraWakeEnrollmentRecorder(this)
@@ -191,6 +205,7 @@ class WakeSetupActivity : Activity() {
             return
         }
         if (enrollmentStartAttempts >= MAX_ENROLLMENT_START_ATTEMPTS) {
+            enrollmentFlowActive = false
             enrollmentRetryPending = true
             statusStore.update(
                 "ENROLLMENT_AUDIO_BUSY",
@@ -208,11 +223,13 @@ class WakeSetupActivity : Activity() {
     }
 
     private fun captureNextEnrollmentSample() {
+        if (!enrollmentFlowActive || isFinishing || isDestroyed) return
         val sampleNumber = enrollmentSamples.size + 1
         statusView.text = "Treinamento — amostra $sampleNumber de $ENROLLMENT_SAMPLES"
         guidanceView.text = "Quando aparecer “Pode falar”, diga apenas “Aurora” em tom normal."
         enrollment?.capture(
             onState = { state ->
+                if (!enrollmentFlowActive) return@capture
                 if (state == "SAY_AURORA") {
                     statusView.text = "Pode falar — “Aurora” ($sampleNumber/$ENROLLMENT_SAMPLES)"
                 } else {
@@ -220,6 +237,7 @@ class WakeSetupActivity : Activity() {
                 }
             },
             onSuccess = { vector ->
+                if (!enrollmentFlowActive) return@capture
                 enrollmentSamples += vector
                 enrollmentRetryPending = false
                 if (enrollmentSamples.size >= ENROLLMENT_SAMPLES) {
@@ -229,6 +247,8 @@ class WakeSetupActivity : Activity() {
                             templates = enrollmentSamples.toList(),
                         )
                     modelStore.save(model)
+                    enrollmentFlowActive = false
+                    enrollmentSamples.clear()
                     statusStore.update("ENROLLMENT_READY", model.modelVersion)
                     enrollment?.close()
                     enrollment = null
@@ -236,12 +256,15 @@ class WakeSetupActivity : Activity() {
                     refresh()
                 } else {
                     statusStore.update("ENROLLMENT_CAPTURING", modelStore.load()?.modelVersion)
+                    refresh()
                     statusView.text = "Amostra ${enrollmentSamples.size} de $ENROLLMENT_SAMPLES aceita"
                     guidanceView.text = "Prepare-se para a próxima amostra."
-                    statusView.postDelayed(::captureNextEnrollmentSample, NEXT_SAMPLE_DELAY_MS)
+                    statusView.postDelayed(nextEnrollmentSampleRunnable, NEXT_SAMPLE_DELAY_MS)
                 }
             },
             onError = { message ->
+                if (!enrollmentFlowActive) return@capture
+                enrollmentFlowActive = false
                 val recoverable = WakeSetupUiPolicy.isRecoverableEnrollmentError(message)
                 enrollment?.close()
                 enrollment = null
@@ -286,8 +309,15 @@ class WakeSetupActivity : Activity() {
     private fun disableWake() {
         preferences.setWakeEnabled(false)
         wakeSuspendedForEnrollment = false
+        enrollmentFlowActive = false
+        statusView.removeCallbacks(enrollmentStartRunnable)
+        statusView.removeCallbacks(nextEnrollmentSampleRunnable)
         statusView.removeCallbacks(wakeRearmRunnable)
         wakeRearmAttempts = 0
+        enrollment?.close()
+        enrollment = null
+        enrollmentSamples.clear()
+        enrollmentRetryPending = false
         disableWakeServiceOnly()
         statusStore.update("DISABLED", modelStore.load()?.modelVersion)
         refresh()
@@ -297,10 +327,13 @@ class WakeSetupActivity : Activity() {
         val enabled = !preferences.privacyModeEnabled()
         preferences.setPrivacyModeEnabled(enabled)
         if (enabled) {
+            statusView.removeCallbacks(enrollmentStartRunnable)
+            statusView.removeCallbacks(nextEnrollmentSampleRunnable)
             enrollment?.close()
             enrollment = null
             enrollmentSamples.clear()
             enrollmentRetryPending = false
+            enrollmentFlowActive = false
             wakeSuspendedForEnrollment = false
             disableWakeServiceOnly()
             statusStore.update("WAKE_PRIVACY_BLOCKED", modelStore.load()?.modelVersion)
