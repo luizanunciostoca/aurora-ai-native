@@ -23,6 +23,7 @@ class WakeVoiceActivity : Activity() {
     private var recognizer: BoundedSpeechRecognizer? = null
     private var started = false
     private var completionRunnable: Runnable? = null
+    private var leavingAfterCompletion = false
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -46,13 +47,7 @@ class WakeVoiceActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (started) {
-            if (recognizer == null && statusStore.snapshot().state == "STT_LIFECYCLE_BLOCKED") {
-                statusView.text = "Interação encerrada ao sair do primeiro plano"
-                scheduleVisibleFinishAndRearm(LIFECYCLE_BLOCK_DISPLAY_MS)
-            }
-            return
-        }
+        if (started) return
         started = true
         if (preferences.privacyModeEnabled()) {
             complete("VOICE_PRIVACY_BLOCKED", "Privacidade ativa")
@@ -95,19 +90,29 @@ class WakeVoiceActivity : Activity() {
             }
     }
 
-    override fun onStop() {
-        // The wake-to-STT fast path is explicitly foreground-bound. If the Activity loses the
-        // foreground before a bounded result exists, abandon that interaction instead of allowing
-        // microphone capture to continue invisibly or replaying a stale wake on resume.
-        if (!isFinishing && completionRunnable == null && recognizer != null) {
+    override fun onPause() {
+        if (!isFinishing && !leavingAfterCompletion) {
+            val pendingCompletion = completionRunnable != null
+            completionRunnable?.let(mainHandler::removeCallbacks)
+            completionRunnable = null
             recognizer?.close()
             recognizer = null
-            statusStore.update(
-                "STT_LIFECYCLE_BLOCKED",
-                lastError = "voice interaction left foreground before completion",
-            )
+
+            if (!pendingCompletion) {
+                statusStore.update(
+                    "STT_LIFECYCLE_BLOCKED",
+                    lastError = "voice interaction left foreground before completion",
+                )
+            }
+
+            // A wake/STT interaction temporarily owns the microphone instead of the hotword
+            // service. Restore the configured detector while this Activity is still foreground;
+            // waiting until onStop/background can make modern Android reject the microphone FGS.
+            rearmFromVisibleContext()
+            leavingAfterCompletion = true
+            finish()
         }
-        super.onStop()
+        super.onPause()
     }
 
     override fun onDestroy() {
@@ -132,9 +137,10 @@ class WakeVoiceActivity : Activity() {
             Runnable {
                 completionRunnable = null
                 if (isFinishing || isDestroyed) return@Runnable
-                // Start the microphone FGS while this Activity is visibly foreground. Modern Android
-                // may reject microphone-FGS starts after finish() moves us to background.
+                // Start the microphone FGS while this Activity is still visibly foreground. Modern
+                // Android may reject microphone-FGS starts after finish() moves us to background.
                 rearmFromVisibleContext()
+                leavingAfterCompletion = true
                 finish()
             }
         completionRunnable = task
@@ -177,6 +183,5 @@ class WakeVoiceActivity : Activity() {
         const val EXTRA_WAKE_ID = "ai.aurora.extra.WAKE_ID"
         const val EXTRA_WAKE_CONFIDENCE = "ai.aurora.extra.WAKE_CONFIDENCE"
         private const val COMPLETION_DISPLAY_MS = 900L
-        private const val LIFECYCLE_BLOCK_DISPLAY_MS = 450L
     }
 }
