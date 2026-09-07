@@ -61,7 +61,11 @@ const controlTests = [];
 collectTests(resolve(repoRoot, 'packages/control/test'), controlTests);
 controlTests.sort();
 
-const testFiles = ['tools/test/smoke.test.mjs', ...controlTests];
+const testFiles = [
+  'tools/test/smoke.test.mjs',
+  'tools/test/tablet-devlab.test.mjs',
+  ...controlTests,
+];
 let status = run(process.execPath, ['--experimental-strip-types', '--test', ...testFiles]);
 
 const executorTests = [];
