@@ -5,13 +5,13 @@ import android.app.Activity
 import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.ViewGroup
 import android.widget.Button
-import android.widget.LinearLayout
 import android.widget.TextView
+import ai.aurora.device.ui.AuroraActivityUi
 
 /**
  * Explicit user-driven setup surface for microphone permission, local enrollment, privacy and the
@@ -22,8 +22,16 @@ class WakeSetupActivity : Activity() {
     private lateinit var modelStore: AuroraWakeModelStore
     private lateinit var statusStore: WakeRuntimeStatusStore
     private lateinit var statusView: TextView
+    private lateinit var guidanceView: TextView
+    private lateinit var microphoneButton: Button
+    private lateinit var enrollmentButton: Button
+    private lateinit var assistantButton: Button
+    private lateinit var enableButton: Button
+    private lateinit var disableButton: Button
+    private lateinit var privacyButton: Button
     private var enrollment: AuroraWakeEnrollmentRecorder? = null
     private val enrollmentSamples = mutableListOf<WakeFeatureVector>()
+    private var enrollmentRetryPending = false
     private var enrollmentStartAttempts = 0
     private var wakeRearmAttempts = 0
     private val enrollmentStartRunnable = Runnable(::startEnrollmentWhenAudioIdle)
@@ -35,33 +43,53 @@ class WakeSetupActivity : Activity() {
         modelStore = AuroraWakeModelStore(this)
         statusStore = WakeRuntimeStatusStore(this)
 
-        val layout =
-            LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(48, 48, 48, 48)
-                layoutParams =
-                    ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                    )
-            }
-        statusView = TextView(this).apply { textSize = 18f }
-        layout.addView(statusView)
-        layout.addView(button("Conceder permissão do microfone") { requestMicrophonePermission() })
-        layout.addView(button("Treinar \"Aurora\" (3 amostras)") { beginEnrollment() })
-        layout.addView(button("Definir Aurora como assistente") { requestAssistantRole() })
-        layout.addView(button("Ativar wake word") { enableWake() })
-        layout.addView(button("Desativar wake word") { disableWake() })
+        val screen = AuroraActivityUi.createScrollableScreen(this)
+        val layout = screen.content
+        layout.addView(AuroraActivityUi.heading(this, "Voz e wake word"))
         layout.addView(
-            button("Alternar modo de privacidade") {
-                preferences.setPrivacyModeEnabled(!preferences.privacyModeEnabled())
-                if (preferences.privacyModeEnabled()) {
-                    stopService(Intent(this, AuroraWakeForegroundService::class.java))
-                }
-                refresh()
-            },
+            AuroraActivityUi.body(
+                this,
+                "Configure o detector local “Aurora”. O wake inicia uma interação; ele nunca concede autoridade de ação.",
+                centered = true,
+            ),
         )
-        setContentView(layout)
+        statusView = AuroraActivityUi.body(this)
+        guidanceView = AuroraActivityUi.body(this)
+        layout.addView(statusView)
+        layout.addView(guidanceView)
+
+        microphoneButton =
+            AuroraActivityUi.actionButton(this, "Conceder permissão do microfone") {
+                requestMicrophonePermissionOrSettings()
+            }
+        enrollmentButton =
+            AuroraActivityUi.actionButton(this, "Treinar “Aurora” (3 amostras)") {
+                beginOrResumeEnrollment()
+            }
+        assistantButton =
+            AuroraActivityUi.actionButton(this, "Definir Aurora como assistente padrão") {
+                requestAssistantRole()
+            }
+        enableButton =
+            AuroraActivityUi.actionButton(this, "Ativar wake word") {
+                enableWake()
+            }
+        disableButton =
+            AuroraActivityUi.actionButton(this, "Desativar wake word") {
+                disableWake()
+            }
+        privacyButton =
+            AuroraActivityUi.actionButton(this, "Ativar modo de privacidade") {
+                togglePrivacyMode()
+            }
+
+        layout.addView(microphoneButton)
+        layout.addView(enrollmentButton)
+        layout.addView(assistantButton)
+        layout.addView(enableButton)
+        layout.addView(disableButton)
+        layout.addView(privacyButton)
+        setContentView(screen.root)
         refresh()
     }
 
@@ -77,6 +105,8 @@ class WakeSetupActivity : Activity() {
         }
         enrollment?.close()
         enrollment = null
+        enrollmentSamples.clear()
+        enrollmentRetryPending = false
         super.onDestroy()
     }
 
@@ -86,19 +116,38 @@ class WakeSetupActivity : Activity() {
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == REQUEST_MICROPHONE) refresh()
+        if (requestCode != REQUEST_MICROPHONE) return
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        if (!granted) {
+            statusStore.update(
+                "WAKE_PERMISSION_BLOCKED",
+                lastError = "microphone permission denied by user",
+            )
+        }
+        refresh()
     }
 
-    private fun beginEnrollment() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestMicrophonePermission()
+    private fun beginOrResumeEnrollment() {
+        if (preferences.privacyModeEnabled()) {
+            statusStore.update(
+                "ENROLLMENT_PRIVACY_BLOCKED",
+                lastError = "privacy mode blocks microphone enrollment",
+            )
+            refresh()
             return
         }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestMicrophonePermissionOrSettings()
+            return
+        }
+
         disableWakeServiceOnly()
         enrollment?.close()
         enrollment = null
-        enrollmentSamples.clear()
+        if (!enrollmentRetryPending) enrollmentSamples.clear()
+        enrollmentRetryPending = false
         enrollmentStartAttempts = 0
+        statusStore.update("ENROLLMENT_STARTING", modelStore.load()?.modelVersion)
         startEnrollmentWhenAudioIdle()
     }
 
@@ -111,8 +160,10 @@ class WakeSetupActivity : Activity() {
             return
         }
         if (enrollmentStartAttempts >= MAX_ENROLLMENT_START_ATTEMPTS) {
+            enrollmentRetryPending = true
             statusStore.update(
                 "ENROLLMENT_AUDIO_BUSY",
+                modelStore.load()?.modelVersion,
                 lastError = "audio ownership did not release before bounded enrollment timeout",
             )
             scheduleWakeRearmIfEnabled()
@@ -120,16 +171,26 @@ class WakeSetupActivity : Activity() {
             return
         }
         enrollmentStartAttempts += 1
-        statusView.text = "Aguardando liberação segura do áudio para treinamento"
+        statusView.text = "Aguardando o microfone ser liberado com segurança…"
+        guidanceView.text = "O detector anterior está sendo encerrado antes do treinamento."
         statusView.postDelayed(enrollmentStartRunnable, AUDIO_TRANSITION_RETRY_MS)
     }
 
     private fun captureNextEnrollmentSample() {
-        statusView.text = "Diga Aurora — amostra ${enrollmentSamples.size + 1} de $ENROLLMENT_SAMPLES"
+        val sampleNumber = enrollmentSamples.size + 1
+        statusView.text = "Treinamento — amostra $sampleNumber de $ENROLLMENT_SAMPLES"
+        guidanceView.text = "Quando aparecer “Pode falar”, diga apenas “Aurora” em tom normal."
         enrollment?.capture(
-            onState = { state -> statusView.text = "$state — ${enrollmentSamples.size + 1}/$ENROLLMENT_SAMPLES" },
+            onState = { state ->
+                if (state == "SAY_AURORA") {
+                    statusView.text = "Pode falar — “Aurora” ($sampleNumber/$ENROLLMENT_SAMPLES)"
+                } else {
+                    statusView.text = "$state — $sampleNumber/$ENROLLMENT_SAMPLES"
+                }
+            },
             onSuccess = { vector ->
                 enrollmentSamples += vector
+                enrollmentRetryPending = false
                 if (enrollmentSamples.size >= ENROLLMENT_SAMPLES) {
                     val model =
                         AuroraWakeTemplateModel(
@@ -143,13 +204,26 @@ class WakeSetupActivity : Activity() {
                     scheduleWakeRearmIfEnabled()
                     refresh()
                 } else {
-                    statusView.postDelayed(::captureNextEnrollmentSample, 600L)
+                    statusStore.update("ENROLLMENT_CAPTURING", modelStore.load()?.modelVersion)
+                    statusView.text = "Amostra ${enrollmentSamples.size} de $ENROLLMENT_SAMPLES aceita"
+                    guidanceView.text = "Prepare-se para a próxima amostra."
+                    statusView.postDelayed(::captureNextEnrollmentSample, NEXT_SAMPLE_DELAY_MS)
                 }
             },
             onError = { message ->
-                statusStore.update("ENROLLMENT_FAILED", lastError = message)
+                val recoverable = WakeSetupUiPolicy.isRecoverableEnrollmentError(message)
                 enrollment?.close()
                 enrollment = null
+                enrollmentRetryPending = recoverable
+                if (!recoverable) enrollmentSamples.clear()
+                statusStore.update(
+                    if (recoverable) "ENROLLMENT_RETRY_REQUIRED" else "ENROLLMENT_FAILED",
+                    modelStore.load()?.modelVersion,
+                    lastError = message,
+                )
+                // A failed re-training attempt must not delete or disable a previously valid model.
+                // If wake was enabled before training, safely re-arm that previous model while the
+                // user decides whether to repeat the rejected sample.
                 scheduleWakeRearmIfEnabled()
                 refresh()
             },
@@ -163,15 +237,17 @@ class WakeSetupActivity : Activity() {
             return
         }
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestMicrophonePermission()
+            requestMicrophonePermissionOrSettings()
             return
         }
-        if (!modelStore.hasValidModel()) {
+        val model = modelStore.load()
+        if (model == null) {
             statusStore.update("USER_SETUP_REQUIRED")
             refresh()
             return
         }
         preferences.setWakeEnabled(true)
+        statusStore.update("INITIALIZING", model.modelVersion)
         scheduleWakeRearmIfEnabled()
         refresh()
     }
@@ -181,7 +257,26 @@ class WakeSetupActivity : Activity() {
         statusView.removeCallbacks(wakeRearmRunnable)
         wakeRearmAttempts = 0
         disableWakeServiceOnly()
-        statusStore.update("DISABLED")
+        statusStore.update("DISABLED", modelStore.load()?.modelVersion)
+        refresh()
+    }
+
+    private fun togglePrivacyMode() {
+        val enabled = !preferences.privacyModeEnabled()
+        preferences.setPrivacyModeEnabled(enabled)
+        if (enabled) {
+            enrollment?.close()
+            enrollment = null
+            enrollmentSamples.clear()
+            enrollmentRetryPending = false
+            disableWakeServiceOnly()
+            statusStore.update("WAKE_PRIVACY_BLOCKED", modelStore.load()?.modelVersion)
+        } else if (preferences.wakeEnabled() && modelStore.hasValidModel()) {
+            statusStore.update("INITIALIZING", modelStore.load()?.modelVersion)
+            scheduleWakeRearmIfEnabled()
+        } else {
+            statusStore.update("DISABLED", modelStore.load()?.modelVersion)
+        }
         refresh()
     }
 
@@ -207,6 +302,7 @@ class WakeSetupActivity : Activity() {
             if (wakeRearmAttempts >= MAX_WAKE_REARM_ATTEMPTS) {
                 statusStore.update(
                     "WAKE_PLATFORM_BLOCKED",
+                    modelStore.load()?.modelVersion,
                     lastError = "audio ownership did not release before bounded wake re-arm timeout",
                 )
                 refresh()
@@ -226,12 +322,30 @@ class WakeSetupActivity : Activity() {
         }.onFailure { failure ->
             statusStore.update(
                 "WAKE_PLATFORM_BLOCKED",
+                modelStore.load()?.modelVersion,
                 lastError = "wake start failed: ${failure.javaClass.simpleName}",
             )
+            refresh()
         }
     }
 
-    private fun requestMicrophonePermission() {
+    private fun requestMicrophonePermissionOrSettings() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            refresh()
+            return
+        }
+        val previouslyDenied = statusStore.snapshot().state == "WAKE_PERMISSION_BLOCKED"
+        if (previouslyDenied && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
+            runCatching {
+                startActivity(
+                    Intent(
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:$packageName"),
+                    ),
+                )
+            }
+            return
+        }
         requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MICROPHONE)
     }
 
@@ -254,33 +368,63 @@ class WakeSetupActivity : Activity() {
         val runtime = statusStore.snapshot()
         val permissionGranted =
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        val assistant =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val roles = getSystemService(RoleManager::class.java)
-                roles.isRoleAvailable(RoleManager.ROLE_ASSISTANT) && roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)
-            } else {
-                false
-            }
+        val roleAvailable: Boolean
+        val assistantSelected: Boolean
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roles = getSystemService(RoleManager::class.java)
+            roleAvailable = roles.isRoleAvailable(RoleManager.ROLE_ASSISTANT)
+            assistantSelected = roleAvailable && roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)
+        } else {
+            roleAvailable = true
+            assistantSelected = false
+        }
+        val modelReady = modelStore.hasValidModel()
+        val ui =
+            WakeSetupUiPolicy.present(
+                WakeSetupUiInput(
+                    microphoneGranted = permissionGranted,
+                    modelReady = modelReady,
+                    assistantRoleAvailable = roleAvailable,
+                    assistantSelected = assistantSelected,
+                    wakeEnabled = preferences.wakeEnabled(),
+                    privacyModeEnabled = preferences.privacyModeEnabled(),
+                    runtimeState = runtime.state,
+                    runtimeError = runtime.lastError,
+                    enrollmentRetryPending = enrollmentRetryPending,
+                    acceptedEnrollmentSamples = enrollmentSamples.size,
+                ),
+            )
+
         statusView.text =
             buildString {
-                appendLine("Wake: ${if (preferences.wakeEnabled()) "ATIVO" else "DESATIVADO"}")
-                appendLine("Privacidade: ${if (preferences.privacyModeEnabled()) "BLOQUEANDO" else "normal"}")
+                appendLine("Wake word: ${if (preferences.wakeEnabled()) "ativado" else "desativado"}")
+                appendLine("Privacidade: ${if (preferences.privacyModeEnabled()) "ativa" else "normal"}")
                 appendLine("Microfone: ${if (permissionGranted) "concedido" else "não concedido"}")
-                appendLine("Modelo local: ${if (modelStore.hasValidModel()) "pronto" else "não treinado"}")
-                appendLine("Assistente padrão: ${if (assistant) "Aurora" else "não"}")
-                appendLine("Runtime: ${runtime.state}")
+                appendLine("Modelo local: ${if (modelReady) "pronto" else "não treinado"}")
+                appendLine("Assistente padrão: ${if (assistantSelected) "Aurora" else "não"}")
+                appendLine("Runtime: ${ui.runtimeLabel}")
                 appendLine("Wakes confirmados: ${runtime.confirmedWakeCount}")
-                appendLine("Rejeitados/ignorados: ${runtime.rejectedOrIgnoredCount}")
-                runtime.lastError?.let { appendLine("Último erro: $it") }
-                append("Esses estados são precondições/evidência local, nunca autoridade de ação.")
+                append("Rejeitados/ignorados: ${runtime.rejectedOrIgnoredCount}")
+                ui.errorLabel?.let { append("\nAtenção: $it") }
             }
-    }
+        guidanceView.text = ui.guidance
 
-    private fun button(label: String, action: () -> Unit): Button =
-        Button(this).apply {
-            text = label
-            setOnClickListener { action() }
-        }
+        val permanentlyDenied =
+            !permissionGranted &&
+                runtime.state == "WAKE_PERMISSION_BLOCKED" &&
+                !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+        microphoneButton.text =
+            if (permanentlyDenied) "Abrir configurações do microfone" else ui.microphoneButtonLabel
+        microphoneButton.isEnabled = ui.canRequestMicrophone
+        enrollmentButton.text = ui.enrollmentButtonLabel
+        enrollmentButton.isEnabled = ui.canTrain
+        assistantButton.text = ui.assistantButtonLabel
+        assistantButton.isEnabled = ui.canRequestAssistantRole
+        enableButton.text = if (preferences.wakeEnabled()) "Wake word já ativo" else "Ativar wake word"
+        enableButton.isEnabled = ui.canEnableWake
+        disableButton.isEnabled = ui.canDisableWake
+        privacyButton.text = ui.privacyButtonLabel
+    }
 
     companion object {
         private const val REQUEST_MICROPHONE = 1501
@@ -288,7 +432,8 @@ class WakeSetupActivity : Activity() {
         private const val ENROLLMENT_SAMPLES = 3
         private const val MODEL_VERSION = "aurora-wake-local-v1"
         private const val AUDIO_TRANSITION_RETRY_MS = 100L
-        private const val MAX_ENROLLMENT_START_ATTEMPTS = 15
-        private const val MAX_WAKE_REARM_ATTEMPTS = 15
+        private const val NEXT_SAMPLE_DELAY_MS = 900L
+        private const val MAX_ENROLLMENT_START_ATTEMPTS = 30
+        private const val MAX_WAKE_REARM_ATTEMPTS = 30
     }
 }
