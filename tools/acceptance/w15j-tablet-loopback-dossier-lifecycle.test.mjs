@@ -17,10 +17,7 @@ import {
 } from './w15j-test-fixture.mjs';
 
 const template = JSON.parse(
-  readFileSync(
-    resolve('apps/aurora-android/physical/W15J_EVIDENCE_TEMPLATE.json'),
-    'utf8',
-  ),
+  readFileSync(resolve('apps/aurora-android/physical/W15J_EVIDENCE_TEMPLATE.json'), 'utf8'),
 );
 const apkSha = '2'.repeat(64);
 const zipSha = '1'.repeat(64);
@@ -116,7 +113,8 @@ test('preflight creates tablet-loopback dossier from legacy-neutral canonical te
   assert.equal(dossier.device.physicalDeviceVerified, true);
   assert.equal(dossier.dp5Status, 'CLOSED_PHYSICAL_EVIDENCE_INCOMPLETE');
   assert.equal(
-    dossier.scenarios.governedNativeExecution.currentDeviceAuthorizationDispatchesExactlyOnce.status,
+    dossier.scenarios.governedNativeExecution.currentDeviceAuthorizationDispatchesExactlyOnce
+      .status,
     'NOT_RUN',
   );
 });
