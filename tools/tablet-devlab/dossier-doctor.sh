@@ -15,12 +15,16 @@ DEVLAB_PR="${AURORA_DEVLAB_PR:-499}"
 DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 DEVLAB_WORKTREE="$DEVLAB_ROOT/worktrees/devlab"
 ANDROID_WORKTREE="$DEVLAB_ROOT/worktrees/android"
+HOST_WORKTREE="$DEVLAB_ROOT/worktrees/host"
 EVIDENCE_DIR="${AURORA_EVIDENCE_DIR:-$DEVLAB_ROOT/evidence/w15j-dp5}"
 RESULT_DIR="${AURORA_DOSSIER_DOCTOR_DIR:-$DEVLAB_ROOT/evidence/doctor}"
 
 [[ -d "$DEVLAB_WORKTREE" ]] || fail "DevLab worktree missing; run worktrees.sh"
 [[ -d "$DEVLAB_WORKTREE/.git" || -f "$DEVLAB_WORKTREE/.git" ]] || fail "DevLab worktree is not a git worktree"
 [[ -d "$ANDROID_WORKTREE" ]] || fail "exact Android worktree missing; run worktrees.sh"
+[[ -d "$ANDROID_WORKTREE/.git" || -f "$ANDROID_WORKTREE/.git" ]] || fail "Android worktree is not a git worktree"
+[[ -d "$HOST_WORKTREE" ]] || fail "exact host worktree missing; run worktrees.sh"
+[[ -d "$HOST_WORKTREE/.git" || -f "$HOST_WORKTREE/.git" ]] || fail "host worktree is not a git worktree"
 [[ -d "$EVIDENCE_DIR" && ! -L "$EVIDENCE_DIR" ]] || fail "finalized evidence directory is required"
 [[ -f "$EVIDENCE_DIR/evidence-manifest.sha256" ]] || fail "finalized evidence-manifest.sha256 is required"
 [[ -f "$EVIDENCE_DIR/reviewer-attestation.json" ]] || fail "independent reviewer-attestation.json is required"
@@ -30,11 +34,6 @@ RESULT_DIR="${AURORA_DOSSIER_DOCTOR_DIR:-$DEVLAB_ROOT/evidence/doctor}"
 devlab_head="$(git -C "$DEVLAB_WORKTREE" rev-parse HEAD)"
 [[ "$devlab_head" =~ ^[0-9a-f]{40}$ ]] || fail "DevLab worktree HEAD is malformed"
 [[ -z "$(git -C "$DEVLAB_WORKTREE" status --porcelain)" ]] || fail "DevLab worktree must remain clean"
-[[ "$(git -C "$ANDROID_WORKTREE" rev-parse HEAD)" == "a45c349c840b6c5125867fee3c7294ad61998cc3" ]] || fail "Android worktree SHA drift"
-[[ -z "$(git -C "$ANDROID_WORKTREE" status --porcelain)" ]] || fail "Android worktree must remain clean"
-
-VALIDATOR="$ANDROID_WORKTREE/tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs"
-[[ -f "$VALIDATOR" ]] || fail "tablet-loopback trusted preflight validator missing"
 
 mkdir -p "$RESULT_DIR"
 chmod 700 "$RESULT_DIR"
@@ -46,6 +45,20 @@ RESULT="$RESULT_DIR/trusted-preflight.json"
 AURORA_CONTROL_TOWER_TUPLE="$TUPLE" bash "$DEVLAB_WORKTREE/tools/tablet-devlab/capture-control-tower-tuple.sh"
 
 main_sha="$(jq -er '.reconciledMainSha' "$TUPLE")"
+android_sha="$(jq -er '.androidCandidateSha' "$TUPLE")"
+host_sha="$(jq -er '.hostCandidateSha' "$TUPLE")"
+for sha in "$main_sha" "$android_sha" "$host_sha"; do
+  [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "captured control-tower tuple contains malformed candidate SHA"
+done
+
+[[ "$(git -C "$ANDROID_WORKTREE" rev-parse HEAD)" == "$android_sha" ]] || fail "Android worktree drift from captured live tuple"
+[[ -z "$(git -C "$ANDROID_WORKTREE" status --porcelain)" ]] || fail "Android worktree must remain clean"
+[[ "$(git -C "$HOST_WORKTREE" rev-parse HEAD)" == "$host_sha" ]] || fail "host worktree drift from captured live tuple"
+[[ -z "$(git -C "$HOST_WORKTREE" status --porcelain)" ]] || fail "host worktree must remain clean"
+
+VALIDATOR="$ANDROID_WORKTREE/tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs"
+[[ -f "$VALIDATOR" ]] || fail "tablet-loopback trusted preflight validator missing"
+
 pr_payload="$(gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "/repos/$REPO/pulls/$DEVLAB_PR")"
 pr_head="$(jq -er '.head.sha' <<<"$pr_payload")"
 pr_base="$(jq -er '.base.sha' <<<"$pr_payload")"
@@ -91,6 +104,8 @@ status=LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED
 transport=LOCAL_TABLET_LOOPBACK
 control_plane=SELF_ADB_WIRELESS_DEBUGGING
 devlab_candidate_sha=$devlab_head
+android_candidate_sha=$android_sha
+host_candidate_sha=$host_sha
 manifest_file_sha256=$manifest_sha
 control_tower_tuple_sha256=$tuple_sha
 trusted_preflight_sha256=$result_sha
@@ -105,5 +120,6 @@ chmod 600 "$RESULT_DIR/DOCTOR_STATUS.txt"
 
 printf 'DP5_DOSSIER_DOCTOR=LINT_READY_FOR_INDEPENDENT_CONTROL_TOWER_REVIEW_NOT_ACCEPTED\n'
 printf 'result_dir=%s\n' "$RESULT_DIR"
-printf 'devlab_candidate_sha=%s\n' "$devlab_head"
+printf 'devlab_candidate_sha=%s\nandroid_candidate_sha=%s\nhost_candidate_sha=%s\n' \
+  "$devlab_head" "$android_sha" "$host_sha"
 printf 'authorizes_execution=false\nphysical_acceptance=false\nretry_authorized=false\nw16_build_unblocked=false\n'
