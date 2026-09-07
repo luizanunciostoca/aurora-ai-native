@@ -1,0 +1,35 @@
+name: Diagnostic W15-J Tablet Loopback Prettier
+
+on:
+  push:
+    branches:
+      - diagnostic/w15j-tablet-loopback-prettier
+    paths:
+      - '.github/workflows/diagnostic-w15j-tablet-loopback-prettier.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prettier-diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - name: Print canonical Prettier diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx prettier --write \
+            tools/acceptance/w15j-tablet-loopback-preflight.mjs \
+            tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs >/dev/null
+          git --no-pager diff -- \
+            tools/acceptance/w15j-tablet-loopback-preflight.mjs \
+            tools/acceptance/w15j-tablet-loopback-trusted-preflight.mjs
