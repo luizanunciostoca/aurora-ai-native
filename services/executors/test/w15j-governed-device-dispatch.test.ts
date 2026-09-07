@@ -21,6 +21,7 @@ const DEVICE = 'dvc_01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const TENANT = 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const ACTOR = 'idn_01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const CORRELATION = 'cor_01ARZ3NDEKTSV4RRFFQ69G5FAV';
+const NOW = 1_788_633_600_000;
 
 function actionIntent(): ActionIntent {
   return {
@@ -143,18 +144,29 @@ class CapturingW14Port implements W14GovernedDeviceDispatchPort {
   }
 }
 
-test('hands a governed device command to W14 only after all W07 gates pass', () => {
+test('hands a governed device command plus bounded W07 authorization to W14 only after all gates pass', () => {
   const port = new CapturingW14Port();
-  const adapter = new W07GovernedDeviceDispatchAdapter(port, () => 1_788_633_600_000);
+  const adapter = new W07GovernedDeviceDispatchAdapter(port, () => NOW);
   const result = adapter.dispatch({ command: command(), context: context(), gates: gates() });
 
   assert.equal(result.ok, true);
   assert.equal(port.calls.length, 1);
-  assert.equal(port.calls[0]?.dispatchedAtMs, 1_788_633_600_000);
+  assert.equal(port.calls[0]?.dispatchedAtMs, NOW);
   assert.equal(port.calls[0]?.command.causationId, 'cau_01ARZ3NDEKTSV4RRFFQ69G5FAV');
   assert.equal(port.calls[0]?.command.orderingKey, 'device:camera');
   assert.equal(port.calls[0]?.command.orderingSequence, 1);
   assert.equal(port.calls[0]?.command.actionIntent.executionTarget?.kind, 'DEVICE');
+  const authorization = port.calls[0]?.command.executionAuthorization;
+  assert.equal(authorization?.kind, 'W07_DEVICE_EXECUTION_AUTHORIZATION');
+  assert.equal(authorization?.executionId, command().executionId);
+  assert.equal(authorization?.tenantId, TENANT);
+  assert.equal(authorization?.deviceId, DEVICE);
+  assert.equal(authorization?.capabilityId, 'camera.open');
+  assert.equal(authorization?.actionId, 'OPEN_CAMERA');
+  assert.equal(authorization?.authorizedAtMs, NOW);
+  assert.equal(authorization?.expiresAtMs, NOW + 30_000);
+  assert.equal(authorization?.authorizesExecution, true);
+  assert.equal(authorization?.cancelled, false);
   assert.equal(result.authorizesExecution, false);
   assert.equal(result.provesExecutionSuccess, false);
   assert.equal(result.retryAuthorized, false);
@@ -174,7 +186,7 @@ test('authority target safeguards and containment failures each prevent any W14 
 
   for (const mutate of mutations) {
     const port = new CapturingW14Port();
-    const adapter = new W07GovernedDeviceDispatchAdapter(port);
+    const adapter = new W07GovernedDeviceDispatchAdapter(port, () => NOW);
     const candidate = gates() as unknown as Record<string, unknown>;
     mutate(candidate as unknown as GovernedDeviceDispatchGateBundle);
     const result = adapter.dispatch({
@@ -196,7 +208,7 @@ test('authenticated W14 context must match canonical action target tenant actor 
     { ...context(), correlationId: 'cor_01ARZ3NDEKTSV4RRFFQ69G5FAW' },
   ]) {
     const port = new CapturingW14Port();
-    const result = new W07GovernedDeviceDispatchAdapter(port).dispatch({
+    const result = new W07GovernedDeviceDispatchAdapter(port, () => NOW).dispatch({
       command: command(),
       context: badContext,
       gates: gates(),
@@ -214,7 +226,7 @@ test('malformed server-owned command identifiers and ordering fail closed before
     { ...command(), orderingSequence: 0 },
   ]) {
     const port = new CapturingW14Port();
-    const adapter = new W07GovernedDeviceDispatchAdapter(port);
+    const adapter = new W07GovernedDeviceDispatchAdapter(port, () => NOW);
     const result = adapter.dispatch({ command: malformed, context: context(), gates: gates() });
     assert.equal(result.ok, false);
     if (!result.ok) assert.equal(result.code, 'MATERIAL_MISMATCH');
@@ -222,9 +234,18 @@ test('malformed server-owned command identifiers and ordering fail closed before
   }
 });
 
+test('expired command deadline prevents minting W07 execution authorization', () => {
+  const port = new CapturingW14Port();
+  const adapter = new W07GovernedDeviceDispatchAdapter(port, () => Date.parse('2026-09-05T21:00:00.000Z'));
+  const result = adapter.dispatch({ command: command(), context: context(), gates: gates() });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.code, 'MATERIAL_MISMATCH');
+  assert.equal(port.calls.length, 0);
+});
+
 test('W14 failure or protocol violation never becomes authority success outcome or retry permission', () => {
   const port = new CapturingW14Port();
-  const adapter = new W07GovernedDeviceDispatchAdapter(port);
+  const adapter = new W07GovernedDeviceDispatchAdapter(port, () => NOW);
 
   port.result = {
     ok: false,
