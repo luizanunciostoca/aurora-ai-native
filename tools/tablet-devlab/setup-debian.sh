@@ -18,12 +18,24 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y git curl ca-certificates build-essential python3 python3-pip jq unzip zip openssh-client postgresql postgresql-client procps lsof
-if ! getent group aurora >/dev/null 2>&1; then
+
+# Android app UIDs/GIDs are high numeric values. A freshly created Debian/PRoot
+# may already contain an unrelated group with the same numeric GID. Reuse the
+# numeric GID instead of failing because the group name `aurora` is absent.
+if ! getent group $TERMUX_GID >/dev/null 2>&1; then
   groupadd -g $TERMUX_GID aurora
 fi
+
 if ! id aurora >/dev/null 2>&1; then
-  useradd -m -u $TERMUX_UID -g $TERMUX_GID -s /bin/bash aurora
+  if getent passwd $TERMUX_UID >/dev/null 2>&1; then
+    useradd -o -m -u $TERMUX_UID -g $TERMUX_GID -s /bin/bash aurora
+  else
+    useradd -m -u $TERMUX_UID -g $TERMUX_GID -s /bin/bash aurora
+  fi
 fi
+
+[[ \"$(id -u aurora)\" == \"$TERMUX_UID\" ]] || { echo 'aurora UID does not match Termux UID' >&2; exit 2; }
+[[ \"$(id -g aurora)\" == \"$TERMUX_GID\" ]] || { echo 'aurora GID does not match Termux GID' >&2; exit 2; }
 install -d -m 0700 -o $TERMUX_UID -g $TERMUX_GID /home/aurora/.nvm
 "
 
@@ -67,6 +79,7 @@ cat <<'EOF'
 Debian/PRoot setup: READY
 
 The host will run as Debian user `aurora`, whose UID/GID mirrors the Termux app.
+If Debian already owns the numeric Termux GID under another group name, that numeric GID is reused safely instead of creating a conflicting duplicate group.
 This lets W15-J readiness directories live in the shared Termux workspace while `/usr/bin/git` remains root-owned in Debian.
 
 Next: enable Wireless debugging and run self-adb.sh.
