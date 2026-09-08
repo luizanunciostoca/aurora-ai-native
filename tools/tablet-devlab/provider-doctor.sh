@@ -24,6 +24,8 @@ DB_ENV="$STATE_DIR/postgres.env"
 PROVIDER="$DEVLAB_ROOT/config/trusted-w15j-provider.mjs"
 MATERIAL="$DEVLAB_ROOT/config/w15j-dp5-material.json"
 DOCTOR_STATE="$STATE_DIR/provider-doctor.txt"
+NODE_VERSION="22.16.0"
+NPM_VERSION="10.9.2"
 
 [[ -d "$HOST_DIR/.git" || -f "$HOST_DIR/.git" ]] || fail "host worktree missing"
 for path in "$WORKTREE_STATE" "$DB_ENV" "$PROVIDER" "$MATERIAL"; do
@@ -43,7 +45,9 @@ set -euo pipefail
 export NVM_DIR=\"\$HOME/.nvm\"
 # shellcheck disable=SC1090
 source \"\$NVM_DIR/nvm.sh\"
-nvm use 22 >/dev/null
+nvm use $NODE_VERSION >/dev/null
+[[ \"\$(node --version)\" == \"v$NODE_VERSION\" ]]
+[[ \"\$(npm --version)\" == \"$NPM_VERSION\" ]]
 cd /aurora-devlab/worktrees/host
 [[ \"\$(git rev-parse HEAD)\" == '$EXPECTED_HOST_SHA' ]]
 [[ -z \"\$(git status --porcelain)\" ]]
@@ -86,6 +90,8 @@ NODE
 cat >"$DOCTOR_STATE" <<EOF
 status=PASS_SOFTWARE_ONLY
 host_candidate_sha=$EXPECTED_HOST_SHA
+node_version=$NODE_VERSION
+npm_version=$NPM_VERSION
 checked_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 authorizes_execution=false
 proves_execution_success=false
