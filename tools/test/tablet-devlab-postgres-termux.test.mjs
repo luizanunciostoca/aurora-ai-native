@@ -6,7 +6,10 @@ import test from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const setup = readFileSync(resolve(repoRoot, 'tools/tablet-devlab/setup-postgres.sh'), 'utf8');
-const bootstrap = readFileSync(resolve(repoRoot, 'tools/tablet-devlab/bootstrap-termux.sh'), 'utf8');
+const bootstrap = readFileSync(
+  resolve(repoRoot, 'tools/tablet-devlab/bootstrap-termux.sh'),
+  'utf8',
+);
 
 test('tablet PostgreSQL runs natively in Termux and never inside PRoot', () => {
   assert.match(bootstrap, /postgresql/);
