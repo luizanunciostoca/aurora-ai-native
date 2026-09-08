@@ -34,8 +34,8 @@ if ! id aurora >/dev/null 2>&1; then
   fi
 fi
 
-[[ \"$(id -u aurora)\" == \"$TERMUX_UID\" ]] || { echo 'aurora UID does not match Termux UID' >&2; exit 2; }
-[[ \"$(id -g aurora)\" == \"$TERMUX_GID\" ]] || { echo 'aurora GID does not match Termux GID' >&2; exit 2; }
+[[ \"\$(id -u aurora)\" == \"$TERMUX_UID\" ]] || { echo 'aurora UID does not match Termux UID' >&2; exit 2; }
+[[ \"\$(id -g aurora)\" == \"$TERMUX_GID\" ]] || { echo 'aurora GID does not match Termux GID' >&2; exit 2; }
 install -d -m 0700 -o $TERMUX_UID -g $TERMUX_GID /home/aurora/.nvm
 "
 
