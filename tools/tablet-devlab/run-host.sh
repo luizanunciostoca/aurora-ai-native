@@ -73,7 +73,7 @@ cd /aurora-devlab/worktrees/host
 # The runner intentionally disables system/global Git config. PRoot can otherwise trigger Git's
 # dubious-ownership protection on the shared Termux worktree even though the mapped aurora UID/GID
 # is the governed operator identity. Bind only this exact worktree as safe through process-local
-# Git config; never use safe.directory=* and never persist trust outside this host process.
+# Git config; never use wildcard safe-directory trust and never persist trust outside this process.
 export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0=safe.directory
 export GIT_CONFIG_VALUE_0=/aurora-devlab/worktrees/host
