@@ -37,8 +37,5 @@ test('tablet PostgreSQL resumes atomic W03 migrations through a hash-bound ledge
   assert.match(setup, /partial\/drifted before ledger adoption/);
   assert.match(setup, /migration .* hash drift/);
   assert.match(setup, /to_regclass\('public\.w03_execution_containment'\)/);
-  assert.doesNotMatch(
-    setup,
-    /to_regclass\('public\.w03_execution_containment_state'\)/,
-  );
+  assert.doesNotMatch(setup, /to_regclass\('public\.w03_execution_containment_state'\)/);
 });
