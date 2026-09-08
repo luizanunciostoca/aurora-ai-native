@@ -5,10 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const source = readFileSync(
-  resolve(repoRoot, 'tools/tablet-devlab/setup-postgres.sh'),
-  'utf8',
-);
+const source = readFileSync(resolve(repoRoot, 'tools/tablet-devlab/setup-postgres.sh'), 'utf8');
 
 test('tablet postgres uses a private aurora-owned cluster under PRoot', () => {
   assert.match(source, /proot-distro login debian/);
