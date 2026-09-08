@@ -17,7 +17,7 @@ proot-distro login debian -- bash -lc "
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y git curl ca-certificates build-essential python3 python3-pip jq unzip zip openssh-client postgresql postgresql-client procps lsof
+apt-get install -y git curl ca-certificates build-essential python3 python3-pip jq unzip zip openssh-client procps lsof
 
 # Android app UIDs/GIDs are high numeric values. A freshly created Debian/PRoot
 # may already contain an unrelated group with the same numeric GID. Reuse the
@@ -71,6 +71,7 @@ termux_uid=$TERMUX_UID
 termux_gid=$TERMUX_GID
 debian_user=aurora
 node_requirement=>=22.16.0 <23
+postgres_runtime=TERMUX_NATIVE_ANDROID
 configured_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 chmod 600 "$DEVLAB_ROOT/state/debian.txt"
@@ -81,6 +82,7 @@ Debian/PRoot setup: READY
 The host will run as Debian user `aurora`, whose UID/GID mirrors the Termux app.
 If Debian already owns the numeric Termux GID under another group name, that numeric GID is reused safely instead of creating a conflicting duplicate group.
 This lets W15-J readiness directories live in the shared Termux workspace while `/usr/bin/git` remains root-owned in Debian.
+PostgreSQL intentionally runs natively in Termux/Android, outside PRoot, and is reached by the Debian host over 127.0.0.1.
 
 Next: enable Wireless debugging and run self-adb.sh.
 EOF
