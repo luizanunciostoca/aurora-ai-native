@@ -9,21 +9,23 @@ This directory turns a representative Android tablet into the physical developme
 ```text
 Samsung / Android tablet
 ├─ Aurora APK under test
-├─ Termux operator shell
+├─ Termux operator/control plane
 │  ├─ git / gh / jq / curl
 │  ├─ android-tools (ADB over Android Wireless Debugging)
+│  ├─ native PostgreSQL for W03 durable state
 │  └─ evidence + development workspace
 └─ Debian under PRoot
    ├─ /usr/bin/git (fixed Linux path required by W15-J host fencing)
    ├─ Node 22 >=22.16 <23
    ├─ npm/build tooling
-   ├─ PostgreSQL for the W03 durable state owners
    └─ exact W15-J LOCAL host
 ```
 
 The Aurora app remains the **system under test**. Termux/self-ADB remains the **operator/control plane**. The app cannot self-declare PASS.
 
 `INTELLIGENCE != AUTHORITY != EXECUTION`.
+
+PostgreSQL intentionally runs natively in Termux/Android, outside PRoot. The Debian host reaches it over `127.0.0.1:5432`. This avoids relying on System V shared-memory behavior that PRoot does not provide reliably while preserving W03's PostgreSQL-backed durable-state contracts.
 
 ## Canonical same-tablet transport
 
@@ -63,6 +65,8 @@ The exact APK is signed with a CI-generated debug signing identity. If a differe
 bash tools/tablet-devlab/bootstrap-termux.sh
 bash tools/tablet-devlab/setup-debian.sh
 ```
+
+`bootstrap-termux.sh` installs the native Termux PostgreSQL runtime used by W03. `setup-debian.sh` prepares only the Linux host/build userland; PostgreSQL is deliberately not run inside PRoot.
 
 4. Pair/connect self-ADB:
 
@@ -107,7 +111,7 @@ That explicit mode uninstalls only package `ai.aurora.device.local`, which remov
 bash tools/tablet-devlab/setup-postgres.sh
 ```
 
-The generated database environment file remains local, mode `0600`, outside Git. Database readiness does not authorize execution and does not constitute physical acceptance.
+The script creates a private native-Termux PostgreSQL cluster under the DevLab root, binds only to `127.0.0.1`, applies W03 migrations 001/002/003 and verifies the idempotency, execution-attempt quota and containment tables. The generated database environment file remains local, mode `0600`, outside Git. Database readiness does not authorize execution and does not constitute physical acceptance.
 
 9. On the physical tablet, record an interactive exact-tuple operator consent for the one bounded positive-effect window:
 
@@ -213,7 +217,7 @@ This is the preferred long-term model because Android's official Linux SDK/build
 Tablet-only means **no PC**, not "no independent reviewer". Final DP5 still requires:
 
 - exact current APK install/readback on the representative physical tablet;
-- local PostgreSQL with W03 migrations and durable state owners;
+- local native-Termux PostgreSQL with W03 migrations and durable state owners;
 - current W02/W07 authority and W14 transport/session truth;
 - fresh interactive exact-tuple operator consent for the one bounded positive-effect window;
 - provider doctor PASS from the exact host candidate;
