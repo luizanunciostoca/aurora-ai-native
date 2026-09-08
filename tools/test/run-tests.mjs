@@ -64,6 +64,7 @@ controlTests.sort();
 const testFiles = [
   'tools/test/smoke.test.mjs',
   'tools/test/tablet-devlab.test.mjs',
+  'tools/test/tablet-devlab-postgres-proot.test.mjs',
   'tools/test/tablet-devlab-jq-boolean.test.mjs',
   'tools/test/tablet-devlab-self-binding.test.mjs',
   'tools/test/tablet-devlab-dossier-lifecycle.test.mjs',
