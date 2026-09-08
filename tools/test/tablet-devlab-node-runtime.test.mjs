@@ -35,6 +35,6 @@ test('host launcher binds Git safe-directory trust to only the exact shared host
   assert.match(source, /GIT_CONFIG_COUNT=1/);
   assert.match(source, /GIT_CONFIG_KEY_0=safe\.directory/);
   assert.match(source, /GIT_CONFIG_VALUE_0=\/aurora-devlab\/worktrees\/host/);
-  assert.doesNotMatch(source, /safe\.directory=\*/);
-  assert.match(source, /never persist trust outside this host process/);
+  assert.doesNotMatch(source, /^export GIT_CONFIG_VALUE_\d+=\*$/m);
+  assert.match(source, /never persist trust outside this process/);
 });
