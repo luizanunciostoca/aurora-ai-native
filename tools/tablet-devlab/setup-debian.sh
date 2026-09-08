@@ -12,6 +12,8 @@ command -v proot-distro >/dev/null 2>&1 || fail "proot-distro is missing; run bo
 DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 TERMUX_UID="$(id -u)"
 TERMUX_GID="$(id -g)"
+NODE_VERSION="22.16.0"
+NPM_VERSION="10.9.2"
 
 proot-distro login debian -- bash -lc "
 set -euo pipefail
@@ -39,21 +41,25 @@ fi
 install -d -m 0700 -o $TERMUX_UID -g $TERMUX_GID /home/aurora/.nvm
 "
 
-proot-distro login debian --user aurora -- bash -lc '
+proot-distro login debian --user aurora -- bash -lc "
 set -euo pipefail
-export NVM_DIR="$HOME/.nvm"
-if [[ ! -s "$NVM_DIR/nvm.sh" ]]; then
-  rm -rf "$NVM_DIR"/*
-  git clone --filter=blob:none --branch v0.40.3 https://github.com/nvm-sh/nvm.git "$NVM_DIR"
+export NVM_DIR=\"\$HOME/.nvm\"
+if [[ ! -s \"\$NVM_DIR/nvm.sh\" ]]; then
+  rm -rf \"\$NVM_DIR\"/*
+  git clone --filter=blob:none --branch v0.40.3 https://github.com/nvm-sh/nvm.git \"\$NVM_DIR\"
 fi
 # shellcheck disable=SC1090
-source "$NVM_DIR/nvm.sh"
-nvm install 22
-nvm alias default 22
-nvm use 22
-node -e '\''const [major,minor]=process.versions.node.split(".").map(Number); if (major!==22 || minor<16) { console.error(`Node ${process.versions.node} is outside >=22.16 <23`); process.exit(2); }'\''
-npm --version
-'
+source \"\$NVM_DIR/nvm.sh\"
+nvm install $NODE_VERSION
+nvm alias default $NODE_VERSION
+nvm use $NODE_VERSION >/dev/null
+[[ \"\$(node --version)\" == \"v$NODE_VERSION\" ]] || { echo 'exact Node runtime mismatch' >&2; exit 2; }
+if [[ \"\$(npm --version)\" != \"$NPM_VERSION\" ]]; then
+  npm install --global npm@$NPM_VERSION >/dev/null
+fi
+[[ \"\$(npm --version)\" == \"$NPM_VERSION\" ]] || { echo 'exact npm runtime mismatch' >&2; exit 2; }
+printf 'Node %s / npm %s pinned for W15-J host\n' \"\$(node --version)\" \"\$(npm --version)\"
+"
 
 proot-distro login debian -- bash -lc '
 set -euo pipefail
@@ -71,6 +77,8 @@ termux_uid=$TERMUX_UID
 termux_gid=$TERMUX_GID
 debian_user=aurora
 node_requirement=>=22.16.0 <23
+node_version=$NODE_VERSION
+npm_version=$NPM_VERSION
 postgres_runtime=TERMUX_NATIVE_ANDROID
 configured_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
@@ -81,6 +89,7 @@ Debian/PRoot setup: READY
 
 The host will run as Debian user `aurora`, whose UID/GID mirrors the Termux app.
 If Debian already owns the numeric Termux GID under another group name, that numeric GID is reused safely instead of creating a conflicting duplicate group.
+The W15-J host runtime is pinned exactly to Node 22.16.0 and npm 10.9.2, matching canonical CI/package-manager requirements.
 This lets W15-J readiness directories live in the shared Termux workspace while `/usr/bin/git` remains root-owned in Debian.
 PostgreSQL intentionally runs natively in Termux/Android, outside PRoot, and is reached by the Debian host over 127.0.0.1.
 
