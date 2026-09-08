@@ -50,9 +50,10 @@ if [[ ! -s \"\$NVM_DIR/nvm.sh\" ]]; then
 fi
 # shellcheck disable=SC1090
 source \"\$NVM_DIR/nvm.sh\"
-nvm install $NODE_VERSION
+nvm install 22.16.0
 nvm alias default $NODE_VERSION
 nvm use $NODE_VERSION >/dev/null
+node -e 'const [major,minor]=process.versions.node.split(\".\").map(Number); if (major!==22 || minor<16) { console.error(`Node ${process.versions.node} is outside >=22.16 <23`); process.exit(2); }'
 [[ \"\$(node --version)\" == \"v$NODE_VERSION\" ]] || { echo 'exact Node runtime mismatch' >&2; exit 2; }
 if [[ \"\$(npm --version)\" != \"$NPM_VERSION\" ]]; then
   npm install --global npm@$NPM_VERSION >/dev/null
