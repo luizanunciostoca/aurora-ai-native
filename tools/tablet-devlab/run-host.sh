@@ -27,6 +27,8 @@ READINESS_PARENT="$DEVLAB_ROOT/host-readiness"
 STATE_DIR="$DEVLAB_ROOT/state"
 WORKTREE_STATE="$STATE_DIR/worktrees.txt"
 DB_ENV="$STATE_DIR/postgres.env"
+NODE_VERSION="22.16.0"
+NPM_VERSION="10.9.2"
 
 [[ -d "$HOST_DIR/.git" || -f "$HOST_DIR/.git" ]] || fail "exact host worktree is missing; run worktrees.sh"
 secure_regular_file "$WORKTREE_STATE" || fail "trusted worktree state missing or insecure; run worktrees.sh"
@@ -63,8 +65,9 @@ set -euo pipefail
 export NVM_DIR=\"\$HOME/.nvm\"
 # shellcheck disable=SC1090
 source \"\$NVM_DIR/nvm.sh\"
-nvm use 22 >/dev/null
-node -e 'const [M,m]=process.versions.node.split(\".\").map(Number); if(M!==22||m<16) process.exit(2)'
+nvm use $NODE_VERSION >/dev/null
+[[ \"\$(node --version)\" == \"v$NODE_VERSION\" ]]
+[[ \"\$(npm --version)\" == \"$NPM_VERSION\" ]]
 cd /aurora-devlab/worktrees/host
 [[ \"\$(git rev-parse HEAD)\" == '$EXPECTED_HOST_SHA' ]]
 [[ -z \"\$(git status --porcelain)\" ]]
