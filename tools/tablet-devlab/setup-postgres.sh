@@ -33,36 +33,69 @@ mkdir -p "$STATE_DIR"
 chmod 700 "$STATE_DIR"
 
 proot-distro login debian \
+  --user aurora \
   --bind "$DEVLAB_ROOT:/aurora-devlab" \
   -- bash -lc "
 set -euo pipefail
-command -v pg_lsclusters >/dev/null
-command -v pg_ctlcluster >/dev/null
-command -v psql >/dev/null
-command -v runuser >/dev/null
 
-version=\"\$(pg_lsclusters --no-header 2>/dev/null | awk 'NR==1 {print \$1}')\"
-if [[ -z \"\$version\" ]]; then
-  version=\"\$(find /usr/lib/postgresql -mindepth 1 -maxdepth 1 -type d -printf '%f\\n' | sort -V | tail -1)\"
-  [[ -n \"\$version\" ]] || { echo 'no PostgreSQL version installed' >&2; exit 2; }
-  pg_createcluster \"\$version\" main >/dev/null
+PG_BINDIR=\"\$(find /usr/lib/postgresql -mindepth 2 -maxdepth 2 -type d -name bin 2>/dev/null | sort -V | tail -1)\"
+[[ -n \"\$PG_BINDIR\" ]] || { echo 'PostgreSQL bindir not found' >&2; exit 2; }
+for cmd in initdb pg_ctl psql createdb pg_isready; do
+  [[ -x \"\$PG_BINDIR/\$cmd\" ]] || { echo \"missing PostgreSQL binary: \$cmd\" >&2; exit 2; }
+done
+
+PG_ROOT=\"\$HOME/.local/share/aurora-w15j-postgres\"
+PG_DATA=\"\$PG_ROOT/data\"
+PG_SOCKET=\"\$PG_ROOT/socket\"
+PG_LOG=\"\$PG_ROOT/postgres.log\"
+mkdir -p \"\$PG_ROOT\" \"\$PG_SOCKET\"
+chmod 700 \"\$PG_ROOT\" \"\$PG_SOCKET\"
+
+if [[ -d \"\$PG_DATA\" && ! -f \"\$PG_DATA/PG_VERSION\" ]]; then
+  if find \"\$PG_DATA\" -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
+    echo \"private DevLab PostgreSQL data directory is non-empty but uninitialized: \$PG_DATA\" >&2
+    exit 2
+  fi
 fi
 
-if ! pg_ctlcluster \"\$version\" main status >/dev/null 2>&1; then
-  pg_ctlcluster \"\$version\" main start
+if [[ ! -f \"\$PG_DATA/PG_VERSION\" ]]; then
+  mkdir -p \"\$PG_DATA\"
+  chmod 700 \"\$PG_DATA\"
+  \"\$PG_BINDIR/initdb\" \
+    --pgdata=\"\$PG_DATA\" \
+    --username=aurora \
+    --auth-local=trust \
+    --auth-host=scram-sha-256 \
+    --encoding=UTF8 \
+    --no-locale >/dev/null
 fi
-pg_isready -h '$DB_HOST' -p '$DB_PORT' >/dev/null
 
-role_exists=\"\$(runuser -u postgres -- psql -Atqc \"SELECT 1 FROM pg_roles WHERE rolname = '$DB_ROLE'\")\"
+if ! \"\$PG_BINDIR/pg_ctl\" -D \"\$PG_DATA\" status >/dev/null 2>&1; then
+  if \"\$PG_BINDIR/pg_isready\" -h '$DB_HOST' -p '$DB_PORT' >/dev/null 2>&1; then
+    echo 'port $DB_PORT is already serving a different PostgreSQL instance' >&2
+    exit 2
+  fi
+  \"\$PG_BINDIR/pg_ctl\" \
+    -D \"\$PG_DATA\" \
+    -l \"\$PG_LOG\" \
+    -o \"-h $DB_HOST -p $DB_PORT -k \\\"\$PG_SOCKET\\\"\" \
+    start -w >/dev/null
+fi
+
+\"\$PG_BINDIR/pg_isready\" -h '$DB_HOST' -p '$DB_PORT' >/dev/null
+
+role_exists=\"\$(\"\$PG_BINDIR/psql\" -h \"\$PG_SOCKET\" -p '$DB_PORT' -d postgres -Atqc \"SELECT 1 FROM pg_roles WHERE rolname = '$DB_ROLE'\")\"
 if [[ \"\$role_exists\" != '1' ]]; then
-  runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c \"CREATE ROLE $DB_ROLE LOGIN PASSWORD '$PASSWORD'\" >/dev/null
+  \"\$PG_BINDIR/psql\" -h \"\$PG_SOCKET\" -p '$DB_PORT' -d postgres -v ON_ERROR_STOP=1 \
+    -c \"CREATE ROLE $DB_ROLE LOGIN PASSWORD '$PASSWORD'\" >/dev/null
 else
-  runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c \"ALTER ROLE $DB_ROLE PASSWORD '$PASSWORD'\" >/dev/null
+  \"\$PG_BINDIR/psql\" -h \"\$PG_SOCKET\" -p '$DB_PORT' -d postgres -v ON_ERROR_STOP=1 \
+    -c \"ALTER ROLE $DB_ROLE PASSWORD '$PASSWORD'\" >/dev/null
 fi
 
-db_exists=\"\$(runuser -u postgres -- psql -Atqc \"SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'\")\"
+db_exists=\"\$(\"\$PG_BINDIR/psql\" -h \"\$PG_SOCKET\" -p '$DB_PORT' -d postgres -Atqc \"SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'\")\"
 if [[ \"\$db_exists\" != '1' ]]; then
-  runuser -u postgres -- createdb -O '$DB_ROLE' '$DB_NAME'
+  \"\$PG_BINDIR/createdb\" -h \"\$PG_SOCKET\" -p '$DB_PORT' -O '$DB_ROLE' '$DB_NAME'
 fi
 
 export PGPASSWORD='$PASSWORD'
@@ -71,12 +104,12 @@ for migration in \
   /aurora-devlab/worktrees/host/migrations/001_w03_postgres_baseline.sql \
   /aurora-devlab/worktrees/host/migrations/002_w03_execution_attempt_quota.sql \
   /aurora-devlab/worktrees/host/migrations/003_w03_execution_containment_state.sql; do
-  psql \"\$DB_URL\" -v ON_ERROR_STOP=1 -f \"\$migration\" >/dev/null
+  \"\$PG_BINDIR/psql\" \"\$DB_URL\" -v ON_ERROR_STOP=1 -f \"\$migration\" >/dev/null
 done
 
-psql \"\$DB_URL\" -Atqc \"SELECT to_regclass('public.w03_idempotency_key') IS NOT NULL\" | grep -qx t
-psql \"\$DB_URL\" -Atqc \"SELECT to_regclass('public.w03_execution_attempt_quota') IS NOT NULL\" | grep -qx t
-psql \"\$DB_URL\" -Atqc \"SELECT to_regclass('public.w03_execution_containment_state') IS NOT NULL\" | grep -qx t
+\"\$PG_BINDIR/psql\" \"\$DB_URL\" -Atqc \"SELECT to_regclass('public.w03_idempotency_key') IS NOT NULL\" | grep -qx t
+\"\$PG_BINDIR/psql\" \"\$DB_URL\" -Atqc \"SELECT to_regclass('public.w03_execution_attempt_quota') IS NOT NULL\" | grep -qx t
+\"\$PG_BINDIR/psql\" \"\$DB_URL\" -Atqc \"SELECT to_regclass('public.w03_execution_containment_state') IS NOT NULL\" | grep -qx t
 "
 
 umask 077
@@ -87,6 +120,8 @@ chmod 600 "$DB_ENV"
 
 cat >"$DB_STATE" <<EOF
 status=READY
+cluster_scope=PRIVATE_DEVLAB_USER_CLUSTER
+server_user=aurora
 host=$DB_HOST
 port=$DB_PORT
 database=$DB_NAME
