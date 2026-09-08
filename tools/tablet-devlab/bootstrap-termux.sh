@@ -25,6 +25,7 @@ PACKAGES=(
   python
   proot-distro
   android-tools
+  postgresql
   coreutils
   findutils
   grep
@@ -71,6 +72,7 @@ Aurora Tablet-Only DevLab Termux bootstrap: READY
 Root: $DEVLAB_ROOT
 Android API: $SDK
 Architecture: $(uname -m)
+PostgreSQL runtime: native Termux/Android
 
 Next:
   bash tools/tablet-devlab/setup-debian.sh
