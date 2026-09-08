@@ -52,7 +52,9 @@ mkdir -p \
   "$DEVLAB_ROOT/screenshots"
 chmod 700 "$DEVLAB_ROOT" "$DEVLAB_ROOT/config" "$DEVLAB_ROOT/state"
 
-if ! proot-distro list --installed 2>/dev/null | grep -Eq '^[[:space:]]*debian([[:space:]]|$)'; then
+# `proot-distro list --installed` output varies across Termux releases. Probe the
+# named distro directly so an already-working Debian is never reinstalled.
+if ! proot-distro login debian -- /usr/bin/true >/dev/null 2>&1; then
   printf 'Installing Debian PRoot userland...\n'
   proot-distro install debian
 fi
