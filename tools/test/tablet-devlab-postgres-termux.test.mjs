@@ -13,6 +13,7 @@ const bootstrap = readFileSync(
 
 test('tablet PostgreSQL runs natively in Termux and never inside PRoot', () => {
   assert.match(bootstrap, /postgresql/);
+  assert.match(bootstrap, /proot-distro login debian -- \/usr\/bin\/true/);
   assert.match(setup, /TERMUX_NATIVE_PRIVATE_CLUSTER/);
   assert.match(setup, /TERMUX_NATIVE_ANDROID/);
   assert.match(setup, /initdb/);
@@ -25,4 +26,19 @@ test('tablet PostgreSQL runs natively in Termux and never inside PRoot', () => {
   assert.doesNotMatch(setup, /\/var\/lib\/postgresql/);
   assert.match(setup, /authorizes_execution=false/);
   assert.match(setup, /physical_acceptance=false/);
+});
+
+test('tablet PostgreSQL resumes atomic W03 migrations through a hash-bound ledger', () => {
+  assert.match(setup, /aurora_devlab_schema_migration/);
+  assert.match(setup, /sha256sum/);
+  assert.match(setup, /adopted_existing/);
+  assert.match(setup, /ADOPTED_EXISTING_ATOMIC_SCHEMA/);
+  assert.match(setup, /VERIFIED_LEDGER/);
+  assert.match(setup, /partial\/drifted before ledger adoption/);
+  assert.match(setup, /migration .* hash drift/);
+  assert.match(setup, /to_regclass\('public\.w03_execution_containment'\)/);
+  assert.doesNotMatch(
+    setup,
+    /to_regclass\('public\.w03_execution_containment_state'\)/,
+  );
 });
