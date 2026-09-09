@@ -55,25 +55,29 @@ READINESS_DIR="$READINESS_PARENT/$RUN_ID"
 printf '%s\n' "$READINESS_DIR" >"$STATE_DIR/last-readiness-termux.txt"
 chmod 600 "$STATE_DIR/last-readiness-termux.txt"
 
-# The Debian `aurora` user mirrors the Termux UID/GID. The shared workspace is therefore owned by
-# the same effective operator identity while /usr/bin/git inside Debian remains root-owned.
+# The trusted #462 runner requires /usr/bin/git to be root-owned. On Android/PRoot, the synthetic
+# Debian root identity exposes the Debian filesystem with uid=0 while providing no Android root or
+# kernel privilege escalation. Keep Aurora's HOME/NVM runtime under /home/aurora, and use this
+# synthetic root identity only for the governed host process so the existing trusted-Git invariant
+# remains unchanged.
 proot-distro login debian \
-  --user aurora \
   --bind "$DEVLAB_ROOT:/aurora-devlab" \
   -- bash -lc "
 set -euo pipefail
-export NVM_DIR=\"\$HOME/.nvm\"
+export HOME=/home/aurora
+export NVM_DIR=/home/aurora/.nvm
 # shellcheck disable=SC1090
 source \"\$NVM_DIR/nvm.sh\"
 nvm use $NODE_VERSION >/dev/null
 [[ \"\$(node --version)\" == \"v$NODE_VERSION\" ]]
 [[ \"\$(npm --version)\" == \"$NPM_VERSION\" ]]
+[[ \"\$(id -u)\" == \"0\" ]]
+[[ \"\$(stat -c '%u' /usr/bin/git)\" == \"0\" ]]
 cd /aurora-devlab/worktrees/host
 
-# The runner intentionally disables system/global Git config. PRoot can otherwise trigger Git's
-# dubious-ownership protection on the shared Termux worktree even though the mapped aurora UID/GID
-# is the governed operator identity. Bind only this exact worktree as safe through process-local
-# Git config; never use wildcard safe-directory trust and never persist trust outside this process.
+# The runner intentionally disables system/global Git config. Bind only this exact worktree as safe
+# through process-local Git config; never use wildcard safe-directory trust and never persist trust
+# outside this process.
 export GIT_CONFIG_COUNT=1
 export GIT_CONFIG_KEY_0=safe.directory
 export GIT_CONFIG_VALUE_0=/aurora-devlab/worktrees/host
