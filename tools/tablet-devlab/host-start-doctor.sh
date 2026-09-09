@@ -84,7 +84,7 @@ node --input-type=module <<'NODE'
 import { request } from 'node:http';
 
 function fail(code, status = 30) {
-  process.stdout.write(`W15J_HOST_START_DOCTOR=FAIL code=${code}\n`);
+  process.stdout.write('W15J_HOST_START_DOCTOR=FAIL code=' + code + '\n');
   process.exit(status);
 }
 
