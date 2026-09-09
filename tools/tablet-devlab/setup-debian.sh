@@ -19,7 +19,7 @@ proot-distro login debian -- bash -lc "
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y git curl ca-certificates build-essential python3 python3-pip jq unzip zip openssh-client procps lsof
+apt-get install -y git curl ca-certificates build-essential python3 python3-pip jq unzip zip openssh-client procps lsof postgresql-client
 
 # Android app UIDs/GIDs are high numeric values. A freshly created Debian/PRoot
 # may already contain an unrelated group with the same numeric GID. Reuse the
@@ -70,6 +70,7 @@ mode=$(stat -c %a /usr/bin/git)
 other=$((10#$mode % 10))
 group=$(((10#$mode / 10) % 10))
 (( (group & 2) == 0 && (other & 2) == 0 )) || { echo "/usr/bin/git must not be group/other writable" >&2; exit 2; }
+command -v psql >/dev/null 2>&1 || { echo "psql client missing" >&2; exit 2; }
 '
 
 mkdir -p "$DEVLAB_ROOT/state"
@@ -81,6 +82,7 @@ node_requirement=>=22.16.0 <23
 node_version=$NODE_VERSION
 npm_version=$NPM_VERSION
 postgres_runtime=TERMUX_NATIVE_ANDROID
+postgres_client=DEBIAN_PSQL_CLIENT
 configured_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 chmod 600 "$DEVLAB_ROOT/state/debian.txt"
@@ -88,11 +90,11 @@ chmod 600 "$DEVLAB_ROOT/state/debian.txt"
 cat <<'EOF'
 Debian/PRoot setup: READY
 
-The host will run as Debian user `aurora`, whose UID/GID mirrors the Termux app.
+The host will run from the synthetic Debian/PRoot root context required by the trusted-Git invariant while Aurora's HOME/NVM runtime remains under /home/aurora.
+The `aurora` user still mirrors the Termux UID/GID for ordinary DevLab preparation and provider validation.
 If Debian already owns the numeric Termux GID under another group name, that numeric GID is reused safely instead of creating a conflicting duplicate group.
 The W15-J host runtime is pinned exactly to Node 22.16.0 and npm 10.9.2, matching canonical CI/package-manager requirements.
-This lets W15-J readiness directories live in the shared Termux workspace while `/usr/bin/git` remains root-owned in Debian.
-PostgreSQL intentionally runs natively in Termux/Android, outside PRoot, and is reached by the Debian host over 127.0.0.1.
+PostgreSQL intentionally runs natively in Termux/Android, outside PRoot, and the Debian host reaches it over 127.0.0.1 using the Debian psql client.
 
 Next: enable Wireless debugging and run self-adb.sh.
 EOF
