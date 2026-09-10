@@ -85,6 +85,8 @@ import { spawnSync } from 'node:child_process';
 import { connect } from 'node:net';
 import { request } from 'node:http';
 
+const ROLLBACK_COMMAND_TAGS = new Set(['BEGIN', 'ROLLBACK', 'COMMIT']);
+
 function fail(code, status = 30) {
   process.stdout.write('W15J_HOST_REAL_START_DOCTOR=FAIL code=' + code + '\n');
   process.exit(status);
@@ -93,7 +95,14 @@ function fail(code, status = 30) {
 function getJson(port, path) {
   return new Promise((resolve, reject) => {
     const req = request(
-      { host: '127.0.0.1', port, method: 'GET', path, headers: { accept: 'application/json' }, timeout: 2000 },
+      {
+        host: '127.0.0.1',
+        port,
+        method: 'GET',
+        path,
+        headers: { accept: 'application/json' },
+        timeout: 2000,
+      },
       (res) => {
         let body = '';
         res.setEncoding('utf8');
@@ -134,7 +143,9 @@ function portOccupied(port) {
 let provider;
 try {
   provider = await import('/aurora-devlab/config/trusted-w15j-provider.mjs');
-  if (typeof provider.createW15JLocalPhysicalHostOperatorInput !== 'function') fail('PROVIDER_EXPORT_INVALID', 31);
+  if (typeof provider.createW15JLocalPhysicalHostOperatorInput !== 'function') {
+    fail('PROVIDER_EXPORT_INVALID', 31);
+  }
 } catch {
   fail('PROVIDER_IMPORT_REJECTED', 31);
 }
@@ -164,6 +175,7 @@ if (captured === undefined || captured.executionStateSeed === undefined) {
   fail('OPERATOR_INPUT_INCOMPLETE', 33);
 }
 
+let rollbackSqlDiagnostic = 'NOT_RUN';
 const rollbackSql = {
   query({ sql, variables }) {
     const args = [
@@ -184,15 +196,46 @@ const rollbackSql = {
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 5000,
     });
-    if (result.status !== 0 || result.signal !== null) throw new Error('psql rollback dry-run failed');
-    return result.stdout;
+    if (result.status !== 0 || result.signal !== null) {
+      rollbackSqlDiagnostic = 'PSQL_PROCESS_REJECTED';
+      throw new Error('psql rollback dry-run failed');
+    }
+
+    const meaningful = result.stdout
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !ROLLBACK_COMMAND_TAGS.has(line));
+    if (meaningful.length !== 1) {
+      rollbackSqlDiagnostic = 'OUTPUT_AMBIGUOUS';
+      throw new Error('psql rollback dry-run output was ambiguous');
+    }
+    rollbackSqlDiagnostic = 'QUERY_OK';
+    return meaningful[0] + '\n';
   },
 };
 
 const stager = new stagerModule.W03PostgresPhysicalExecutionStateStager(rollbackSql);
 const seedDryRun = stager.stage(captured.executionStateSeed);
-if (!seedDryRun.ok || seedDryRun.disposition !== 'STAGED') {
+if (!seedDryRun.ok) {
+  process.stdout.write(
+    'w03_seed_real_dry_run=FAIL stager_code=' +
+      seedDryRun.code +
+      ' sql_diagnostic=' +
+      rollbackSqlDiagnostic +
+      '\n',
+  );
+  if (seedDryRun.code === 'ATTEMPT_ALREADY_EXISTS') fail('W03_SEED_ALREADY_EXISTS', 34);
+  if (seedDryRun.code === 'MALFORMED') fail('W03_SEED_MALFORMED', 34);
+  if (seedDryRun.code === 'UNAVAILABLE' && rollbackSqlDiagnostic === 'PSQL_PROCESS_REJECTED') {
+    fail('W03_SEED_SQL_UNAVAILABLE', 34);
+  }
+  if (seedDryRun.code === 'UNAVAILABLE' && rollbackSqlDiagnostic === 'OUTPUT_AMBIGUOUS') {
+    fail('W03_SEED_OUTPUT_AMBIGUOUS', 34);
+  }
   fail('W03_SEED_REAL_DRY_RUN_REJECTED', 34);
+}
+if (seedDryRun.disposition !== 'STAGED') {
+  fail('W03_SEED_UNEXPECTED_DISPOSITION', 34);
 }
 
 if (await portOccupied(8080)) fail('FIXED_PORT_8080_OCCUPIED', 35);
@@ -240,6 +283,8 @@ process.stdout.write('w03_seed_real_dry_run=PASS\n');
 process.stdout.write('fixed_ports_available=PASS\n');
 process.stdout.write('fixed_port_composition=PASS\n');
 process.stdout.write('W15J_HOST_REAL_START_DOCTOR=PASS_SOFTWARE_ONLY\n');
-process.stdout.write('persists_w03_state=false\nexecutes_physical_effect=false\nauthorizes_execution=false\nproves_execution_success=false\nretry_authorized=false\nphysical_acceptance=false\n');
+process.stdout.write(
+  'persists_w03_state=false\nexecutes_physical_effect=false\nauthorizes_execution=false\nproves_execution_success=false\nretry_authorized=false\nphysical_acceptance=false\n',
+);
 NODE
 "
