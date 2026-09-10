@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const doctor = readFileSync(resolve(repoRoot, 'tools/tablet-devlab/host-real-start-doctor.sh'), 'utf8');
+const doctor = readFileSync(
+  resolve(repoRoot, 'tools/tablet-devlab/host-real-start-doctor.sh'),
+  'utf8',
+);
 
 test('real-start doctor isolates fixed-port and real-W03 startup without durable mutation', () => {
   assert.match(doctor, /proot-distro login debian/);
