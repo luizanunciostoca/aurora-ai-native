@@ -109,9 +109,7 @@ function decodeUrlComponent(value: string, label: string): string {
   }
 }
 
-function psqlConnectionEnv(
-  databaseUrl: string,
-): Readonly<Record<string, string | undefined>> {
+function psqlConnectionEnv(databaseUrl: string): Readonly<Record<string, string | undefined>> {
   let parsed: URL;
   try {
     parsed = new URL(databaseUrl);

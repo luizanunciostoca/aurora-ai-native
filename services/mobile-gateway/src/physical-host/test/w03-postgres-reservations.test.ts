@@ -223,7 +223,8 @@ test('psql executor splits the URI into libpq env fields and keeps credentials o
   assert.equal(observedEnv.PGSERVICE, undefined);
   assert.equal(
     observedArgs.some(
-      (value) => value.includes(databaseUrl) || value.includes('physical-user') || value.includes('s:ecret'),
+      (value) =>
+        value.includes(databaseUrl) || value.includes('physical-user') || value.includes('s:ecret'),
     ),
     false,
   );

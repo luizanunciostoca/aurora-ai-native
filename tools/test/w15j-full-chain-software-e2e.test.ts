@@ -13,6 +13,8 @@ import { tmpdir } from 'node:os';
 // @ts-expect-error -- cross-service test uses Node 22 built-ins without repository-wide @types/node.
 import { join } from 'node:path';
 // @ts-expect-error -- cross-service test uses Node 22 built-ins without repository-wide @types/node.
+import { env as processEnv } from 'node:process';
+// @ts-expect-error -- cross-service test uses Node 22 built-ins without repository-wide @types/node.
 import test from 'node:test';
 
 import type {
@@ -411,7 +413,7 @@ for (let index = 0; index < args.length; index += 1) {
   }
 }
 
-const statePath = process.env.PGDATABASE;
+const statePath = process.env.AURORA_W15J_TEST_STATE_PATH;
 if (!statePath) process.exit(2);
 const state = existsSync(statePath)
   ? JSON.parse(readFileSync(statePath, 'utf8'))
@@ -519,6 +521,7 @@ function createFakePsql(): {
 
 test('software E2E crosses loopback W14/W07/W02 dispatch and observes authenticated receipt evidence', async () => {
   const fakePsql = createFakePsql();
+  processEnv.AURORA_W15J_TEST_STATE_PATH = fakePsql.statePath;
   const authoritySource = new ServerAuthoritySource();
   const deviceExecutionSource = new DeviceExecutionSource();
   const authorityResults: AuthorityEvaluationResult[] = [];
@@ -558,7 +561,7 @@ test('software E2E crosses loopback W14/W07/W02 dispatch and observes authentica
   });
   const host = new W15JLocalPhysicalHost(
     {
-      databaseUrl: fakePsql.statePath,
+      databaseUrl: 'postgresql://software-e2e@127.0.0.1/aurora_w15j_test',
       psqlBinary: fakePsql.executable,
       gatewayPort: 0,
       bootstrapPort: 0,
@@ -817,6 +820,7 @@ test('software E2E crosses loopback W14/W07/W02 dispatch and observes authentica
     bootstrapAgent.destroy();
     gatewayAgent.destroy();
     await host.stop();
+    delete processEnv.AURORA_W15J_TEST_STATE_PATH;
     rmSync(fakePsql.directory, { recursive: true, force: true });
   }
 });
