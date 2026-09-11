@@ -156,7 +156,6 @@ function runPsql(stage, sql, variables = {}) {
   for (const [key, value] of Object.entries(variables)) {
     args.push('--set', key + '=' + value);
   }
-  args.push('--command', sql);
 
   let env;
   try {
@@ -172,10 +171,12 @@ function runPsql(stage, sql, variables = {}) {
     return Object.freeze({ ok: false, lines: [] });
   }
 
+  const input = sql.endsWith('\n') ? sql : sql + '\n';
   const result = spawnSync('psql', args, {
     encoding: 'utf8',
     env,
-    stdio: ['ignore', 'pipe', 'pipe'],
+    input,
+    stdio: ['pipe', 'pipe', 'pipe'],
     timeout: 5000,
   });
 
