@@ -137,10 +137,9 @@ function psqlConnectionEnv(databaseUrl: string): Readonly<Record<string, string 
   const password =
     parsed.password.length === 0 ? undefined : decodeUrlComponent(parsed.password, 'password');
 
-  const env: Record<string, string | undefined> = { ...processEnv };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith('PG')) delete env[key];
-  }
+  const env: Record<string, string | undefined> = Object.fromEntries(
+    Object.entries(processEnv).filter(([key]) => !key.startsWith('PG')),
+  );
   env.PGHOST = parsed.hostname;
   env.PGPORT = port;
   if (username !== undefined) env.PGUSER = username;
