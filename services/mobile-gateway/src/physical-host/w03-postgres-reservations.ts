@@ -88,7 +88,8 @@ type ExecFileSyncLike = (
   options: Readonly<{
     encoding: 'utf8';
     env: Readonly<Record<string, string | undefined>>;
-    stdio: readonly ['ignore', 'pipe', 'pipe'];
+    input: string;
+    stdio: readonly ['pipe', 'pipe', 'pipe'];
     timeout: number;
   }>,
 ) => string;
@@ -155,9 +156,10 @@ function psqlConnectionEnv(databaseUrl: string): Readonly<Record<string, string 
  * LOCAL physical-host SQL executor over the accepted W03 Postgres schema.
  *
  * The database URL is decomposed into libpq connection environment fields so credentials stay out
- * of process argv while PGDATABASE contains only the database name. Values are validated by callers
- * and passed through psql variables, so this layer neither interpolates raw identity into SQL nor
- * owns a second idempotency ledger.
+ * of process argv while PGDATABASE contains only the database name. SQL is delivered on stdin so
+ * psql client-side variables remain available without placing SQL or credentials in argv. Values
+ * are validated by callers and passed through psql variables, so this layer neither interpolates
+ * raw identity into SQL nor owns a second idempotency ledger.
  */
 export class PsqlW03SyncExecutor implements W03SyncSqlExecutor {
   readonly #connectionEnv: Readonly<Record<string, string | undefined>>;
@@ -207,13 +209,14 @@ export class PsqlW03SyncExecutor implements W03SyncSqlExecutor {
       }
       args.push('--set', `${key}=${value}`);
     }
-    args.push('--command', request.sql);
+    const input = request.sql.endsWith('\n') ? request.sql : `${request.sql}\n`;
 
     try {
       return this.#execFileSync(this.#psqlBinary, args, {
         encoding: 'utf8',
         env: this.#connectionEnv,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        input,
+        stdio: ['pipe', 'pipe', 'pipe'],
         timeout: this.#timeoutMs,
       });
     } catch {
