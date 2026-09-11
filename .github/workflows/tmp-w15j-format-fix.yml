@@ -1,0 +1,63 @@
+name: Temporary W15J lint formatter
+
+on:
+  push:
+    branches:
+      - wave/15j-w03-psql-connection-env-fix
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/15j-w03-psql-connection-env-fix
+          persist-credentials: true
+          fetch-depth: 1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Remove dynamic delete from libpq environment construction
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('services/mobile-gateway/src/physical-host/w03-postgres-reservations.ts')
+          text = path.read_text()
+          old = """  const env: Record<string, string | undefined> = { ...processEnv };
+          for (const key of Object.keys(env)) {
+            if (key.startsWith('PG')) delete env[key];
+          }
+"""
+          new = """  const env: Record<string, string | undefined> = Object.fromEntries(
+            Object.entries(processEnv).filter(([key]) => !key.startsWith('PG')),
+          );
+"""
+          count = text.count(old)
+          if count == 0:
+              print('dynamic-delete target already corrected')
+          elif count == 1:
+              path.write_text(text.replace(old, new, 1))
+          else:
+              raise SystemExit(f'unexpected dynamic-delete target count: {count}')
+          PY
+      - run: npm run format
+      - run: npm run lint
+      - name: Commit correction when needed
+        shell: bash
+        run: |
+          git config user.name "aurora-ci"
+          git config user.email "aurora-ci@users.noreply.github.com"
+          git add services/mobile-gateway/src/physical-host/w03-postgres-reservations.ts
+          if git diff --cached --quiet; then
+            echo "No correction required."
+            exit 0
+          fi
+          git commit -m "fix(w15j): avoid dynamic PG env deletion"
+          git push origin HEAD:wave/15j-w03-psql-connection-env-fix
