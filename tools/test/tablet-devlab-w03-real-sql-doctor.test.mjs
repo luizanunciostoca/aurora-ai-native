@@ -31,6 +31,14 @@ test('W03 real SQL doctor isolates psql process, variable binding and rollback-o
   assert.match(doctor, /W15J_W03_REAL_SQL_DOCTOR=PASS_SOFTWARE_ONLY/);
 });
 
+test('W03 real SQL doctor streams SQL on stdin so psql variables are expanded client-side', () => {
+  assert.match(doctor, /const input = sql\.endsWith\('\\n'\) \? sql : sql \+ '\\n'/);
+  assert.match(doctor, /input,/);
+  assert.match(doctor, /stdio: \['pipe', 'pipe', 'pipe'\]/);
+  assert.doesNotMatch(doctor, /args\.push\('--command', sql\)/);
+  assert.doesNotMatch(doctor, /stdio: \['ignore', 'pipe', 'pipe'\]/);
+});
+
 test('W03 real SQL doctor keeps the nested Node heredoc shell-safe', () => {
   assert.match(doctor, /\\"BEGIN;\\nSELECT :'probe_value';\\nROLLBACK;\\"/);
   assert.doesNotMatch(doctor, / {2}"BEGIN;\\nSELECT :'probe_value';\\nROLLBACK;",/);
