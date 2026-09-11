@@ -209,8 +209,7 @@ test(
     let observedEnv: Readonly<Record<string, string | undefined>> = {};
     let observedInput = '';
     let observedStdio: readonly ['pipe', 'pipe', 'pipe'] | undefined;
-    const databaseUrl =
-      'postgresql://physical%2Duser:s%3Aecret@127.0.0.1:15432/aurora%5Fw15j';
+    const databaseUrl = 'postgresql://physical%2Duser:s%3Aecret@127.0.0.1:15432/aurora%5Fw15j';
     const executor = new PsqlW03SyncExecutor(
       { databaseUrl, psqlBinary: '/usr/bin/psql', timeoutMs: 1_000 },
       (_file, args, options) => {
