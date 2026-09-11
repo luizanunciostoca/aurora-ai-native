@@ -33,7 +33,7 @@ test('W03 real SQL doctor isolates psql process, variable binding and rollback-o
 
 test('W03 real SQL doctor keeps the nested Node heredoc shell-safe', () => {
   assert.match(doctor, /\\"BEGIN;\\nSELECT :'probe_value';\\nROLLBACK;\\"/);
-  assert.doesNotMatch(doctor, /  "BEGIN;\\nSELECT :'probe_value';\\nROLLBACK;",/);
+  assert.doesNotMatch(doctor, / {2}"BEGIN;\\nSELECT :'probe_value';\\nROLLBACK;",/);
 });
 
 test('W03 real SQL doctor emits bounded diagnostics without leaking stderr or authority', () => {
