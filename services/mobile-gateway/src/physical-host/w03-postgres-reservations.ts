@@ -4,6 +4,8 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 // @ts-expect-error -- Aurora targets Node 22 runtime built-ins without repository-wide @types/node.
 import { env as processEnv } from 'node:process';
+// @ts-expect-error -- Aurora targets Node 22 runtime built-ins without repository-wide @types/node.
+import { URL } from 'node:url';
 
 import type {
   W03DurableDeliveryReservationPort,
@@ -97,15 +99,68 @@ export interface PsqlW03SyncExecutorConfig {
   readonly timeoutMs?: number;
 }
 
+function decodeUrlComponent(value: string, label: string): string {
+  try {
+    const decoded = decodeURIComponent(value);
+    if (decoded.length === 0 || /[\r\n\0]/u.test(decoded)) throw new Error('invalid');
+    return decoded;
+  } catch {
+    throw new Error(`W03 database ${label} is invalid.`);
+  }
+}
+
+function psqlConnectionEnv(databaseUrl: string): Readonly<Record<string, string | undefined>> {
+  let parsed: URL;
+  try {
+    parsed = new URL(databaseUrl);
+  } catch {
+    throw new Error('W03 database URL is invalid.');
+  }
+  if (
+    (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') ||
+    parsed.hostname.length === 0 ||
+    parsed.pathname.length <= 1 ||
+    parsed.pathname.slice(1).includes('/') ||
+    parsed.search.length !== 0 ||
+    parsed.hash.length !== 0
+  ) {
+    throw new Error('W03 database URL is invalid.');
+  }
+  const port = parsed.port.length === 0 ? '5432' : parsed.port;
+  const portNumber = Number(port);
+  if (!Number.isSafeInteger(portNumber) || portNumber < 1 || portNumber > 65_535) {
+    throw new Error('W03 database port is invalid.');
+  }
+  const username =
+    parsed.username.length === 0 ? undefined : decodeUrlComponent(parsed.username, 'username');
+  const database = decodeUrlComponent(parsed.pathname.slice(1), 'name');
+  const password =
+    parsed.password.length === 0 ? undefined : decodeUrlComponent(parsed.password, 'password');
+
+  const env: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(processEnv)) {
+    if (!key.startsWith('PG') && (typeof value === 'string' || value === undefined)) {
+      env[key] = value;
+    }
+  }
+  env.PGHOST = parsed.hostname;
+  env.PGPORT = port;
+  if (username !== undefined) env.PGUSER = username;
+  env.PGDATABASE = database;
+  if (password !== undefined) env.PGPASSWORD = password;
+  return Object.freeze(env);
+}
+
 /**
  * LOCAL physical-host SQL executor over the accepted W03 Postgres schema.
  *
- * The database URL is supplied through PGDATABASE rather than the process command line and is never
- * included in returned errors. Values are validated by callers and passed through psql variables,
- * so this layer neither interpolates raw identity into SQL nor owns a second idempotency ledger.
+ * The database URL is decomposed into libpq connection environment fields so credentials stay out
+ * of process argv while PGDATABASE contains only the database name. Values are validated by callers
+ * and passed through psql variables, so this layer neither interpolates raw identity into SQL nor
+ * owns a second idempotency ledger.
  */
 export class PsqlW03SyncExecutor implements W03SyncSqlExecutor {
-  readonly #databaseUrl: string;
+  readonly #connectionEnv: Readonly<Record<string, string | undefined>>;
   readonly #psqlBinary: string;
   readonly #timeoutMs: number;
   readonly #execFileSync: ExecFileSyncLike;
@@ -129,7 +184,7 @@ export class PsqlW03SyncExecutor implements W03SyncSqlExecutor {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 60_000) {
       throw new Error('W03 psql timeout is invalid.');
     }
-    this.#databaseUrl = config.databaseUrl;
+    this.#connectionEnv = psqlConnectionEnv(config.databaseUrl);
     this.#psqlBinary = binary;
     this.#timeoutMs = timeoutMs;
     this.#execFileSync = execFile;
@@ -157,7 +212,7 @@ export class PsqlW03SyncExecutor implements W03SyncSqlExecutor {
     try {
       return this.#execFileSync(this.#psqlBinary, args, {
         encoding: 'utf8',
-        env: { ...processEnv, PGDATABASE: this.#databaseUrl },
+        env: this.#connectionEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
         timeout: this.#timeoutMs,
       });

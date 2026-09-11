@@ -202,22 +202,30 @@ test('malformed input and database failure are non-authoritative fail-closed res
   });
 });
 
-test('psql executor keeps database URL out of argv and sanitizes execution failure', () => {
+test('psql executor splits the URI into libpq env fields and keeps credentials out of argv', () => {
   let observedArgs: readonly string[] = [];
-  let observedDatabase: string | undefined;
-  const databaseUrl = 'postgresql://physical-user:secret@127.0.0.1/aurora';
+  let observedEnv: Readonly<Record<string, string | undefined>> = {};
+  const databaseUrl = 'postgresql://physical%2Duser:s%3Aecret@127.0.0.1:15432/aurora%5Fw15j';
   const executor = new PsqlW03SyncExecutor(
     { databaseUrl, psqlBinary: '/usr/bin/psql', timeoutMs: 1_000 },
     (_file, args, options) => {
       observedArgs = args;
-      observedDatabase = options.env.PGDATABASE;
+      observedEnv = options.env;
       return 'ok';
     },
   );
   assert.equal(executor.query({ sql: 'SELECT 1', variables: { tenant_id: TENANT } }), 'ok');
-  assert.equal(observedDatabase, databaseUrl);
+  assert.equal(observedEnv.PGHOST, '127.0.0.1');
+  assert.equal(observedEnv.PGPORT, '15432');
+  assert.equal(observedEnv.PGUSER, 'physical-user');
+  assert.equal(observedEnv.PGPASSWORD, 's:ecret');
+  assert.equal(observedEnv.PGDATABASE, 'aurora_w15j');
+  assert.equal(observedEnv.PGSERVICE, undefined);
   assert.equal(
-    observedArgs.some((value) => value.includes(databaseUrl)),
+    observedArgs.some(
+      (value) =>
+        value.includes(databaseUrl) || value.includes('physical-user') || value.includes('s:ecret'),
+    ),
     false,
   );
   assert.equal(observedArgs.includes('tenant_id=' + TENANT), true);
@@ -232,4 +240,16 @@ test('psql executor keeps database URL out of argv and sanitizes execution failu
       error.message === 'W03 Postgres reservation query failed.' &&
       !error.message.includes(databaseUrl),
   );
+});
+
+test('psql executor rejects ambiguous or unsupported database URI shapes before spawning', () => {
+  for (const databaseUrl of [
+    'http://user:secret@127.0.0.1:15432/aurora',
+    'postgresql://user:secret@127.0.0.1:15432/',
+    'postgresql://user:secret@127.0.0.1:15432/aurora/extra',
+    'postgresql://user:secret@127.0.0.1:15432/aurora?sslmode=disable',
+    'postgresql://user:secret@127.0.0.1:15432/aurora#fragment',
+  ]) {
+    assert.throws(() => new PsqlW03SyncExecutor({ databaseUrl }), /W03 database URL is invalid/u);
+  }
 });
