@@ -109,7 +109,9 @@ function decodeUrlComponent(value: string, label: string): string {
   }
 }
 
-function psqlConnectionEnv(databaseUrl: string): Readonly<Record<string, string | undefined>> {
+function psqlConnectionEnv(
+  databaseUrl: string,
+): Readonly<Record<string, string | undefined>> {
   let parsed: URL;
   try {
     parsed = new URL(databaseUrl);
@@ -119,7 +121,6 @@ function psqlConnectionEnv(databaseUrl: string): Readonly<Record<string, string 
   if (
     (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') ||
     parsed.hostname.length === 0 ||
-    parsed.username.length === 0 ||
     parsed.pathname.length <= 1 ||
     parsed.pathname.slice(1).includes('/') ||
     parsed.search.length !== 0 ||
@@ -132,7 +133,8 @@ function psqlConnectionEnv(databaseUrl: string): Readonly<Record<string, string 
   if (!Number.isSafeInteger(portNumber) || portNumber < 1 || portNumber > 65_535) {
     throw new Error('W03 database port is invalid.');
   }
-  const username = decodeUrlComponent(parsed.username, 'username');
+  const username =
+    parsed.username.length === 0 ? undefined : decodeUrlComponent(parsed.username, 'username');
   const database = decodeUrlComponent(parsed.pathname.slice(1), 'name');
   const password =
     parsed.password.length === 0 ? undefined : decodeUrlComponent(parsed.password, 'password');
@@ -143,7 +145,7 @@ function psqlConnectionEnv(databaseUrl: string): Readonly<Record<string, string 
   }
   env.PGHOST = parsed.hostname;
   env.PGPORT = port;
-  env.PGUSER = username;
+  if (username !== undefined) env.PGUSER = username;
   env.PGDATABASE = database;
   if (password !== undefined) env.PGPASSWORD = password;
   return Object.freeze(env);
