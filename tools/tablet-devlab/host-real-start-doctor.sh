@@ -76,12 +76,12 @@ required=\"\$(psql --no-psqlrc --quiet --tuples-only --no-align \"\$AURORA_W15J_
 for built in \
   services/mobile-gateway/dist/physical-host/local-physical-host-operator.js \
   services/mobile-gateway/dist/physical-host/local-physical-host-runner.js \
-  services/mobile-gateway/dist/physical-host/w03-physical-execution-state-stage.js; do
+  services/mobile-gateway/dist/physical-host/w03-physical-execution-state-stage.js \
+  services/mobile-gateway/dist/physical-host/w03-postgres-reservations.js; do
   [[ -f \"\$built\" ]] || { echo 'W15J_HOST_REAL_START_DOCTOR=FAIL code=RUNTIME_NOT_BUILT'; exit 24; }
 done
 
 node --input-type=module <<'NODE'
-import { spawnSync } from 'node:child_process';
 import { connect } from 'node:net';
 import { request } from 'node:http';
 
@@ -159,6 +159,9 @@ const runnerModule = await import(
 const stagerModule = await import(
   '/aurora-devlab/worktrees/host/services/mobile-gateway/dist/physical-host/w03-physical-execution-state-stage.js'
 );
+const postgresModule = await import(
+  '/aurora-devlab/worktrees/host/services/mobile-gateway/dist/physical-host/w03-postgres-reservations.js'
+);
 
 let captured;
 try {
@@ -176,32 +179,28 @@ if (captured === undefined || captured.executionStateSeed === undefined) {
 }
 
 let rollbackSqlDiagnostic = 'NOT_RUN';
+let canonicalSql;
+try {
+  canonicalSql = new postgresModule.PsqlW03SyncExecutor({
+    databaseUrl: process.env.AURORA_W15J_DATABASE_URL,
+  });
+} catch {
+  fail('W03_SQL_EXECUTOR_REJECTED', 34);
+}
 const rollbackSql = {
   query({ sql, variables }) {
-    const args = [
-      '--no-psqlrc',
-      '--quiet',
-      '--tuples-only',
-      '--no-align',
-      '--field-separator',
-      '\t',
-      '--set',
-      'ON_ERROR_STOP=1',
-    ];
-    for (const [key, value] of Object.entries(variables)) args.push('--set', key + '=' + value);
-    args.push('--command', 'BEGIN;\n' + sql + ';\nROLLBACK;');
-    const result = spawnSync('psql', args, {
-      encoding: 'utf8',
-      env: { ...process.env, PGDATABASE: process.env.AURORA_W15J_DATABASE_URL },
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 5000,
-    });
-    if (result.status !== 0 || result.signal !== null) {
+    let output;
+    try {
+      output = canonicalSql.query({
+        sql: 'BEGIN;\n' + sql + ';\nROLLBACK;',
+        variables,
+      });
+    } catch {
       rollbackSqlDiagnostic = 'PSQL_PROCESS_REJECTED';
       throw new Error('psql rollback dry-run failed');
     }
 
-    const meaningful = result.stdout
+    const meaningful = output
       .split(/\r?\n/u)
       .map((line) => line.trim())
       .filter((line) => line.length > 0 && !ROLLBACK_COMMAND_TAGS.has(line));
