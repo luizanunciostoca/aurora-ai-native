@@ -14,10 +14,14 @@ test('real-start doctor isolates fixed-port and real-W03 startup without durable
   assert.match(doctor, /proot-distro login debian/);
   assert.match(doctor, /export HOME=\/home\/aurora/);
   assert.match(doctor, /command -v psql/);
+  assert.match(doctor, /w03-postgres-reservations\.js/);
+  assert.match(doctor, /new postgresModule\.PsqlW03SyncExecutor/);
   assert.match(doctor, /W03PostgresPhysicalExecutionStateStager/);
   assert.match(doctor, /BEGIN;\\n/);
   assert.match(doctor, /ROLLBACK;/);
   assert.match(doctor, /ROLLBACK_COMMAND_TAGS/);
+  assert.doesNotMatch(doctor, /args\.push\('--command'/);
+  assert.doesNotMatch(doctor, /PGDATABASE: process\.env\.AURORA_W15J_DATABASE_URL/);
   assert.match(doctor, /OUTPUT_AMBIGUOUS/);
   assert.match(doctor, /W03_SEED_ALREADY_EXISTS/);
   assert.match(doctor, /W03_SEED_MALFORMED/);
