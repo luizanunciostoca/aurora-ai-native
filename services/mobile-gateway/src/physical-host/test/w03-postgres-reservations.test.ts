@@ -202,59 +202,59 @@ test('malformed input and database failure are non-authoritative fail-closed res
   });
 });
 
-test(
-  'psql executor splits URI into libpq env fields and streams variable-aware SQL on stdin',
-  () => {
-    let observedArgs: readonly string[] = [];
-    let observedEnv: Readonly<Record<string, string | undefined>> = {};
-    let observedInput = '';
-    let observedStdio: readonly ['pipe', 'pipe', 'pipe'] | undefined;
-    const databaseUrl = 'postgresql://physical%2Duser:s%3Aecret@127.0.0.1:15432/aurora%5Fw15j';
-    const executor = new PsqlW03SyncExecutor(
-      { databaseUrl, psqlBinary: '/usr/bin/psql', timeoutMs: 1_000 },
-      (_file, args, options) => {
-        observedArgs = args;
-        observedEnv = options.env;
-        observedInput = options.input;
-        observedStdio = options.stdio;
-        return 'ok';
-      },
-    );
-    assert.equal(
-      executor.query({ sql: "SELECT :'tenant_id'", variables: { tenant_id: TENANT } }),
-      'ok',
-    );
-    assert.equal(observedEnv.PGHOST, '127.0.0.1');
-    assert.equal(observedEnv.PGPORT, '15432');
-    assert.equal(observedEnv.PGUSER, 'physical-user');
-    assert.equal(observedEnv.PGPASSWORD, 's:ecret');
-    assert.equal(observedEnv.PGDATABASE, 'aurora_w15j');
-    assert.equal(observedEnv.PGSERVICE, undefined);
-    assert.deepEqual(observedStdio, ['pipe', 'pipe', 'pipe']);
-    assert.equal(observedInput, "SELECT :'tenant_id'\n");
-    assert.equal(observedArgs.includes('--command'), false);
-    assert.equal(observedArgs.some((value) => value.includes("SELECT :'tenant_id'")), false);
-    assert.equal(
-      observedArgs.some(
-        (value) =>
-          value.includes(databaseUrl) || value.includes('physical-user') || value.includes('s:ecret'),
-      ),
-      false,
-    );
-    assert.equal(observedArgs.includes('tenant_id=' + TENANT), true);
+test('psql executor splits URI into libpq env fields and streams variable-aware SQL on stdin', () => {
+  let observedArgs: readonly string[] = [];
+  let observedEnv: Readonly<Record<string, string | undefined>> = {};
+  let observedInput = '';
+  let observedStdio: readonly ['pipe', 'pipe', 'pipe'] | undefined;
+  const databaseUrl = 'postgresql://physical%2Duser:s%3Aecret@127.0.0.1:15432/aurora%5Fw15j';
+  const executor = new PsqlW03SyncExecutor(
+    { databaseUrl, psqlBinary: '/usr/bin/psql', timeoutMs: 1_000 },
+    (_file, args, options) => {
+      observedArgs = args;
+      observedEnv = options.env;
+      observedInput = options.input;
+      observedStdio = options.stdio;
+      return 'ok';
+    },
+  );
+  assert.equal(
+    executor.query({ sql: "SELECT :'tenant_id'", variables: { tenant_id: TENANT } }),
+    'ok',
+  );
+  assert.equal(observedEnv.PGHOST, '127.0.0.1');
+  assert.equal(observedEnv.PGPORT, '15432');
+  assert.equal(observedEnv.PGUSER, 'physical-user');
+  assert.equal(observedEnv.PGPASSWORD, 's:ecret');
+  assert.equal(observedEnv.PGDATABASE, 'aurora_w15j');
+  assert.equal(observedEnv.PGSERVICE, undefined);
+  assert.deepEqual(observedStdio, ['pipe', 'pipe', 'pipe']);
+  assert.equal(observedInput, "SELECT :'tenant_id'\n");
+  assert.equal(observedArgs.includes('--command'), false);
+  assert.equal(
+    observedArgs.some((value) => value.includes("SELECT :'tenant_id'")),
+    false,
+  );
+  assert.equal(
+    observedArgs.some(
+      (value) =>
+        value.includes(databaseUrl) || value.includes('physical-user') || value.includes('s:ecret'),
+    ),
+    false,
+  );
+  assert.equal(observedArgs.includes('tenant_id=' + TENANT), true);
 
-    const failing = new PsqlW03SyncExecutor({ databaseUrl }, () => {
-      throw new Error(`do not leak ${databaseUrl}`);
-    });
-    assert.throws(
-      () => failing.query({ sql: 'SELECT 1', variables: {} }),
-      (error: unknown) =>
-        error instanceof Error &&
-        error.message === 'W03 Postgres reservation query failed.' &&
-        !error.message.includes(databaseUrl),
-    );
-  },
-);
+  const failing = new PsqlW03SyncExecutor({ databaseUrl }, () => {
+    throw new Error(`do not leak ${databaseUrl}`);
+  });
+  assert.throws(
+    () => failing.query({ sql: 'SELECT 1', variables: {} }),
+    (error: unknown) =>
+      error instanceof Error &&
+      error.message === 'W03 Postgres reservation query failed.' &&
+      !error.message.includes(databaseUrl),
+  );
+});
 
 test('psql executor rejects ambiguous or unsupported database URI shapes before spawning', () => {
   for (const databaseUrl of [
