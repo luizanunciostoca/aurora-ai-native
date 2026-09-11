@@ -400,18 +400,15 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 const args = process.argv.slice(2);
 const variables = {};
-let sql = '';
 for (let index = 0; index < args.length; index += 1) {
   if (args[index] === '--set') {
     const pair = args[index + 1] ?? '';
     const separator = pair.indexOf('=');
     if (separator > 0) variables[pair.slice(0, separator)] = pair.slice(separator + 1);
     index += 1;
-  } else if (args[index] === '--command') {
-    sql = args[index + 1] ?? '';
-    index += 1;
   }
 }
+const sql = readFileSync(0, 'utf8');
 
 const statePath = process.env.AURORA_W15J_TEST_STATE_PATH;
 if (!statePath) process.exit(2);
