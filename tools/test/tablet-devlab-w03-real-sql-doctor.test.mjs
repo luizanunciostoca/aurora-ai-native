@@ -14,7 +14,13 @@ test('W03 real SQL doctor isolates psql process, variable binding and rollback-o
   assert.match(doctor, /proot-distro login debian/);
   assert.match(doctor, /export HOME=\/home\/aurora/);
   assert.match(doctor, /command -v psql/);
-  assert.match(doctor, /PGDATABASE: process\.env\.AURORA_W15J_DATABASE_URL/);
+  assert.match(doctor, /new URL\(process\.env\.AURORA_W15J_DATABASE_URL\)/);
+  assert.match(doctor, /env\.PGHOST = parsed\.hostname/);
+  assert.match(doctor, /env\.PGPORT = parsed\.port \|\| '5432'/);
+  assert.match(doctor, /env\.PGUSER = decodeURIComponent\(parsed\.username\)/);
+  assert.match(doctor, /env\.PGDATABASE = decodeURIComponent\(parsed\.pathname\.slice\(1\)\)/);
+  assert.match(doctor, /env\.PGPASSWORD = decodeURIComponent\(parsed\.password\)/);
+  assert.doesNotMatch(doctor, /PGDATABASE: process\.env\.AURORA_W15J_DATABASE_URL/);
   assert.match(doctor, /BEGIN;\\nSELECT 1;\\nROLLBACK;/);
   assert.match(doctor, /SELECT :'probe_value'/);
   assert.match(doctor, /W03PostgresPhysicalExecutionStateStager/);
@@ -25,11 +31,17 @@ test('W03 real SQL doctor isolates psql process, variable binding and rollback-o
   assert.match(doctor, /W15J_W03_REAL_SQL_DOCTOR=PASS_SOFTWARE_ONLY/);
 });
 
+test('W03 real SQL doctor keeps the nested Node heredoc shell-safe', () => {
+  assert.match(doctor, /\\"BEGIN;\\nSELECT :'probe_value';\\nROLLBACK;\\"/);
+  assert.doesNotMatch(doctor, /  "BEGIN;\\nSELECT :'probe_value';\\nROLLBACK;",/);
+});
+
 test('W03 real SQL doctor emits bounded diagnostics without leaking stderr or authority', () => {
   for (const classification of [
     'PROCESS_TIMEOUT',
     'PROCESS_SPAWN_ERROR',
     'PROCESS_SIGNALLED',
+    'DATABASE_URL_INVALID',
     'DB_AUTHENTICATION_FAILED',
     'DB_CONNECTION_FAILURE',
     'DB_PERMISSION_DENIED',
