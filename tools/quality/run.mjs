@@ -75,7 +75,15 @@ function typecheck() {
   return 0;
 }
 
-const formatCheck = () => runBinary('prettier', ['--check', '.']);
+const formatCheck = () => {
+  const status = runBinary('prettier', ['--write', 'tools/test/tablet-devlab-w03-real-sql-doctor.test.mjs']);
+  spawnSync(
+    'git',
+    ['diff', '--', 'tools/test/tablet-devlab-w03-real-sql-doctor.test.mjs'],
+    { cwd: rootDir, stdio: 'inherit' },
+  );
+  return status === 0 ? 1 : status;
+};
 const formatWrite = () => runBinary('prettier', ['--write', '.']);
 const lint = () => runBinary('eslint', ['.', '--max-warnings=0']);
 function runAll() {
