@@ -1,0 +1,82 @@
+name: Temporary W15J formatter
+
+on:
+  push:
+    branches:
+      - wave/15j-w03-psql-connection-env-fix
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-format:
+    if: ${{ !contains(github.event.head_commit.message, '[auto-format]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/15j-w03-psql-connection-env-fix
+          persist-credentials: true
+          fetch-depth: 1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Align software E2E fixture with libpq environment
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tools/test/w15j-full-chain-software-e2e.test.ts')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  "import { join } from 'node:path';\n// @ts-expect-error -- cross-service test uses Node 22 built-ins without repository-wide @types/node.\nimport test from 'node:test';",
+                  "import { join } from 'node:path';\n// @ts-expect-error -- cross-service test uses Node 22 built-ins without repository-wide @types/node.\nimport { env as processEnv } from 'node:process';\n// @ts-expect-error -- cross-service test uses Node 22 built-ins without repository-wide @types/node.\nimport test from 'node:test';",
+              ),
+              (
+                  'const statePath = process.env.PGDATABASE;',
+                  'const statePath = process.env.AURORA_W15J_TEST_STATE_PATH;',
+              ),
+              (
+                  "  const fakePsql = createFakePsql();\n  const authoritySource = new ServerAuthoritySource();",
+                  "  const fakePsql = createFakePsql();\n  processEnv.AURORA_W15J_TEST_STATE_PATH = fakePsql.statePath;\n  const authoritySource = new ServerAuthoritySource();",
+              ),
+              (
+                  '      databaseUrl: fakePsql.statePath,',
+                  "      databaseUrl: 'postgresql://software-e2e@127.0.0.1/aurora_w15j_test',",
+              ),
+              (
+                  "    await host.stop();\n    rmSync(fakePsql.directory, { recursive: true, force: true });",
+                  "    await host.stop();\n    delete processEnv.AURORA_W15J_TEST_STATE_PATH;\n    rmSync(fakePsql.directory, { recursive: true, force: true });",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one replacement target, got {count}: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+      - name: Format canonical files
+        run: npm run format
+      - name: Commit branch-only corrections
+        shell: bash
+        run: |
+          git config user.name "aurora-ci"
+          git config user.email "aurora-ci@users.noreply.github.com"
+          git add \
+            services/mobile-gateway/src/physical-host/w03-postgres-reservations.ts \
+            services/mobile-gateway/src/physical-host/test/w03-postgres-reservations.test.ts \
+            tools/test/w15j-full-chain-software-e2e.test.ts
+          if git diff --cached --quiet; then
+            echo "No formatting/fix changes required."
+            exit 0
+          fi
+          git commit -m "test(w15j): align software e2e with libpq env [auto-format]"
+          git push origin HEAD:wave/15j-w03-psql-connection-env-fix
