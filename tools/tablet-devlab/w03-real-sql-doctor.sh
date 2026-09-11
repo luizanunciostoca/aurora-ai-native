@@ -112,6 +112,36 @@ function meaningfulLines(stdout) {
     .filter((line) => line.length > 0 && !COMMAND_TAGS.has(line));
 }
 
+function connectionEnv() {
+  let parsed;
+  try {
+    parsed = new URL(process.env.AURORA_W15J_DATABASE_URL);
+  } catch {
+    throw new Error('invalid database URL');
+  }
+  if (
+    (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') ||
+    parsed.hostname.length === 0 ||
+    parsed.username.length === 0 ||
+    parsed.pathname.length <= 1 ||
+    parsed.pathname.slice(1).includes('/') ||
+    parsed.search.length !== 0 ||
+    parsed.hash.length !== 0
+  ) {
+    throw new Error('invalid database URL');
+  }
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('PG')) delete env[key];
+  }
+  env.PGHOST = parsed.hostname;
+  env.PGPORT = parsed.port || '5432';
+  env.PGUSER = decodeURIComponent(parsed.username);
+  env.PGDATABASE = decodeURIComponent(parsed.pathname.slice(1));
+  if (parsed.password.length > 0) env.PGPASSWORD = decodeURIComponent(parsed.password);
+  return env;
+}
+
 function runPsql(stage, sql, variables = {}) {
   const args = [
     '--no-psqlrc',
@@ -128,9 +158,23 @@ function runPsql(stage, sql, variables = {}) {
   }
   args.push('--command', sql);
 
+  let env;
+  try {
+    env = connectionEnv();
+  } catch {
+    lastSqlFailure = Object.freeze({
+      stage,
+      classification: 'DATABASE_URL_INVALID',
+      status: 'NONE',
+      signal: 'NONE',
+      stderrSha256: sha256(''),
+    });
+    return Object.freeze({ ok: false, lines: [] });
+  }
+
   const result = spawnSync('psql', args, {
     encoding: 'utf8',
-    env: { ...process.env, PGDATABASE: process.env.AURORA_W15J_DATABASE_URL },
+    env,
     stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 5000,
   });
@@ -167,6 +211,7 @@ function codeForClassification(classification) {
     ['PROCESS_TIMEOUT', 'W03_SQL_PROCESS_TIMEOUT'],
     ['PROCESS_SPAWN_ERROR', 'W03_SQL_PROCESS_SPAWN_ERROR'],
     ['PROCESS_SIGNALLED', 'W03_SQL_PROCESS_SIGNALLED'],
+    ['DATABASE_URL_INVALID', 'W03_SQL_DATABASE_URL_INVALID'],
     ['DB_AUTHENTICATION_FAILED', 'W03_SQL_DB_AUTHENTICATION_FAILED'],
     ['DB_ROLE_MISSING', 'W03_SQL_DB_ROLE_MISSING'],
     ['DB_DATABASE_MISSING', 'W03_SQL_DB_DATABASE_MISSING'],
@@ -200,7 +245,7 @@ process.stdout.write('psql_process=PASS\n');
 
 const variableProbe = runPsql(
   'variable_probe',
-  "BEGIN;\nSELECT :'probe_value';\nROLLBACK;",
+  \"BEGIN;\nSELECT :'probe_value';\nROLLBACK;\",
   { probe_value: 'AURORA_W03_PROBE' },
 );
 if (!variableProbe.ok) emitFailure(codeForClassification(lastSqlFailure.classification), lastSqlFailure, 32);
