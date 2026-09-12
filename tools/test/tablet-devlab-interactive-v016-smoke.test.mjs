@@ -55,3 +55,17 @@ test('interactive smoke tooling preserves destructive and authority boundaries',
   assert.doesNotMatch(script, /adb reverse tcp:8080/);
   assert.doesNotMatch(script, /adb reverse tcp:8081/);
 });
+
+test('interactive smoke tooling fails closed on device observations and launch', () => {
+  assert.match(script, /unable to query self-ADB devices/);
+  assert.match(script, /unable to prove ADB reverse state/);
+  assert.match(script, /unable to query installed Aurora package before mutation/);
+  assert.match(script, /unexpected package-manager response before mutation/);
+  assert.match(script, /unable to query installed Aurora package after install/);
+  assert.match(script, /unexpected package-manager response after install/);
+  assert.match(script, /am start -W -n/);
+  assert.match(script, /Status: ok/);
+  assert.match(script, /Aurora launch was not confirmed by ActivityManager/);
+  assert.doesNotMatch(script, /reverse --list[^\n]*\|\| true/);
+  assert.doesNotMatch(script, /Status: ok\\\|Starting:[^\n]*\|\| true/);
+});
