@@ -1,12 +1,18 @@
 package ai.aurora.device
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import ai.aurora.device.bootstrap.GatewayBootstrapSetupActivity
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.ui.AuroraAssistantStage
 import ai.aurora.device.ui.AuroraAssistantSurface
+import ai.aurora.device.ui.AuroraDeveloperModePreferences
+import ai.aurora.device.ui.AuroraOnboardingInput
+import ai.aurora.device.ui.AuroraOnboardingPolicy
+import ai.aurora.device.ui.AuroraOnboardingStep
 import ai.aurora.device.wake.AuroraAssistantRoleCoordinator
 import ai.aurora.device.wake.AuroraAssistantSelectionLaunch
 import ai.aurora.device.wake.AuroraWakeModelStore
@@ -19,11 +25,13 @@ import ai.aurora.device.wake.WakeVoiceActivity
 class MainActivity : Activity() {
     private lateinit var aurora: AuroraApplication
     private lateinit var surface: AuroraAssistantSurface
+    private lateinit var developerMode: AuroraDeveloperModePreferences
     private var assistantFeedback: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         aurora = application as AuroraApplication
+        developerMode = AuroraDeveloperModePreferences(this)
         surface = AuroraAssistantSurface.create(this)
         setContentView(surface.root)
         renderStatus()
@@ -60,9 +68,9 @@ class MainActivity : Activity() {
         val selected = AuroraAssistantRoleCoordinator.snapshot(this).selected
         assistantFeedback =
             if (selected) {
-                "Aurora foi selecionada como assistente padrão deste dispositivo."
+                "Aurora foi selecionada como assistente padrão."
             } else {
-                "Aurora ainda não foi selecionada. Abra os apps padrão do Android e escolha Aurora como assistente digital."
+                "Aurora ainda não foi selecionada como assistente padrão."
             }
         renderStatus()
     }
@@ -88,7 +96,19 @@ class MainActivity : Activity() {
         val wakeEnabled = preferences.wakeEnabled()
         val privacyEnabled = preferences.privacyModeEnabled()
         val modelReady = AuroraWakeModelStore(this).hasValidModel()
+        val microphoneGranted =
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         val assistant = AuroraAssistantRoleCoordinator.snapshot(this)
+        val onboarding =
+            AuroraOnboardingPolicy.present(
+                AuroraOnboardingInput(
+                    microphoneGranted = microphoneGranted,
+                    assistantSelected = assistant.selected,
+                    wakeModelReady = modelReady,
+                    wakeEnabled = wakeEnabled,
+                    privacyModeEnabled = privacyEnabled,
+                ),
+            )
         val runtimeLabel =
             WakeSetupUiPolicy.runtimeLabel(
                 state = runtime.state,
@@ -96,70 +116,133 @@ class MainActivity : Activity() {
                 wakeEnabled = wakeEnabled,
             )
         val errorLabel = WakeSetupUiPolicy.userFacingError(runtime.lastError)
-        val ready = wakeEnabled && modelReady && assistant.selected && !privacyEnabled
+        val ready = onboarding.step == AuroraOnboardingStep.READY
 
         surface.render(
-            if (ready) AuroraAssistantStage.READY else AuroraAssistantStage.DEGRADED,
-            detailOverride =
+            stage =
                 when {
-                    privacyEnabled -> "O modo de privacidade está ativo. Desative-o para usar voz."
-                    !modelReady -> "Configure a wake word para eu reconhecer “Aurora”."
-                    !assistant.selected -> "Defina Aurora como assistente padrão para usar o atalho do Android."
-                    !wakeEnabled -> "Ative a wake word para usar a experiência mãos livres."
-                    else -> null
+                    ready -> AuroraAssistantStage.READY
+                    privacyEnabled -> AuroraAssistantStage.BLOCKED
+                    else -> AuroraAssistantStage.DEGRADED
                 },
+            titleOverride = onboarding.title,
+            detailOverride = onboarding.detail,
+        )
+
+        surface.setStatusLine(
+            buildString {
+                append(onboarding.progressLabel)
+                append("  •  Microfone ")
+                append(if (microphoneGranted) "autorizado" else "pendente")
+                append("  •  Wake ")
+                append(if (wakeEnabled && modelReady && !privacyEnabled) "ativo" else "inativo")
+                append("  •  Privacidade ")
+                append(if (privacyEnabled) "ativa" else "normal")
+                assistantFeedback?.let { append("\n$it") }
+                if (!developerMode.enabled()) errorLabel?.let { append("\n$it") }
+            },
         )
 
         surface.setDiagnostics(
             buildString {
-                append("${aurora.environmentConfig.environment.name}  •  ")
-                append(if (presence.visibility.name == "FOREGROUND") "ativa" else "segundo plano")
-                append("  •  wake ")
-                append(if (wakeEnabled) "on" else "off")
-                append("  •  modelo ")
-                append(if (modelReady) "pronto" else "pendente")
-                append("  •  runtime $runtimeLabel")
-                assistantFeedback?.let { append("\n$it") }
-                errorLabel?.let { append("\nAtenção: $it") }
+                appendLine("DEVELOPER MODE")
+                appendLine("App ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                appendLine("Android SHA: ${BuildConfig.AURORA_ANDROID_SHA}")
+                appendLine("Host SHA: ${BuildConfig.AURORA_HOST_SHA}")
+                appendLine("Release tuple: ${BuildConfig.AURORA_RELEASE_TUPLE_ID}")
+                appendLine("Environment: ${aurora.environmentConfig.environment.name}")
+                appendLine("Gateway: ${aurora.environmentConfig.gatewayOrigin}")
+                appendLine("Presence: ${presence.visibility.name}")
+                appendLine("Assistant role: ${if (assistant.selected) "selected" else "not-selected"}")
+                appendLine("Wake: ${if (wakeEnabled) "enabled" else "disabled"}")
+                appendLine("Wake model: ${if (modelReady) "ready" else "missing"}")
+                appendLine("Wake runtime: $runtimeLabel")
+                appendLine("Confirmed wakes: ${runtime.confirmedWakeCount}")
+                append("Rejected/ignored: ${runtime.rejectedOrIgnoredCount}")
+                errorLabel?.let { append("\nLast sanitized error: $it") }
             },
         )
+        surface.setDiagnosticsVisible(developerMode.enabled())
 
-        rebuildActions(assistant.selected)
+        rebuildActions(
+            step = onboarding.step,
+            primaryLabel = onboarding.primaryActionLabel,
+            assistantSelected = assistant.selected,
+            microphoneGranted = microphoneGranted,
+            privacyEnabled = privacyEnabled,
+        )
     }
 
-    private fun rebuildActions(assistantSelected: Boolean) {
+    private fun rebuildActions(
+        step: AuroraOnboardingStep,
+        primaryLabel: String,
+        assistantSelected: Boolean,
+        microphoneGranted: Boolean,
+        privacyEnabled: Boolean,
+    ) {
         surface.clearActions()
-        surface.addPrimaryAction("Falar com Aurora") {
-            startActivity(
-                Intent(this, WakeVoiceActivity::class.java).apply {
-                    putExtra(WakeVoiceActivity.EXTRA_SYSTEM_ASSIST_INVOCATION, true)
-                },
-            )
+        surface.addPrimaryAction(primaryLabel) {
+            when (step) {
+                AuroraOnboardingStep.READY -> openVoiceSession()
+                AuroraOnboardingStep.MICROPHONE ->
+                    startActivity(
+                        Intent(this, WakeSetupActivity::class.java).apply {
+                            putExtra(WakeSetupActivity.EXTRA_AUTO_REQUEST_MICROPHONE, true)
+                        },
+                    )
+                AuroraOnboardingStep.ASSISTANT_ROLE ->
+                    handleAssistantLaunch(
+                        AuroraAssistantRoleCoordinator.requestSelection(this, REQUEST_ASSISTANT_ROLE),
+                    )
+                AuroraOnboardingStep.WAKE_MODEL,
+                AuroraOnboardingStep.WAKE_ENABLE,
+                AuroraOnboardingStep.PRIVACY_BLOCKED,
+                -> startActivity(Intent(this, WakeSetupActivity::class.java))
+            }
         }
 
-        if (!assistantSelected) {
-            surface.addSecondaryAction("Definir Aurora como assistente padrão") {
+        if (step != AuroraOnboardingStep.READY && microphoneGranted && !privacyEnabled) {
+            surface.addSecondaryAction("Falar sem wake word") { openVoiceSession() }
+        }
+
+        if (!assistantSelected && step != AuroraOnboardingStep.ASSISTANT_ROLE) {
+            surface.addSecondaryAction("Definir Aurora como assistente") {
                 handleAssistantLaunch(
                     AuroraAssistantRoleCoordinator.requestSelection(this, REQUEST_ASSISTANT_ROLE),
                 )
             }
-            surface.addSecondaryAction("Abrir apps padrão do Android") {
-                handleAssistantLaunch(AuroraAssistantRoleCoordinator.openSystemSelection(this))
-            }
         }
 
-        surface.addSecondaryAction("Configurar voz e wake word") {
+        surface.addSecondaryAction("Voz, wake word e privacidade") {
             startActivity(Intent(this, WakeSetupActivity::class.java))
         }
 
         if (
+            developerMode.enabled() &&
             aurora.environmentConfig.environment == AuroraEnvironment.LOCAL &&
             aurora.environmentConfig.allowCleartextTraffic
         ) {
-            surface.addSecondaryAction("Conectar runtime local") {
+            surface.addSecondaryAction("Conectar runtime LOCAL") {
                 startActivity(Intent(this, GatewayBootstrapSetupActivity::class.java))
             }
         }
+
+        if (aurora.environmentConfig.environment == AuroraEnvironment.LOCAL) {
+            surface.addSecondaryAction(
+                if (developerMode.enabled()) "Ocultar modo desenvolvedor" else "Modo desenvolvedor",
+            ) {
+                developerMode.setEnabled(!developerMode.enabled())
+                renderStatus()
+            }
+        }
+    }
+
+    private fun openVoiceSession() {
+        startActivity(
+            Intent(this, WakeVoiceActivity::class.java).apply {
+                putExtra(WakeVoiceActivity.EXTRA_SYSTEM_ASSIST_INVOCATION, true)
+            },
+        )
     }
 
     private fun handleAssistantLaunch(result: AuroraAssistantSelectionLaunch) {
@@ -174,7 +257,7 @@ class MainActivity : Activity() {
                 AuroraAssistantSelectionLaunch.GENERAL_SETTINGS,
                 -> "Selecione Aurora como assistente digital nas configurações do Android."
                 AuroraAssistantSelectionLaunch.FAILED ->
-                    "O Android não expôs uma tela de seleção. Abra Configurações > Apps > Apps padrão e escolha Aurora manualmente."
+                    "O Android não expôs a seleção automaticamente. Abra Apps padrão e escolha Aurora."
             }
         renderStatus()
     }
