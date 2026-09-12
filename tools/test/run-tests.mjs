@@ -119,6 +119,11 @@ if (
 
 if (status === 0 && mobileGatewayTests.length > 0) {
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  status = run(npm, ['run', 'build', '--workspace', '@aurora/registries']);
+}
+
+if (status === 0 && mobileGatewayTests.length > 0) {
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   status = run(npm, ['run', 'build', '--workspace', '@aurora/schemas']);
 }
 
