@@ -42,6 +42,7 @@ android {
         buildConfigField("String", "AURORA_ANDROID_SHA", buildConfigString(auroraAndroidSha))
         buildConfigField("String", "AURORA_HOST_SHA", buildConfigString(auroraHostSha))
         buildConfigField("String", "AURORA_RELEASE_TUPLE_ID", buildConfigString(auroraReleaseTupleId))
+        buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"NON_PHYSICAL\"")
     }
 
     if (physicalDevSigningConfigured) {
@@ -59,6 +60,20 @@ android {
         }
     }
 
+    buildTypes {
+        getByName("debug") {
+            buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"DEBUG_FALLBACK\"")
+        }
+        if (physicalDevSigningConfigured) {
+            create("physicalDev") {
+                initWith(getByName("debug"))
+                signingConfig = signingConfigs.getByName("physicalDev")
+                matchingFallbacks += listOf("debug")
+                buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"PHYSICAL_DEV_STABLE\"")
+            }
+        }
+    }
+
     flavorDimensions += "environment"
     productFlavors {
         create("local") {
@@ -66,32 +81,18 @@ android {
             applicationIdSuffix = ".local"
             versionNameSuffix = "-local"
             buildConfigField("String", "AURORA_ENVIRONMENT", "\"LOCAL\"")
-            buildConfigField(
-                "String",
-                "AURORA_SIGNING_PROFILE",
-                buildConfigString(
-                    if (physicalDevSigningConfigured) {
-                        "PHYSICAL_DEV_STABLE"
-                    } else {
-                        "DEBUG_FALLBACK"
-                    },
-                ),
-            )
-            // Emulator builds retain 10.0.2.2 by default. Physical same-tablet packaging injects
-            // AURORA_LOCAL_GATEWAY_ORIGIN=http://127.0.0.1:8080 and verifies the generated value.
+            // Emulator/local-debug builds retain 10.0.2.2 by default. Physical same-tablet
+            // packaging injects AURORA_LOCAL_GATEWAY_ORIGIN=http://127.0.0.1:8080 and builds the
+            // dedicated localPhysicalDev variant only when stable signing material is present.
             buildConfigField("String", "AURORA_GATEWAY_ORIGIN", buildConfigString(auroraLocalGatewayOrigin))
             buildConfigField("boolean", "AURORA_ALLOW_CLEARTEXT", "true")
             manifestPlaceholders["usesCleartextTraffic"] = "true"
-            if (physicalDevSigningConfigured) {
-                signingConfig = signingConfigs.getByName("physicalDev")
-            }
         }
         create("staging") {
             dimension = "environment"
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
             buildConfigField("String", "AURORA_ENVIRONMENT", "\"STAGING\"")
-            buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"NON_PHYSICAL\"")
             buildConfigField("String", "AURORA_GATEWAY_ORIGIN", "\"https://staging.invalid\"")
             buildConfigField("boolean", "AURORA_ALLOW_CLEARTEXT", "false")
             manifestPlaceholders["usesCleartextTraffic"] = "false"
@@ -99,10 +100,17 @@ android {
         create("production") {
             dimension = "environment"
             buildConfigField("String", "AURORA_ENVIRONMENT", "\"PRODUCTION\"")
-            buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"NON_PHYSICAL\"")
             buildConfigField("String", "AURORA_GATEWAY_ORIGIN", "\"https://production.invalid\"")
             buildConfigField("boolean", "AURORA_ALLOW_CLEARTEXT", "false")
             manifestPlaceholders["usesCleartextTraffic"] = "false"
+        }
+    }
+
+    // Stable physical-development signing is intentionally exposed only as localPhysicalDev.
+    // STAGING/PRODUCTION must never inherit that key or report the stable physical profile.
+    variantFilter {
+        if (buildType.name == "physicalDev" && flavors.none { it.name == "local" }) {
+            setIgnore(true)
         }
     }
 
