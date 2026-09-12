@@ -97,10 +97,7 @@ function append(
   });
 }
 
-function expectError(
-  result: ReturnType<InteractionSessionManager['current']>,
-  code: string,
-): void {
+function expectError(result: ReturnType<InteractionSessionManager['current']>, code: string): void {
   assert.equal(result.ok, false);
   if (result.ok) throw new Error('expected manager failure');
   assert.equal(result.code, code);
@@ -155,10 +152,7 @@ test('classification escalates monotonically and later downgrade is rejected', (
   const restricted = expectSuccess(append(manager, { dataClassification: 'RESTRICTED' }));
   assert.equal(restricted.session.dataClassification, 'RESTRICTED');
 
-  expectError(
-    append(manager, { dataClassification: 'CONFIDENTIAL' }),
-    'CLASSIFICATION_DOWNGRADE',
-  );
+  expectError(append(manager, { dataClassification: 'CONFIDENTIAL' }), 'CLASSIFICATION_DOWNGRADE');
   assert.equal(expectSuccess(manager.current(SESSION)).revision, 2);
 });
 
