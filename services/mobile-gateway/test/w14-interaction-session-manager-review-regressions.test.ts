@@ -230,6 +230,22 @@ test('pre-1970 four-digit RFC3339 instants remain valid manager clock values', (
   assert.equal(opened.session.updatedAt, '1969-12-31T23:59:59.000Z');
 });
 
+test('store lookup key must match the canonical interaction session identity returned by persistence', () => {
+  const store = new MemoryStore();
+  const manager = new InteractionSessionManager(store, ids(), () => 1_000);
+  const opened = expectSuccess(open(manager));
+  const otherSession = 'ins_01JW14V0180000000000000000' as InteractionSessionId;
+  store.records.set(SESSION, {
+    revision: opened.revision,
+    session: {
+      ...opened.session,
+      interactionSessionId: otherSession,
+    },
+  } as StoredInteractionSession);
+
+  expectError(manager.current(binding()), 'STORE_INVALID');
+});
+
 test('invalid deserialized persistence state fails closed instead of escaping as a mutable contract object', () => {
   const store = new MemoryStore();
   const manager = new InteractionSessionManager(store, ids(), () => 1_000);
