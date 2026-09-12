@@ -1,10 +1,11 @@
-import type { DataClassification } from '@aurora/contracts/context';
+import { DATA_CLASSIFICATIONS, type DataClassification } from '@aurora/contracts/context';
 import type { InteractionSessionId } from '@aurora/contracts/ids';
-import type {
-  InteractionCanonicalReferences,
-  InteractionModality,
-  InteractionParticipantRef,
-  InteractionTextContent,
+import {
+  INTERACTION_MODALITIES,
+  type InteractionCanonicalReferences,
+  type InteractionModality,
+  type InteractionParticipantRef,
+  type InteractionTextContent,
 } from '@aurora/contracts/interaction-session';
 
 import type { DeviceSessionTrustSnapshot } from '../device-session/types.js';
@@ -21,6 +22,7 @@ import {
   type InteractionContinuityPort,
   type InteractionGatewayAdapterConfig,
   type InteractionGatewayBoundInput,
+  type InteractionGatewayClock,
   type InteractionGatewayError,
   type InteractionGatewayErrorCode,
   type InteractionGatewayResult,
@@ -29,13 +31,8 @@ import {
   type SuspendDeviceInteractionInput,
 } from './types.js';
 
-const DATA_CLASSIFICATIONS = new Set<DataClassification>([
-  'PUBLIC',
-  'INTERNAL',
-  'CONFIDENTIAL',
-  'RESTRICTED',
-]);
-const MODALITIES = new Set<InteractionModality>(['VOICE', 'TEXT', 'MULTIMODAL']);
+const DATA_CLASSIFICATION_SET = new Set<DataClassification>(DATA_CLASSIFICATIONS);
+const MODALITIES = new Set<InteractionModality>(INTERACTION_MODALITIES);
 const INTERACTION_SESSION_ID = /^ins_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const LANGUAGE_TAG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u;
 const SAFE_TOKEN = /^[A-Za-z0-9._:/-]+$/u;
@@ -54,6 +51,14 @@ interface OperationAttempt {
   readonly result?: InteractionSessionManagerResult;
   readonly error?: InteractionGatewayError;
   readonly interactionMayHaveChanged: boolean;
+}
+
+function serverNow(clock: InteractionGatewayClock): number {
+  const nowMs = clock();
+  if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
+    throw new TypeError('interaction gateway server clock must return a non-negative safe integer');
+  }
+  return nowMs;
 }
 
 function isPlainDataRecord(value: unknown): value is Record<string, unknown> {
@@ -316,6 +321,7 @@ export class InteractionGatewayAdapter {
   readonly #deviceTrust: DeviceInteractionTrustPort;
   readonly #interaction: InteractionContinuityPort;
   readonly #classification: DataClassification;
+  readonly #clock: InteractionGatewayClock;
 
   constructor(
     gateway: GatewayInteractionRequestPort,
@@ -323,13 +329,14 @@ export class InteractionGatewayAdapter {
     interaction: InteractionContinuityPort,
     config: InteractionGatewayAdapterConfig,
   ) {
-    if (!DATA_CLASSIFICATIONS.has(config.ingressDataClassification)) {
+    if (!DATA_CLASSIFICATION_SET.has(config.ingressDataClassification)) {
       throw new TypeError('interaction gateway ingress classification is invalid');
     }
     this.#gateway = gateway;
     this.#deviceTrust = deviceTrust;
     this.#interaction = interaction;
     this.#classification = config.ingressDataClassification;
+    this.#clock = config.clock ?? (() => Date.now());
   }
 
   open(input: unknown): InteractionGatewayResult {
@@ -419,8 +426,10 @@ export class InteractionGatewayAdapter {
     operation: (binding: TrustedInteractionBinding) => InteractionSessionManagerResult,
   ): InteractionGatewayResult {
     let begun;
+    let beginNowMs: number;
     try {
-      begun = this.#gateway.beginRequest(input.gatewayRequest);
+      beginNowMs = serverNow(this.#clock);
+      begun = this.#gateway.beginRequest({ ...input.gatewayRequest, nowMs: beginNowMs });
     } catch {
       return error('GATEWAY_REQUEST_REJECTED', 'Gateway request validation failed closed.');
     }
@@ -436,7 +445,7 @@ export class InteractionGatewayAdapter {
       const trust = this.#deviceTrust.getSession(
         input.deviceSessionId,
         input.gatewayRequest.connectionId,
-        input.gatewayRequest.nowMs,
+        beginNowMs,
       );
       if (!trust.ok) {
         attempt = {
@@ -468,6 +477,7 @@ export class InteractionGatewayAdapter {
 
     let completed;
     try {
+      const completionNowMs = serverNow(this.#clock);
       completed = this.#gateway.completeRequest({
         protocolVersion: input.gatewayRequest.protocolVersion,
         sessionId: input.gatewayRequest.sessionId,
@@ -476,7 +486,7 @@ export class InteractionGatewayAdapter {
         tenantId: input.gatewayRequest.tenantId,
         actorIdentityId: input.gatewayRequest.actorIdentityId,
         correlationId: input.gatewayRequest.correlationId,
-        nowMs: input.gatewayRequest.nowMs,
+        nowMs: completionNowMs,
       });
     } catch {
       return error('REQUEST_COMPLETION_FAILED', 'Gateway request completion failed closed.', {
@@ -504,7 +514,7 @@ export class InteractionGatewayAdapter {
         causeCode: attempt.result.code,
         retryable: attempt.result.retryable,
         requestCompleted: true,
-        requiresStateReconciliation: attempt.result.retryable,
+        requiresStateReconciliation: attempt.interactionMayHaveChanged,
       });
     }
     return {
