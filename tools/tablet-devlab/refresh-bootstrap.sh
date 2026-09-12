@@ -67,7 +67,7 @@ fi
 
 kill -USR2 "$HOST_PID" || fail "could not signal the live host"
 
-for _ in $(seq 1 50); do
+for (( attempt = 0; attempt < 50; attempt += 1 )); do
   [[ -e "$REFRESH_FILE" ]] && break
   sleep 0.1
 done
