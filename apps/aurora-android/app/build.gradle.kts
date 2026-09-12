@@ -11,6 +11,24 @@ val auroraReleaseTupleId = providers.environmentVariable("AURORA_RELEASE_TUPLE_I
 val auroraLocalGatewayOrigin =
     providers.environmentVariable("AURORA_LOCAL_GATEWAY_ORIGIN").orElse("http://10.0.2.2:8080").get()
 
+val physicalDevSigningValues =
+    mapOf(
+        "storeFile" to providers.environmentVariable("AURORA_PHYSICAL_DEV_KEYSTORE").orNull,
+        "storePassword" to providers.environmentVariable("AURORA_PHYSICAL_DEV_STORE_PASSWORD").orNull,
+        "keyAlias" to providers.environmentVariable("AURORA_PHYSICAL_DEV_KEY_ALIAS").orNull,
+        "keyPassword" to providers.environmentVariable("AURORA_PHYSICAL_DEV_KEY_PASSWORD").orNull,
+    )
+val configuredPhysicalDevSigningValues =
+    physicalDevSigningValues.filterValues { !it.isNullOrBlank() }
+require(
+    configuredPhysicalDevSigningValues.isEmpty() ||
+        configuredPhysicalDevSigningValues.size == physicalDevSigningValues.size,
+) {
+    "physical development signing must be either fully configured or completely absent"
+}
+val physicalDevSigningConfigured =
+    configuredPhysicalDevSigningValues.size == physicalDevSigningValues.size
+
 android {
     namespace = "ai.aurora.device"
     compileSdk = 36
@@ -19,11 +37,41 @@ android {
         applicationId = "ai.aurora.device"
         minSdk = 26
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.16.0-physical.1"
+        versionCode = 4
+        versionName = "0.17.0-dev.1"
         buildConfigField("String", "AURORA_ANDROID_SHA", buildConfigString(auroraAndroidSha))
         buildConfigField("String", "AURORA_HOST_SHA", buildConfigString(auroraHostSha))
         buildConfigField("String", "AURORA_RELEASE_TUPLE_ID", buildConfigString(auroraReleaseTupleId))
+        buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"NON_PHYSICAL\"")
+    }
+
+    if (physicalDevSigningConfigured) {
+        signingConfigs {
+            create("physicalDev") {
+                storeFile = file(checkNotNull(physicalDevSigningValues.getValue("storeFile")))
+                storePassword = checkNotNull(physicalDevSigningValues.getValue("storePassword"))
+                keyAlias = checkNotNull(physicalDevSigningValues.getValue("keyAlias"))
+                keyPassword = checkNotNull(physicalDevSigningValues.getValue("keyPassword"))
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"DEBUG_FALLBACK\"")
+        }
+        if (physicalDevSigningConfigured) {
+            create("physicalDev") {
+                initWith(getByName("debug"))
+                signingConfig = signingConfigs.getByName("physicalDev")
+                matchingFallbacks += listOf("debug")
+                buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"PHYSICAL_DEV_STABLE\"")
+            }
+        }
     }
 
     flavorDimensions += "environment"
@@ -33,8 +81,9 @@ android {
             applicationIdSuffix = ".local"
             versionNameSuffix = "-local"
             buildConfigField("String", "AURORA_ENVIRONMENT", "\"LOCAL\"")
-            // Emulator builds retain 10.0.2.2 by default. Physical same-tablet packaging injects
-            // AURORA_LOCAL_GATEWAY_ORIGIN=http://127.0.0.1:8080 and verifies the generated value.
+            // Emulator/local-debug builds retain 10.0.2.2 by default. Physical same-tablet
+            // packaging injects AURORA_LOCAL_GATEWAY_ORIGIN=http://127.0.0.1:8080 and builds the
+            // dedicated localPhysicalDev variant only when stable signing material is present.
             buildConfigField("String", "AURORA_GATEWAY_ORIGIN", buildConfigString(auroraLocalGatewayOrigin))
             buildConfigField("boolean", "AURORA_ALLOW_CLEARTEXT", "true")
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -69,6 +118,17 @@ android {
     testOptions {
         unitTests.all {
             it.useJUnit()
+        }
+    }
+}
+
+// AGP 9 removed the legacy android.variantFilter DSL. Keep the persistent development key
+// available only to LOCAL by disabling the impossible stagingPhysicalDev/productionPhysicalDev
+// combinations through the supported variant API.
+androidComponents {
+    beforeVariants(selector().withBuildType("physicalDev")) { variantBuilder ->
+        if (!variantBuilder.productFlavors.contains("environment" to "local")) {
+            variantBuilder.enable = false
         }
     }
 }
