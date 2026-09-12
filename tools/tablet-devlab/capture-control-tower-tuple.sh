@@ -7,20 +7,20 @@ fail() {
 }
 
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
-for cmd in gh jq sha256sum mktemp; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
+for cmd in gh jq sha256sum mktemp sleep; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
 gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated; run: gh auth login"
 
 REPO="${AURORA_REPOSITORY:-luizanunciostoca/aurora-ai-native}"
 MAIN_SHA="${AURORA_MAIN_SHA:-d2089407e88480686b879928cf2863c0dc81718e}"
 ANDROID_SHA="${AURORA_ANDROID_SHA:-6d44480eae9b99467b20df44290b5c9b17626c3e}"
-HOST_SHA="${AURORA_HOST_SHA:-15cf70e70d405dfdc4c971b53c60168a700e534d}"
-PACKAGING_SHA="${AURORA_PACKAGING_HEAD_SHA:-929780b9de1aac272093b26e1cff627c24675893}"
+HOST_SHA="${AURORA_HOST_SHA:-294e8754a568838ade40f1907546339385d7e599}"
+PACKAGING_SHA="${AURORA_PACKAGING_HEAD_SHA:-e0f120525a08fa51e6be4b1ac29cc1e203648765}"
 PACKAGING_BRANCH="prototype/w15j-physical-apk-artifact"
-RUN_ID="${AURORA_PACKAGING_RUN_ID:-34650819272}"
-ARTIFACT_ID="${AURORA_ARTIFACT_ID:-10283399095}"
-ARTIFACT_NAME="${AURORA_ARTIFACT_NAME:-aurora-w15j-tablet-loopback-apk-6d44480e-host-15cf70e7}"
-ZIP_SHA="${AURORA_ARTIFACT_ZIP_SHA256:-9250fc9b4c68a95233e3f870212edba2160182e76cc75126d2c3788bbb209d16}"
-APK_SHA="${AURORA_APK_SHA256:-9f7c5737f827d907759b41b9a87fd3fb7802efa6f0be64700621221d06c4db73}"
+RUN_ID="${AURORA_PACKAGING_RUN_ID:-34686121049}"
+ARTIFACT_ID="${AURORA_ARTIFACT_ID:-10296091034}"
+ARTIFACT_NAME="${AURORA_ARTIFACT_NAME:-aurora-w15j-tablet-loopback-apk-6d44480e-host-294e8754}"
+ZIP_SHA="${AURORA_ARTIFACT_ZIP_SHA256:-e115c2fcd31416e855cab0a69576ec254a71cc37e2979933ab375de82ed91810}"
+APK_SHA="${AURORA_APK_SHA256:-a0f8ed0b3e5d461592873a522a75a42fd7c079bad2a78dfd2d9968c1763af7e6}"
 APPLICATION_ID="ai.aurora.device.local"
 VARIANT="localDebug"
 VERSION_CODE="1"
@@ -48,7 +48,15 @@ chmod 700 "$(dirname "$OUTPUT")"
 [[ ! -L "$OUTPUT" ]] || fail "output path cannot be a symlink"
 
 api() {
-  gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$1"
+  local endpoint="$1" attempt output
+  for attempt in 1 2 3 4; do
+    if output="$(gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$endpoint" 2>/dev/null)"; then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    [[ "$attempt" -lt 4 ]] && sleep $((attempt * 2))
+  done
+  fail "GitHub API unavailable after bounded retries: $endpoint"
 }
 
 live_main="$(api "/repos/$REPO/branches/main" | jq -er '.commit.sha')"
