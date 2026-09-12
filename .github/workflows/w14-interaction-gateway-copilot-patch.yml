@@ -1,0 +1,113 @@
+name: W14 Interaction Gateway Copilot Patch
+
+on:
+  push:
+    branches:
+      - prebuild/w14-v017-interaction-gateway-adapter-r2
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Apply bounded adapter fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'services/mobile-gateway/src/interaction-gateway/adapter.ts';
+          let text = readFileSync(path, 'utf8');
+          function once(before, after, label) {
+            const at = text.indexOf(before);
+            if (at < 0) throw new Error(`missing target: ${label}`);
+            if (text.indexOf(before, at + before.length) >= 0) throw new Error(`duplicate target: ${label}`);
+            text = text.slice(0, at) + after + text.slice(at + before.length);
+          }
+
+          once(
+            "import type { DataClassification } from '@aurora/contracts/context';",
+            "import { DATA_CLASSIFICATIONS, type DataClassification } from '@aurora/contracts/context';",
+            'classification import',
+          );
+          once(
+            "import type {\n  InteractionCanonicalReferences,\n  InteractionModality,\n  InteractionParticipantRef,\n  InteractionTextContent,\n} from '@aurora/contracts/interaction-session';",
+            "import {\n  INTERACTION_MODALITIES,\n  type InteractionCanonicalReferences,\n  type InteractionModality,\n  type InteractionParticipantRef,\n  type InteractionTextContent,\n} from '@aurora/contracts/interaction-session';",
+            'modality import',
+          );
+          once(
+            '  type InteractionGatewayAdapterConfig,\n  type InteractionGatewayBoundInput,',
+            '  type InteractionGatewayAdapterConfig,\n  type InteractionGatewayBoundInput,\n  type InteractionGatewayClock,',
+            'clock type import',
+          );
+          once(
+            "const DATA_CLASSIFICATIONS = new Set<DataClassification>([\n  'PUBLIC',\n  'INTERNAL',\n  'CONFIDENTIAL',\n  'RESTRICTED',\n]);\nconst MODALITIES = new Set<InteractionModality>(['VOICE', 'TEXT', 'MULTIMODAL']);",
+            'const DATA_CLASSIFICATION_SET = new Set<DataClassification>(DATA_CLASSIFICATIONS);\nconst MODALITIES = new Set<InteractionModality>(INTERACTION_MODALITIES);',
+            'canonical vocabularies',
+          );
+          once(
+            "function isPlainDataRecord(value: unknown): value is Record<string, unknown> {",
+            "function serverNow(clock: InteractionGatewayClock): number {\n  const nowMs = clock();\n  if (!Number.isSafeInteger(nowMs) || nowMs < 0) {\n    throw new TypeError('interaction gateway server clock must return a non-negative safe integer');\n  }\n  return nowMs;\n}\n\nfunction isPlainDataRecord(value: unknown): value is Record<string, unknown> {",
+            'server clock helper',
+          );
+          once(
+            '  readonly #interaction: InteractionContinuityPort;\n  readonly #classification: DataClassification;',
+            '  readonly #interaction: InteractionContinuityPort;\n  readonly #classification: DataClassification;\n  readonly #clock: InteractionGatewayClock;',
+            'clock field',
+          );
+          once(
+            '    if (!DATA_CLASSIFICATIONS.has(config.ingressDataClassification)) {',
+            '    if (!DATA_CLASSIFICATION_SET.has(config.ingressDataClassification)) {',
+            'classification set usage',
+          );
+          once(
+            '    this.#interaction = interaction;\n    this.#classification = config.ingressDataClassification;',
+            '    this.#interaction = interaction;\n    this.#classification = config.ingressDataClassification;\n    this.#clock = config.clock ?? (() => Date.now());',
+            'clock assignment',
+          );
+          once(
+            '    let begun;\n    try {\n      begun = this.#gateway.beginRequest(input.gatewayRequest);',
+            '    let begun;\n    let beginNowMs: number;\n    try {\n      beginNowMs = serverNow(this.#clock);\n      begun = this.#gateway.beginRequest({ ...input.gatewayRequest, nowMs: beginNowMs });',
+            'begin server clock',
+          );
+          once(
+            '        input.gatewayRequest.connectionId,\n        input.gatewayRequest.nowMs,',
+            '        input.gatewayRequest.connectionId,\n        beginNowMs,',
+            'trust server clock',
+          );
+          once(
+            '    let completed;\n    try {\n      completed = this.#gateway.completeRequest({',
+            '    let completed;\n    try {\n      const completionNowMs = serverNow(this.#clock);\n      completed = this.#gateway.completeRequest({',
+            'completion server clock',
+          );
+          once(
+            '        correlationId: input.gatewayRequest.correlationId,\n        nowMs: input.gatewayRequest.nowMs,',
+            '        correlationId: input.gatewayRequest.correlationId,\n        nowMs: completionNowMs,',
+            'fresh completion clock',
+          );
+          once(
+            '        requestCompleted: true,\n        requiresStateReconciliation: attempt.result.retryable,',
+            '        requestCompleted: true,\n        requiresStateReconciliation: attempt.interactionMayHaveChanged,',
+            'manager reconciliation semantics',
+          );
+          writeFileSync(path, text);
+          NODE
+          npx prettier --write services/mobile-gateway/src/interaction-gateway/adapter.ts
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add services/mobile-gateway/src/interaction-gateway/adapter.ts
+          git diff --cached --quiet && { echo 'patch produced no diff' >&2; exit 1; }
+          git commit -m 'fix(W14): harden interaction gateway clock and reconciliation'
+          git push origin HEAD:prebuild/w14-v017-interaction-gateway-adapter-r2
