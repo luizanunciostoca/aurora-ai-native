@@ -69,8 +69,8 @@ export const InteractionModalitySchema = createRuntimeSchema<InteractionModality
   parseEnum<InteractionModality>(value, MODALITIES, 'InteractionModality'),
 );
 
-export const InteractionSessionStateSchema = createRuntimeSchema<InteractionSessionState>((value) =>
-  parseEnum<InteractionSessionState>(value, SESSION_STATES, 'InteractionSessionState'),
+export const InteractionSessionStateSchema = createRuntimeSchema<InteractionSessionState>(
+  (value) => parseEnum<InteractionSessionState>(value, SESSION_STATES, 'InteractionSessionState'),
 );
 
 export const InteractionTurnRoleSchema = createRuntimeSchema<InteractionTurnRole>((value) =>
@@ -239,7 +239,11 @@ export const InteractionTurnSchema = createRuntimeSchema<InteractionTurn>((value
   if (record.kind !== 'INTERACTION_TURN' || record.schemaVersion !== 1) {
     throw new TypeError('InteractionTurn kind/schemaVersion is invalid');
   }
-  if (!Number.isSafeInteger(record.sequence) || Number(record.sequence) < 1 || Number(record.sequence) > MAX_SEQUENCE) {
+  if (
+    !Number.isSafeInteger(record.sequence) ||
+    Number(record.sequence) < 1 ||
+    Number(record.sequence) > MAX_SEQUENCE
+  ) {
     throw new TypeError('InteractionTurn.sequence is invalid');
   }
   if (
@@ -282,7 +286,10 @@ export const InteractionResumeStateSchema = createRuntimeSchema<InteractionResum
   if (typeof record.resumable !== 'boolean') {
     throw new TypeError('InteractionResumeState.resumable must be boolean');
   }
-  if (!record.resumable && (record.resumeAfterTurnId !== undefined || record.resumableUntil !== undefined)) {
+  if (
+    !record.resumable &&
+    (record.resumeAfterTurnId !== undefined || record.resumableUntil !== undefined)
+  ) {
     throw new TypeError('non-resumable interaction cannot carry resume cursor or expiry');
   }
   return {
