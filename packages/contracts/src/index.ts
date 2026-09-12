@@ -1,6 +1,7 @@
 export * from './ids/index.js';
 export * from './versioning/index.js';
 export * from './context/index.js';
+export * from './interaction-session/index.js';
 export {
   COMMAND_ENVELOPE_KIND,
   EVENT_ENVELOPE_KIND,

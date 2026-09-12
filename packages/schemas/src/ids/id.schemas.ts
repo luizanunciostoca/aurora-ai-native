@@ -7,6 +7,8 @@ import type { EventId } from '@aurora/contracts/ids';
 import type { EvidenceId } from '@aurora/contracts/ids';
 import type { ExecutionId } from '@aurora/contracts/ids';
 import type { IdentityId } from '@aurora/contracts/ids';
+import type { InteractionSessionId } from '@aurora/contracts/ids';
+import type { InteractionTurnId } from '@aurora/contracts/ids';
 import type { PolicyTokenId } from '@aurora/contracts/ids';
 import type { ProviderExternalId } from '@aurora/contracts/ids';
 import type { ReceiptId } from '@aurora/contracts/ids';
@@ -68,6 +70,10 @@ export const EvidenceIdSchema = makeIdSchema<EvidenceId>(ids.EvidenceId.prefix);
 export const DecisionIdSchema = makeIdSchema<DecisionId>(ids.DecisionId.prefix);
 export const PolicyTokenIdSchema = makeIdSchema<PolicyTokenId>(ids.PolicyTokenId.prefix);
 export const ExecutionIdSchema = makeIdSchema<ExecutionId>(ids.ExecutionId.prefix);
+export const InteractionSessionIdSchema = makeIdSchema<InteractionSessionId>(
+  ids.InteractionSessionId.prefix,
+);
+export const InteractionTurnIdSchema = makeIdSchema<InteractionTurnId>(ids.InteractionTurnId.prefix);
 
 /** @deprecated Use DecisionIdSchema. */
 export const OwnerDecisionIdSchema = DecisionIdSchema;
