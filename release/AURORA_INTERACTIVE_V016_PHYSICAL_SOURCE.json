@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "tupleId": "aurora-interactive-v016-physical-1",
   "mainSha": "d2089407e88480686b879928cf2863c0dc81718e",
-  "androidSha": "3a342c2ff0302d12cffe58e567e5ee1cd24f5f61",
+  "androidSha": "bd9081d1016bdf83af0a0ef0959ae97f59e0dc49",
   "androidBranch": "wave/15-interactive-v016-physical-candidate",
   "hostSha": "294e8754a568838ade40f1907546339385d7e599",
   "hostBranch": "wave/15j-real-local-physical-host-clean",
