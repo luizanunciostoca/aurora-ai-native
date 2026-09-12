@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "tupleId": "aurora-interactive-v016-physical-1",
+  "mainSha": "d2089407e88480686b879928cf2863c0dc81718e",
+  "androidSha": "c4eb5acfe8f74c597e97306605ac251e0e90b049",
+  "androidBranch": "wave/15-interactive-v016-physical-candidate",
+  "hostSha": "294e8754a568838ade40f1907546339385d7e599",
+  "hostBranch": "wave/15j-real-local-physical-host-clean",
+  "devlabSha": "4924956abde3e0e312c54e97ac94191b8949679c",
+  "devlabBranch": "tooling/tablet-only-devlab",
+  "packagingBranch": "prototype/aurora-interactive-v016-physical-artifact",
+  "appVersion": "0.16.0-physical.1-local",
+  "versionCode": 3,
+  "environment": "LOCAL",
+  "gatewayProtocolVersion": "1.0",
+  "w03SchemaVersion": "003",
+  "w07ContractVersion": "w07-host-composition@294e8754",
+  "physicalAcceptanceStatus": "SMOKE_PENDING",
+  "dp5Status": "INCOMPLETE",
+  "canonicalDp5AcceptanceArtifact": false
+}
