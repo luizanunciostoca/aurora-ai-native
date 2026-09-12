@@ -189,10 +189,7 @@ test('tenant and participant bindings protect reads and mutations', () => {
   expectSuccess(open(manager));
 
   expectError(manager.current({ ...binding(), tenantId: TENANT_B }), 'TENANT_MISMATCH');
-  expectError(
-    append(manager, { participant: OTHER_PARTICIPANT }),
-    'PARTICIPANT_MISMATCH',
-  );
+  expectError(append(manager, { participant: OTHER_PARTICIPANT }), 'PARTICIPANT_MISMATCH');
   assert.equal(expectSuccess(manager.current(binding())).revision, 1);
 });
 
@@ -299,9 +296,7 @@ test('suspend and resume preserve bounded cursor continuity', () => {
   assert.ok(turn);
 
   now = 3_000;
-  const suspended = expectSuccess(
-    manager.suspend({ ...binding(), resumeWindowMs: 2_000 }),
-  );
+  const suspended = expectSuccess(manager.suspend({ ...binding(), resumeWindowMs: 2_000 }));
   assert.equal(suspended.session.state, 'SUSPENDED');
   assert.equal(suspended.session.resume.resumable, true);
   assert.equal(suspended.session.resume.resumeAfterTurnId, turn.interactionTurnId);
@@ -318,24 +313,15 @@ test('expired and invalid resume windows fail closed', () => {
   let now = 1_000;
   const manager = new InteractionSessionManager(store, ids(), () => now);
   expectSuccess(open(manager));
-  expectError(
-    manager.suspend({ ...binding(), resumeWindowMs: 999 }),
-    'INVALID_RESUME_WINDOW',
-  );
+  expectError(manager.suspend({ ...binding(), resumeWindowMs: 999 }), 'INVALID_RESUME_WINDOW');
   expectSuccess(manager.suspend({ ...binding(), resumeWindowMs: 1_000 }));
   now = 2_000;
   expectError(manager.resume(binding()), 'RESUME_EXPIRED');
 });
 
 test('RFC3339 timestamp helper and manager reject extended-year timestamps', () => {
-  assert.equal(
-    asRfc3339Timestamp(MAX_RFC3339_TIMESTAMP_MS),
-    '9999-12-31T23:59:59.999Z',
-  );
-  assert.throws(
-    () => asRfc3339Timestamp(MAX_RFC3339_TIMESTAMP_MS + 1),
-    /four-digit RFC3339 range/,
-  );
+  assert.equal(asRfc3339Timestamp(MAX_RFC3339_TIMESTAMP_MS), '9999-12-31T23:59:59.999Z');
+  assert.throws(() => asRfc3339Timestamp(MAX_RFC3339_TIMESTAMP_MS + 1), /four-digit RFC3339 range/);
   const manager = new InteractionSessionManager(
     new MemoryStore(),
     ids(),
