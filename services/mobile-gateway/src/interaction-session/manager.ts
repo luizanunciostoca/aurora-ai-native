@@ -65,11 +65,7 @@ function success(value: StoredInteractionSession): InteractionSessionManagerSucc
 
 function checkedClock(clock: InteractionClock): number {
   const observed = clock();
-  if (
-    !Number.isSafeInteger(observed) ||
-    observed < 0 ||
-    observed > MAX_RFC3339_TIMESTAMP_MS
-  ) {
+  if (!Number.isSafeInteger(observed) || observed < 0 || observed > MAX_RFC3339_TIMESTAMP_MS) {
     throw new TypeError('interaction clock must remain within the canonical RFC3339 range');
   }
   return observed;
@@ -106,9 +102,7 @@ function cloneReferences(
     ...(references.activeTaskRef === undefined ? {} : { activeTaskRef: references.activeTaskRef }),
     ...(references.workspaceRef === undefined ? {} : { workspaceRef: references.workspaceRef }),
     artifactRefs: Object.freeze([...references.artifactRefs]),
-    pendingHumanControlRequestRefs: Object.freeze([
-      ...references.pendingHumanControlRequestRefs,
-    ]),
+    pendingHumanControlRequestRefs: Object.freeze([...references.pendingHumanControlRequestRefs]),
   });
 }
 
