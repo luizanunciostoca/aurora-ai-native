@@ -69,14 +69,18 @@ export interface DeviceInteractionTrustPort {
 
 export interface InteractionContinuityPort {
   open(input: Parameters<InteractionSessionManager['open']>[0]): InteractionSessionManagerResult;
-  current(input: Parameters<InteractionSessionManager['current']>[0]): InteractionSessionManagerResult;
+  current(
+    input: Parameters<InteractionSessionManager['current']>[0],
+  ): InteractionSessionManagerResult;
   appendTurn(
     input: Parameters<InteractionSessionManager['appendTurn']>[0],
   ): InteractionSessionManagerResult;
   suspend(
     input: Parameters<InteractionSessionManager['suspend']>[0],
   ): InteractionSessionManagerResult;
-  resume(input: Parameters<InteractionSessionManager['resume']>[0]): InteractionSessionManagerResult;
+  resume(
+    input: Parameters<InteractionSessionManager['resume']>[0],
+  ): InteractionSessionManagerResult;
   end(input: Parameters<InteractionSessionManager['end']>[0]): InteractionSessionManagerResult;
 }
 
