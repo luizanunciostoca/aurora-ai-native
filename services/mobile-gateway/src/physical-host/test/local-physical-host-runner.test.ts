@@ -96,7 +96,7 @@ function hostInput(runtimeHooks: W15JLocalPhysicalHostRunnerHooks) {
   } as const;
 }
 
-test('starts both loopback listeners emits only allowlisted bootstrap metadata and cleans up on signal', async () => {
+test('starts both loopback listeners, refreshes bootstrap in-place, and cleans up on signal', async () => {
   const runtime = hooks();
   const handle = await startW15JLocalPhysicalHostRunner(hostInput(runtime.value));
 
@@ -142,6 +142,30 @@ test('starts both loopback listeners emits only allowlisted bootstrap metadata a
   ]) {
     assert.equal(serialized.includes(String(forbidden)), false);
   }
+
+  const refreshBootstrapReference = handle.refreshBootstrapReference;
+  assert.equal(typeof refreshBootstrapReference, 'function');
+  if (refreshBootstrapReference === undefined) throw new Error('runner refresh control missing');
+  const refreshed = refreshBootstrapReference();
+  assert.match(refreshed.bootstrapReference, /^gbr_[A-Za-z0-9_-]{43,128}$/u);
+  assert.notEqual(refreshed.bootstrapReference, ready.bootstrapReference);
+  assert.equal(refreshed.bootstrapExpiresAtMs, ready.bootstrapExpiresAtMs);
+  assert.equal(refreshed.authorizesExecution, false);
+  assert.equal(refreshed.provesExecutionSuccess, false);
+  assert.equal(refreshed.retryAuthorized, false);
+  assert.equal(handle.hostInstanceId, handle.address.hostInstanceId);
+
+  const exchangedRefresh = await fetch(
+    `http://127.0.0.1:${handle.address.bootstrap.port}${handle.address.bootstrap.path}`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ bootstrapReference: refreshed.bootstrapReference }),
+    },
+  );
+  assert.equal(exchangedRefresh.status, 200);
+  const exchangeBody = (await exchangedRefresh.json()) as Readonly<Record<string, unknown>>;
+  assert.equal(exchangeBody.ok, true);
 
   assert.equal(runtime.listeners.size, 2);
   runtime.listeners.get('SIGTERM')?.();
