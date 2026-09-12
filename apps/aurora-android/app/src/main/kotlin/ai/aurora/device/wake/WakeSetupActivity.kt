@@ -36,6 +36,7 @@ class WakeSetupActivity : Activity() {
     private var wakeSuspendedForEnrollment = false
     private var enrollmentStartAttempts = 0
     private var wakeRearmAttempts = 0
+    private var onboardingActionConsumed = false
     private val enrollmentStartRunnable = Runnable(::startEnrollmentWhenAudioIdle)
     private val nextEnrollmentSampleRunnable = Runnable(::captureNextEnrollmentSample)
     private val wakeRearmRunnable = Runnable(::rearmWakeWhenAudioIdle)
@@ -43,6 +44,8 @@ class WakeSetupActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onboardingActionConsumed =
+            savedInstanceState?.getBoolean(STATE_ONBOARDING_ACTION_CONSUMED, false) == true
         preferences = WakeRuntimePreferences(this)
         modelStore = AuroraWakeModelStore(this)
         statusStore = WakeRuntimeStatusStore(this)
@@ -95,11 +98,17 @@ class WakeSetupActivity : Activity() {
         layout.addView(privacyButton)
         setContentView(screen.root)
         refresh()
+        consumePendingOnboardingAction()
     }
 
     override fun onResume() {
         super.onResume()
         refresh()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_ONBOARDING_ACTION_CONSUMED, onboardingActionConsumed)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onPause() {
@@ -170,6 +179,28 @@ class WakeSetupActivity : Activity() {
             )
         }
         refresh()
+    }
+
+    private fun consumePendingOnboardingAction() {
+        if (onboardingActionConsumed) return
+        val action =
+            WakeSetupOnboardingActionCodec.decode(
+                intent?.getStringExtra(WakeSetupOnboardingActionCodec.EXTRA_ONBOARDING_ACTION),
+            ) ?: return
+        onboardingActionConsumed = true
+        intent?.removeExtra(WakeSetupOnboardingActionCodec.EXTRA_ONBOARDING_ACTION)
+        statusView.post {
+            if (isFinishing || isDestroyed) return@post
+            when (action) {
+                WakeSetupOnboardingAction.TRAIN_WAKE -> beginOrResumeEnrollment()
+                WakeSetupOnboardingAction.ENABLE_WAKE -> enableWake()
+                WakeSetupOnboardingAction.REVIEW_PRIVACY -> {
+                    refresh()
+                    guidanceView.text =
+                        "Revise o modo de privacidade abaixo. A Aurora não altera essa escolha sem um toque explícito seu."
+                }
+            }
+        }
     }
 
     private fun beginOrResumeEnrollment() {
@@ -540,6 +571,7 @@ class WakeSetupActivity : Activity() {
     }
 
     companion object {
+        private const val STATE_ONBOARDING_ACTION_CONSUMED = "wake_setup_onboarding_action_consumed"
         private const val REQUEST_MICROPHONE = 1501
         private const val REQUEST_ASSISTANT_ROLE = 1502
         private const val ENROLLMENT_SAMPLES = 3
