@@ -143,7 +143,10 @@ test('starts both loopback listeners, refreshes bootstrap in-place, and cleans u
     assert.equal(serialized.includes(String(forbidden)), false);
   }
 
-  const refreshed = handle.refreshBootstrapReference();
+  const refreshBootstrapReference = handle.refreshBootstrapReference;
+  assert.equal(typeof refreshBootstrapReference, 'function');
+  if (refreshBootstrapReference === undefined) throw new Error('runner refresh control missing');
+  const refreshed = refreshBootstrapReference();
   assert.match(refreshed.bootstrapReference, /^gbr_[A-Za-z0-9_-]{43,128}$/u);
   assert.notEqual(refreshed.bootstrapReference, ready.bootstrapReference);
   assert.equal(refreshed.bootstrapExpiresAtMs, ready.bootstrapExpiresAtMs);
