@@ -4,7 +4,9 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import ai.aurora.device.bootstrap.GatewayBootstrapSetupActivity
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.ui.AuroraAssistantStage
@@ -16,6 +18,9 @@ import ai.aurora.device.ui.AuroraOnboardingStep
 import ai.aurora.device.wake.AuroraAssistantRoleCoordinator
 import ai.aurora.device.wake.AuroraAssistantSelectionLaunch
 import ai.aurora.device.wake.AuroraWakeModelStore
+import ai.aurora.device.wake.MicrophonePermissionAction
+import ai.aurora.device.wake.MicrophonePermissionFlow
+import ai.aurora.device.wake.MicrophonePermissionRequestHistory
 import ai.aurora.device.wake.WakeRuntimePreferences
 import ai.aurora.device.wake.WakeRuntimeStatusStore
 import ai.aurora.device.wake.WakeSetupActivity
@@ -26,12 +31,14 @@ class MainActivity : Activity() {
     private lateinit var aurora: AuroraApplication
     private lateinit var surface: AuroraAssistantSurface
     private lateinit var developerMode: AuroraDeveloperModePreferences
+    private lateinit var microphonePermissionHistory: MicrophonePermissionRequestHistory
     private var assistantFeedback: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         aurora = application as AuroraApplication
         developerMode = AuroraDeveloperModePreferences(this)
+        microphonePermissionHistory = MicrophonePermissionRequestHistory(this)
         surface = AuroraAssistantSurface.create(this)
         setContentView(surface.root)
         renderStatus()
@@ -55,6 +62,22 @@ class MainActivity : Activity() {
                 renderInvocation(intent)
             }
         }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_MICROPHONE) return
+        assistantFeedback =
+            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+                "Microfone autorizado. Podemos continuar a configuração."
+            } else {
+                "O microfone ainda não está autorizado."
+            }
+        renderStatus()
     }
 
     @Deprecated("RoleManager still returns its user-consent result through the Activity result API")
@@ -184,12 +207,7 @@ class MainActivity : Activity() {
         surface.addPrimaryAction(primaryLabel) {
             when (step) {
                 AuroraOnboardingStep.READY -> openVoiceSession()
-                AuroraOnboardingStep.MICROPHONE ->
-                    startActivity(
-                        Intent(this, WakeSetupActivity::class.java).apply {
-                            putExtra(WakeSetupActivity.EXTRA_AUTO_REQUEST_MICROPHONE, true)
-                        },
-                    )
+                AuroraOnboardingStep.MICROPHONE -> requestMicrophonePermissionOrSettings()
                 AuroraOnboardingStep.ASSISTANT_ROLE ->
                     handleAssistantLaunch(
                         AuroraAssistantRoleCoordinator.requestSelection(this, REQUEST_ASSISTANT_ROLE),
@@ -237,6 +255,38 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun requestMicrophonePermissionOrSettings() {
+        val granted =
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val rationale =
+            !granted && shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+        when (
+            MicrophonePermissionFlow.nextAction(
+                granted = granted,
+                requestAttempted = microphonePermissionHistory.attempted(),
+                shouldShowRationale = rationale,
+            )
+        ) {
+            MicrophonePermissionAction.NONE -> renderStatus()
+            MicrophonePermissionAction.REQUEST -> {
+                microphonePermissionHistory.markAttempted()
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MICROPHONE)
+            }
+            MicrophonePermissionAction.OPEN_SETTINGS ->
+                runCatching {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName"),
+                        ),
+                    )
+                }.onFailure {
+                    assistantFeedback = "Abra as configurações do aplicativo para autorizar o microfone."
+                    renderStatus()
+                }
+        }
+    }
+
     private fun openVoiceSession() {
         startActivity(
             Intent(this, WakeVoiceActivity::class.java).apply {
@@ -267,5 +317,6 @@ class MainActivity : Activity() {
         const val EXTRA_LAST_TRANSCRIPT = "ai.aurora.extra.LAST_TRANSCRIPT"
         const val EXTRA_LAST_RESPONSE = "ai.aurora.extra.LAST_RESPONSE"
         private const val REQUEST_ASSISTANT_ROLE = 1401
+        private const val REQUEST_MICROPHONE = 1402
     }
 }
