@@ -93,7 +93,10 @@ cp "$SOURCE_TUPLE" "$ARTIFACT_DIR/SOURCE_TUPLE.json"
 cp "$SUMS" "$ARTIFACT_DIR/SHA256SUMS.txt"
 chmod 600 "$ARTIFACT_DIR"/*.txt "$ARTIFACT_DIR"/*.json 2>/dev/null || true
 
-mapfile -t DEVICES < <(adb devices | awk 'NR > 1 && $2 == "device" {print $1}')
+if ! devices_output="$(adb devices 2>&1)"; then
+  fail "unable to query self-ADB devices"
+fi
+mapfile -t DEVICES < <(printf '%s\n' "$devices_output" | awk 'NR > 1 && $2 == "device" {print $1}')
 [[ "${#DEVICES[@]}" -eq 1 ]] || fail "exactly one self-ADB physical device is required; found ${#DEVICES[@]}"
 SERIAL="${DEVICES[0]}"
 ADB=(adb -s "$SERIAL")
@@ -102,7 +105,9 @@ QEMU="$("${ADB[@]}" shell getprop ro.kernel.qemu | tr -d '\r\n')"
 MODEL="$("${ADB[@]}" shell getprop ro.product.model | tr -d '\r\n')"
 [[ "$MODEL" == "SM-X820" ]] || fail "representative device must be SM-X820; observed $MODEL"
 
-reverse_state="$("${ADB[@]}" reverse --list 2>/dev/null || true)"
+if ! reverse_state="$("${ADB[@]}" reverse --list 2>&1)"; then
+  fail "unable to prove ADB reverse state"
+fi
 if printf '%s\n' "$reverse_state" | grep -Eq 'tcp:(8080|8081)'; then
   fail "ADB reverse on 8080/8081 is forbidden for LOCAL_TABLET_LOOPBACK"
 fi
@@ -112,7 +117,16 @@ EVIDENCE_DIR="$EVIDENCE_ROOT/install-$WINDOW"
 mkdir -p "$EVIDENCE_DIR"
 chmod 700 "$EVIDENCE_DIR"
 
-mapfile -t PRE_PATHS < <("${ADB[@]}" shell pm path "$PACKAGE_ID" 2>/dev/null | tr -d '\r' | sed -n 's/^package://p')
+if ! pre_pm_output="$("${ADB[@]}" shell pm path "$PACKAGE_ID" 2>&1)"; then
+  fail "unable to query installed Aurora package before mutation"
+fi
+pre_pm_output="${pre_pm_output//$'\r'/}"
+unexpected_pre_pm="$(printf '%s\n' "$pre_pm_output" | sed '/^package:/d;/^[[:space:]]*$/d')"
+[[ -z "$unexpected_pre_pm" ]] || fail "unexpected package-manager response before mutation"
+PRE_PATHS=()
+while IFS= read -r path; do
+  [[ -n "$path" ]] && PRE_PATHS+=("$path")
+done < <(printf '%s\n' "$pre_pm_output" | sed -n 's/^package://p')
 [[ "${#PRE_PATHS[@]}" -le 1 ]] || fail "installed package is split/non-canonical"
 prior_present=false
 prior_sha="NOT_INSTALLED"
@@ -153,7 +167,16 @@ EOF
   grep -Fxq 'Success' "$EVIDENCE_DIR/install.txt" || fail "install did not report Success"
 fi
 
-mapfile -t POST_PATHS < <("${ADB[@]}" shell pm path "$PACKAGE_ID" | tr -d '\r' | sed -n 's/^package://p')
+if ! post_pm_output="$("${ADB[@]}" shell pm path "$PACKAGE_ID" 2>&1)"; then
+  fail "unable to query installed Aurora package after install"
+fi
+post_pm_output="${post_pm_output//$'\r'/}"
+unexpected_post_pm="$(printf '%s\n' "$post_pm_output" | sed '/^package:/d;/^[[:space:]]*$/d')"
+[[ -z "$unexpected_post_pm" ]] || fail "unexpected package-manager response after install"
+POST_PATHS=()
+while IFS= read -r path; do
+  [[ -n "$path" ]] && POST_PATHS+=("$path")
+done < <(printf '%s\n' "$post_pm_output" | sed -n 's/^package://p')
 [[ "${#POST_PATHS[@]}" -eq 1 ]] || fail "exactly one installed base APK required"
 POST_APK="$EVIDENCE_DIR/installed-after.apk"
 "${ADB[@]}" pull "${POST_PATHS[0]}" "$POST_APK" >"$EVIDENCE_DIR/pull-after.txt" 2>&1 || fail "installed APK readback failed"
@@ -191,10 +214,9 @@ cat >"$EVIDENCE_DIR/install-evidence.json" <<EOF
 }
 EOF
 
-"${ADB[@]}" shell am force-stop "$PACKAGE_ID" >/dev/null 2>&1 || true
-"${ADB[@]}" shell am start -n "$LAUNCH_COMPONENT" >"$EVIDENCE_DIR/launch.txt" 2>&1 || fail "Aurora launch failed"
-
-grep -q 'Status: ok\|Starting:' "$EVIDENCE_DIR/launch.txt" || true
+"${ADB[@]}" shell am force-stop "$PACKAGE_ID" >"$EVIDENCE_DIR/force-stop.txt" 2>&1 || fail "unable to establish clean launch state"
+"${ADB[@]}" shell am start -W -n "$LAUNCH_COMPONENT" >"$EVIDENCE_DIR/launch.txt" 2>&1 || fail "Aurora launch failed"
+grep -Fxq 'Status: ok' "$EVIDENCE_DIR/launch.txt" || fail "Aurora launch was not confirmed by ActivityManager"
 
 cat <<EOF
 Aurora Interactive v0.16 FINAL physical smoke candidate is installed and launched.
