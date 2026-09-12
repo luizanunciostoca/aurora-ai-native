@@ -73,7 +73,9 @@ export const ExecutionIdSchema = makeIdSchema<ExecutionId>(ids.ExecutionId.prefi
 export const InteractionSessionIdSchema = makeIdSchema<InteractionSessionId>(
   ids.InteractionSessionId.prefix,
 );
-export const InteractionTurnIdSchema = makeIdSchema<InteractionTurnId>(ids.InteractionTurnId.prefix);
+export const InteractionTurnIdSchema = makeIdSchema<InteractionTurnId>(
+  ids.InteractionTurnId.prefix,
+);
 
 /** @deprecated Use DecisionIdSchema. */
 export const OwnerDecisionIdSchema = DecisionIdSchema;
