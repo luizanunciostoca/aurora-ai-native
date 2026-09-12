@@ -27,6 +27,7 @@ READINESS_PARENT="$DEVLAB_ROOT/host-readiness"
 STATE_DIR="$DEVLAB_ROOT/state"
 WORKTREE_STATE="$STATE_DIR/worktrees.txt"
 DB_ENV="$STATE_DIR/postgres.env"
+BOOTSTRAP_REFRESH_FILE="$STATE_DIR/w15j-bootstrap-refresh.json"
 NODE_VERSION="22.16.0"
 NPM_VERSION="10.9.2"
 
@@ -49,6 +50,10 @@ grep -q 'TABLET_DEVLAB_PROVIDER_NOT_CONFIGURED' "$PROVIDER" && \
 
 mkdir -p "$READINESS_PARENT" "$STATE_DIR"
 chmod 700 "$READINESS_PARENT" "$STATE_DIR"
+if [[ -e "$BOOTSTRAP_REFRESH_FILE" ]]; then
+  secure_regular_file "$BOOTSTRAP_REFRESH_FILE" || fail "stale bootstrap refresh file is insecure"
+  rm -f -- "$BOOTSTRAP_REFRESH_FILE"
+fi
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 READINESS_DIR="$READINESS_PARENT/$RUN_ID"
 [[ ! -e "$READINESS_DIR" ]] || fail "readiness path unexpectedly exists: $READINESS_DIR"
@@ -92,6 +97,7 @@ set +a
 export AURORA_W15J_DP5_MATERIAL=/aurora-devlab/config/w15j-dp5-material.json
 export AURORA_W15J_PROVIDER_MODULE=/aurora-devlab/config/trusted-w15j-provider.mjs
 export AURORA_W15J_HOST_READINESS_DIR=/aurora-devlab/host-readiness/$RUN_ID
+export AURORA_W15J_BOOTSTRAP_REFRESH_FILE=/aurora-devlab/state/w15j-bootstrap-refresh.json
 
 npm ci
 # The external provider imports only freshly compiled canonical owners from this exact host HEAD.
