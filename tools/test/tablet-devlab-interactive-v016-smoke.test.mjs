@@ -56,11 +56,33 @@ test('interactive smoke tooling preserves destructive and authority boundaries',
   assert.doesNotMatch(script, /adb reverse tcp:8081/);
 });
 
+test('interactive smoke tooling binds package mutation to persisted Wireless Debugging self-ADB', () => {
+  assert.match(script, /state\/self-adb-endpoint\.txt/);
+  assert.match(script, /saved self-ADB endpoint permissions must be 600/);
+  assert.match(script, /SAVED_SELF_ADB_ENDPOINT/);
+  assert.match(script, /\[\[ "\$SERIAL" == "\$SAVED_SELF_ADB_ENDPOINT" \]\]/);
+  assert.match(script, /persisted Wireless Debugging self-ADB endpoint/);
+  assert.match(script, /"selfAdbBindingVerified": true/);
+  assert.match(script, /"selfAdbEndpointSha256": "\$SERIAL_SHA"/);
+});
+
+test('interactive smoke tooling proves clean first install without failing open on package queries', () => {
+  assert.match(script, /cmd package list packages "\$PACKAGE_ID"/);
+  assert.match(script, /unable to prove Aurora package presence before mutation/);
+  assert.match(script, /unexpected package-list response before mutation/);
+  assert.match(script, /pre_package_matches/);
+  assert.match(script, /if \[\[ "\$pre_package_matches" == "1" \]\]; then/);
+  assert.match(script, /unable to query installed Aurora package path before mutation/);
+  assert.match(script, /installed Aurora package must resolve to exactly one base APK/);
+  assert.doesNotMatch(
+    script,
+    /if ! pre_pm_output=.*then\n\s*fail "unable to query installed Aurora package before mutation"/,
+  );
+});
+
 test('interactive smoke tooling fails closed on device observations and launch', () => {
   assert.match(script, /unable to query self-ADB devices/);
   assert.match(script, /unable to prove ADB reverse state/);
-  assert.match(script, /unable to query installed Aurora package before mutation/);
-  assert.match(script, /unexpected package-manager response before mutation/);
   assert.match(script, /unable to query installed Aurora package after install/);
   assert.match(script, /unexpected package-manager response after install/);
   assert.match(script, /am start -W -n/);
