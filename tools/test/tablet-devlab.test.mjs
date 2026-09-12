@@ -9,12 +9,12 @@ const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', nam
 
 const MAIN_SHA = 'd2089407e88480686b879928cf2863c0dc81718e';
 const ANDROID_SHA = '6d44480eae9b99467b20df44290b5c9b17626c3e';
-const HOST_SHA = '15cf70e70d405dfdc4c971b53c60168a700e534d';
-const PACKAGING_SHA = '929780b9de1aac272093b26e1cff627c24675893';
-const APK_SHA = '9f7c5737f827d907759b41b9a87fd3fb7802efa6f0be64700621221d06c4db73';
-const ARTIFACT_ID = '10283399095';
-const RUN_ID = '34650819272';
-const ZIP_SHA = '9250fc9b4c68a95233e3f870212edba2160182e76cc75126d2c3788bbb209d16';
+const HOST_SHA = '294e8754a568838ade40f1907546339385d7e599';
+const PACKAGING_SHA = 'e0f120525a08fa51e6be4b1ac29cc1e203648765';
+const APK_SHA = 'a0f8ed0b3e5d461592873a522a75a42fd7c079bad2a78dfd2d9968c1763af7e6';
+const ARTIFACT_ID = '10296091034';
+const RUN_ID = '34686121049';
+const ZIP_SHA = 'e115c2fcd31416e855cab0a69576ec254a71cc37e2979933ab375de82ed91810';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -47,6 +47,7 @@ test('tablet host remains fail closed until trusted provider is configured', () 
   const provider = read('trusted-w15j-provider.template.mjs');
   assert.match(launcher, /TABLET_DEVLAB_PROVIDER_NOT_CONFIGURED/);
   assert.match(launcher, /AURORA_W15J_PROVIDER_MODULE/);
+  assert.match(launcher, /AURORA_W15J_BOOTSTRAP_REFRESH_FILE/);
   assert.match(provider, /throw new Error/);
   assert.match(provider, /authorizesExecution: false/);
   assert.match(provider, /canGrantPermission: false/);
@@ -195,13 +196,15 @@ test('provider doctor validates owner-backed composition but remains software-on
   assert.match(source, /physical_acceptance=false/);
 });
 
-test('live control-tower tuple capture revalidates GitHub and cannot self-accept DP5', () => {
+test('live control-tower tuple capture retries transient GitHub reads and cannot self-accept DP5', () => {
   const source = read('capture-control-tower-tuple.sh');
   assert.match(source, /branches\/main/);
   assert.match(source, /pulls\/\$number/);
   assert.match(source, /compare\/\$MAIN_SHA\.\.\.\$expected_head/);
   assert.match(source, /actions\/runs\/\$RUN_ID/);
   assert.match(source, /actions\/artifacts\/\$ARTIFACT_ID/);
+  assert.match(source, /for attempt in 1 2 3 4/);
+  assert.match(source, /GitHub API unavailable after bounded retries/);
   assert.match(source, /sha256:\$ZIP_SHA/);
   assert.match(source, /open\/draft\/unmerged/);
   for (const value of [
@@ -220,6 +223,21 @@ test('live control-tower tuple capture revalidates GitHub and cannot self-accept
   assert.match(source, /authorizes_execution=false/);
   assert.match(source, /physical_acceptance=false/);
   assert.match(source, /retry_authorized=false/);
+});
+
+test('same-host bootstrap refresh is protected, current-instance-bound and non-authoritative', () => {
+  const source = read('refresh-bootstrap.sh');
+  assert.match(source, /last-readiness-termux\.txt/);
+  assert.match(source, /host-ready-announcement\.txt/);
+  assert.match(source, /kill -USR2/);
+  assert.match(source, /DEVICE_GATEWAY/);
+  assert.match(source, /BOOTSTRAP_EXCHANGE/);
+  assert.match(source, /W15J_LOCAL_BOOTSTRAP_REFRESH_READY/);
+  assert.match(source, /REMAINING_MS > 30_000/);
+  assert.match(source, /authorizes_execution=false/);
+  assert.match(source, /proves_execution_success=false/);
+  assert.match(source, /retry_authorized=false/);
+  assert.match(source, /physical_acceptance=false/);
 });
 
 test('dossier doctor requires finalized reviewer-bound evidence and remains non-accepting', () => {
@@ -255,6 +273,7 @@ test('tablet devlab documentation keeps independent reviewer and exact tuple req
   assert.match(source, /authorize-dp5-effect\.sh/);
   assert.match(source, /prepare-dp5-provider\.sh/);
   assert.match(source, /provider-doctor\.sh/);
+  assert.match(source, /refresh-bootstrap\.sh/);
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED=YES/);
   assert.match(source, /clean uninstall\/install/i);
   assert.match(source, /install-exact-apk\.sh/);
