@@ -89,5 +89,5 @@ test('interactive smoke tooling fails closed on device observations and launch',
   assert.match(script, /Status: ok/);
   assert.match(script, /Aurora launch was not confirmed by ActivityManager/);
   assert.doesNotMatch(script, /reverse --list[^\n]*\|\| true/);
-  assert.doesNotMatch(script, /Status: ok\\\|Starting:[^\n]*\|\| true/);
+  assert.doesNotMatch(script, /Status: ok[^\n]*\|\| true/);
 });
