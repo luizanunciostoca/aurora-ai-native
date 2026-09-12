@@ -178,6 +178,7 @@ function runtime(): Runtime {
   );
   const adapter = new InteractionGatewayAdapter(gateway, deviceTrust, interaction, {
     ingressDataClassification: 'CONFIDENTIAL',
+    clock: () => 2_000,
   });
   let requestIndex = 0;
   return {
@@ -394,6 +395,7 @@ test('adapter independently rejects a gateway/device binding mismatch', () => {
   };
   const adapter = new InteractionGatewayAdapter(rt.gateway, spoofTrust, rt.interaction, {
     ingressDataClassification: 'CONFIDENTIAL',
+    clock: () => 2_000,
   });
   const result = adapter.open({
     gatewayRequest: rt.request(2_100),
