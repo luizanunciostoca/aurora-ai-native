@@ -262,7 +262,17 @@ function readStored(
     };
   }
   try {
-    return { ok: true, value: freezeStored(raw.revision, raw.session) };
+    const value = freezeStored(raw.revision, raw.session);
+    if (value.session.interactionSessionId !== interactionSessionId) {
+      return {
+        ok: false,
+        error: failure(
+          'STORE_INVALID',
+          'interaction session store returned a mismatched canonical identity',
+        ),
+      };
+    }
+    return { ok: true, value };
   } catch {
     return {
       ok: false,
