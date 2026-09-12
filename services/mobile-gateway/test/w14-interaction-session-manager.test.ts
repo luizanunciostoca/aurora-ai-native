@@ -11,15 +11,27 @@ import type {
 } from '@aurora/contracts/ids';
 
 import {
+  MAX_RFC3339_TIMESTAMP_MS,
   InteractionSessionManager,
+  asRfc3339Timestamp,
   type InteractionSessionIdFactory,
   type InteractionSessionStore,
   type StoredInteractionSession,
 } from '../src/interaction-session/index.js';
 
 const TENANT = 'ten_01JW14V0170000000000000000' as TenantId;
+const TENANT_B = 'ten_01JW14V0170000000000000001' as TenantId;
 const CORRELATION = 'cor_01JW14V0170000000000000000' as CorrelationId;
 const SESSION = 'ins_01JW14V0170000000000000000' as InteractionSessionId;
+const SESSION_B = 'ins_01JW14V0170000000000000001' as InteractionSessionId;
+const PARTICIPANT = Object.freeze({
+  kind: 'DEVICE' as const,
+  bindingReference: 'device:sm-x820',
+});
+const OTHER_PARTICIPANT = Object.freeze({
+  kind: 'DEVICE' as const,
+  bindingReference: 'device:other',
+});
 const REFERENCES = Object.freeze({
   artifactRefs: Object.freeze([]),
   pendingHumanControlRequestRefs: Object.freeze([]),
@@ -27,6 +39,7 @@ const REFERENCES = Object.freeze({
 
 class MemoryStore implements InteractionSessionStore {
   readonly records = new Map<InteractionSessionId, StoredInteractionSession>();
+  readonly reservedTurnIds = new Set<InteractionTurnId>();
   rejectCreate = false;
   rejectNextCas = false;
 
@@ -37,6 +50,12 @@ class MemoryStore implements InteractionSessionStore {
   create(initial: StoredInteractionSession): boolean {
     if (this.rejectCreate || this.records.has(initial.session.interactionSessionId)) return false;
     this.records.set(initial.session.interactionSessionId, initial);
+    return true;
+  }
+
+  reserveTurnId(interactionTurnId: InteractionTurnId): boolean {
+    if (this.reservedTurnIds.has(interactionTurnId)) return false;
+    this.reservedTurnIds.add(interactionTurnId);
     return true;
   }
 
@@ -60,11 +79,27 @@ function turnId(index: number): InteractionTurnId {
   return `itr_${String(index).padStart(26, '0')}` as InteractionTurnId;
 }
 
-function ids(turns: readonly InteractionTurnId[] = []): InteractionSessionIdFactory {
+function ids(
+  turns: readonly InteractionTurnId[] = [],
+  sessions: readonly InteractionSessionId[] = [SESSION],
+): InteractionSessionIdFactory {
+  let sessionIndex = 0;
   let turnIndex = 0;
   return {
-    sessionId: () => SESSION,
-    turnId: () => turns[turnIndex++] ?? turnId(turnIndex),
+    sessionId: () => sessions[sessionIndex++] ?? SESSION,
+    turnId: () => {
+      const current = turnIndex;
+      turnIndex += 1;
+      return turns[current] ?? turnId(current + 1);
+    },
+  };
+}
+
+function binding(interactionSessionId: InteractionSessionId = SESSION) {
+  return {
+    interactionSessionId,
+    tenantId: TENANT,
+    participant: PARTICIPANT,
   };
 }
 
@@ -74,7 +109,7 @@ function open(
 ) {
   return manager.open({
     tenantId: TENANT,
-    participant: { kind: 'DEVICE', bindingReference: 'device:sm-x820' },
+    participant: PARTICIPANT,
     modality: 'VOICE',
     dataClassification,
     references: REFERENCES,
@@ -86,7 +121,7 @@ function append(
   overrides: Partial<Parameters<InteractionSessionManager['appendTurn']>[0]> = {},
 ) {
   return manager.appendTurn({
-    interactionSessionId: SESSION,
+    ...binding(),
     role: 'USER',
     modality: 'VOICE',
     correlationId: CORRELATION,
@@ -97,11 +132,15 @@ function append(
   });
 }
 
-function expectError(result: ReturnType<InteractionSessionManager['current']>, code: string): void {
+function expectError(
+  result: ReturnType<InteractionSessionManager['current']>,
+  code: string,
+  retryable = false,
+): void {
   assert.equal(result.ok, false);
   if (result.ok) throw new Error('expected manager failure');
   assert.equal(result.code, code);
-  assert.equal(result.retryable, false);
+  assert.equal(result.retryable, retryable);
   assert.equal(result.authorizesExecution, false);
   assert.equal(result.provesExecutionSuccess, false);
   assert.equal(result.retryAuthorized, false);
@@ -144,6 +183,69 @@ test('W14 interaction manager opens and appends ordered non-authoritative turns'
   assert.equal(second.session.turns[1]?.retryAuthorized, false);
 });
 
+test('tenant and participant bindings protect reads and mutations', () => {
+  const store = new MemoryStore();
+  const manager = new InteractionSessionManager(store, ids(), () => 1_000);
+  expectSuccess(open(manager));
+
+  expectError(manager.current({ ...binding(), tenantId: TENANT_B }), 'TENANT_MISMATCH');
+  expectError(
+    append(manager, { participant: OTHER_PARTICIPANT }),
+    'PARTICIPANT_MISMATCH',
+  );
+  assert.equal(expectSuccess(manager.current(binding())).revision, 1);
+});
+
+test('caller-owned participant, references and turn content cannot mutate stored state', () => {
+  const store = new MemoryStore();
+  const manager = new InteractionSessionManager(store, ids(), () => 1_000);
+  const artifactRefs = ['artifact:one'];
+  const pendingRefs = ['human-control:one'];
+  const mutableParticipant = { kind: 'DEVICE' as const, bindingReference: 'device:mutable' };
+  const opened = expectSuccess(
+    manager.open({
+      tenantId: TENANT,
+      participant: mutableParticipant,
+      modality: 'VOICE',
+      dataClassification: 'INTERNAL',
+      references: {
+        artifactRefs,
+        pendingHumanControlRequestRefs: pendingRefs,
+      },
+    }),
+  );
+
+  mutableParticipant.bindingReference = 'device:mutated';
+  artifactRefs.push('artifact:mutated');
+  pendingRefs.push('human-control:mutated');
+  assert.equal(opened.session.participant.kind, 'DEVICE');
+  if (opened.session.participant.kind !== 'DEVICE') throw new Error('expected device participant');
+  assert.equal(opened.session.participant.bindingReference, 'device:mutable');
+  assert.deepEqual(opened.session.references.artifactRefs, ['artifact:one']);
+  assert.deepEqual(opened.session.references.pendingHumanControlRequestRefs, ['human-control:one']);
+  assert.equal(Object.isFrozen(opened.session.participant), true);
+  assert.equal(Object.isFrozen(opened.session.references), true);
+  assert.equal(Object.isFrozen(opened.session.references.artifactRefs), true);
+
+  const turnArtifacts = ['turn-artifact:one'];
+  const content = { kind: 'TEXT' as const, text: 'texto original', languageTag: 'pt-BR' };
+  const appended = expectSuccess(
+    append(manager, {
+      content,
+      references: {
+        artifactRefs: turnArtifacts,
+        pendingHumanControlRequestRefs: [],
+      },
+    }),
+  );
+  content.text = 'texto mutado';
+  turnArtifacts.push('turn-artifact:mutated');
+  assert.equal(appended.session.turns[0]?.content.text, 'texto original');
+  assert.deepEqual(appended.session.turns[0]?.references.artifactRefs, ['turn-artifact:one']);
+  assert.equal(Object.isFrozen(appended.session.turns[0]?.content), true);
+  assert.equal(Object.isFrozen(appended.session.turns[0]?.references.artifactRefs), true);
+});
+
 test('classification escalates monotonically and later downgrade is rejected', () => {
   const store = new MemoryStore();
   const manager = new InteractionSessionManager(store, ids(), () => 1_000);
@@ -153,7 +255,7 @@ test('classification escalates monotonically and later downgrade is rejected', (
   assert.equal(restricted.session.dataClassification, 'RESTRICTED');
 
   expectError(append(manager, { dataClassification: 'CONFIDENTIAL' }), 'CLASSIFICATION_DOWNGRADE');
-  assert.equal(expectSuccess(manager.current(SESSION)).revision, 2);
+  assert.equal(expectSuccess(manager.current(binding())).revision, 2);
 });
 
 test('fixed-modality session rejects incompatible turn modality', () => {
@@ -162,23 +264,28 @@ test('fixed-modality session rejects incompatible turn modality', () => {
   expectError(append(manager, { modality: 'TEXT' }), 'MODALITY_MISMATCH');
 });
 
-test('duplicate generated turn identity fails closed without mutating the store', () => {
+test('duplicate generated turn identity fails closed across interaction sessions', () => {
   const duplicate = turnId(7);
   const store = new MemoryStore();
-  const manager = new InteractionSessionManager(store, ids([duplicate, duplicate]), () => 1_000);
+  const manager = new InteractionSessionManager(
+    store,
+    ids([duplicate, duplicate], [SESSION, SESSION_B]),
+    () => 1_000,
+  );
   expectSuccess(open(manager));
   expectSuccess(append(manager));
-  expectError(append(manager), 'ID_COLLISION');
-  assert.equal(expectSuccess(manager.current(SESSION)).session.turns.length, 1);
+  expectSuccess(open(manager));
+  expectError(append(manager, { interactionSessionId: SESSION_B }), 'ID_COLLISION');
+  assert.equal(expectSuccess(manager.current(binding(SESSION_B))).session.turns.length, 0);
 });
 
-test('CAS conflict is surfaced and never silently overwrites newer continuity state', () => {
+test('CAS conflict is recoverable only after guards and never grants retry authority', () => {
   const store = new MemoryStore();
   const manager = new InteractionSessionManager(store, ids(), () => 1_000);
   expectSuccess(open(manager));
   store.rejectNextCas = true;
-  expectError(append(manager), 'REVISION_CONFLICT');
-  assert.equal(expectSuccess(manager.current(SESSION)).revision, 1);
+  expectError(append(manager), 'REVISION_CONFLICT', true);
+  assert.equal(expectSuccess(manager.current(binding())).revision, 1);
 });
 
 test('suspend and resume preserve bounded cursor continuity', () => {
@@ -192,7 +299,7 @@ test('suspend and resume preserve bounded cursor continuity', () => {
 
   now = 3_000;
   const suspended = expectSuccess(
-    manager.suspend({ interactionSessionId: SESSION, resumeWindowMs: 2_000 }),
+    manager.suspend({ ...binding(), resumeWindowMs: 2_000 }),
   );
   assert.equal(suspended.session.state, 'SUSPENDED');
   assert.equal(suspended.session.resume.resumable, true);
@@ -200,7 +307,7 @@ test('suspend and resume preserve bounded cursor continuity', () => {
   assert.equal(suspended.session.resume.resumableUntil, '1970-01-01T00:00:05.000Z');
 
   now = 4_000;
-  const resumed = expectSuccess(manager.resume({ interactionSessionId: SESSION }));
+  const resumed = expectSuccess(manager.resume(binding()));
   assert.equal(resumed.session.state, 'ACTIVE');
   assert.deepEqual(resumed.session.resume, { resumable: false });
 });
@@ -211,12 +318,29 @@ test('expired and invalid resume windows fail closed', () => {
   const manager = new InteractionSessionManager(store, ids(), () => now);
   expectSuccess(open(manager));
   expectError(
-    manager.suspend({ interactionSessionId: SESSION, resumeWindowMs: 999 }),
+    manager.suspend({ ...binding(), resumeWindowMs: 999 }),
     'INVALID_RESUME_WINDOW',
   );
-  expectSuccess(manager.suspend({ interactionSessionId: SESSION, resumeWindowMs: 1_000 }));
+  expectSuccess(manager.suspend({ ...binding(), resumeWindowMs: 1_000 }));
   now = 2_000;
-  expectError(manager.resume({ interactionSessionId: SESSION }), 'RESUME_EXPIRED');
+  expectError(manager.resume(binding()), 'RESUME_EXPIRED');
+});
+
+test('RFC3339 timestamp helper and manager reject extended-year timestamps', () => {
+  assert.equal(
+    asRfc3339Timestamp(MAX_RFC3339_TIMESTAMP_MS),
+    '9999-12-31T23:59:59.999Z',
+  );
+  assert.throws(
+    () => asRfc3339Timestamp(MAX_RFC3339_TIMESTAMP_MS + 1),
+    /four-digit RFC3339 range/,
+  );
+  const manager = new InteractionSessionManager(
+    new MemoryStore(),
+    ids(),
+    () => MAX_RFC3339_TIMESTAMP_MS + 1,
+  );
+  assert.throws(() => open(manager), /canonical RFC3339 range/);
 });
 
 test('turn limit is enforced by writer even before schema validation', () => {
@@ -228,7 +352,7 @@ test('turn limit is enforced by writer even before schema validation', () => {
     expectSuccess(append(manager));
   }
   expectError(append(manager), 'TURN_LIMIT_REACHED');
-  assert.equal(expectSuccess(manager.current(SESSION)).session.turns.length, 128);
+  assert.equal(expectSuccess(manager.current(binding())).session.turns.length, 128);
 });
 
 test('clock regression cannot move session or turn timestamps backwards', () => {
@@ -246,8 +370,8 @@ test('end is terminal and idempotent without creating authority', () => {
   const store = new MemoryStore();
   const manager = new InteractionSessionManager(store, ids(), () => 1_000);
   expectSuccess(open(manager));
-  const ended = expectSuccess(manager.end({ interactionSessionId: SESSION }));
-  const repeated = expectSuccess(manager.end({ interactionSessionId: SESSION }));
+  const ended = expectSuccess(manager.end(binding()));
+  const repeated = expectSuccess(manager.end(binding()));
   assert.equal(ended.session.state, 'ENDED');
   assert.equal(repeated.revision, ended.revision);
   expectError(append(manager), 'SESSION_NOT_ACTIVE');
