@@ -459,7 +459,9 @@ export class InteractionGatewayAdapter {
       }
     } catch {
       attempt = {
-        error: error('INTERNAL_FAILURE', 'Interaction gateway operation failed closed.'),
+        error: error('INTERNAL_FAILURE', 'Interaction gateway operation failed closed.', {
+          requiresStateReconciliation: mayMutate,
+        }),
         interactionMayHaveChanged: mayMutate,
       };
     }
