@@ -15,6 +15,7 @@ import type {
   GatewayProtocolResult,
   GatewayRequestSnapshot,
 } from '../gateway-auth/types.js';
+import type { InteractionSessionManager } from '../interaction-session/manager.js';
 import type {
   InteractionSessionManagerErrorCode,
   InteractionSessionManagerResult,
@@ -67,36 +68,16 @@ export interface DeviceInteractionTrustPort {
 }
 
 export interface InteractionContinuityPort {
-  open(
-    input: Parameters<
-      import('../interaction-session/manager.js').InteractionSessionManager['open']
-    >[0],
-  ): InteractionSessionManagerResult;
-  current(
-    input: Parameters<
-      import('../interaction-session/manager.js').InteractionSessionManager['current']
-    >[0],
-  ): InteractionSessionManagerResult;
+  open(input: Parameters<InteractionSessionManager['open']>[0]): InteractionSessionManagerResult;
+  current(input: Parameters<InteractionSessionManager['current']>[0]): InteractionSessionManagerResult;
   appendTurn(
-    input: Parameters<
-      import('../interaction-session/manager.js').InteractionSessionManager['appendTurn']
-    >[0],
+    input: Parameters<InteractionSessionManager['appendTurn']>[0],
   ): InteractionSessionManagerResult;
   suspend(
-    input: Parameters<
-      import('../interaction-session/manager.js').InteractionSessionManager['suspend']
-    >[0],
+    input: Parameters<InteractionSessionManager['suspend']>[0],
   ): InteractionSessionManagerResult;
-  resume(
-    input: Parameters<
-      import('../interaction-session/manager.js').InteractionSessionManager['resume']
-    >[0],
-  ): InteractionSessionManagerResult;
-  end(
-    input: Parameters<
-      import('../interaction-session/manager.js').InteractionSessionManager['end']
-    >[0],
-  ): InteractionSessionManagerResult;
+  resume(input: Parameters<InteractionSessionManager['resume']>[0]): InteractionSessionManagerResult;
+  end(input: Parameters<InteractionSessionManager['end']>[0]): InteractionSessionManagerResult;
 }
 
 export type InteractionGatewayCauseCode =
