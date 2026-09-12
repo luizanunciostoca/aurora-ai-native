@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { URL } from 'node:url';
 
 const script = readFileSync(
   new URL('../tablet-devlab/prepare-interactive-v016-smoke.sh', import.meta.url),
