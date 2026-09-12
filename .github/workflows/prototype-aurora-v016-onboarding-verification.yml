@@ -1,0 +1,51 @@
+name: Prototype Aurora v0.16 Onboarding Verification
+
+on:
+  push:
+    branches:
+      - prototype/aurora-v016-onboarding-verification
+    paths:
+      - '.github/workflows/prototype-aurora-v016-onboarding-verification.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android-exact-head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact onboarding candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 51f91fe4cc6805859fa775be44f5a3b07dde9598
+          persist-credentials: false
+      - name: Assert exact source
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "51f91fe4cc6805859fa775be44f5a3b07dde9598"
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '9.4.1'
+          cache-read-only: true
+      - name: Install stable Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+      - name: Run exact Android Foundation commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --console=plain -p apps/aurora-android \
+            :app:testLocalDebugUnitTest \
+            :app:assembleLocalDebug \
+            :app:assembleStagingDebug \
+            :app:assembleProductionDebug
