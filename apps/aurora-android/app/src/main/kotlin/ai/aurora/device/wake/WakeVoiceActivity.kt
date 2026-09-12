@@ -15,6 +15,7 @@ import ai.aurora.device.ui.AuroraAssistantSurface
 import ai.aurora.device.voice.AuroraTextToSpeechOutput
 import ai.aurora.device.voice.BoundedSpeechRecognitionFailure
 import ai.aurora.device.voice.BoundedSpeechRecognizer
+import ai.aurora.device.voice.SingleFlightWorkDispatcher
 import ai.aurora.device.voice.WakeVoiceRoute
 import ai.aurora.device.voice.WakeVoiceRuntimeRegistry
 
@@ -35,6 +36,7 @@ class WakeVoiceActivity : Activity() {
     private var lastTranscript: String? = null
     private var lastResponse: String? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val governedWork = SingleFlightWorkDispatcher()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -43,6 +45,7 @@ class WakeVoiceActivity : Activity() {
         surface = AuroraAssistantSurface.create(this)
         surface.clearActions()
         surface.render(AuroraAssistantStage.LISTENING)
+        surface.setStatusLine("Microfone ativo  •  Wake pausado durante a conversa")
         surface.setDiagnostics("Voz local • STT limitado • autoridade e execução permanecem governadas")
         setContentView(surface.root)
     }
@@ -69,30 +72,20 @@ class WakeVoiceActivity : Activity() {
                 capture.start(
                     onResult = { result ->
                         runOnUiThread {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
                             lastTranscript = result.transcript
                             surface.showConversation(result.transcript, null)
                             surface.render(AuroraAssistantStage.UNDERSTANDING)
+                            surface.setStatusLine("Processando sua solicitação…")
                         }
-                        val route =
-                            WakeVoiceRuntimeRegistry.route(
-                                activity = this,
-                                transcript = result.transcript,
-                                transcriptConfidence = result.confidence,
-                            )
-                        runOnUiThread {
-                            when (route) {
-                                is WakeVoiceRoute.AuthoritySubmitted -> consumeGovernedDispatch(route)
-                                is WakeVoiceRoute.ConversationFallback ->
-                                    complete(
-                                        state = "VOICE_FALLBACK_${route.reason.name}",
-                                        display = AuroraAssistantResponseComposer.fallback(route),
-                                        stage = AuroraAssistantStage.DEGRADED,
-                                    )
-                            }
-                        }
+                        dispatchGovernedVoiceTurn(
+                            transcript = result.transcript,
+                            transcriptConfidence = result.confidence,
+                        )
                     },
                     onFailure = { failure ->
                         runOnUiThread {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
                             complete(
                                 state = "STT_${failure.name}",
                                 display = failureMessage(failure),
@@ -138,29 +131,96 @@ class WakeVoiceActivity : Activity() {
         speechOutput = null
         completionRunnable?.let(mainHandler::removeCallbacks)
         completionRunnable = null
+        // Do not interrupt an in-flight governed effect. The worker rejects new turns immediately
+        // and lets the already-started W07/W14/W15 path reach its own receipt/reconciliation state.
+        governedWork.close()
         super.onDestroy()
     }
 
-    private fun consumeGovernedDispatch(route: WakeVoiceRoute.AuthoritySubmitted) {
-        surface.render(AuroraAssistantStage.ACTING)
-        val application = application as? AuroraApplication
-        if (application == null) {
-            complete(
-                "W15_DEVICE_CONSUMER_UNAVAILABLE",
-                "Entendi o pedido, mas o executor governado está indisponível.",
-                AuroraAssistantStage.DEGRADED,
+    private fun dispatchGovernedVoiceTurn(
+        transcript: String,
+        transcriptConfidence: Double?,
+    ) {
+        val accepted =
+            governedWork.submit(
+                operation = {
+                    val route =
+                        WakeVoiceRuntimeRegistry.route(
+                            activity = this,
+                            transcript = transcript,
+                            transcriptConfidence = transcriptConfidence,
+                        )
+                    when (route) {
+                        is WakeVoiceRoute.ConversationFallback ->
+                            GovernedVoiceTurnWorkResult.Fallback(route)
+                        is WakeVoiceRoute.AuthoritySubmitted -> {
+                            val application = application as? AuroraApplication
+                            val consumption =
+                                if (application == null) {
+                                    W15JDeviceCommandConsumptionResult.NoEffect(
+                                        reason = "governed device consumer is unavailable",
+                                    )
+                                } else {
+                                    runCatching {
+                                        application.consumeLocalGovernedDeviceCommand(
+                                            route.dispatch.commandId,
+                                        )
+                                    }.getOrElse {
+                                        W15JDeviceCommandConsumptionResult.NoEffect(
+                                            reason =
+                                                "governed device consumer raised before confirmed effect",
+                                            requiresReconciliation = true,
+                                        )
+                                    }
+                                }
+                            GovernedVoiceTurnWorkResult.Authority(route, consumption)
+                        }
+                    }
+                },
+                onComplete = { work ->
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        when (work) {
+                            is GovernedVoiceTurnWorkResult.Fallback ->
+                                complete(
+                                    state = "VOICE_FALLBACK_${work.route.reason.name}",
+                                    display = AuroraAssistantResponseComposer.fallback(work.route),
+                                    stage = AuroraAssistantStage.DEGRADED,
+                                )
+                            is GovernedVoiceTurnWorkResult.Authority ->
+                                handleGovernedConsumption(work.route, work.consumption)
+                        }
+                    }
+                },
+                onFailure = { failure ->
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        complete(
+                            state = "VOICE_ROUTE_FAILED",
+                            display = "Não consegui concluir essa solicitação agora.",
+                            stage = AuroraAssistantStage.DEGRADED,
+                        )
+                        surface.setDiagnostics(
+                            "Voice route failure: ${failure.javaClass.simpleName}",
+                        )
+                    }
+                },
             )
-            return
+
+        if (!accepted) {
+            statusStore.update(
+                "VOICE_DUPLICATE_TURN_IGNORED",
+                lastError = "a governed voice turn is already in flight",
+            )
         }
-        val consumption =
-            runCatching {
-                application.consumeLocalGovernedDeviceCommand(route.dispatch.commandId)
-            }.getOrElse {
-                W15JDeviceCommandConsumptionResult.NoEffect(
-                    reason = "governed device consumer raised before confirmed effect",
-                    requiresReconciliation = true,
-                )
-            }
+    }
+
+    private fun handleGovernedConsumption(
+        route: WakeVoiceRoute.AuthoritySubmitted,
+        consumption: W15JDeviceCommandConsumptionResult,
+    ) {
+        surface.render(AuroraAssistantStage.ACTING)
+        surface.setStatusLine("Executando com segurança…")
         when (consumption) {
             is W15JDeviceCommandConsumptionResult.NoEffect ->
                 complete(
@@ -211,6 +271,7 @@ class WakeVoiceActivity : Activity() {
         lastResponse = display
         surface.showConversation(lastTranscript, display)
         surface.render(stage)
+        surface.setStatusLine(if (stage == AuroraAssistantStage.COMPLETED) "Concluído" else "")
         speakAndFinish(display, stage)
     }
 
@@ -222,6 +283,7 @@ class WakeVoiceActivity : Activity() {
         val output = AuroraTextToSpeechOutput(this)
         speechOutput = output
         surface.render(AuroraAssistantStage.SPEAKING, detailOverride = display)
+        surface.setStatusLine("Respondendo por voz…")
         output.speak(
             text = display,
             onComplete = {
@@ -319,4 +381,15 @@ class WakeVoiceActivity : Activity() {
         const val EXTRA_SYSTEM_ASSIST_INVOCATION = "ai.aurora.extra.SYSTEM_ASSIST_INVOCATION"
         private const val COMPLETION_DISPLAY_MS = 1_100L
     }
+}
+
+private sealed interface GovernedVoiceTurnWorkResult {
+    data class Fallback(
+        val route: WakeVoiceRoute.ConversationFallback,
+    ) : GovernedVoiceTurnWorkResult
+
+    data class Authority(
+        val route: WakeVoiceRoute.AuthoritySubmitted,
+        val consumption: W15JDeviceCommandConsumptionResult,
+    ) : GovernedVoiceTurnWorkResult
 }
