@@ -106,7 +106,12 @@ function rfc3339EpochNanoseconds(value: Rfc3339Timestamp): bigint {
   const fraction = RFC3339_FRACTION.exec(value)?.[1] ?? '';
   const paddedFraction = fraction.padEnd(9, '0');
   const subMillisecondNanoseconds = BigInt(paddedFraction.slice(3) || '0');
-  return BigInt(epochMs) * NANOSECONDS_PER_MILLISECOND + subMillisecondNanoseconds;
+  const epochNanoseconds =
+    BigInt(epochMs) * NANOSECONDS_PER_MILLISECOND + subMillisecondNanoseconds;
+  if (epochNanoseconds < MIN_RFC3339_TIMESTAMP_NS || epochNanoseconds > MAX_RFC3339_TIMESTAMP_NS) {
+    throw new TypeError('interaction timestamp is outside the canonical RFC3339 UTC range');
+  }
+  return epochNanoseconds;
 }
 
 function epochNanosecondsToRfc3339(epochNanoseconds: bigint): Rfc3339Timestamp {
@@ -223,7 +228,20 @@ function freezeSession(session: InteractionSession): InteractionSession {
     throw new TypeError('interaction updatedAt cannot precede createdAt at nanosecond precision');
   }
   let previousOccurredAtNs = createdAtNs;
+  let previousClassificationRank = -1;
+  let highestTurnClassification;
+  const seenTurnIds = new Set<string>();
   const turns = parsed.turns.map((turn) => {
+    if (seenTurnIds.has(turn.interactionTurnId)) {
+      throw new TypeError('interaction session cannot contain duplicate turn identities');
+    }
+    seenTurnIds.add(turn.interactionTurnId);
+    const classificationRank = CLASSIFICATION_RANK[turn.dataClassification];
+    if (classificationRank < previousClassificationRank) {
+      throw new TypeError('interaction turn classifications cannot downgrade over time');
+    }
+    previousClassificationRank = classificationRank;
+    highestTurnClassification = turn.dataClassification;
     const occurredAtNs = rfc3339EpochNanoseconds(turn.occurredAt);
     if (occurredAtNs < previousOccurredAtNs || occurredAtNs > updatedAtNs) {
       throw new TypeError('interaction turn timestamp is outside exact session bounds');
@@ -231,7 +249,16 @@ function freezeSession(session: InteractionSession): InteractionSession {
     previousOccurredAtNs = occurredAtNs;
     return freezeTurn(turn);
   });
-  if (parsed.resume.resumable && parsed.resume.resumableUntil !== undefined) {
+  if (
+    highestTurnClassification !== undefined &&
+    parsed.dataClassification !== highestTurnClassification
+  ) {
+    throw new TypeError('interaction session classification must equal its highest observed turn');
+  }
+  if (parsed.resume.resumable) {
+    if (parsed.state !== 'SUSPENDED' || parsed.resume.resumableUntil === undefined) {
+      throw new TypeError('resumable interaction must be suspended with an expiry');
+    }
     if (rfc3339EpochNanoseconds(parsed.resume.resumableUntil) <= updatedAtNs) {
       throw new TypeError('resumable interaction expiry must be after updatedAt');
     }
