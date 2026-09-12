@@ -1,0 +1,279 @@
+name: Aurora Interactive v0.16 Physical Smoke Artifact
+
+on:
+  push:
+    branches:
+      - prototype/aurora-interactive-v016-physical-artifact
+    paths:
+      - '.github/workflows/prototype-aurora-interactive-v016-physical-artifact.yml'
+      - 'release/AURORA_INTERACTIVE_V016_PHYSICAL_SOURCE.json'
+
+permissions:
+  contents: read
+
+jobs:
+  build-exact-physical-candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout packaging metadata
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          path: packaging-meta
+          persist-credentials: false
+
+      - name: Load and validate source tuple
+        id: tuple
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE=packaging-meta/release/AURORA_INTERACTIVE_V016_PHYSICAL_SOURCE.json
+          jq -e '
+            .schemaVersion == 1 and
+            .tupleId == "aurora-interactive-v016-physical-1" and
+            .environment == "LOCAL" and
+            .versionCode == 3 and
+            .appVersion == "0.16.0-physical.1-local" and
+            .gatewayProtocolVersion == "1.0" and
+            .w03SchemaVersion == "003" and
+            .physicalAcceptanceStatus == "SMOKE_PENDING" and
+            .dp5Status == "INCOMPLETE" and
+            .canonicalDp5AcceptanceArtifact == false
+          ' "$SOURCE" >/dev/null
+
+          echo "main_sha=$(jq -r .mainSha "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "android_sha=$(jq -r .androidSha "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "android_branch=$(jq -r .androidBranch "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "host_sha=$(jq -r .hostSha "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "host_branch=$(jq -r .hostBranch "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "devlab_sha=$(jq -r .devlabSha "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "devlab_branch=$(jq -r .devlabBranch "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "tuple_id=$(jq -r .tupleId "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "w03_schema=$(jq -r .w03SchemaVersion "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "w07_contract=$(jq -r .w07ContractVersion "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "android_short=$(jq -r .androidSha "$SOURCE" | cut -c1-8)" >> "$GITHUB_OUTPUT"
+          echo "host_short=$(jq -r .hostSha "$SOURCE" | cut -c1-8)" >> "$GITHUB_OUTPUT"
+
+      - name: Fail closed on source drift
+        shell: bash
+        env:
+          MAIN_SHA: ${{ steps.tuple.outputs.main_sha }}
+          ANDROID_SHA: ${{ steps.tuple.outputs.android_sha }}
+          ANDROID_BRANCH: ${{ steps.tuple.outputs.android_branch }}
+          HOST_SHA: ${{ steps.tuple.outputs.host_sha }}
+          HOST_BRANCH: ${{ steps.tuple.outputs.host_branch }}
+          DEVLAB_SHA: ${{ steps.tuple.outputs.devlab_sha }}
+          DEVLAB_BRANCH: ${{ steps.tuple.outputs.devlab_branch }}
+        run: |
+          set -euo pipefail
+          REMOTE="https://github.com/${GITHUB_REPOSITORY}.git"
+          remote_head() {
+            git ls-remote "$REMOTE" "refs/heads/$1" | awk '{print $1}'
+          }
+          test "$(remote_head main)" = "$MAIN_SHA"
+          test "$(remote_head "$ANDROID_BRANCH")" = "$ANDROID_SHA"
+          test "$(remote_head "$HOST_BRANCH")" = "$HOST_SHA"
+          test "$(remote_head "$DEVLAB_BRANCH")" = "$DEVLAB_SHA"
+
+      - name: Checkout exact Android candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.tuple.outputs.android_sha }}
+          path: source
+          persist-credentials: false
+
+      - name: Assert exact Android source
+        shell: bash
+        env:
+          ANDROID_SHA: ${{ steps.tuple.outputs.android_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "$ANDROID_SHA"
+
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '9.4.1'
+          cache-read-only: true
+
+      - name: Install stable Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Test, assemble and verify Aurora Interactive v0.16
+        id: build
+        shell: bash
+        env:
+          AURORA_ANDROID_SHA: ${{ steps.tuple.outputs.android_sha }}
+          AURORA_HOST_SHA: ${{ steps.tuple.outputs.host_sha }}
+          AURORA_RELEASE_TUPLE_ID: ${{ steps.tuple.outputs.tuple_id }}
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --console=plain -p source/apps/aurora-android \
+            :app:testLocalDebugUnitTest \
+            :app:assembleLocalDebug
+
+          APK="$(find source/apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          AAPT="$SDK_ROOT/build-tools/36.0.0/aapt"
+          test -x "$AAPT"
+          BADGING="$($AAPT dump badging "$APK" | sed -n '1p')"
+          PACKAGE_ID="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          VERSION_CODE="$(printf '%s\n' "$BADGING" | sed -n "s/.* versionCode='\([^']*\)'.*/\1/p")"
+          VERSION_NAME="$(printf '%s\n' "$BADGING" | sed -n "s/.* versionName='\([^']*\)'.*/\1/p")"
+          test "$PACKAGE_ID" = "ai.aurora.device.local"
+          test "$VERSION_CODE" = "3"
+          test "$VERSION_NAME" = "0.16.0-physical.1-local"
+
+          ARTIFACT_DIR=/tmp/aurora-interactive-v016-physical
+          mkdir -p "$ARTIFACT_DIR"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-Interactive-v0.16-Physical-localDebug.apk"
+          cp packaging-meta/release/AURORA_INTERACTIVE_V016_PHYSICAL_SOURCE.json "$ARTIFACT_DIR/SOURCE_TUPLE.json"
+          APK_SHA256="$(sha256sum "$ARTIFACT_DIR/Aurora-Interactive-v0.16-Physical-localDebug.apk" | awk '{print $1}')"
+          printf '%s  %s\n' "$APK_SHA256" 'Aurora-Interactive-v0.16-Physical-localDebug.apk' > "$ARTIFACT_DIR/SHA256SUMS.txt"
+          (cd "$ARTIFACT_DIR" && sha256sum -c SHA256SUMS.txt)
+
+          cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
+          artifact_purpose=AURORA_INTERACTIVE_V016_PHYSICAL_SMOKE
+          source_candidate_sha=${AURORA_ANDROID_SHA}
+          source_branch=${{ steps.tuple.outputs.android_branch }}
+          paired_local_host_candidate_sha=${AURORA_HOST_SHA}
+          devlab_candidate_sha=${{ steps.tuple.outputs.devlab_sha }}
+          reconciled_main_sha=${{ steps.tuple.outputs.main_sha }}
+          packaging_head_sha=${GITHUB_SHA}
+          packaging_branch=${GITHUB_REF_NAME}
+          packaging_run_id=${GITHUB_RUN_ID}
+          release_tuple_id=${AURORA_RELEASE_TUPLE_ID}
+          gateway_environment=LOCAL
+          gateway_protocol_version=1.0
+          w03_schema_version=${{ steps.tuple.outputs.w03_schema }}
+          w07_contract_version=${{ steps.tuple.outputs.w07_contract }}
+          apk_variant=localDebug
+          package_id=${PACKAGE_ID}
+          version_code=${VERSION_CODE}
+          version_name=${VERSION_NAME}
+          apk_sha256=${APK_SHA256}
+          canonical_dp5_acceptance_artifact=false
+          physical_acceptance_status=SMOKE_PENDING
+          dp5_status=INCOMPLETE
+          EOF
+
+          echo "apk_sha256=$APK_SHA256" >> "$GITHUB_OUTPUT"
+          echo "artifact_dir=$ARTIFACT_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Re-assert tuple has not drifted before publication
+        shell: bash
+        env:
+          MAIN_SHA: ${{ steps.tuple.outputs.main_sha }}
+          ANDROID_SHA: ${{ steps.tuple.outputs.android_sha }}
+          ANDROID_BRANCH: ${{ steps.tuple.outputs.android_branch }}
+          HOST_SHA: ${{ steps.tuple.outputs.host_sha }}
+          HOST_BRANCH: ${{ steps.tuple.outputs.host_branch }}
+          DEVLAB_SHA: ${{ steps.tuple.outputs.devlab_sha }}
+          DEVLAB_BRANCH: ${{ steps.tuple.outputs.devlab_branch }}
+        run: |
+          set -euo pipefail
+          REMOTE="https://github.com/${GITHUB_REPOSITORY}.git"
+          remote_head() {
+            git ls-remote "$REMOTE" "refs/heads/$1" | awk '{print $1}'
+          }
+          test "$(remote_head main)" = "$MAIN_SHA"
+          test "$(remote_head "$ANDROID_BRANCH")" = "$ANDROID_SHA"
+          test "$(remote_head "$HOST_BRANCH")" = "$HOST_SHA"
+          test "$(remote_head "$DEVLAB_BRANCH")" = "$DEVLAB_SHA"
+
+      - name: Upload exact APK payload
+        id: apk_upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: aurora-interactive-v016-physical-${{ steps.tuple.outputs.android_short }}-host-${{ steps.tuple.outputs.host_short }}
+          path: /tmp/aurora-interactive-v016-physical
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create resolved canonical release tuple
+        shell: bash
+        env:
+          APK_SHA256: ${{ steps.build.outputs.apk_sha256 }}
+          ARTIFACT_ID: ${{ steps.apk_upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.apk_upload.outputs.artifact-digest }}
+        run: |
+          set -euo pipefail
+          ZIP_SHA256="${ARTIFACT_DIGEST#sha256:}"
+          ARTIFACT_NAME="aurora-interactive-v016-physical-${{ steps.tuple.outputs.android_short }}-host-${{ steps.tuple.outputs.host_short }}"
+          mkdir -p /tmp/aurora-interactive-v016-release-tuple
+          jq -n \
+            --argjson schemaVersion 1 \
+            --arg tupleId '${{ steps.tuple.outputs.tuple_id }}' \
+            --arg mainSha '${{ steps.tuple.outputs.main_sha }}' \
+            --arg androidSha '${{ steps.tuple.outputs.android_sha }}' \
+            --arg hostSha '${{ steps.tuple.outputs.host_sha }}' \
+            --arg devlabSha '${{ steps.tuple.outputs.devlab_sha }}' \
+            --arg packagingSha "$GITHUB_SHA" \
+            --arg packagingRun "$GITHUB_RUN_ID" \
+            --arg artifactId "$ARTIFACT_ID" \
+            --arg artifactName "$ARTIFACT_NAME" \
+            --arg zipSha256 "$ZIP_SHA256" \
+            --arg apkSha256 "$APK_SHA256" \
+            --arg appVersion '0.16.0-physical.1-local' \
+            --argjson versionCode 3 \
+            --arg environment 'LOCAL' \
+            --arg gatewayProtocolVersion '1.0' \
+            --arg w03SchemaVersion '${{ steps.tuple.outputs.w03_schema }}' \
+            --arg w07ContractVersion '${{ steps.tuple.outputs.w07_contract }}' \
+            --arg physicalAcceptanceStatus 'SMOKE_PENDING' \
+            --arg dp5Status 'INCOMPLETE' \
+            '{
+              schemaVersion: $schemaVersion,
+              tupleId: $tupleId,
+              mainSha: $mainSha,
+              androidSha: $androidSha,
+              hostSha: $hostSha,
+              devlabSha: $devlabSha,
+              packagingSha: $packagingSha,
+              packagingRun: $packagingRun,
+              artifactId: $artifactId,
+              artifactName: $artifactName,
+              zipSha256: $zipSha256,
+              apkSha256: $apkSha256,
+              appVersion: $appVersion,
+              versionCode: $versionCode,
+              environment: $environment,
+              gatewayProtocolVersion: $gatewayProtocolVersion,
+              w03SchemaVersion: $w03SchemaVersion,
+              w07ContractVersion: $w07ContractVersion,
+              physicalAcceptanceStatus: $physicalAcceptanceStatus,
+              dp5Status: $dp5Status,
+              canonicalDp5AcceptanceArtifact: false
+            }' > /tmp/aurora-interactive-v016-release-tuple/AURORA_RELEASE_TUPLE.json
+
+          jq -e '
+            .physicalAcceptanceStatus == "SMOKE_PENDING" and
+            .dp5Status == "INCOMPLETE" and
+            .canonicalDp5AcceptanceArtifact == false and
+            (.artifactId | length) > 0 and
+            (.apkSha256 | length) == 64 and
+            (.zipSha256 | length) == 64
+          ' /tmp/aurora-interactive-v016-release-tuple/AURORA_RELEASE_TUPLE.json >/dev/null
+          cat /tmp/aurora-interactive-v016-release-tuple/AURORA_RELEASE_TUPLE.json
+
+      - name: Upload resolved release tuple
+        uses: actions/upload-artifact@v7
+        with:
+          name: aurora-interactive-v016-physical-release-tuple
+          path: /tmp/aurora-interactive-v016-release-tuple/AURORA_RELEASE_TUPLE.json
+          if-no-files-found: error
+          retention-days: 14
