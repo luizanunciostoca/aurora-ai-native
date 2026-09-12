@@ -24,6 +24,8 @@ import ai.aurora.device.wake.MicrophonePermissionRequestHistory
 import ai.aurora.device.wake.WakeRuntimePreferences
 import ai.aurora.device.wake.WakeRuntimeStatusStore
 import ai.aurora.device.wake.WakeSetupActivity
+import ai.aurora.device.wake.WakeSetupOnboardingAction
+import ai.aurora.device.wake.WakeSetupOnboardingActionCodec
 import ai.aurora.device.wake.WakeSetupUiPolicy
 import ai.aurora.device.wake.WakeVoiceActivity
 
@@ -130,6 +132,7 @@ class MainActivity : Activity() {
                     wakeModelReady = modelReady,
                     wakeEnabled = wakeEnabled,
                     privacyModeEnabled = privacyEnabled,
+                    wakeRuntimeReady = AuroraOnboardingPolicy.isWakeRuntimeReady(runtime.state),
                 ),
             )
         val runtimeLabel =
@@ -158,7 +161,7 @@ class MainActivity : Activity() {
                 append("  •  Microfone ")
                 append(if (microphoneGranted) "autorizado" else "pendente")
                 append("  •  Wake ")
-                append(if (wakeEnabled && modelReady && !privacyEnabled) "ativo" else "inativo")
+                append(if (wakeEnabled && modelReady && !privacyEnabled && AuroraOnboardingPolicy.isWakeRuntimeReady(runtime.state)) "ativo" else "inativo")
                 append("  •  Privacidade ")
                 append(if (privacyEnabled) "ativa" else "normal")
                 assistantFeedback?.let { append("\n$it") }
@@ -212,10 +215,13 @@ class MainActivity : Activity() {
                     handleAssistantLaunch(
                         AuroraAssistantRoleCoordinator.requestSelection(this, REQUEST_ASSISTANT_ROLE),
                     )
-                AuroraOnboardingStep.WAKE_MODEL,
+                AuroraOnboardingStep.WAKE_MODEL ->
+                    openWakeSetup(WakeSetupOnboardingAction.TRAIN_WAKE)
                 AuroraOnboardingStep.WAKE_ENABLE,
-                AuroraOnboardingStep.PRIVACY_BLOCKED,
-                -> startActivity(Intent(this, WakeSetupActivity::class.java))
+                AuroraOnboardingStep.WAKE_RUNTIME,
+                -> openWakeSetup(WakeSetupOnboardingAction.ENABLE_WAKE)
+                AuroraOnboardingStep.PRIVACY_BLOCKED ->
+                    openWakeSetup(WakeSetupOnboardingAction.REVIEW_PRIVACY)
             }
         }
 
@@ -232,7 +238,7 @@ class MainActivity : Activity() {
         }
 
         surface.addSecondaryAction("Voz, wake word e privacidade") {
-            startActivity(Intent(this, WakeSetupActivity::class.java))
+            openWakeSetup()
         }
 
         if (
@@ -253,6 +259,17 @@ class MainActivity : Activity() {
                 renderStatus()
             }
         }
+    }
+
+    private fun openWakeSetup(action: WakeSetupOnboardingAction? = null) {
+        val intent = Intent(this, WakeSetupActivity::class.java)
+        action?.let {
+            intent.putExtra(
+                WakeSetupOnboardingActionCodec.EXTRA_ONBOARDING_ACTION,
+                WakeSetupOnboardingActionCodec.encode(it),
+            )
+        }
+        startActivity(intent)
     }
 
     private fun requestMicrophonePermissionOrSettings() {
