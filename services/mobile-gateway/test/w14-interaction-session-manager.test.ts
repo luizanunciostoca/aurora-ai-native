@@ -231,6 +231,7 @@ test('caller-owned participant, references and turn content cannot mutate stored
   const content = { kind: 'TEXT' as const, text: 'texto original', languageTag: 'pt-BR' };
   const appended = expectSuccess(
     append(manager, {
+      participant: { kind: 'DEVICE', bindingReference: 'device:mutable' },
       content,
       references: {
         artifactRefs: turnArtifacts,
