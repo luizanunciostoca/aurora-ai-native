@@ -1,0 +1,113 @@
+name: Package Aurora Interactive Preview v0.16 APK
+
+on:
+  push:
+    branches:
+      - prototype/aurora-interactive-preview-v016-apk
+    paths:
+      - '.github/workflows/prototype-aurora-interactive-preview-v016-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-exact-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Assert packaging invocation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = "push"
+          test "$GITHUB_REF_NAME" = "prototype/aurora-interactive-preview-v016-apk"
+          test "$GITHUB_SHA" = "$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')"
+      - name: Checkout exact Aurora Interactive Preview source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: 819900e4776cd3a50105e4bbba3549a2421994b8
+          persist-credentials: false
+      - name: Assert exact preview source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "819900e4776cd3a50105e4bbba3549a2421994b8"
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '9.4.1'
+          cache-read-only: true
+      - name: Install stable Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+      - name: Test, assemble and bind exact preview APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --console=plain -p apps/aurora-android \
+            :app:testLocalDebugUnitTest \
+            :app:assembleLocalDebug
+
+          APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
+          test -n "$APK"
+
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          AAPT="$SDK_ROOT/build-tools/36.0.0/aapt"
+          test -x "$AAPT"
+          BADGING="$($AAPT dump badging "$APK" | sed -n '1p')"
+          PACKAGE_ID="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
+          VERSION_CODE="$(printf '%s\n' "$BADGING" | sed -n "s/.* versionCode='\([^']*\)'.*/\1/p")"
+          VERSION_NAME="$(printf '%s\n' "$BADGING" | sed -n "s/.* versionName='\([^']*\)'.*/\1/p")"
+          test "$PACKAGE_ID" = "ai.aurora.device.local"
+          test "$VERSION_CODE" = "2"
+          test "$VERSION_NAME" = "0.16.0-preview.1-local"
+
+          ARTIFACT_DIR=/tmp/aurora-interactive-preview-v016
+          mkdir -p "$ARTIFACT_DIR"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-Interactive-v0.16.0-preview.1-local.apk"
+          (
+            cd "$ARTIFACT_DIR"
+            sha256sum Aurora-Interactive-v0.16.0-preview.1-local.apk > SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt
+          )
+
+          cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
+          artifact_purpose=Aurora-Interactive-Preview-v0.16
+          source_preview_sha=819900e4776cd3a50105e4bbba3549a2421994b8
+          source_branch=preview/aurora-interactive-v016
+          stacked_w15j_android_sha=6d44480eae9b99467b20df44290b5c9b17626c3e
+          compatible_local_host_head_sha=294e8754a568838ade40f1907546339385d7e599
+          main_at_preview_start=d2089407e88480686b879928cf2863c0dc81718e
+          packaging_head_sha=${GITHUB_SHA}
+          packaging_branch=prototype/aurora-interactive-preview-v016-apk
+          packaging_run_id=${GITHUB_RUN_ID}
+          apk_variant=localDebug
+          package_id=${PACKAGE_ID}
+          version_code=${VERSION_CODE}
+          version_name=${VERSION_NAME}
+          canonical_acceptance=false
+          w15j_dp5_accepted=false
+          w16_build_unblocked=false
+          preview_smoke_required=true
+          EOF
+
+          grep -Fxq 'artifact_purpose=Aurora-Interactive-Preview-v0.16' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
+          grep -Fxq 'canonical_acceptance=false' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
+          test "$(find "$ARTIFACT_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
+          printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-Interactive-v0.16.0-preview.1-local.apk" | awk '{print $1}')"
+      - name: Upload Aurora Interactive Preview APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: aurora-interactive-preview-v016-819900e4-host-294e8754
+          path: /tmp/aurora-interactive-preview-v016
+          if-no-files-found: error
+          retention-days: 14
