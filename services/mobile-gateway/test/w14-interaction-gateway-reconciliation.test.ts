@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 // @ts-expect-error -- mobile-gateway harness intentionally has no @types/node.
 import test from 'node:test';
 
-import type { CorrelationId, DeviceId, IdentityId, TenantId } from '@aurora/contracts/ids';
+import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
 
+import type { DeviceId } from '../src/device/types.js';
 import type { DeviceSessionTrustResult } from '../src/device-session/types.js';
 import { GATEWAY_PROTOCOL_VERSION } from '../src/gateway-auth/index.js';
 import type {
