@@ -9,6 +9,11 @@
       "@aurora/contracts/ids": ["../../../../packages/contracts/src/ids/index.ts"],
       "@aurora/contracts/interaction-session": [
         "../../../../packages/contracts/src/interaction-session/index.ts"
+      ],
+      "@aurora/registries/ids": ["../../../../packages/registries/src/ids/index.ts"],
+      "@aurora/registries/versioning": ["../../../../packages/registries/src/versioning/index.ts"],
+      "@aurora/schemas/interaction-session": [
+        "../../../../packages/schemas/src/interaction-session/index.ts"
       ]
     }
   },
