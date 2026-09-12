@@ -88,6 +88,7 @@ const mobileGatewaySourceProjects = [
   'services/mobile-gateway/src/device-session/tsconfig.json',
   'services/mobile-gateway/src/device-command-delivery/tsconfig.json',
   'services/mobile-gateway/src/device-receipt-ingress/tsconfig.json',
+  'services/mobile-gateway/src/interaction-session/tsconfig.json',
 ];
 
 const contextTests = [];
