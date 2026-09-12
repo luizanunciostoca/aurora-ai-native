@@ -100,7 +100,7 @@ BOOTSTRAP_REFERENCE="$(jq -er '.bootstrapReference' "$REFRESH_FILE")"
 EXPIRES_AT_MS="$(jq -er '.bootstrapExpiresAtMs' "$REFRESH_FILE")"
 NOW_MS="$(( $(date +%s) * 1000 ))"
 REMAINING_MS="$(( EXPIRES_AT_MS - NOW_MS ))"
-(( REMAINING_MS > 30_000 )) || fail "fresh bootstrap has less than 30 seconds remaining"
+(( REMAINING_MS > 30000 )) || fail "fresh bootstrap has less than 30 seconds remaining"
 REMAINING_SECONDS="$(( REMAINING_MS / 1000 ))"
 
 rm -f -- "$REFRESH_FILE"
