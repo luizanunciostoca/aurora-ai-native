@@ -6,6 +6,7 @@ enum class AuroraOnboardingStep {
     ASSISTANT_ROLE,
     WAKE_MODEL,
     WAKE_ENABLE,
+    WAKE_RUNTIME,
     READY,
 }
 
@@ -15,6 +16,7 @@ data class AuroraOnboardingInput(
     val wakeModelReady: Boolean,
     val wakeEnabled: Boolean,
     val privacyModeEnabled: Boolean,
+    val wakeRuntimeReady: Boolean,
 )
 
 data class AuroraOnboardingPresentation(
@@ -73,6 +75,14 @@ object AuroraOnboardingPolicy {
                     primaryActionLabel = "Ativar wake word",
                     progressLabel = "Configuração 4 de 4",
                 )
+            AuroraOnboardingStep.WAKE_RUNTIME ->
+                AuroraOnboardingPresentation(
+                    step = step,
+                    title = "Finalizando a ativação",
+                    detail = "A wake word está configurada, mas o detector ainda não confirmou que está escutando. Revise ou reative o detector antes de considerar a Aurora pronta.",
+                    primaryActionLabel = "Verificar wake word",
+                    progressLabel = "Validando detector local",
+                )
             AuroraOnboardingStep.READY ->
                 AuroraOnboardingPresentation(
                     step = step,
@@ -91,6 +101,10 @@ object AuroraOnboardingPolicy {
             !input.assistantSelected -> AuroraOnboardingStep.ASSISTANT_ROLE
             !input.wakeModelReady -> AuroraOnboardingStep.WAKE_MODEL
             !input.wakeEnabled -> AuroraOnboardingStep.WAKE_ENABLE
+            !input.wakeRuntimeReady -> AuroraOnboardingStep.WAKE_RUNTIME
             else -> AuroraOnboardingStep.READY
         }
+
+    fun isWakeRuntimeReady(state: String): Boolean =
+        state == "ARMED" || state == "HOTWORD_LISTENING"
 }
