@@ -15,6 +15,7 @@ import type {
   InteractionTurnRole,
 } from '@aurora/contracts/interaction-session';
 
+export const MIN_RFC3339_TIMESTAMP_MS = -62_167_219_200_000;
 export const MAX_RFC3339_TIMESTAMP_MS = 253_402_300_799_999;
 
 export interface StoredInteractionSession {
@@ -91,6 +92,8 @@ export type InteractionSessionManagerErrorCode =
   | 'PARTICIPANT_MISMATCH'
   | 'RESUME_EXPIRED'
   | 'INVALID_RESUME_WINDOW'
+  | 'INVALID_INPUT'
+  | 'STORE_INVALID'
   | 'CLASSIFICATION_DOWNGRADE'
   | 'MODALITY_MISMATCH'
   | 'TURN_LIMIT_REACHED'
@@ -123,7 +126,11 @@ export type InteractionSessionManagerResult =
 export type InteractionClock = () => number;
 
 export function asRfc3339Timestamp(epochMs: number): Rfc3339Timestamp {
-  if (!Number.isSafeInteger(epochMs) || epochMs < 0 || epochMs > MAX_RFC3339_TIMESTAMP_MS) {
+  if (
+    !Number.isSafeInteger(epochMs) ||
+    epochMs < MIN_RFC3339_TIMESTAMP_MS ||
+    epochMs > MAX_RFC3339_TIMESTAMP_MS
+  ) {
     throw new TypeError('interaction clock must be within the canonical four-digit RFC3339 range');
   }
   return new Date(epochMs).toISOString() as Rfc3339Timestamp;
