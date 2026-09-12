@@ -31,7 +31,8 @@ test('bootstrap refresh binds signal output to the currently proven host instanc
   assert.match(refresh, /kill -USR2/);
   assert.match(refresh, /W15J_LOCAL_BOOTSTRAP_REFRESH_READY/);
   assert.match(refresh, /\^gbr_\[A-Za-z0-9_-\]\{43,128\}\$/);
-  assert.match(refresh, /REMAINING_MS > 30_000/);
+  assert.match(refresh, /REMAINING_MS > 30000/);
+  assert.doesNotMatch(refresh, /REMAINING_MS > 30_000/);
 });
 
 test('refresh remains non-authoritative and never claims DP5 acceptance', () => {
