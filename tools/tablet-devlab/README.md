@@ -43,13 +43,13 @@ Current exact tuple defaults:
 ```text
 main      d2089407e88480686b879928cf2863c0dc81718e
 android   6d44480eae9b99467b20df44290b5c9b17626c3e
-host      15cf70e70d405dfdc4c971b53c60168a700e534d
-packaging 929780b9de1aac272093b26e1cff627c24675893
-run       34650819272
-artifact  10283399095
-name      aurora-w15j-tablet-loopback-apk-6d44480e-host-15cf70e7
-zip       9250fc9b4c68a95233e3f870212edba2160182e76cc75126d2c3788bbb209d16
-apk       9f7c5737f827d907759b41b9a87fd3fb7802efa6f0be64700621221d06c4db73
+host      294e8754a568838ade40f1907546339385d7e599
+packaging e0f120525a08fa51e6be4b1ac29cc1e203648765
+run       34686121049
+artifact  10296091034
+name      aurora-w15j-tablet-loopback-apk-6d44480e-host-294e8754
+zip       e115c2fcd31416e855cab0a69576ec254a71cc37e2979933ab375de82ed91810
+apk       a0f8ed0b3e5d461592873a522a75a42fd7c079bad2a78dfd2d9968c1763af7e6
 transport LOCAL_TABLET_LOOPBACK
 ```
 
@@ -146,6 +146,16 @@ A PASS here means `PASS_SOFTWARE_ONLY`. It verifies current host identity, secur
 ```bash
 bash tools/tablet-devlab/run-host.sh
 ```
+
+## Bootstrap refresh on the same live host
+
+The W14 bootstrap reference is deliberately one-shot and short-lived. Do not restart a healthy host merely because an earlier `gbr_...` reference expired or was already consumed. Once `run-host.sh` is still alive and both listeners remain on the same `hostInstanceId`, request a fresh reference with:
+
+```bash
+bash tools/tablet-devlab/refresh-bootstrap.sh
+```
+
+The helper verifies the recorded host PID, the live instance identity on ports 8080 and 8081, listener roles, file ownership/mode and the non-authoritative refresh schema before returning a new `bootstrap_reference=gbr_...`. Paste only that freshly emitted reference into Aurora immediately. A refresh does not authorize execution, retry or physical acceptance.
 
 ## Physical development controls
 
