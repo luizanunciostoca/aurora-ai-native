@@ -25,8 +25,12 @@ import type {
 export const INTERACTION_GATEWAY_MAX_TEXT_CHARS = 4_096;
 export const INTERACTION_GATEWAY_MAX_LANGUAGE_TAG_CHARS = 64;
 
+export type InteractionGatewayClock = () => number;
+
 export interface InteractionGatewayAdapterConfig {
   readonly ingressDataClassification: DataClassification;
+  /** Server-owned wall clock. Client `gatewayRequest.nowMs` is never trusted as current time. */
+  readonly clock?: InteractionGatewayClock;
 }
 
 export interface InteractionGatewayBoundInput {
