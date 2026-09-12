@@ -1,17 +1,7 @@
 // @ts-expect-error -- Aurora targets Node 22 runtime built-ins without repository-wide @types/node.
-import {
-  closeSync,
-  constants as FS_CONSTANTS,
-  fsyncSync,
-  lstatSync,
-  openSync,
-  realpathSync,
-  renameSync,
-  rmSync,
-  writeSync,
-} from 'node:fs';
+import * as nodeFs from 'node:fs';
 // @ts-expect-error -- Aurora targets Node 22 runtime built-ins without repository-wide @types/node.
-import { dirname, isAbsolute, resolve } from 'node:path';
+import * as nodePath from 'node:path';
 // @ts-expect-error -- Aurora targets Node 22 runtime built-ins without repository-wide @types/node.
 import process from 'node:process';
 
@@ -153,33 +143,33 @@ function bootstrapRefreshOutputTarget(reference: unknown): BootstrapRefreshOutpu
     typeof reference !== 'string' ||
     reference.length === 0 ||
     reference.length > 4096 ||
-    !isAbsolute(reference) ||
-    resolve(reference) !== reference ||
+    !nodePath.isAbsolute(reference) ||
+    nodePath.resolve(reference) !== reference ||
     typeof process.getuid !== 'function'
   ) {
     return null;
   }
   try {
     const uid = process.getuid();
-    const parentPath = dirname(reference);
-    const parent = lstatSync(parentPath);
+    const parentPath = nodePath.dirname(reference);
+    const parent = nodeFs.lstatSync(parentPath);
     if (
       parent.isSymbolicLink() ||
       !parent.isDirectory() ||
       parent.uid !== uid ||
       (parent.mode & 0o022) !== 0 ||
-      realpathSync(parentPath) !== parentPath
+      nodeFs.realpathSync(parentPath) !== parentPath
     ) {
       return null;
     }
     try {
-      const existing = lstatSync(reference);
+      const existing = nodeFs.lstatSync(reference);
       if (
         existing.isSymbolicLink() ||
         !existing.isFile() ||
         existing.uid !== uid ||
         (existing.mode & 0o777) !== 0o600 ||
-        dirname(realpathSync(reference)) !== parentPath
+        nodePath.dirname(nodeFs.realpathSync(reference)) !== parentPath
       ) {
         return null;
       }
@@ -200,7 +190,7 @@ function bootstrapRefreshOutputTarget(reference: unknown): BootstrapRefreshOutpu
 
 function refreshOutputTargetStillSafe(target: BootstrapRefreshOutputTarget): boolean {
   try {
-    const parent = lstatSync(target.parentPath);
+    const parent = nodeFs.lstatSync(target.parentPath);
     return (
       !parent.isSymbolicLink() &&
       parent.isDirectory() &&
@@ -208,7 +198,7 @@ function refreshOutputTargetStillSafe(target: BootstrapRefreshOutputTarget): boo
       parent.dev === target.parentDev &&
       parent.ino === target.parentIno &&
       (parent.mode & 0o022) === 0 &&
-      realpathSync(target.parentPath) === target.parentPath
+      nodeFs.realpathSync(target.parentPath) === target.parentPath
     );
   } catch {
     return false;
@@ -236,33 +226,36 @@ function writeBootstrapRefreshOutput(
   const temporary = `${target.path}.tmp-${process.pid}`;
   let descriptor: number | undefined;
   try {
-    rmSync(temporary, { force: true });
-    descriptor = openSync(
+    nodeFs.rmSync(temporary, { force: true });
+    descriptor = nodeFs.openSync(
       temporary,
-      FS_CONSTANTS.O_WRONLY | FS_CONSTANTS.O_CREAT | FS_CONSTANTS.O_EXCL | FS_CONSTANTS.O_NOFOLLOW,
+      nodeFs.constants.O_WRONLY |
+        nodeFs.constants.O_CREAT |
+        nodeFs.constants.O_EXCL |
+        nodeFs.constants.O_NOFOLLOW,
       0o600,
     );
-    writeSync(descriptor, `${record}\n`, undefined, 'utf8');
-    fsyncSync(descriptor);
-    closeSync(descriptor);
+    nodeFs.writeSync(descriptor, `${record}\n`, undefined, 'utf8');
+    nodeFs.fsyncSync(descriptor);
+    nodeFs.closeSync(descriptor);
     descriptor = undefined;
     if (!refreshOutputTargetStillSafe(target)) {
       throw new Error('bootstrap refresh output parent changed');
     }
-    renameSync(temporary, target.path);
-    const written = lstatSync(target.path);
+    nodeFs.renameSync(temporary, target.path);
+    const written = nodeFs.lstatSync(target.path);
     if (
       written.isSymbolicLink() ||
       !written.isFile() ||
       written.uid !== target.uid ||
       (written.mode & 0o777) !== 0o600 ||
-      dirname(realpathSync(target.path)) !== target.parentPath
+      nodePath.dirname(nodeFs.realpathSync(target.path)) !== target.parentPath
     ) {
       throw new Error('bootstrap refresh output verification failed');
     }
   } finally {
-    if (descriptor !== undefined) closeSync(descriptor);
-    rmSync(temporary, { force: true });
+    if (descriptor !== undefined) nodeFs.closeSync(descriptor);
+    nodeFs.rmSync(temporary, { force: true });
   }
 }
 
@@ -297,15 +290,12 @@ export async function startW15JLocalPhysicalHostRunner(
     await host.stop();
     throw new Error(`W15-J LOCAL bootstrap staging failed: ${staged.error.code}`);
   }
-  let activeBootstrapReference = staged.value.bootstrapReference;
 
   const refreshBootstrapReference = (): W15JLocalPhysicalHostBootstrapReference => {
     const refreshed = host.stageBootstrap(input.principal);
     if (!refreshed.ok) {
       throw new Error(`W15-J LOCAL bootstrap refresh failed: ${refreshed.error.code}`);
     }
-    host.revokeBootstrapReference(activeBootstrapReference);
-    activeBootstrapReference = refreshed.value.bootstrapReference;
     return Object.freeze({
       bootstrapReference: refreshed.value.bootstrapReference,
       bootstrapExpiresAtMs: refreshed.value.expiresAtMs,
