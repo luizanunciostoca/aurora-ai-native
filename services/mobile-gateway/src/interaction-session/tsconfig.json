@@ -11,9 +11,7 @@
         "../../../../packages/contracts/src/interaction-session/index.ts"
       ],
       "@aurora/registries/ids": ["../../../../packages/registries/src/ids/index.ts"],
-      "@aurora/registries/versioning": [
-        "../../../../packages/registries/src/versioning/index.ts"
-      ],
+      "@aurora/registries/versioning": ["../../../../packages/registries/src/versioning/index.ts"],
       "@aurora/schemas/interaction-session": [
         "../../../../packages/schemas/src/interaction-session/index.ts"
       ]
