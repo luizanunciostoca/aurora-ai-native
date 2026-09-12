@@ -39,8 +39,7 @@ const MIN_RESUME_WINDOW_MS = 1_000;
 const MAX_RESUME_WINDOW_MS = 10 * 60 * 1000;
 const MAX_TURNS = 128;
 const NANOSECONDS_PER_MILLISECOND = 1_000_000n;
-const MIN_RFC3339_TIMESTAMP_NS =
-  BigInt(MIN_RFC3339_TIMESTAMP_MS) * NANOSECONDS_PER_MILLISECOND;
+const MIN_RFC3339_TIMESTAMP_NS = BigInt(MIN_RFC3339_TIMESTAMP_MS) * NANOSECONDS_PER_MILLISECOND;
 const MAX_RFC3339_TIMESTAMP_NS =
   BigInt(MAX_RFC3339_TIMESTAMP_MS) * NANOSECONDS_PER_MILLISECOND + 999_999n;
 const RFC3339_FRACTION = /\.(\d{1,9})(?:Z|[+-]\d{2}:\d{2})$/u;
@@ -110,10 +109,7 @@ function rfc3339EpochNanoseconds(value: Rfc3339Timestamp): bigint {
 }
 
 function epochNanosecondsToRfc3339(epochNanoseconds: bigint): Rfc3339Timestamp {
-  if (
-    epochNanoseconds < MIN_RFC3339_TIMESTAMP_NS ||
-    epochNanoseconds > MAX_RFC3339_TIMESTAMP_NS
-  ) {
+  if (epochNanoseconds < MIN_RFC3339_TIMESTAMP_NS || epochNanoseconds > MAX_RFC3339_TIMESTAMP_NS) {
     throw new TypeError('interaction timestamp is outside the canonical RFC3339 range');
   }
 
@@ -129,7 +125,10 @@ function epochNanosecondsToRfc3339(epochNanoseconds: bigint): Rfc3339Timestamp {
   return base.replace(/Z$/u, `${extraFraction}Z`) as Rfc3339Timestamp;
 }
 
-function monotonicInstant(clock: InteractionClock, currentIso?: Rfc3339Timestamp): MonotonicInstant {
+function monotonicInstant(
+  clock: InteractionClock,
+  currentIso?: Rfc3339Timestamp,
+): MonotonicInstant {
   const observedMs = checkedClock(clock);
   const observedTimestamp = asRfc3339Timestamp(observedMs);
   const observedNanoseconds = BigInt(observedMs) * NANOSECONDS_PER_MILLISECOND;
@@ -177,9 +176,7 @@ function freezeContent(content: InteractionTextContent): InteractionTextContent 
     kind: 'TEXT',
     text: parsed.text,
     ...(parsed.languageTag === undefined ? {} : { languageTag: parsed.languageTag }),
-    ...(parsed.speechConfidence === undefined
-      ? {}
-      : { speechConfidence: parsed.speechConfidence }),
+    ...(parsed.speechConfidence === undefined ? {} : { speechConfidence: parsed.speechConfidence }),
   });
 }
 
@@ -246,10 +243,7 @@ function freezeSession(session: InteractionSession): InteractionSession {
   });
 }
 
-function freezeStored(
-  revision: number,
-  session: InteractionSession,
-): StoredInteractionSession {
+function freezeStored(revision: number, session: InteractionSession): StoredInteractionSession {
   if (!Number.isSafeInteger(revision) || revision < 1) {
     throw new TypeError('interaction store revision must be a positive safe integer');
   }
@@ -479,8 +473,7 @@ export class InteractionSessionManager {
     }
     const instant = monotonicInstant(this.clock, session.updatedAt);
     const resumableUntilNs =
-      instant.epochNanoseconds +
-      BigInt(input.resumeWindowMs) * NANOSECONDS_PER_MILLISECOND;
+      instant.epochNanoseconds + BigInt(input.resumeWindowMs) * NANOSECONDS_PER_MILLISECOND;
     if (resumableUntilNs > MAX_RFC3339_TIMESTAMP_NS) {
       return failure(
         'INVALID_RESUME_WINDOW',

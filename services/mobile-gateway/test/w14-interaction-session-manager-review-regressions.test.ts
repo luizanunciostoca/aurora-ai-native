@@ -91,7 +91,10 @@ function open(manager: InteractionSessionManager) {
   });
 }
 
-function append(manager: InteractionSessionManager, content: unknown = { kind: 'TEXT', text: 'oi' }) {
+function append(
+  manager: InteractionSessionManager,
+  content: unknown = { kind: 'TEXT', text: 'oi' },
+) {
   return manager.appendTurn({
     ...binding(),
     role: 'USER',
@@ -111,10 +114,7 @@ function expectSuccess(
   return result.value;
 }
 
-function expectError(
-  result: ReturnType<InteractionSessionManager['current']>,
-  code: string,
-): void {
+function expectError(result: ReturnType<InteractionSessionManager['current']>, code: string): void {
   assert.equal(result.ok, false);
   if (result.ok) throw new Error('expected manager failure');
   assert.equal(result.code, code);
@@ -128,16 +128,13 @@ test('sub-millisecond stored timestamps never regress when the wall clock stays 
   const manager = new InteractionSessionManager(store, ids(), () => 1_000);
   const opened = expectSuccess(open(manager));
 
-  store.records.set(
-    SESSION,
-    {
-      revision: opened.revision,
-      session: {
-        ...opened.session,
-        updatedAt: '1970-01-01T00:00:01.000000900Z',
-      },
-    } as StoredInteractionSession,
-  );
+  store.records.set(SESSION, {
+    revision: opened.revision,
+    session: {
+      ...opened.session,
+      updatedAt: '1970-01-01T00:00:01.000000900Z',
+    },
+  } as StoredInteractionSession);
 
   const appended = expectSuccess(append(manager));
   assert.equal(appended.session.updatedAt, '1970-01-01T00:00:01.000000900Z');
@@ -184,10 +181,10 @@ test('manager returns a deep-owned immutable snapshot even when the persistence 
     },
     turns: [],
   };
-  store.records.set(
-    SESSION,
-    { revision: opened.revision, session: mutableSession } as unknown as StoredInteractionSession,
-  );
+  store.records.set(SESSION, {
+    revision: opened.revision,
+    session: mutableSession,
+  } as unknown as StoredInteractionSession);
 
   const snapshot = expectSuccess(manager.current(binding()));
   mutableArtifacts.push('artifact:mutated-after-read');
@@ -197,7 +194,8 @@ test('manager returns a deep-owned immutable snapshot even when the persistence 
   assert.deepEqual(snapshot.session.references.artifactRefs, ['artifact:original']);
   assert.deepEqual(snapshot.session.references.pendingHumanControlRequestRefs, []);
   assert.equal(snapshot.session.participant.kind, 'DEVICE');
-  if (snapshot.session.participant.kind !== 'DEVICE') throw new Error('expected device participant');
+  if (snapshot.session.participant.kind !== 'DEVICE')
+    throw new Error('expected device participant');
   assert.equal(snapshot.session.participant.bindingReference, PARTICIPANT.bindingReference);
   assert.equal(Object.isFrozen(snapshot), true);
   assert.equal(Object.isFrozen(snapshot.session), true);
@@ -236,19 +234,16 @@ test('invalid deserialized persistence state fails closed instead of escaping as
   const store = new MemoryStore();
   const manager = new InteractionSessionManager(store, ids(), () => 1_000);
   const opened = expectSuccess(open(manager));
-  store.records.set(
-    SESSION,
-    {
-      revision: opened.revision,
-      session: {
-        ...opened.session,
-        references: {
-          artifactRefs: ['duplicate', 'duplicate'],
-          pendingHumanControlRequestRefs: [],
-        },
+  store.records.set(SESSION, {
+    revision: opened.revision,
+    session: {
+      ...opened.session,
+      references: {
+        artifactRefs: ['duplicate', 'duplicate'],
+        pendingHumanControlRequestRefs: [],
       },
-    } as StoredInteractionSession,
-  );
+    },
+  } as StoredInteractionSession);
 
   expectError(manager.current(binding()), 'STORE_INVALID');
 });
