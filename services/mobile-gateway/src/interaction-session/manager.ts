@@ -12,6 +12,7 @@ import {
   InteractionParticipantRefSchema,
   InteractionSessionSchema,
   InteractionTextContentSchema,
+  InteractionTurnSchema,
 } from '@aurora/schemas/interaction-session';
 
 import {
@@ -206,10 +207,11 @@ function freezeParticipant(participant: InteractionParticipantRef): InteractionP
 }
 
 function freezeTurn(turn: InteractionTurn): InteractionTurn {
+  const parsed = InteractionTurnSchema.parse(turn);
   return Object.freeze({
-    ...turn,
-    content: freezeContent(turn.content),
-    references: freezeReferences(turn.references),
+    ...parsed,
+    content: freezeContent(parsed.content),
+    references: freezeReferences(parsed.references),
   });
 }
 
@@ -310,10 +312,16 @@ function bindingFailure(
   session: InteractionSession,
   binding: InteractionSessionBinding,
 ): InteractionSessionManagerError | null {
+  let participant: InteractionParticipantRef;
+  try {
+    participant = freezeParticipant(binding.participant);
+  } catch {
+    return failure('INVALID_INPUT', 'interaction binding participant violates the canonical contract');
+  }
   if (session.tenantId !== binding.tenantId) {
     return failure('TENANT_MISMATCH', 'interaction session belongs to a different tenant');
   }
-  if (!participantMatches(session.participant, binding.participant)) {
+  if (!participantMatches(session.participant, participant)) {
     return failure(
       'PARTICIPANT_MISMATCH',
       'interaction session belongs to a different participant',
@@ -414,15 +422,6 @@ export class InteractionSessionManager {
     if (session.turns.length >= MAX_TURNS) {
       return failure('TURN_LIMIT_REACHED', 'interaction session reached the bounded turn limit');
     }
-    if (session.modality !== 'MULTIMODAL' && input.modality !== session.modality) {
-      return failure('MODALITY_MISMATCH', 'turn modality does not match interaction session');
-    }
-    if (!moreRestrictiveOrEqual(input.dataClassification, session.dataClassification)) {
-      return failure(
-        'CLASSIFICATION_DOWNGRADE',
-        'turn classification cannot downgrade session data',
-      );
-    }
 
     let content: InteractionTextContent;
     let references: InteractionCanonicalReferences;
@@ -435,31 +434,45 @@ export class InteractionSessionManager {
 
     const occurredAt = monotonicTimestamp(this.clock, session.updatedAt);
     const interactionTurnId = this.ids.turnId();
+    let turn: InteractionTurn;
+    try {
+      turn = freezeTurn({
+        kind: 'INTERACTION_TURN',
+        schemaVersion: 1,
+        interactionTurnId,
+        interactionSessionId: session.interactionSessionId,
+        sequence: session.turns.length + 1,
+        role: input.role,
+        modality: input.modality,
+        correlationId: input.correlationId,
+        ...(input.causationId === undefined ? {} : { causationId: input.causationId }),
+        occurredAt,
+        dataClassification: input.dataClassification,
+        content,
+        references,
+        authorizesExecution: false,
+        provesExecutionSuccess: false,
+        retryAuthorized: false,
+      });
+    } catch {
+      return failure('INVALID_INPUT', 'interaction turn input violates the canonical contract');
+    }
+    if (session.modality !== 'MULTIMODAL' && turn.modality !== session.modality) {
+      return failure('MODALITY_MISMATCH', 'turn modality does not match interaction session');
+    }
+    if (!moreRestrictiveOrEqual(turn.dataClassification, session.dataClassification)) {
+      return failure(
+        'CLASSIFICATION_DOWNGRADE',
+        'turn classification cannot downgrade session data',
+      );
+    }
     if (!this.store.reserveTurnId(interactionTurnId)) {
       return failure('ID_COLLISION', 'generated interaction turn id is already reserved globally');
     }
-    const turn: InteractionTurn = Object.freeze({
-      kind: 'INTERACTION_TURN',
-      schemaVersion: 1,
-      interactionTurnId,
-      interactionSessionId: session.interactionSessionId,
-      sequence: session.turns.length + 1,
-      role: input.role,
-      modality: input.modality,
-      correlationId: input.correlationId,
-      ...(input.causationId === undefined ? {} : { causationId: input.causationId }),
-      occurredAt,
-      dataClassification: input.dataClassification,
-      content,
-      references,
-      authorizesExecution: false,
-      provesExecutionSuccess: false,
-      retryAuthorized: false,
-    });
     return replace(this.store, current, {
       ...session,
       updatedAt: occurredAt,
-      dataClassification: input.dataClassification,
+      dataClassification: turn.dataClassification,
       turns: Object.freeze([...session.turns, turn]),
     });
   }
