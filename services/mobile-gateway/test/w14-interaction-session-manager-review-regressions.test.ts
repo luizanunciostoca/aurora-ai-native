@@ -18,9 +18,9 @@ import {
   type StoredInteractionSession,
 } from '../src/interaction-session/index.js';
 
-const TENANT = 'ten_01JW14V017REVIEW0000000000' as TenantId;
-const CORRELATION = 'cor_01JW14V017REVIEW0000000000' as CorrelationId;
-const SESSION = 'ins_01JW14V017REVIEW0000000000' as InteractionSessionId;
+const TENANT = 'ten_01JW14V0170000000000000000' as TenantId;
+const CORRELATION = 'cor_01JW14V0170000000000000000' as CorrelationId;
+const SESSION = 'ins_01JW14V0170000000000000000' as InteractionSessionId;
 const PARTICIPANT = Object.freeze({
   kind: 'DEVICE' as const,
   bindingReference: 'device:sm-x820:review-regression',
