@@ -103,9 +103,7 @@ export interface InteractionSessionManagerSuccess {
   readonly retryAuthorized: false;
 }
 
-export type InteractionSessionManagerResult =
-  | InteractionSessionManagerSuccess
-  | InteractionSessionManagerError;
+export type InteractionSessionManagerResult = InteractionSessionManagerSuccess | InteractionSessionManagerError;
 
 export type InteractionClock = () => number;
 
