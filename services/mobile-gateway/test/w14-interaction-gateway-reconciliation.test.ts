@@ -111,6 +111,7 @@ test('mutating interaction exception requires reconciliation even after request 
   const adapter = new InteractionGatewayAdapter(gateway, deviceTrust, throwingContinuity, {
     ingressDataClassification: 'CONFIDENTIAL',
     clock: () => 2_000,
+    clock: () => 2_000,
   });
 
   const result = adapter.open({
