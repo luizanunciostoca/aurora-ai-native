@@ -35,6 +35,9 @@ jobs:
             .environment == "LOCAL" and
             .versionCode == 3 and
             .appVersion == "0.16.0-physical.1-local" and
+            .gatewayOrigin == "http://127.0.0.1:8080" and
+            .bootstrapOrigin == "http://127.0.0.1:8081" and
+            .gatewayTransportScope == "LOCAL_TABLET_LOOPBACK" and
             .gatewayProtocolVersion == "1.0" and
             .w03SchemaVersion == "003" and
             .physicalAcceptanceStatus == "SMOKE_PENDING" and
@@ -50,6 +53,9 @@ jobs:
           echo "devlab_sha=$(jq -r .devlabSha "$SOURCE")" >> "$GITHUB_OUTPUT"
           echo "devlab_branch=$(jq -r .devlabBranch "$SOURCE")" >> "$GITHUB_OUTPUT"
           echo "tuple_id=$(jq -r .tupleId "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "gateway_origin=$(jq -r .gatewayOrigin "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "bootstrap_origin=$(jq -r .bootstrapOrigin "$SOURCE")" >> "$GITHUB_OUTPUT"
+          echo "transport_scope=$(jq -r .gatewayTransportScope "$SOURCE")" >> "$GITHUB_OUTPUT"
           echo "w03_schema=$(jq -r .w03SchemaVersion "$SOURCE")" >> "$GITHUB_OUTPUT"
           echo "w07_contract=$(jq -r .w07ContractVersion "$SOURCE")" >> "$GITHUB_OUTPUT"
           echo "android_short=$(jq -r .androidSha "$SOURCE" | cut -c1-8)" >> "$GITHUB_OUTPUT"
@@ -118,11 +124,20 @@ jobs:
           AURORA_ANDROID_SHA: ${{ steps.tuple.outputs.android_sha }}
           AURORA_HOST_SHA: ${{ steps.tuple.outputs.host_sha }}
           AURORA_RELEASE_TUPLE_ID: ${{ steps.tuple.outputs.tuple_id }}
+          AURORA_LOCAL_GATEWAY_ORIGIN: ${{ steps.tuple.outputs.gateway_origin }}
         run: |
           set -euo pipefail
           gradle --no-daemon --console=plain -p source/apps/aurora-android \
             :app:testLocalDebugUnitTest \
             :app:assembleLocalDebug
+
+          BUILD_CONFIG="$(find source/apps/aurora-android/app/build/generated -type f -name 'BuildConfig.java' -path '*/local/debug/*' -print -quit)"
+          test -n "$BUILD_CONFIG"
+          grep -Fq 'public static final String AURORA_GATEWAY_ORIGIN = "http://127.0.0.1:8080";' "$BUILD_CONFIG"
+          if grep -Fq '10.0.2.2:8080' "$BUILD_CONFIG"; then
+            echo "physical candidate still contains emulator gateway origin" >&2
+            exit 1
+          fi
 
           APK="$(find source/apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
           test -n "$APK"
@@ -158,6 +173,9 @@ jobs:
           packaging_run_id=${GITHUB_RUN_ID}
           release_tuple_id=${AURORA_RELEASE_TUPLE_ID}
           gateway_environment=LOCAL
+          gateway_origin=${{ steps.tuple.outputs.gateway_origin }}
+          bootstrap_origin=${{ steps.tuple.outputs.bootstrap_origin }}
+          gateway_transport_scope=${{ steps.tuple.outputs.transport_scope }}
           gateway_protocol_version=1.0
           w03_schema_version=${{ steps.tuple.outputs.w03_schema }}
           w07_contract_version=${{ steps.tuple.outputs.w07_contract }}
@@ -170,6 +188,10 @@ jobs:
           physical_acceptance_status=SMOKE_PENDING
           dp5_status=INCOMPLETE
           EOF
+
+          grep -Fxq 'gateway_origin=http://127.0.0.1:8080' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
+          grep -Fxq 'bootstrap_origin=http://127.0.0.1:8081' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
+          grep -Fxq 'gateway_transport_scope=LOCAL_TABLET_LOOPBACK' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
 
           echo "apk_sha256=$APK_SHA256" >> "$GITHUB_OUTPUT"
           echo "artifact_dir=$ARTIFACT_DIR" >> "$GITHUB_OUTPUT"
@@ -231,6 +253,9 @@ jobs:
             --arg appVersion '0.16.0-physical.1-local' \
             --argjson versionCode 3 \
             --arg environment 'LOCAL' \
+            --arg gatewayOrigin '${{ steps.tuple.outputs.gateway_origin }}' \
+            --arg bootstrapOrigin '${{ steps.tuple.outputs.bootstrap_origin }}' \
+            --arg gatewayTransportScope '${{ steps.tuple.outputs.transport_scope }}' \
             --arg gatewayProtocolVersion '1.0' \
             --arg w03SchemaVersion '${{ steps.tuple.outputs.w03_schema }}' \
             --arg w07ContractVersion '${{ steps.tuple.outputs.w07_contract }}' \
@@ -252,6 +277,9 @@ jobs:
               appVersion: $appVersion,
               versionCode: $versionCode,
               environment: $environment,
+              gatewayOrigin: $gatewayOrigin,
+              bootstrapOrigin: $bootstrapOrigin,
+              gatewayTransportScope: $gatewayTransportScope,
               gatewayProtocolVersion: $gatewayProtocolVersion,
               w03SchemaVersion: $w03SchemaVersion,
               w07ContractVersion: $w07ContractVersion,
@@ -261,6 +289,9 @@ jobs:
             }' > /tmp/aurora-interactive-v016-release-tuple/AURORA_RELEASE_TUPLE.json
 
           jq -e '
+            .gatewayOrigin == "http://127.0.0.1:8080" and
+            .bootstrapOrigin == "http://127.0.0.1:8081" and
+            .gatewayTransportScope == "LOCAL_TABLET_LOOPBACK" and
             .physicalAcceptanceStatus == "SMOKE_PENDING" and
             .dp5Status == "INCOMPLETE" and
             .canonicalDp5AcceptanceArtifact == false and
