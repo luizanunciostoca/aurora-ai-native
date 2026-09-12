@@ -164,6 +164,39 @@ test('canonical reference and text-content runtime validation rejects malformed 
   assert.equal(expectSuccess(manager.current(binding())).revision, 1);
 });
 
+test('complete turn validation happens before global turn-id reservation', () => {
+  const store = new MemoryStore();
+  const manager = new InteractionSessionManager(store, ids(), () => 1_000);
+  expectSuccess(open(manager));
+
+  const result = manager.appendTurn({
+    ...binding(),
+    role: 'USER',
+    modality: 'VOICE',
+    correlationId: 'not-a-canonical-correlation' as CorrelationId,
+    dataClassification: 'INTERNAL',
+    content: { kind: 'TEXT', text: 'oi' },
+    references: REFERENCES,
+  });
+
+  expectError(result, 'INVALID_INPUT');
+  assert.equal(store.reservedTurnIds.size, 0);
+  assert.equal(expectSuccess(manager.current(binding())).revision, 1);
+});
+
+test('malformed binding participant fails closed without throwing', () => {
+  const store = new MemoryStore();
+  const manager = new InteractionSessionManager(store, ids(), () => 1_000);
+  expectSuccess(open(manager));
+
+  const result = manager.current({
+    ...binding(),
+    participant: { kind: 'ACTOR' } as Parameters<InteractionSessionManager['current']>[0]['participant'],
+  });
+
+  expectError(result, 'INVALID_INPUT');
+});
+
 test('manager returns a deep-owned immutable snapshot even when the persistence adapter returns mutable data', () => {
   const store = new MemoryStore();
   const manager = new InteractionSessionManager(store, ids(), () => 1_000);
