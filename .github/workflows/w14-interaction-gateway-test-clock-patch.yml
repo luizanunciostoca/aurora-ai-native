@@ -1,0 +1,56 @@
+name: W14 Interaction Gateway Test Clock Patch
+
+on:
+  push:
+    branches:
+      - prebuild/w14-v017-interaction-gateway-adapter-r2
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Inject deterministic server clocks into existing adapter tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          for (const path of [
+            'services/mobile-gateway/test/w14-interaction-gateway-adapter.test.ts',
+            'services/mobile-gateway/test/w14-interaction-gateway-reconciliation.test.ts',
+          ]) {
+            let text = readFileSync(path, 'utf8');
+            const needle = "    ingressDataClassification: 'CONFIDENTIAL',\n";
+            const count = text.split(needle).length - 1;
+            if (count < 1) throw new Error(`missing adapter config in ${path}`);
+            text = text.replaceAll(
+              needle,
+              "    ingressDataClassification: 'CONFIDENTIAL',\n    clock: () => 2_000,\n",
+            );
+            writeFileSync(path, text);
+          }
+          NODE
+          npx prettier --write \
+            services/mobile-gateway/test/w14-interaction-gateway-adapter.test.ts \
+            services/mobile-gateway/test/w14-interaction-gateway-reconciliation.test.ts
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            services/mobile-gateway/test/w14-interaction-gateway-adapter.test.ts \
+            services/mobile-gateway/test/w14-interaction-gateway-reconciliation.test.ts
+          git diff --cached --quiet && { echo 'patch produced no diff' >&2; exit 1; }
+          git commit -m 'test(W14): inject server clock into gateway adapter fixtures'
+          git push origin HEAD:prebuild/w14-v017-interaction-gateway-adapter-r2
