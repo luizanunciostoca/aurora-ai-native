@@ -22,9 +22,9 @@ object AuroraAssistantExperience {
         when (stage) {
             AuroraAssistantStage.READY ->
                 AuroraAssistantPresentation(
-                    eyebrow = "AURORA • PREVIEW",
+                    eyebrow = "AURORA",
                     title = "Pronta para você",
-                    detail = "Diga “Aurora” ou toque em Falar para iniciar.",
+                    detail = "Diga “Aurora” ou toque em Falar com Aurora para iniciar.",
                 )
             AuroraAssistantStage.LISTENING ->
                 AuroraAssistantPresentation(
@@ -36,13 +36,13 @@ object AuroraAssistantExperience {
                 AuroraAssistantPresentation(
                     eyebrow = "ENTENDENDO",
                     title = "Entendi",
-                    detail = "Estou verificando o que consigo fazer com segurança agora.",
+                    detail = "Estou verificando o que posso fazer agora.",
                 )
             AuroraAssistantStage.ACTING ->
                 AuroraAssistantPresentation(
                     eyebrow = "AGINDO",
                     title = "Executando",
-                    detail = "A ação está passando pelo fluxo governado da Aurora.",
+                    detail = "Estou realizando a ação com as verificações necessárias.",
                 )
             AuroraAssistantStage.SPEAKING ->
                 AuroraAssistantPresentation(
@@ -58,15 +58,15 @@ object AuroraAssistantExperience {
                 )
             AuroraAssistantStage.BLOCKED ->
                 AuroraAssistantPresentation(
-                    eyebrow = "AÇÃO BLOQUEADA",
-                    title = "Não executei",
-                    detail = "A Aurora preservou as regras de segurança e autoridade.",
+                    eyebrow = "NÃO EXECUTADO",
+                    title = "Não consegui fazer isso",
+                    detail = "A solicitação não pôde ser executada com segurança.",
                 )
             AuroraAssistantStage.DEGRADED ->
                 AuroraAssistantPresentation(
-                    eyebrow = "CONFIGURAÇÃO NECESSÁRIA",
+                    eyebrow = "CONFIGURAÇÃO",
                     title = "Quase pronta",
-                    detail = "Conclua a configuração indicada abaixo para liberar a experiência de voz.",
+                    detail = "Conclua a etapa indicada abaixo para liberar a experiência de voz.",
                 )
         }
 }
