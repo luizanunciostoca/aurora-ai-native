@@ -1,0 +1,100 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+fail() {
+  printf 'Aurora Tablet-Only Debian setup failed: %s\n' "$*" >&2
+  exit 2
+}
+
+[[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
+command -v proot-distro >/dev/null 2>&1 || fail "proot-distro is missing; run bootstrap-termux.sh first"
+
+DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
+TERMUX_UID="$(id -u)"
+TERMUX_GID="$(id -g)"
+NODE_VERSION="22.16.0"
+NPM_VERSION="10.9.2"
+
+proot-distro login debian -- bash -lc "
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install -y git curl ca-certificates build-essential python3 python3-pip jq unzip zip openssh-client procps lsof postgresql-client
+
+# Android app UIDs/GIDs are high numeric values. A freshly created Debian/PRoot
+# may already contain an unrelated group with the same numeric GID. Reuse the
+# numeric GID instead of failing because the group name `aurora` is absent.
+if ! getent group $TERMUX_GID >/dev/null 2>&1; then
+  groupadd -g $TERMUX_GID aurora
+fi
+
+if ! id aurora >/dev/null 2>&1; then
+  if getent passwd $TERMUX_UID >/dev/null 2>&1; then
+    useradd -o -m -u $TERMUX_UID -g $TERMUX_GID -s /bin/bash aurora
+  else
+    useradd -m -u $TERMUX_UID -g $TERMUX_GID -s /bin/bash aurora
+  fi
+fi
+
+[[ \"\$(id -u aurora)\" == \"$TERMUX_UID\" ]] || { echo 'aurora UID does not match Termux UID' >&2; exit 2; }
+[[ \"\$(id -g aurora)\" == \"$TERMUX_GID\" ]] || { echo 'aurora GID does not match Termux GID' >&2; exit 2; }
+install -d -m 0700 -o $TERMUX_UID -g $TERMUX_GID /home/aurora/.nvm
+"
+
+proot-distro login debian --user aurora -- bash -lc "
+set -euo pipefail
+export NVM_DIR=\"\$HOME/.nvm\"
+if [[ ! -s \"\$NVM_DIR/nvm.sh\" ]]; then
+  rm -rf \"\$NVM_DIR\"/*
+  git clone --filter=blob:none --branch v0.40.3 https://github.com/nvm-sh/nvm.git \"\$NVM_DIR\"
+fi
+# shellcheck disable=SC1090
+source \"\$NVM_DIR/nvm.sh\"
+nvm install 22.16.0
+nvm alias default $NODE_VERSION
+nvm use $NODE_VERSION >/dev/null
+node -e 'const [major,minor]=process.versions.node.split(\".\").map(Number); if (major!==22 || minor<16) { console.error(`Node ${process.versions.node} is outside >=22.16 <23`); process.exit(2); }'
+[[ \"\$(node --version)\" == \"v$NODE_VERSION\" ]] || { echo 'exact Node runtime mismatch' >&2; exit 2; }
+if [[ \"\$(npm --version)\" != \"$NPM_VERSION\" ]]; then
+  npm install --global npm@$NPM_VERSION >/dev/null
+fi
+[[ \"\$(npm --version)\" == \"$NPM_VERSION\" ]] || { echo 'exact npm runtime mismatch' >&2; exit 2; }
+printf 'Node %s / npm %s pinned for W15-J host\n' \"\$(node --version)\" \"\$(npm --version)\"
+"
+
+proot-distro login debian -- bash -lc '
+set -euo pipefail
+[[ -x /usr/bin/git ]] || { echo "/usr/bin/git missing" >&2; exit 2; }
+[[ "$(stat -c %u /usr/bin/git)" == "0" ]] || { echo "/usr/bin/git must be root-owned" >&2; exit 2; }
+mode=$(stat -c %a /usr/bin/git)
+other=$((10#$mode % 10))
+group=$(((10#$mode / 10) % 10))
+(( (group & 2) == 0 && (other & 2) == 0 )) || { echo "/usr/bin/git must not be group/other writable" >&2; exit 2; }
+command -v psql >/dev/null 2>&1 || { echo "psql client missing" >&2; exit 2; }
+'
+
+mkdir -p "$DEVLAB_ROOT/state"
+cat >"$DEVLAB_ROOT/state/debian.txt" <<EOF
+termux_uid=$TERMUX_UID
+termux_gid=$TERMUX_GID
+debian_user=aurora
+node_requirement=>=22.16.0 <23
+node_version=$NODE_VERSION
+npm_version=$NPM_VERSION
+postgres_runtime=TERMUX_NATIVE_ANDROID
+postgres_client=DEBIAN_PSQL_CLIENT
+configured_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+chmod 600 "$DEVLAB_ROOT/state/debian.txt"
+
+cat <<'EOF'
+Debian/PRoot setup: READY
+
+The host will run from the synthetic Debian/PRoot root context required by the trusted-Git invariant while Aurora's HOME/NVM runtime remains under /home/aurora.
+The `aurora` user still mirrors the Termux UID/GID for ordinary DevLab preparation and provider validation.
+If Debian already owns the numeric Termux GID under another group name, that numeric GID is reused safely instead of creating a conflicting duplicate group.
+The W15-J host runtime is pinned exactly to Node 22.16.0 and npm 10.9.2, matching canonical CI/package-manager requirements.
+PostgreSQL intentionally runs natively in Termux/Android, outside PRoot, and the Debian host reaches it over 127.0.0.1 using the Debian psql client.
+
+Next: enable Wireless debugging and run self-adb.sh.
+EOF

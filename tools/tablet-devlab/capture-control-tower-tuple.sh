@@ -1,0 +1,179 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+fail() {
+  printf 'Aurora control-tower tuple capture failed: %s\n' "$*" >&2
+  exit 2
+}
+
+[[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
+for cmd in gh jq sha256sum mktemp sleep; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
+gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated; run: gh auth login"
+
+REPO="${AURORA_REPOSITORY:-luizanunciostoca/aurora-ai-native}"
+MAIN_SHA="${AURORA_MAIN_SHA:-d2089407e88480686b879928cf2863c0dc81718e}"
+ANDROID_SHA="${AURORA_ANDROID_SHA:-6d44480eae9b99467b20df44290b5c9b17626c3e}"
+HOST_SHA="${AURORA_HOST_SHA:-294e8754a568838ade40f1907546339385d7e599}"
+PACKAGING_SHA="${AURORA_PACKAGING_HEAD_SHA:-e0f120525a08fa51e6be4b1ac29cc1e203648765}"
+PACKAGING_BRANCH="prototype/w15j-physical-apk-artifact"
+RUN_ID="${AURORA_PACKAGING_RUN_ID:-34686121049}"
+ARTIFACT_ID="${AURORA_ARTIFACT_ID:-10296091034}"
+ARTIFACT_NAME="${AURORA_ARTIFACT_NAME:-aurora-w15j-tablet-loopback-apk-6d44480e-host-294e8754}"
+ZIP_SHA="${AURORA_ARTIFACT_ZIP_SHA256:-e115c2fcd31416e855cab0a69576ec254a71cc37e2979933ab375de82ed91810}"
+APK_SHA="${AURORA_APK_SHA256:-a0f8ed0b3e5d461592873a522a75a42fd7c079bad2a78dfd2d9968c1763af7e6}"
+APPLICATION_ID="ai.aurora.device.local"
+VARIANT="localDebug"
+VERSION_CODE="1"
+VERSION_NAME="0.15.0-alpha.1-local"
+
+DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
+ARTIFACT_DIR="$DEVLAB_ROOT/artifacts"
+OUTPUT="${AURORA_CONTROL_TOWER_TUPLE:-$DEVLAB_ROOT/evidence/control-tower-tuple.json}"
+LOCAL_ZIP="$ARTIFACT_DIR/$ARTIFACT_NAME.zip"
+
+for sha in "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" "$PACKAGING_SHA"; do
+  [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "all tuple SHAs must be lowercase 40-hex"
+done
+[[ "$ZIP_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "artifact ZIP SHA must be lowercase 64-hex"
+[[ "$APK_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "APK SHA must be lowercase 64-hex"
+[[ "$RUN_ID" =~ ^[1-9][0-9]*$ ]] || fail "workflow run id must be positive"
+[[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]] || fail "artifact id must be positive"
+[[ "$ARTIFACT_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "artifact name contains unsafe characters"
+[[ -f "$LOCAL_ZIP" && ! -L "$LOCAL_ZIP" ]] || fail "verified local artifact ZIP is required; run fetch-current-artifact.sh first"
+[[ "$(sha256sum "$LOCAL_ZIP" | awk '{print $1}')" == "$ZIP_SHA" ]] || fail "local artifact ZIP digest drift"
+
+mkdir -p "$(dirname "$OUTPUT")"
+chmod 700 "$(dirname "$OUTPUT")"
+[[ ! -e "$OUTPUT" ]] || fail "refusing to overwrite existing control-tower tuple: $OUTPUT"
+[[ ! -L "$OUTPUT" ]] || fail "output path cannot be a symlink"
+
+api() {
+  local endpoint="$1" attempt output
+  for attempt in 1 2 3 4; do
+    if output="$(gh api -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$endpoint" 2>/dev/null)"; then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    [[ "$attempt" -lt 4 ]] && sleep $((attempt * 2))
+  done
+  fail "GitHub API unavailable after bounded retries: $endpoint"
+}
+
+live_main="$(api "/repos/$REPO/branches/main" | jq -er '.commit.sha')"
+[[ "$live_main" == "$MAIN_SHA" ]] || fail "main drift: expected $MAIN_SHA, observed $live_main"
+
+validate_pr() {
+  local number="$1" expected_head="$2" label="$3"
+  local payload head base state draft merged_at
+  payload="$(api "/repos/$REPO/pulls/$number")"
+  head="$(jq -er '.head.sha' <<<"$payload")"
+  base="$(jq -er '.base.sha' <<<"$payload")"
+  state="$(jq -er '.state' <<<"$payload")"
+  draft="$(jq -er '.draft' <<<"$payload")"
+  merged_at="$(jq -r '.merged_at // ""' <<<"$payload")"
+  [[ "$head" == "$expected_head" ]] || fail "$label head drift: $head"
+  [[ "$base" == "$MAIN_SHA" ]] || fail "$label base drift: $base"
+  [[ "$state" == "open" && "$draft" == "true" && -z "$merged_at" ]] || fail "$label must remain open/draft/unmerged before DP5 acceptance"
+
+  local compare merge_base behind
+  compare="$(api "/repos/$REPO/compare/$MAIN_SHA...$expected_head")"
+  merge_base="$(jq -er '.merge_base_commit.sha' <<<"$compare")"
+  behind="$(jq -er '.behind_by' <<<"$compare")"
+  [[ "$merge_base" == "$MAIN_SHA" && "$behind" == "0" ]] || fail "$label no longer reconciles exactly to current main"
+}
+
+validate_pr 413 "$ANDROID_SHA" "Android #413"
+validate_pr 462 "$HOST_SHA" "host #462"
+
+run="$(api "/repos/$REPO/actions/runs/$RUN_ID")"
+run_id="$(jq -er '.id' <<<"$run")"
+run_url="$(jq -er '.html_url' <<<"$run")"
+run_status="$(jq -er '.status' <<<"$run")"
+run_conclusion="$(jq -er '.conclusion' <<<"$run")"
+run_head="$(jq -er '.head_sha' <<<"$run")"
+run_branch="$(jq -er '.head_branch' <<<"$run")"
+run_event="$(jq -er '.event' <<<"$run")"
+[[ "$run_id" == "$RUN_ID" ]] || fail "workflow run id drift"
+[[ "$run_status" == "completed" && "$run_conclusion" == "success" ]] || fail "packaging workflow is not completed/success"
+[[ "$run_head" == "$PACKAGING_SHA" ]] || fail "packaging workflow head drift"
+[[ "$run_branch" == "$PACKAGING_BRANCH" ]] || fail "packaging workflow branch drift"
+[[ "$run_event" == "push" ]] || fail "packaging workflow event must be push"
+
+artifact="$(api "/repos/$REPO/actions/artifacts/$ARTIFACT_ID")"
+artifact_id="$(jq -er '.id' <<<"$artifact")"
+artifact_name="$(jq -er '.name' <<<"$artifact")"
+artifact_expired="$(jq -r '.expired' <<<"$artifact")"
+artifact_run_id="$(jq -er '.workflow_run.id' <<<"$artifact")"
+artifact_digest="$(jq -r '.digest // ""' <<<"$artifact")"
+[[ "$artifact_id" == "$ARTIFACT_ID" ]] || fail "artifact id drift"
+[[ "$artifact_name" == "$ARTIFACT_NAME" ]] || fail "artifact name drift"
+[[ "$artifact_expired" == "false" ]] || fail "artifact is expired"
+[[ "$artifact_run_id" == "$RUN_ID" ]] || fail "artifact is not owned by the expected packaging run"
+if [[ -n "$artifact_digest" ]]; then
+  [[ "$artifact_digest" == "sha256:$ZIP_SHA" ]] || fail "GitHub artifact digest drift: $artifact_digest"
+fi
+
+run_source_ref="${run_url}#head-sha-${PACKAGING_SHA}"
+artifact_source_ref="${run_url}#artifact-${ARTIFACT_ID}"
+
+tmp="$(mktemp "$(dirname "$OUTPUT")/.control-tower-tuple.XXXXXX")"
+trap 'rm -f -- "$tmp"' EXIT
+jq -n \
+  --arg repository "$REPO" \
+  --arg runId "$RUN_ID" \
+  --arg runUrl "$run_url" \
+  --arg packagingSha "$PACKAGING_SHA" \
+  --arg packagingBranch "$PACKAGING_BRANCH" \
+  --arg runSourceRef "$run_source_ref" \
+  --arg androidSha "$ANDROID_SHA" \
+  --arg hostSha "$HOST_SHA" \
+  --arg mainSha "$MAIN_SHA" \
+  --arg artifactId "$ARTIFACT_ID" \
+  --arg artifactName "$ARTIFACT_NAME" \
+  --arg zipSha "$ZIP_SHA" \
+  --arg artifactSourceRef "$artifact_source_ref" \
+  --arg applicationId "$APPLICATION_ID" \
+  --arg variant "$VARIANT" \
+  --arg versionCode "$VERSION_CODE" \
+  --arg versionName "$VERSION_NAME" \
+  --arg apkSha "$APK_SHA" \
+  '{
+    schemaVersion: "w15j-control-tower-tuple-v1",
+    repository: $repository,
+    workflowRun: {
+      id: $runId,
+      url: $runUrl,
+      status: "SUCCESS",
+      headSha: $packagingSha,
+      headBranch: $packagingBranch,
+      eventName: "push",
+      sourceRef: $runSourceRef
+    },
+    androidCandidateSha: $androidSha,
+    hostCandidateSha: $hostSha,
+    reconciledMainSha: $mainSha,
+    packagingHeadSha: $packagingSha,
+    artifact: {
+      id: $artifactId,
+      name: $artifactName,
+      zipSha256: $zipSha,
+      digestSourceRef: $artifactSourceRef
+    },
+    apk: {
+      applicationId: $applicationId,
+      variant: $variant,
+      versionCode: $versionCode,
+      versionName: $versionName,
+      sha256: $apkSha
+    }
+  }' >"$tmp"
+chmod 600 "$tmp"
+mv "$tmp" "$OUTPUT"
+trap - EXIT
+chmod 600 "$OUTPUT"
+
+printf 'CONTROL_TOWER_TUPLE_CAPTURED_READY_NOT_ACCEPTED\n'
+printf 'path=%s\n' "$OUTPUT"
+printf 'main=%s\nandroid=%s\nhost=%s\npackaging=%s\nrun=%s\nartifact=%s\n' \
+  "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" "$PACKAGING_SHA" "$RUN_ID" "$ARTIFACT_ID"
+printf 'authorizes_execution=false\nphysical_acceptance=false\nretry_authorized=false\n'
