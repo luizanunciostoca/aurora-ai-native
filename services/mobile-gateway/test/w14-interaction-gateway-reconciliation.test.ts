@@ -8,10 +8,7 @@ import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids'
 import type { DeviceId } from '../src/device/types.js';
 import type { DeviceSessionTrustResult } from '../src/device-session/types.js';
 import { GATEWAY_PROTOCOL_VERSION } from '../src/gateway-auth/index.js';
-import type {
-  GatewayProtocolResult,
-  GatewayRequestSnapshot,
-} from '../src/gateway-auth/types.js';
+import type { GatewayProtocolResult, GatewayRequestSnapshot } from '../src/gateway-auth/types.js';
 import {
   InteractionGatewayAdapter,
   type DeviceInteractionTrustPort,
