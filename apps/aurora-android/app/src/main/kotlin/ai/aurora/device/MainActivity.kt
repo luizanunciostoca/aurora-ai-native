@@ -35,6 +35,14 @@ class MainActivity : Activity() {
     private lateinit var developerMode: AuroraDeveloperModePreferences
     private lateinit var microphonePermissionHistory: MicrophonePermissionRequestHistory
     private var assistantFeedback: String? = null
+    private var wakeRuntimeRefreshAttempts = 0
+    private val wakeRuntimeRefreshRunnable =
+        Runnable {
+            if (::surface.isInitialized && !isFinishing && !isDestroyed) {
+                wakeRuntimeRefreshAttempts += 1
+                renderStatus()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,6 +59,7 @@ class MainActivity : Activity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (::surface.isInitialized) {
+            wakeRuntimeRefreshAttempts = 0
             renderStatus()
             renderInvocation(intent)
         }
@@ -58,12 +67,21 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        wakeRuntimeRefreshAttempts = 0
         if (::surface.isInitialized) {
+            surface.root.removeCallbacks(wakeRuntimeRefreshRunnable)
             surface.root.post {
                 renderStatus()
                 renderInvocation(intent)
             }
         }
+    }
+
+    override fun onPause() {
+        if (::surface.isInitialized) {
+            surface.root.removeCallbacks(wakeRuntimeRefreshRunnable)
+        }
+        super.onPause()
     }
 
     override fun onRequestPermissionsResult(
@@ -124,6 +142,7 @@ class MainActivity : Activity() {
         val microphoneGranted =
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         val assistant = AuroraAssistantRoleCoordinator.snapshot(this)
+        val wakeRuntimeReady = AuroraOnboardingPolicy.isWakeRuntimeReady(runtime.state)
         val onboarding =
             AuroraOnboardingPolicy.present(
                 AuroraOnboardingInput(
@@ -132,7 +151,7 @@ class MainActivity : Activity() {
                     wakeModelReady = modelReady,
                     wakeEnabled = wakeEnabled,
                     privacyModeEnabled = privacyEnabled,
-                    wakeRuntimeReady = AuroraOnboardingPolicy.isWakeRuntimeReady(runtime.state),
+                    wakeRuntimeReady = wakeRuntimeReady,
                 ),
             )
         val runtimeLabel =
@@ -161,7 +180,7 @@ class MainActivity : Activity() {
                 append("  •  Microfone ")
                 append(if (microphoneGranted) "autorizado" else "pendente")
                 append("  •  Wake ")
-                append(if (wakeEnabled && modelReady && !privacyEnabled && AuroraOnboardingPolicy.isWakeRuntimeReady(runtime.state)) "ativo" else "inativo")
+                append(if (wakeEnabled && modelReady && !privacyEnabled && wakeRuntimeReady) "ativo" else "inativo")
                 append("  •  Privacidade ")
                 append(if (privacyEnabled) "ativa" else "normal")
                 assistantFeedback?.let { append("\n$it") }
@@ -197,6 +216,19 @@ class MainActivity : Activity() {
             microphoneGranted = microphoneGranted,
             privacyEnabled = privacyEnabled,
         )
+        scheduleWakeRuntimeRefresh(onboarding.step)
+    }
+
+    private fun scheduleWakeRuntimeRefresh(step: AuroraOnboardingStep) {
+        surface.root.removeCallbacks(wakeRuntimeRefreshRunnable)
+        if (
+            step == AuroraOnboardingStep.WAKE_RUNTIME &&
+            wakeRuntimeRefreshAttempts < MAX_WAKE_RUNTIME_REFRESH_ATTEMPTS
+        ) {
+            surface.root.postDelayed(wakeRuntimeRefreshRunnable, WAKE_RUNTIME_REFRESH_MS)
+        } else if (step != AuroraOnboardingStep.WAKE_RUNTIME) {
+            wakeRuntimeRefreshAttempts = 0
+        }
     }
 
     private fun rebuildActions(
@@ -335,5 +367,7 @@ class MainActivity : Activity() {
         const val EXTRA_LAST_RESPONSE = "ai.aurora.extra.LAST_RESPONSE"
         private const val REQUEST_ASSISTANT_ROLE = 1401
         private const val REQUEST_MICROPHONE = 1402
+        private const val WAKE_RUNTIME_REFRESH_MS = 500L
+        private const val MAX_WAKE_RUNTIME_REFRESH_ATTEMPTS = 12
     }
 }
