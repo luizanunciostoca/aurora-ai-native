@@ -15,6 +15,8 @@ import type {
   InteractionTurnRole,
 } from '@aurora/contracts/interaction-session';
 
+export const MAX_RFC3339_TIMESTAMP_MS = 253_402_300_799_999;
+
 export interface StoredInteractionSession {
   readonly revision: number;
   readonly session: InteractionSession;
@@ -23,11 +25,13 @@ export interface StoredInteractionSession {
 /**
  * Persistence port only. The manager owns W14 interaction-session transitions while the concrete
  * durable store remains a separate persistence concern. compareAndSwap prevents reconnect/turn
- * races from silently overwriting newer conversational state.
+ * races from silently overwriting newer conversational state. Turn IDs are reserved at store scope
+ * so canonical identity cannot collide across sessions or manager instances sharing the store.
  */
 export interface InteractionSessionStore {
   read(interactionSessionId: InteractionSessionId): StoredInteractionSession | null;
   create(initial: StoredInteractionSession): boolean;
+  reserveTurnId(interactionTurnId: InteractionTurnId): boolean;
   compareAndSwap(
     interactionSessionId: InteractionSessionId,
     expectedRevision: number,
@@ -40,15 +44,22 @@ export interface InteractionSessionIdFactory {
   turnId(): InteractionTurnId;
 }
 
-export interface OpenInteractionSessionInput {
+export interface InteractionSessionBinding {
   readonly tenantId: TenantId;
   readonly participant: InteractionParticipantRef;
+}
+
+export interface OpenInteractionSessionInput extends InteractionSessionBinding {
   readonly modality: InteractionModality;
   readonly dataClassification: DataClassification;
   readonly references: InteractionCanonicalReferences;
 }
 
-export interface AppendInteractionTurnInput {
+export interface ReadInteractionSessionInput extends InteractionSessionBinding {
+  readonly interactionSessionId: InteractionSessionId;
+}
+
+export interface AppendInteractionTurnInput extends InteractionSessionBinding {
   readonly interactionSessionId: InteractionSessionId;
   readonly role: InteractionTurnRole;
   readonly modality: InteractionModality;
@@ -59,16 +70,16 @@ export interface AppendInteractionTurnInput {
   readonly references: InteractionCanonicalReferences;
 }
 
-export interface SuspendInteractionSessionInput {
+export interface SuspendInteractionSessionInput extends InteractionSessionBinding {
   readonly interactionSessionId: InteractionSessionId;
   readonly resumeWindowMs: number;
 }
 
-export interface ResumeInteractionSessionInput {
+export interface ResumeInteractionSessionInput extends InteractionSessionBinding {
   readonly interactionSessionId: InteractionSessionId;
 }
 
-export interface EndInteractionSessionInput {
+export interface EndInteractionSessionInput extends InteractionSessionBinding {
   readonly interactionSessionId: InteractionSessionId;
 }
 
@@ -76,6 +87,8 @@ export type InteractionSessionManagerErrorCode =
   | 'SESSION_NOT_FOUND'
   | 'SESSION_NOT_ACTIVE'
   | 'SESSION_NOT_SUSPENDED'
+  | 'TENANT_MISMATCH'
+  | 'PARTICIPANT_MISMATCH'
   | 'RESUME_EXPIRED'
   | 'INVALID_RESUME_WINDOW'
   | 'CLASSIFICATION_DOWNGRADE'
@@ -89,7 +102,8 @@ export interface InteractionSessionManagerError {
   readonly ok: false;
   readonly code: InteractionSessionManagerErrorCode;
   readonly message: string;
-  readonly retryable: false;
+  /** Recoverability hint only. It never authorizes automatic retry or execution. */
+  readonly retryable: boolean;
   readonly authorizesExecution: false;
   readonly provesExecutionSuccess: false;
   readonly retryAuthorized: false;
@@ -109,8 +123,12 @@ export type InteractionSessionManagerResult =
 export type InteractionClock = () => number;
 
 export function asRfc3339Timestamp(epochMs: number): Rfc3339Timestamp {
-  if (!Number.isSafeInteger(epochMs) || epochMs < 0) {
-    throw new TypeError('interaction clock must return a non-negative safe integer');
+  if (
+    !Number.isSafeInteger(epochMs) ||
+    epochMs < 0 ||
+    epochMs > MAX_RFC3339_TIMESTAMP_MS
+  ) {
+    throw new TypeError('interaction clock must be within the canonical four-digit RFC3339 range');
   }
   return new Date(epochMs).toISOString() as Rfc3339Timestamp;
 }
