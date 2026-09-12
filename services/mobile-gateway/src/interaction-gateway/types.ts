@@ -1,8 +1,14 @@
 import type { DataClassification } from '@aurora/contracts/context';
 import type { InteractionSessionId } from '@aurora/contracts/ids';
-import type { InteractionModality, InteractionTextContent } from '@aurora/contracts/interaction-session';
+import type {
+  InteractionModality,
+  InteractionTextContent,
+} from '@aurora/contracts/interaction-session';
 
-import type { DeviceSessionTrustErrorCode, DeviceSessionTrustResult } from '../device-session/types.js';
+import type {
+  DeviceSessionTrustErrorCode,
+  DeviceSessionTrustResult,
+} from '../device-session/types.js';
 import type {
   BeginGatewayRequestInput,
   GatewayProtocolErrorCode,
@@ -53,22 +59,48 @@ export interface GatewayInteractionRequestPort {
 }
 
 export interface DeviceInteractionTrustPort {
-  getSession(deviceSessionId: string, connectionId: string, nowMs: number): DeviceSessionTrustResult;
+  getSession(
+    deviceSessionId: string,
+    connectionId: string,
+    nowMs: number,
+  ): DeviceSessionTrustResult;
 }
 
 export interface InteractionContinuityPort {
-  open(input: Parameters<import('../interaction-session/manager.js').InteractionSessionManager['open']>[0]): InteractionSessionManagerResult;
-  current(input: Parameters<import('../interaction-session/manager.js').InteractionSessionManager['current']>[0]): InteractionSessionManagerResult;
-  appendTurn(input: Parameters<import('../interaction-session/manager.js').InteractionSessionManager['appendTurn']>[0]): InteractionSessionManagerResult;
-  suspend(input: Parameters<import('../interaction-session/manager.js').InteractionSessionManager['suspend']>[0]): InteractionSessionManagerResult;
-  resume(input: Parameters<import('../interaction-session/manager.js').InteractionSessionManager['resume']>[0]): InteractionSessionManagerResult;
-  end(input: Parameters<import('../interaction-session/manager.js').InteractionSessionManager['end']>[0]): InteractionSessionManagerResult;
+  open(
+    input: Parameters<
+      import('../interaction-session/manager.js').InteractionSessionManager['open']
+    >[0],
+  ): InteractionSessionManagerResult;
+  current(
+    input: Parameters<
+      import('../interaction-session/manager.js').InteractionSessionManager['current']
+    >[0],
+  ): InteractionSessionManagerResult;
+  appendTurn(
+    input: Parameters<
+      import('../interaction-session/manager.js').InteractionSessionManager['appendTurn']
+    >[0],
+  ): InteractionSessionManagerResult;
+  suspend(
+    input: Parameters<
+      import('../interaction-session/manager.js').InteractionSessionManager['suspend']
+    >[0],
+  ): InteractionSessionManagerResult;
+  resume(
+    input: Parameters<
+      import('../interaction-session/manager.js').InteractionSessionManager['resume']
+    >[0],
+  ): InteractionSessionManagerResult;
+  end(
+    input: Parameters<
+      import('../interaction-session/manager.js').InteractionSessionManager['end']
+    >[0],
+  ): InteractionSessionManagerResult;
 }
 
 export type InteractionGatewayCauseCode =
-  | GatewayProtocolErrorCode
-  | DeviceSessionTrustErrorCode
-  | InteractionSessionManagerErrorCode;
+  GatewayProtocolErrorCode | DeviceSessionTrustErrorCode | InteractionSessionManagerErrorCode;
 
 export type InteractionGatewayErrorCode =
   | 'MALFORMED_REQUEST'

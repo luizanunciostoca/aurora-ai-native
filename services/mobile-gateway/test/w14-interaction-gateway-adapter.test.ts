@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 // @ts-expect-error -- mobile-gateway harness intentionally has no @types/node.
 import test from 'node:test';
 
-import type { CorrelationId, IdentityId, InteractionSessionId, InteractionTurnId, TenantId } from '@aurora/contracts/ids';
+import type {
+  CorrelationId,
+  IdentityId,
+  InteractionSessionId,
+  InteractionTurnId,
+  TenantId,
+} from '@aurora/contracts/ids';
 
 import { DeviceSessionTrustManager } from '../src/device-session/index.js';
 import type { DeviceRegistrationRecord, DeviceId } from '../src/device/types.js';
@@ -72,8 +78,7 @@ function interactionIds(): InteractionSessionIdFactory {
   let session = 0;
   let turn = 0;
   return {
-    sessionId: () =>
-      `ins_${String(++session).padStart(26, '0')}` as InteractionSessionId,
+    sessionId: () => `ins_${String(++session).padStart(26, '0')}` as InteractionSessionId,
     turnId: () => `itr_${String(++turn).padStart(26, '0')}` as InteractionTurnId,
   };
 }
@@ -166,7 +171,11 @@ function runtime(): Runtime {
 
   const store = new MemoryInteractionStore();
   let interactionNow = 1_000;
-  const interaction = new InteractionSessionManager(store, interactionIds(), () => ++interactionNow);
+  const interaction = new InteractionSessionManager(
+    store,
+    interactionIds(),
+    () => ++interactionNow,
+  );
   const adapter = new InteractionGatewayAdapter(gateway, deviceTrust, interaction, {
     ingressDataClassification: 'CONFIDENTIAL',
   });

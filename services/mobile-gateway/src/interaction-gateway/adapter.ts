@@ -172,14 +172,15 @@ function parseContent(value: unknown): InteractionTextContent | null {
     kind: 'TEXT',
     text: value.text,
     ...(value.languageTag === undefined ? {} : { languageTag: value.languageTag }),
-    ...(value.speechConfidence === undefined
-      ? {}
-      : { speechConfidence: value.speechConfidence }),
+    ...(value.speechConfidence === undefined ? {} : { speechConfidence: value.speechConfidence }),
   }) as InteractionTextContent;
 }
 
 function parseOpen(value: unknown): OpenDeviceInteractionInput | null {
-  if (!isPlainDataRecord(value) || !hasExactKeys(value, ['gatewayRequest', 'deviceSessionId', 'modality'])) {
+  if (
+    !isPlainDataRecord(value) ||
+    !hasExactKeys(value, ['gatewayRequest', 'deviceSessionId', 'modality'])
+  ) {
     return null;
   }
   const common = parseCommon(value);
