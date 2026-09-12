@@ -117,6 +117,11 @@ if (
   status = run(npm, ['run', 'build', '--workspace', '@aurora/contracts']);
 }
 
+if (status === 0 && mobileGatewayTests.length > 0) {
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  status = run(npm, ['run', 'build', '--workspace', '@aurora/schemas']);
+}
+
 if (status === 0) {
   status = compileAndRunServiceTests('services/executors', executorTests);
 }
