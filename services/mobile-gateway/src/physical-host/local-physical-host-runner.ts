@@ -34,6 +34,14 @@ export interface W15JLocalPhysicalHostRunnerAnnouncement {
   readonly retryAuthorized: false;
 }
 
+export interface W15JLocalPhysicalHostBootstrapReference {
+  readonly bootstrapReference: string;
+  readonly bootstrapExpiresAtMs: number;
+  readonly authorizesExecution: false;
+  readonly provesExecutionSuccess: false;
+  readonly retryAuthorized: false;
+}
+
 export interface W15JLocalPhysicalHostRunnerHooks {
   readonly emit: (announcement: W15JLocalPhysicalHostRunnerAnnouncement) => void;
   readonly registerSignal: (
@@ -61,6 +69,13 @@ export interface W15JLocalPhysicalHostRunnerHandle {
   readonly bootstrapExpiresAtMs: number;
   readonly physicalEvidenceStatus: 'NOT_RUN';
   readonly authorizesExecution: false;
+  /**
+   * Stages a fresh one-shot bootstrap reference against the same already-authenticated principal
+   * and the same live host instance. The previous pending reference is revoked only after the new
+   * reference is staged successfully. This does not create policy authority, execution authority,
+   * retry permission or physical acceptance.
+   */
+  refreshBootstrapReference(): W15JLocalPhysicalHostBootstrapReference;
   stop(): Promise<void>;
 }
 
@@ -136,6 +151,23 @@ export async function startW15JLocalPhysicalHostRunner(
     await host.stop();
     throw new Error(`W15-J LOCAL bootstrap staging failed: ${staged.error.code}`);
   }
+  let activeBootstrapReference = staged.value.bootstrapReference;
+
+  const refreshBootstrapReference = (): W15JLocalPhysicalHostBootstrapReference => {
+    const refreshed = host.stageBootstrap(input.principal);
+    if (!refreshed.ok) {
+      throw new Error(`W15-J LOCAL bootstrap refresh failed: ${refreshed.error.code}`);
+    }
+    host.revokeBootstrapReference(activeBootstrapReference);
+    activeBootstrapReference = refreshed.value.bootstrapReference;
+    return Object.freeze({
+      bootstrapReference: refreshed.value.bootstrapReference,
+      bootstrapExpiresAtMs: refreshed.value.expiresAtMs,
+      authorizesExecution: false,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    });
+  };
 
   const removers: Array<() => void> = [];
   let stopPromise: Promise<void> | undefined;
@@ -172,6 +204,7 @@ export async function startW15JLocalPhysicalHostRunner(
     bootstrapExpiresAtMs: staged.value.expiresAtMs,
     physicalEvidenceStatus: 'NOT_RUN',
     authorizesExecution: false,
+    refreshBootstrapReference,
     stop,
   });
 }
