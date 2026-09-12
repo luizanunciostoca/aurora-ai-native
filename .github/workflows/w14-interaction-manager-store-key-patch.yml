@@ -1,0 +1,95 @@
+name: W14 Interaction Manager Store Key Patch
+
+on:
+  push:
+    branches:
+      - prebuild/w14-v017-interaction-manager
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - run: npm ci
+      - name: Apply bounded store-key integrity patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          manager = Path('services/mobile-gateway/src/interaction-session/manager.ts')
+          text = manager.read_text()
+          old = """  try {
+    return { ok: true, value: freezeStored(raw.revision, raw.session) };
+  } catch {
+"""
+          new = """  try {
+    const value = freezeStored(raw.revision, raw.session);
+    if (value.session.interactionSessionId !== interactionSessionId) {
+      return {
+        ok: false,
+        error: failure(
+          'STORE_INVALID',
+          'interaction session store returned a mismatched canonical identity',
+        ),
+      };
+    }
+    return { ok: true, value };
+  } catch {
+"""
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one readStored target, found {text.count(old)}')
+          manager.write_text(text.replace(old, new))
+
+          test_file = Path('services/mobile-gateway/test/w14-interaction-session-manager-review-regressions.test.ts')
+          test_text = test_file.read_text()
+          anchor = """test('invalid deserialized persistence state fails closed instead of escaping as a mutable contract object', () => {
+"""
+          regression = """test('store lookup key must match the canonical interaction session identity returned by persistence', () => {
+  const store = new MemoryStore();
+  const manager = new InteractionSessionManager(store, ids(), () => 1_000);
+  const opened = expectSuccess(open(manager));
+  const otherSession = 'ins_01JW14V0180000000000000000' as InteractionSessionId;
+  store.records.set(SESSION, {
+    revision: opened.revision,
+    session: {
+      ...opened.session,
+      interactionSessionId: otherSession,
+    },
+  } as StoredInteractionSession);
+
+  expectError(manager.current(binding()), 'STORE_INVALID');
+});
+
+test('invalid deserialized persistence state fails closed instead of escaping as a mutable contract object', () => {
+"""
+          if test_text.count(anchor) != 1:
+              raise SystemExit(f'expected one regression anchor, found {test_text.count(anchor)}')
+          test_file.write_text(test_text.replace(anchor, regression))
+          PY
+          npx prettier --write \
+            services/mobile-gateway/src/interaction-session/manager.ts \
+            services/mobile-gateway/test/w14-interaction-session-manager-review-regressions.test.ts
+          git diff --check
+          git add \
+            services/mobile-gateway/src/interaction-session/manager.ts \
+            services/mobile-gateway/test/w14-interaction-session-manager-review-regressions.test.ts
+          git diff --cached --exit-code && {
+            echo 'Expected bounded store-key patch produced no diff.' >&2
+            exit 1
+          } || true
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(W14): reject mismatched persisted session identity'
+          git push origin HEAD:prebuild/w14-v017-interaction-manager
