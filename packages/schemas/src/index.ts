@@ -2,6 +2,7 @@ export * from './ids/index.js';
 export * from './versioning/index.js';
 export * from './context/index.js';
 export * from './interaction-session/index.js';
+export * from './experience/index.js';
 export * from './envelopes/index.js';
 export * from './actions/index.js';
 export * from './execution-target/index.js';
