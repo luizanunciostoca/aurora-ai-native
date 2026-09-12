@@ -233,7 +233,8 @@ test('same-host bootstrap refresh is protected, current-instance-bound and non-a
   assert.match(source, /DEVICE_GATEWAY/);
   assert.match(source, /BOOTSTRAP_EXCHANGE/);
   assert.match(source, /W15J_LOCAL_BOOTSTRAP_REFRESH_READY/);
-  assert.match(source, /REMAINING_MS > 30_000/);
+  assert.match(source, /REMAINING_MS > 30000/);
+  assert.doesNotMatch(source, /REMAINING_MS > 30_000/);
   assert.match(source, /authorizes_execution=false/);
   assert.match(source, /proves_execution_success=false/);
   assert.match(source, /retry_authorized=false/);
