@@ -66,14 +66,13 @@ function monotonicEpochMs(clock: InteractionClock, currentIso?: string): number 
   const observed = checkedClock(clock);
   const floor = currentIso === undefined ? 0 : Date.parse(currentIso);
   const effective = Math.max(observed, Number.isFinite(floor) ? floor : 0);
-  if (effective > MAX_DATE_MS) throw new TypeError('interaction timestamp is outside supported range');
+  if (effective > MAX_DATE_MS) {
+    throw new TypeError('interaction timestamp is outside supported range');
+  }
   return effective;
 }
 
-function monotonicTimestamp(
-  clock: InteractionClock,
-  currentIso?: string,
-): Rfc3339Timestamp {
+function monotonicTimestamp(clock: InteractionClock, currentIso?: string): Rfc3339Timestamp {
   return asRfc3339Timestamp(monotonicEpochMs(clock, currentIso));
 }
 
@@ -161,7 +160,10 @@ export class InteractionSessionManager {
       return failure('MODALITY_MISMATCH', 'turn modality does not match interaction session');
     }
     if (!moreRestrictiveOrEqual(input.dataClassification, session.dataClassification)) {
-      return failure('CLASSIFICATION_DOWNGRADE', 'turn classification cannot downgrade session data');
+      return failure(
+        'CLASSIFICATION_DOWNGRADE',
+        'turn classification cannot downgrade session data',
+      );
     }
 
     const interactionTurnId = this.ids.turnId();
@@ -213,7 +215,10 @@ export class InteractionSessionManager {
     }
     const effectiveNowMs = monotonicEpochMs(this.clock, session.updatedAt);
     if (effectiveNowMs > MAX_DATE_MS - input.resumeWindowMs) {
-      return failure('INVALID_RESUME_WINDOW', 'resume window exceeds the supported timestamp range');
+      return failure(
+        'INVALID_RESUME_WINDOW',
+        'resume window exceeds the supported timestamp range',
+      );
     }
     const updatedAt = asRfc3339Timestamp(effectiveNowMs);
     const lastTurn = session.turns.at(-1);
