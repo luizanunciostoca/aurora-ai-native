@@ -123,11 +123,7 @@ export type InteractionSessionManagerResult =
 export type InteractionClock = () => number;
 
 export function asRfc3339Timestamp(epochMs: number): Rfc3339Timestamp {
-  if (
-    !Number.isSafeInteger(epochMs) ||
-    epochMs < 0 ||
-    epochMs > MAX_RFC3339_TIMESTAMP_MS
-  ) {
+  if (!Number.isSafeInteger(epochMs) || epochMs < 0 || epochMs > MAX_RFC3339_TIMESTAMP_MS) {
     throw new TypeError('interaction clock must be within the canonical four-digit RFC3339 range');
   }
   return new Date(epochMs).toISOString() as Rfc3339Timestamp;
