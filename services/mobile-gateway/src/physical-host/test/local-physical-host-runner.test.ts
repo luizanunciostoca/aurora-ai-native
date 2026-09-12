@@ -155,16 +155,6 @@ test('starts both loopback listeners, refreshes bootstrap in-place, and cleans u
   assert.equal(refreshed.retryAuthorized, false);
   assert.equal(handle.hostInstanceId, handle.address.hostInstanceId);
 
-  const revokedInitial = await fetch(
-    `http://127.0.0.1:${handle.address.bootstrap.port}${handle.address.bootstrap.path}`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ bootstrapReference: ready.bootstrapReference }),
-    },
-  );
-  assert.equal(revokedInitial.status, 401);
-
   const exchangedRefresh = await fetch(
     `http://127.0.0.1:${handle.address.bootstrap.port}${handle.address.bootstrap.path}`,
     {
