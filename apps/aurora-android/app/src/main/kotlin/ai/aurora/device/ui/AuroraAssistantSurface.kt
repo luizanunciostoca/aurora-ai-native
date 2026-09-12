@@ -18,6 +18,7 @@ class AuroraAssistantSurface private constructor(
     private val eyebrowView: TextView,
     private val titleView: TextView,
     private val detailView: TextView,
+    private val statusLineView: TextView,
     private val transcriptCard: LinearLayout,
     private val transcriptView: TextView,
     private val responseView: TextView,
@@ -31,6 +32,7 @@ class AuroraAssistantSurface private constructor(
     ) {
         val presentation = AuroraAssistantExperience.presentation(stage)
         orb.setStage(stage)
+        orb.contentDescription = "Aurora: ${titleOverride ?: presentation.title}"
         eyebrowView.text = presentation.eyebrow
         titleView.text = titleOverride ?: presentation.title
         detailView.text = detailOverride ?: presentation.detail
@@ -50,8 +52,17 @@ class AuroraAssistantSurface private constructor(
         responseView.text = if (cleanResponse.isBlank()) "" else "Aurora  ·  $cleanResponse"
     }
 
+    fun setStatusLine(text: String) {
+        statusLineView.text = text
+        statusLineView.visibility = if (text.isBlank()) View.GONE else View.VISIBLE
+    }
+
     fun setDiagnostics(text: String) {
         diagnosticsView.text = text
+    }
+
+    fun setDiagnosticsVisible(visible: Boolean) {
+        diagnosticsView.visibility = if (visible) View.VISIBLE else View.GONE
     }
 
     fun addPrimaryAction(
@@ -76,6 +87,7 @@ class AuroraAssistantSurface private constructor(
         val button =
             Button(activity).apply {
                 text = label
+                contentDescription = label
                 isAllCaps = false
                 textSize = 16f
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -154,7 +166,11 @@ class AuroraAssistantSurface private constructor(
                 },
             )
 
-            val orb = AuroraOrbView(activity)
+            val orb =
+                AuroraOrbView(activity).apply {
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                    contentDescription = "Estado visual da Aurora"
+                }
             content.addView(
                 orb,
                 LinearLayout.LayoutParams(
@@ -173,6 +189,7 @@ class AuroraAssistantSurface private constructor(
                     setTextColor(Color.WHITE)
                     gravity = Gravity.CENTER
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
                 }
             content.addView(
                 title,
@@ -188,6 +205,7 @@ class AuroraAssistantSurface private constructor(
                     setTextColor(Color.rgb(179, 192, 226))
                     gravity = Gravity.CENTER
                     setLineSpacing(0f, 1.16f)
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
                 }
             content.addView(
                 detail,
@@ -196,7 +214,24 @@ class AuroraAssistantSurface private constructor(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                 ).apply {
                     topMargin = AuroraActivityUi.dp(activity, 8)
-                    bottomMargin = AuroraActivityUi.dp(activity, 18)
+                    bottomMargin = AuroraActivityUi.dp(activity, 10)
+                },
+            )
+
+            val statusLine =
+                TextView(activity).apply {
+                    textSize = 13f
+                    setTextColor(Color.rgb(151, 176, 231))
+                    gravity = Gravity.CENTER
+                    setLineSpacing(0f, 1.12f)
+                }
+            content.addView(
+                statusLine,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    bottomMargin = AuroraActivityUi.dp(activity, 16)
                 },
             )
 
@@ -226,6 +261,7 @@ class AuroraAssistantSurface private constructor(
                     textSize = 16f
                     setTextColor(Color.rgb(205, 216, 247))
                     setLineSpacing(0f, 1.12f)
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
                 }
             val response =
                 TextView(activity).apply {
@@ -234,6 +270,7 @@ class AuroraAssistantSurface private constructor(
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                     setLineSpacing(0f, 1.12f)
                     setPadding(0, AuroraActivityUi.dp(activity, 10), 0, 0)
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
                 }
             conversationCard.addView(transcript)
             conversationCard.addView(response)
@@ -267,6 +304,7 @@ class AuroraAssistantSurface private constructor(
                     setTextColor(Color.rgb(111, 129, 176))
                     gravity = Gravity.CENTER
                     setLineSpacing(0f, 1.12f)
+                    visibility = View.GONE
                 }
             content.addView(
                 diagnostics,
@@ -285,6 +323,7 @@ class AuroraAssistantSurface private constructor(
                 eyebrowView = eyebrow,
                 titleView = title,
                 detailView = detail,
+                statusLineView = statusLine,
                 transcriptCard = conversationCard,
                 transcriptView = transcript,
                 responseView = response,
