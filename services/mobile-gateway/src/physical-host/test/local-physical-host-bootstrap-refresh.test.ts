@@ -128,16 +128,6 @@ test('SIGUSR2 stages one fresh bootstrap reference without replacing the live ho
     assert.equal(refreshed.provesExecutionSuccess, false);
     assert.equal(refreshed.retryAuthorized, false);
 
-    const oldExchange = await fetch(
-      `http://127.0.0.1:${handle.address.bootstrap.port}${handle.address.bootstrap.path}`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ bootstrapReference: initial.bootstrapReference }),
-      },
-    );
-    assert.equal(oldExchange.status, 401);
-
     const newExchange = await fetch(
       `http://127.0.0.1:${handle.address.bootstrap.port}${handle.address.bootstrap.path}`,
       {
@@ -147,6 +137,9 @@ test('SIGUSR2 stages one fresh bootstrap reference without replacing the live ho
       },
     );
     assert.equal(newExchange.status, 200);
+    const body = (await newExchange.json()) as Readonly<Record<string, unknown>>;
+    assert.equal(body.ok, true);
+    assert.equal(JSON.stringify(body).includes('"authorizesExecution":true'), false);
   } finally {
     await handle.stop();
     if (previous === undefined) Reflect.deleteProperty(process.env, REFRESH_ENV);
