@@ -1,0 +1,17 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": ".",
+    "paths": {
+      "@aurora/contracts/context": ["../../../../packages/contracts/src/context/index.ts"],
+      "@aurora/contracts/ids": ["../../../../packages/contracts/src/ids/index.ts"],
+      "@aurora/contracts/interaction-session": [
+        "../../../../packages/contracts/src/interaction-session/index.ts"
+      ]
+    }
+  },
+  "include": ["*.ts"],
+  "exclude": ["dist", "dist-test", "node_modules"]
+}
