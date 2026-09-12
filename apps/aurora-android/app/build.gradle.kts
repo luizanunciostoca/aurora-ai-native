@@ -8,6 +8,8 @@ fun buildConfigString(value: String): String =
 val auroraAndroidSha = providers.environmentVariable("AURORA_ANDROID_SHA").orElse("unbound").get()
 val auroraHostSha = providers.environmentVariable("AURORA_HOST_SHA").orElse("unbound").get()
 val auroraReleaseTupleId = providers.environmentVariable("AURORA_RELEASE_TUPLE_ID").orElse("unbound").get()
+val auroraLocalGatewayOrigin =
+    providers.environmentVariable("AURORA_LOCAL_GATEWAY_ORIGIN").orElse("http://10.0.2.2:8080").get()
 
 android {
     namespace = "ai.aurora.device"
@@ -31,7 +33,9 @@ android {
             applicationIdSuffix = ".local"
             versionNameSuffix = "-local"
             buildConfigField("String", "AURORA_ENVIRONMENT", "\"LOCAL\"")
-            buildConfigField("String", "AURORA_GATEWAY_ORIGIN", "\"http://10.0.2.2:8080\"")
+            // Emulator builds retain 10.0.2.2 by default. Physical same-tablet packaging injects
+            // AURORA_LOCAL_GATEWAY_ORIGIN=http://127.0.0.1:8080 and verifies the generated value.
+            buildConfigField("String", "AURORA_GATEWAY_ORIGIN", buildConfigString(auroraLocalGatewayOrigin))
             buildConfigField("boolean", "AURORA_ALLOW_CLEARTEXT", "true")
             manifestPlaceholders["usesCleartextTraffic"] = "true"
         }
