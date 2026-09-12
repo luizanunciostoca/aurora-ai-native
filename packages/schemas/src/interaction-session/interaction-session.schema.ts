@@ -69,8 +69,8 @@ export const InteractionModalitySchema = createRuntimeSchema<InteractionModality
   parseEnum<InteractionModality>(value, MODALITIES, 'InteractionModality'),
 );
 
-export const InteractionSessionStateSchema = createRuntimeSchema<InteractionSessionState>(
-  (value) => parseEnum<InteractionSessionState>(value, SESSION_STATES, 'InteractionSessionState'),
+export const InteractionSessionStateSchema = createRuntimeSchema<InteractionSessionState>((value) =>
+  parseEnum<InteractionSessionState>(value, SESSION_STATES, 'InteractionSessionState'),
 );
 
 export const InteractionTurnRoleSchema = createRuntimeSchema<InteractionTurnRole>((value) =>
@@ -251,7 +251,9 @@ export const InteractionTurnSchema = createRuntimeSchema<InteractionTurn>((value
     record.provesExecutionSuccess !== false ||
     record.retryAuthorized !== false
   ) {
-    throw new TypeError('InteractionTurn cannot carry authority, verified outcome, or retry authority');
+    throw new TypeError(
+      'InteractionTurn cannot carry authority, verified outcome, or retry authority',
+    );
   }
   return {
     kind: 'INTERACTION_TURN',
@@ -353,7 +355,9 @@ export const InteractionSessionSchema = createRuntimeSchema<InteractionSession>(
     record.provesExecutionSuccess !== false ||
     record.retryAuthorized !== false
   ) {
-    throw new TypeError('InteractionSession cannot carry authority, verified outcome, or retry authority');
+    throw new TypeError(
+      'InteractionSession cannot carry authority, verified outcome, or retry authority',
+    );
   }
   if (!Array.isArray(record.turns) || record.turns.length > MAX_TURNS) {
     throw new TypeError(`InteractionSession.turns must contain at most ${MAX_TURNS} turns`);
