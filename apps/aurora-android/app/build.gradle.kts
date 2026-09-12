@@ -106,14 +106,6 @@ android {
         }
     }
 
-    // Stable physical-development signing is intentionally exposed only as localPhysicalDev.
-    // STAGING/PRODUCTION must never inherit that key or report the stable physical profile.
-    variantFilter {
-        if (buildType.name == "physicalDev" && flavors.none { it.name == "local" }) {
-            setIgnore(true)
-        }
-    }
-
     buildFeatures {
         buildConfig = true
     }
@@ -126,6 +118,17 @@ android {
     testOptions {
         unitTests.all {
             it.useJUnit()
+        }
+    }
+}
+
+// AGP 9 removed the legacy android.variantFilter DSL. Keep the persistent development key
+// available only to LOCAL by disabling the impossible stagingPhysicalDev/productionPhysicalDev
+// combinations through the supported variant API.
+androidComponents {
+    beforeVariants(selector().withBuildType("physicalDev")) { variantBuilder ->
+        if (!variantBuilder.productFlavors.contains("environment" to "local")) {
+            variantBuilder.enable = false
         }
     }
 }
