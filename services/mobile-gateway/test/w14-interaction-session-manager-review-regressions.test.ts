@@ -191,7 +191,9 @@ test('malformed binding participant fails closed without throwing', () => {
 
   const result = manager.current({
     ...binding(),
-    participant: { kind: 'ACTOR' } as Parameters<InteractionSessionManager['current']>[0]['participant'],
+    participant: { kind: 'ACTOR' } as Parameters<
+      InteractionSessionManager['current']
+    >[0]['participant'],
   });
 
   expectError(result, 'INVALID_INPUT');

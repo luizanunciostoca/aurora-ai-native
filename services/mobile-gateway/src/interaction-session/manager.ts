@@ -316,7 +316,10 @@ function bindingFailure(
   try {
     participant = freezeParticipant(binding.participant);
   } catch {
-    return failure('INVALID_INPUT', 'interaction binding participant violates the canonical contract');
+    return failure(
+      'INVALID_INPUT',
+      'interaction binding participant violates the canonical contract',
+    );
   }
   if (session.tenantId !== binding.tenantId) {
     return failure('TENANT_MISMATCH', 'interaction session belongs to a different tenant');
