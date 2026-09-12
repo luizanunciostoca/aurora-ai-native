@@ -2,6 +2,13 @@ plugins {
     id("com.android.application")
 }
 
+fun buildConfigString(value: String): String =
+    "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+
+val auroraAndroidSha = providers.environmentVariable("AURORA_ANDROID_SHA").orElse("unbound").get()
+val auroraHostSha = providers.environmentVariable("AURORA_HOST_SHA").orElse("unbound").get()
+val auroraReleaseTupleId = providers.environmentVariable("AURORA_RELEASE_TUPLE_ID").orElse("unbound").get()
+
 android {
     namespace = "ai.aurora.device"
     compileSdk = 36
@@ -12,6 +19,9 @@ android {
         targetSdk = 36
         versionCode = 3
         versionName = "0.16.0-physical.1"
+        buildConfigField("String", "AURORA_ANDROID_SHA", buildConfigString(auroraAndroidSha))
+        buildConfigField("String", "AURORA_HOST_SHA", buildConfigString(auroraHostSha))
+        buildConfigField("String", "AURORA_RELEASE_TUPLE_ID", buildConfigString(auroraReleaseTupleId))
     }
 
     flavorDimensions += "environment"
