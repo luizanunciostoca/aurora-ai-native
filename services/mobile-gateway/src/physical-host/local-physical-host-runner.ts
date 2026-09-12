@@ -70,12 +70,12 @@ export interface W15JLocalPhysicalHostRunnerHandle {
   readonly physicalEvidenceStatus: 'NOT_RUN';
   readonly authorizesExecution: false;
   /**
-   * Stages a fresh one-shot bootstrap reference against the same already-authenticated principal
-   * and the same live host instance. The previous pending reference is revoked only after the new
-   * reference is staged successfully. This does not create policy authority, execution authority,
-   * retry permission or physical acceptance.
+   * Canonical runners expose this recovery control. It remains optional on the structural handle so
+   * existing injected test runners and non-physical harnesses do not accidentally gain a required
+   * authority-like capability merely by satisfying this interface. The physical launcher requires
+   * it explicitly before enabling refresh control.
    */
-  refreshBootstrapReference(): W15JLocalPhysicalHostBootstrapReference;
+  readonly refreshBootstrapReference?: () => W15JLocalPhysicalHostBootstrapReference;
   stop(): Promise<void>;
 }
 
