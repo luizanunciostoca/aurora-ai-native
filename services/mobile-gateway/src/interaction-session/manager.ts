@@ -1,4 +1,5 @@
 import type { DataClassification, Rfc3339Timestamp } from '@aurora/contracts/context';
+import type { InteractionSessionId } from '@aurora/contracts/ids';
 import type {
   InteractionCanonicalReferences,
   InteractionParticipantRef,
@@ -6,9 +7,16 @@ import type {
   InteractionTextContent,
   InteractionTurn,
 } from '@aurora/contracts/interaction-session';
+import {
+  InteractionCanonicalReferencesSchema,
+  InteractionParticipantRefSchema,
+  InteractionSessionSchema,
+  InteractionTextContentSchema,
+} from '@aurora/schemas/interaction-session';
 
 import {
   MAX_RFC3339_TIMESTAMP_MS,
+  MIN_RFC3339_TIMESTAMP_MS,
   asRfc3339Timestamp,
   type AppendInteractionTurnInput,
   type EndInteractionSessionInput,
@@ -30,12 +38,27 @@ import {
 const MIN_RESUME_WINDOW_MS = 1_000;
 const MAX_RESUME_WINDOW_MS = 10 * 60 * 1000;
 const MAX_TURNS = 128;
+const NANOSECONDS_PER_MILLISECOND = 1_000_000n;
+const MIN_RFC3339_TIMESTAMP_NS =
+  BigInt(MIN_RFC3339_TIMESTAMP_MS) * NANOSECONDS_PER_MILLISECOND;
+const MAX_RFC3339_TIMESTAMP_NS =
+  BigInt(MAX_RFC3339_TIMESTAMP_MS) * NANOSECONDS_PER_MILLISECOND + 999_999n;
+const RFC3339_FRACTION = /\.(\d{1,9})(?:Z|[+-]\d{2}:\d{2})$/u;
 const CLASSIFICATION_RANK: Readonly<Record<DataClassification, number>> = Object.freeze({
   PUBLIC: 0,
   INTERNAL: 1,
   CONFIDENTIAL: 2,
   RESTRICTED: 3,
 });
+
+interface MonotonicInstant {
+  readonly epochNanoseconds: bigint;
+  readonly timestamp: Rfc3339Timestamp;
+}
+
+type StoredReadResult =
+  | { readonly ok: true; readonly value: StoredInteractionSession }
+  | { readonly ok: false; readonly error: InteractionSessionManagerError };
 
 function failure(
   code: InteractionSessionManagerErrorCode,
@@ -65,24 +88,65 @@ function success(value: StoredInteractionSession): InteractionSessionManagerSucc
 
 function checkedClock(clock: InteractionClock): number {
   const observed = clock();
-  if (!Number.isSafeInteger(observed) || observed < 0 || observed > MAX_RFC3339_TIMESTAMP_MS) {
+  if (
+    !Number.isSafeInteger(observed) ||
+    observed < MIN_RFC3339_TIMESTAMP_MS ||
+    observed > MAX_RFC3339_TIMESTAMP_MS
+  ) {
     throw new TypeError('interaction clock must remain within the canonical RFC3339 range');
   }
   return observed;
 }
 
-function monotonicEpochMs(clock: InteractionClock, currentIso?: string): number {
-  const observed = checkedClock(clock);
-  const floor = currentIso === undefined ? 0 : Date.parse(currentIso);
-  const effective = Math.max(observed, Number.isFinite(floor) ? floor : 0);
-  if (effective > MAX_RFC3339_TIMESTAMP_MS) {
-    throw new TypeError('interaction timestamp is outside the canonical RFC3339 range');
+function rfc3339EpochNanoseconds(value: Rfc3339Timestamp): bigint {
+  const epochMs = Date.parse(value);
+  if (!Number.isSafeInteger(epochMs)) {
+    throw new TypeError('interaction timestamp must be a parseable RFC3339 instant');
   }
-  return effective;
+  const fraction = RFC3339_FRACTION.exec(value)?.[1] ?? '';
+  const paddedFraction = fraction.padEnd(9, '0');
+  const subMillisecondNanoseconds = BigInt(paddedFraction.slice(3) || '0');
+  return BigInt(epochMs) * NANOSECONDS_PER_MILLISECOND + subMillisecondNanoseconds;
 }
 
-function monotonicTimestamp(clock: InteractionClock, currentIso?: string): Rfc3339Timestamp {
-  return asRfc3339Timestamp(monotonicEpochMs(clock, currentIso));
+function epochNanosecondsToRfc3339(epochNanoseconds: bigint): Rfc3339Timestamp {
+  if (
+    epochNanoseconds < MIN_RFC3339_TIMESTAMP_NS ||
+    epochNanoseconds > MAX_RFC3339_TIMESTAMP_NS
+  ) {
+    throw new TypeError('interaction timestamp is outside the canonical RFC3339 range');
+  }
+
+  let epochMs = epochNanoseconds / NANOSECONDS_PER_MILLISECOND;
+  let subMillisecondNanoseconds = epochNanoseconds % NANOSECONDS_PER_MILLISECOND;
+  if (subMillisecondNanoseconds < 0n) {
+    epochMs -= 1n;
+    subMillisecondNanoseconds += NANOSECONDS_PER_MILLISECOND;
+  }
+  const base = asRfc3339Timestamp(Number(epochMs));
+  if (subMillisecondNanoseconds === 0n) return base;
+  const extraFraction = subMillisecondNanoseconds.toString().padStart(6, '0');
+  return base.replace(/Z$/u, `${extraFraction}Z`) as Rfc3339Timestamp;
+}
+
+function monotonicInstant(clock: InteractionClock, currentIso?: Rfc3339Timestamp): MonotonicInstant {
+  const observedMs = checkedClock(clock);
+  const observedTimestamp = asRfc3339Timestamp(observedMs);
+  const observedNanoseconds = BigInt(observedMs) * NANOSECONDS_PER_MILLISECOND;
+  if (currentIso === undefined) {
+    return { epochNanoseconds: observedNanoseconds, timestamp: observedTimestamp };
+  }
+  const currentNanoseconds = rfc3339EpochNanoseconds(currentIso);
+  return currentNanoseconds > observedNanoseconds
+    ? { epochNanoseconds: currentNanoseconds, timestamp: currentIso }
+    : { epochNanoseconds: observedNanoseconds, timestamp: observedTimestamp };
+}
+
+function monotonicTimestamp(
+  clock: InteractionClock,
+  currentIso?: Rfc3339Timestamp,
+): Rfc3339Timestamp {
+  return monotonicInstant(clock, currentIso).timestamp;
 }
 
 function moreRestrictiveOrEqual(
@@ -92,37 +156,40 @@ function moreRestrictiveOrEqual(
   return CLASSIFICATION_RANK[candidate] >= CLASSIFICATION_RANK[baseline];
 }
 
-function cloneReferences(
+function freezeReferences(
   references: InteractionCanonicalReferences,
 ): InteractionCanonicalReferences {
+  const parsed = InteractionCanonicalReferencesSchema.parse(references);
   return Object.freeze({
-    ...(references.activeObjectiveRef === undefined
+    ...(parsed.activeObjectiveRef === undefined
       ? {}
-      : { activeObjectiveRef: references.activeObjectiveRef }),
-    ...(references.activeTaskRef === undefined ? {} : { activeTaskRef: references.activeTaskRef }),
-    ...(references.workspaceRef === undefined ? {} : { workspaceRef: references.workspaceRef }),
-    artifactRefs: Object.freeze([...references.artifactRefs]),
-    pendingHumanControlRequestRefs: Object.freeze([...references.pendingHumanControlRequestRefs]),
+      : { activeObjectiveRef: parsed.activeObjectiveRef }),
+    ...(parsed.activeTaskRef === undefined ? {} : { activeTaskRef: parsed.activeTaskRef }),
+    ...(parsed.workspaceRef === undefined ? {} : { workspaceRef: parsed.workspaceRef }),
+    artifactRefs: Object.freeze([...parsed.artifactRefs]),
+    pendingHumanControlRequestRefs: Object.freeze([...parsed.pendingHumanControlRequestRefs]),
   });
 }
 
-function cloneContent(content: InteractionTextContent): InteractionTextContent {
+function freezeContent(content: InteractionTextContent): InteractionTextContent {
+  const parsed = InteractionTextContentSchema.parse(content);
   return Object.freeze({
     kind: 'TEXT',
-    text: content.text,
-    ...(content.languageTag === undefined ? {} : { languageTag: content.languageTag }),
-    ...(content.speechConfidence === undefined
+    text: parsed.text,
+    ...(parsed.languageTag === undefined ? {} : { languageTag: parsed.languageTag }),
+    ...(parsed.speechConfidence === undefined
       ? {}
-      : { speechConfidence: content.speechConfidence }),
+      : { speechConfidence: parsed.speechConfidence }),
   });
 }
 
-function cloneParticipant(participant: InteractionParticipantRef): InteractionParticipantRef {
-  if (participant.kind === 'ACTOR') {
-    const externalIdentity = participant.actor.externalIdentity;
+function freezeParticipant(participant: InteractionParticipantRef): InteractionParticipantRef {
+  const parsed = InteractionParticipantRefSchema.parse(participant);
+  if (parsed.kind === 'ACTOR') {
+    const externalIdentity = parsed.actor.externalIdentity;
     const actor = Object.freeze({
-      kind: participant.actor.kind,
-      identityId: participant.actor.identityId,
+      kind: parsed.actor.kind,
+      identityId: parsed.actor.identityId,
       ...(externalIdentity === undefined
         ? {}
         : {
@@ -136,9 +203,78 @@ function cloneParticipant(participant: InteractionParticipantRef): InteractionPa
     return Object.freeze({ kind: 'ACTOR', actor }) as InteractionParticipantRef;
   }
   return Object.freeze({
-    kind: participant.kind,
-    bindingReference: participant.bindingReference,
+    kind: parsed.kind,
+    bindingReference: parsed.bindingReference,
   });
+}
+
+function freezeTurn(turn: InteractionTurn): InteractionTurn {
+  return Object.freeze({
+    ...turn,
+    content: freezeContent(turn.content),
+    references: freezeReferences(turn.references),
+  });
+}
+
+function freezeSession(session: InteractionSession): InteractionSession {
+  const parsed = InteractionSessionSchema.parse(session);
+  const createdAtNs = rfc3339EpochNanoseconds(parsed.createdAt);
+  const updatedAtNs = rfc3339EpochNanoseconds(parsed.updatedAt);
+  if (updatedAtNs < createdAtNs) {
+    throw new TypeError('interaction updatedAt cannot precede createdAt at nanosecond precision');
+  }
+  let previousOccurredAtNs = createdAtNs;
+  const turns = parsed.turns.map((turn) => {
+    const occurredAtNs = rfc3339EpochNanoseconds(turn.occurredAt);
+    if (occurredAtNs < previousOccurredAtNs || occurredAtNs > updatedAtNs) {
+      throw new TypeError('interaction turn timestamp is outside exact session bounds');
+    }
+    previousOccurredAtNs = occurredAtNs;
+    return freezeTurn(turn);
+  });
+  if (parsed.resume.resumable && parsed.resume.resumableUntil !== undefined) {
+    if (rfc3339EpochNanoseconds(parsed.resume.resumableUntil) <= updatedAtNs) {
+      throw new TypeError('resumable interaction expiry must be after updatedAt');
+    }
+  }
+  return Object.freeze({
+    ...parsed,
+    participant: freezeParticipant(parsed.participant),
+    resume: Object.freeze({ ...parsed.resume }),
+    references: freezeReferences(parsed.references),
+    turns: Object.freeze(turns),
+  });
+}
+
+function freezeStored(
+  revision: number,
+  session: InteractionSession,
+): StoredInteractionSession {
+  if (!Number.isSafeInteger(revision) || revision < 1) {
+    throw new TypeError('interaction store revision must be a positive safe integer');
+  }
+  return Object.freeze({ revision, session: freezeSession(session) });
+}
+
+function readStored(
+  store: InteractionSessionStore,
+  interactionSessionId: InteractionSessionId,
+): StoredReadResult {
+  const raw = store.read(interactionSessionId);
+  if (raw === null) {
+    return {
+      ok: false,
+      error: failure('SESSION_NOT_FOUND', 'interaction session does not exist'),
+    };
+  }
+  try {
+    return { ok: true, value: freezeStored(raw.revision, raw.session) };
+  } catch {
+    return {
+      ok: false,
+      error: failure('STORE_INVALID', 'interaction session store returned invalid state'),
+    };
+  }
 }
 
 function externalIdentityMatches(
@@ -187,10 +323,12 @@ function replace(
   current: StoredInteractionSession,
   session: InteractionSession,
 ): InteractionSessionManagerResult {
-  const next: StoredInteractionSession = Object.freeze({
-    revision: current.revision + 1,
-    session: Object.freeze(session),
-  });
+  let next: StoredInteractionSession;
+  try {
+    next = freezeStored(current.revision + 1, session);
+  } catch {
+    return failure('INVALID_INPUT', 'interaction transition would violate the canonical contract');
+  }
   return store.compareAndSwap(session.interactionSessionId, current.revision, next)
     ? success(next)
     : failure(
@@ -213,45 +351,56 @@ export class InteractionSessionManager {
   ) {}
 
   open(input: OpenInteractionSessionInput): InteractionSessionManagerResult {
+    let participant: InteractionParticipantRef;
+    let references: InteractionCanonicalReferences;
+    try {
+      participant = freezeParticipant(input.participant);
+      references = freezeReferences(input.references);
+    } catch {
+      return failure('INVALID_INPUT', 'interaction open input violates the canonical contract');
+    }
+
     const now = monotonicTimestamp(this.clock);
-    const session: InteractionSession = Object.freeze({
+    const session: InteractionSession = {
       kind: 'INTERACTION_SESSION',
       schemaVersion: 1,
       interactionSessionId: this.ids.sessionId(),
       tenantId: input.tenantId,
-      participant: cloneParticipant(input.participant),
+      participant,
       modality: input.modality,
       state: 'ACTIVE',
       createdAt: now,
       updatedAt: now,
       dataClassification: input.dataClassification,
       resume: Object.freeze({ resumable: false }),
-      references: cloneReferences(input.references),
+      references,
       turns: Object.freeze([]),
       authorizesExecution: false,
       provesExecutionSuccess: false,
       retryAuthorized: false,
-    });
-    const stored: StoredInteractionSession = Object.freeze({ revision: 1, session });
+    };
+    let stored: StoredInteractionSession;
+    try {
+      stored = freezeStored(1, session);
+    } catch {
+      return failure('INVALID_INPUT', 'interaction open input violates the canonical contract');
+    }
     return this.store.create(stored)
       ? success(stored)
       : failure('STORE_REJECTED', 'interaction session store rejected create');
   }
 
   current(input: ReadInteractionSessionInput): InteractionSessionManagerResult {
-    const current = this.store.read(input.interactionSessionId);
-    if (current === null) {
-      return failure('SESSION_NOT_FOUND', 'interaction session does not exist');
-    }
-    const bindingError = bindingFailure(current.session, input);
-    return bindingError ?? success(current);
+    const read = readStored(this.store, input.interactionSessionId);
+    if (!read.ok) return read.error;
+    const bindingError = bindingFailure(read.value.session, input);
+    return bindingError ?? success(read.value);
   }
 
   appendTurn(input: AppendInteractionTurnInput): InteractionSessionManagerResult {
-    const current = this.store.read(input.interactionSessionId);
-    if (current === null) {
-      return failure('SESSION_NOT_FOUND', 'interaction session does not exist');
-    }
+    const read = readStored(this.store, input.interactionSessionId);
+    if (!read.ok) return read.error;
+    const current = read.value;
     const session = current.session;
     const bindingError = bindingFailure(session, input);
     if (bindingError !== null) return bindingError;
@@ -271,6 +420,15 @@ export class InteractionSessionManager {
       );
     }
 
+    let content: InteractionTextContent;
+    let references: InteractionCanonicalReferences;
+    try {
+      content = freezeContent(input.content);
+      references = freezeReferences(input.references);
+    } catch {
+      return failure('INVALID_INPUT', 'interaction turn input violates the canonical contract');
+    }
+
     const occurredAt = monotonicTimestamp(this.clock, session.updatedAt);
     const interactionTurnId = this.ids.turnId();
     if (!this.store.reserveTurnId(interactionTurnId)) {
@@ -288,8 +446,8 @@ export class InteractionSessionManager {
       ...(input.causationId === undefined ? {} : { causationId: input.causationId }),
       occurredAt,
       dataClassification: input.dataClassification,
-      content: cloneContent(input.content),
-      references: cloneReferences(input.references),
+      content,
+      references,
       authorizesExecution: false,
       provesExecutionSuccess: false,
       retryAuthorized: false,
@@ -310,42 +468,42 @@ export class InteractionSessionManager {
     ) {
       return failure('INVALID_RESUME_WINDOW', 'resume window is outside the bounded W14 range');
     }
-    const current = this.store.read(input.interactionSessionId);
-    if (current === null) {
-      return failure('SESSION_NOT_FOUND', 'interaction session does not exist');
-    }
+    const read = readStored(this.store, input.interactionSessionId);
+    if (!read.ok) return read.error;
+    const current = read.value;
     const session = current.session;
     const bindingError = bindingFailure(session, input);
     if (bindingError !== null) return bindingError;
     if (session.state !== 'ACTIVE') {
       return failure('SESSION_NOT_ACTIVE', 'interaction session is not active');
     }
-    const effectiveNowMs = monotonicEpochMs(this.clock, session.updatedAt);
-    if (effectiveNowMs > MAX_RFC3339_TIMESTAMP_MS - input.resumeWindowMs) {
+    const instant = monotonicInstant(this.clock, session.updatedAt);
+    const resumableUntilNs =
+      instant.epochNanoseconds +
+      BigInt(input.resumeWindowMs) * NANOSECONDS_PER_MILLISECOND;
+    if (resumableUntilNs > MAX_RFC3339_TIMESTAMP_NS) {
       return failure(
         'INVALID_RESUME_WINDOW',
         'resume window exceeds the canonical RFC3339 timestamp range',
       );
     }
-    const updatedAt = asRfc3339Timestamp(effectiveNowMs);
     const lastTurn = session.turns.at(-1);
     return replace(this.store, current, {
       ...session,
       state: 'SUSPENDED',
-      updatedAt,
+      updatedAt: instant.timestamp,
       resume: Object.freeze({
         resumable: true,
         ...(lastTurn === undefined ? {} : { resumeAfterTurnId: lastTurn.interactionTurnId }),
-        resumableUntil: asRfc3339Timestamp(effectiveNowMs + input.resumeWindowMs),
+        resumableUntil: epochNanosecondsToRfc3339(resumableUntilNs),
       }),
     });
   }
 
   resume(input: ResumeInteractionSessionInput): InteractionSessionManagerResult {
-    const current = this.store.read(input.interactionSessionId);
-    if (current === null) {
-      return failure('SESSION_NOT_FOUND', 'interaction session does not exist');
-    }
+    const read = readStored(this.store, input.interactionSessionId);
+    if (!read.ok) return read.error;
+    const current = read.value;
     const session = current.session;
     const bindingError = bindingFailure(session, input);
     if (bindingError !== null) return bindingError;
@@ -355,24 +513,30 @@ export class InteractionSessionManager {
     if (!session.resume.resumable || session.resume.resumableUntil === undefined) {
       return failure('RESUME_EXPIRED', 'interaction session is not resumable');
     }
-    const effectiveNowMs = monotonicEpochMs(this.clock, session.updatedAt);
-    if (effectiveNowMs >= Date.parse(session.resume.resumableUntil)) {
-      return failure('RESUME_EXPIRED', 'interaction session resume window expired');
+    const instant = monotonicInstant(this.clock, session.updatedAt);
+    const resumableUntilNs = rfc3339EpochNanoseconds(session.resume.resumableUntil);
+    if (instant.epochNanoseconds >= resumableUntilNs) {
+      const expired = replace(this.store, current, {
+        ...session,
+        updatedAt: instant.timestamp,
+        resume: Object.freeze({ resumable: false }),
+      });
+      return expired.ok
+        ? failure('RESUME_EXPIRED', 'interaction session resume window expired')
+        : expired;
     }
-    const updatedAt = asRfc3339Timestamp(effectiveNowMs);
     return replace(this.store, current, {
       ...session,
       state: 'ACTIVE',
-      updatedAt,
+      updatedAt: instant.timestamp,
       resume: Object.freeze({ resumable: false }),
     });
   }
 
   end(input: EndInteractionSessionInput): InteractionSessionManagerResult {
-    const current = this.store.read(input.interactionSessionId);
-    if (current === null) {
-      return failure('SESSION_NOT_FOUND', 'interaction session does not exist');
-    }
+    const read = readStored(this.store, input.interactionSessionId);
+    if (!read.ok) return read.error;
+    const current = read.value;
     const session = current.session;
     const bindingError = bindingFailure(session, input);
     if (bindingError !== null) return bindingError;
