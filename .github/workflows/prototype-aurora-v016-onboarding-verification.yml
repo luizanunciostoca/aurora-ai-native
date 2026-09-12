@@ -18,11 +18,11 @@ jobs:
       - name: Checkout exact onboarding candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 51f91fe4cc6805859fa775be44f5a3b07dde9598
+          ref: 0ecd8089aab9dd629b3749b1d284c0e6211043e2
           persist-credentials: false
       - name: Assert exact source
         shell: bash
-        run: test "$(git rev-parse HEAD)" = "51f91fe4cc6805859fa775be44f5a3b07dde9598"
+        run: test "$(git rev-parse HEAD)" = "0ecd8089aab9dd629b3749b1d284c0e6211043e2"
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
