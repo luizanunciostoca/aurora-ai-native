@@ -42,11 +42,6 @@ android {
         buildConfigField("String", "AURORA_ANDROID_SHA", buildConfigString(auroraAndroidSha))
         buildConfigField("String", "AURORA_HOST_SHA", buildConfigString(auroraHostSha))
         buildConfigField("String", "AURORA_RELEASE_TUPLE_ID", buildConfigString(auroraReleaseTupleId))
-        buildConfigField(
-            "String",
-            "AURORA_SIGNING_PROFILE",
-            buildConfigString(if (physicalDevSigningConfigured) "PHYSICAL_DEV_STABLE" else "DEBUG_FALLBACK"),
-        )
     }
 
     if (physicalDevSigningConfigured) {
@@ -71,6 +66,17 @@ android {
             applicationIdSuffix = ".local"
             versionNameSuffix = "-local"
             buildConfigField("String", "AURORA_ENVIRONMENT", "\"LOCAL\"")
+            buildConfigField(
+                "String",
+                "AURORA_SIGNING_PROFILE",
+                buildConfigString(
+                    if (physicalDevSigningConfigured) {
+                        "PHYSICAL_DEV_STABLE"
+                    } else {
+                        "DEBUG_FALLBACK"
+                    },
+                ),
+            )
             // Emulator builds retain 10.0.2.2 by default. Physical same-tablet packaging injects
             // AURORA_LOCAL_GATEWAY_ORIGIN=http://127.0.0.1:8080 and verifies the generated value.
             buildConfigField("String", "AURORA_GATEWAY_ORIGIN", buildConfigString(auroraLocalGatewayOrigin))
@@ -85,6 +91,7 @@ android {
             applicationIdSuffix = ".staging"
             versionNameSuffix = "-staging"
             buildConfigField("String", "AURORA_ENVIRONMENT", "\"STAGING\"")
+            buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"NON_PHYSICAL\"")
             buildConfigField("String", "AURORA_GATEWAY_ORIGIN", "\"https://staging.invalid\"")
             buildConfigField("boolean", "AURORA_ALLOW_CLEARTEXT", "false")
             manifestPlaceholders["usesCleartextTraffic"] = "false"
@@ -92,6 +99,7 @@ android {
         create("production") {
             dimension = "environment"
             buildConfigField("String", "AURORA_ENVIRONMENT", "\"PRODUCTION\"")
+            buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"NON_PHYSICAL\"")
             buildConfigField("String", "AURORA_GATEWAY_ORIGIN", "\"https://production.invalid\"")
             buildConfigField("boolean", "AURORA_ALLOW_CLEARTEXT", "false")
             manifestPlaceholders["usesCleartextTraffic"] = "false"
