@@ -7,7 +7,7 @@ fail() {
 }
 
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
-for cmd in gh adb sha256sum unzip cmp date sed awk; do
+for cmd in gh adb sha256sum unzip cmp date sed awk grep stat wc tr; do
   command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"
 done
 gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated"
@@ -17,6 +17,7 @@ DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 ROOT="$DEVLAB_ROOT/interactive-v016-smoke"
 ARTIFACT_DIR="$ROOT/artifact"
 EVIDENCE_ROOT="$ROOT/evidence"
+SELF_ADB_ENDPOINT_FILE="$DEVLAB_ROOT/state/self-adb-endpoint.txt"
 mkdir -p "$ARTIFACT_DIR" "$EVIDENCE_ROOT"
 chmod 700 "$ROOT" "$ARTIFACT_DIR" "$EVIDENCE_ROOT"
 
@@ -93,12 +94,24 @@ cp "$SOURCE_TUPLE" "$ARTIFACT_DIR/SOURCE_TUPLE.json"
 cp "$SUMS" "$ARTIFACT_DIR/SHA256SUMS.txt"
 chmod 600 "$ARTIFACT_DIR"/*.txt "$ARTIFACT_DIR"/*.json 2>/dev/null || true
 
+[[ -f "$SELF_ADB_ENDPOINT_FILE" && ! -L "$SELF_ADB_ENDPOINT_FILE" ]] || \
+  fail "saved self-ADB endpoint is missing or unsafe; run self-adb.sh connect <ip:debug-port> first"
+[[ "$(stat -c '%a' "$SELF_ADB_ENDPOINT_FILE")" == "600" ]] || \
+  fail "saved self-ADB endpoint permissions must be 600"
+[[ "$(wc -l < "$SELF_ADB_ENDPOINT_FILE" | tr -d ' ')" == "1" ]] || \
+  fail "saved self-ADB endpoint must contain exactly one line"
+SAVED_SELF_ADB_ENDPOINT="$(tr -d '\r\n' <"$SELF_ADB_ENDPOINT_FILE")"
+[[ "$SAVED_SELF_ADB_ENDPOINT" =~ ^[^[:space:]]+:[0-9]+$ ]] || \
+  fail "saved self-ADB endpoint is malformed"
+
 if ! devices_output="$(adb devices 2>&1)"; then
   fail "unable to query self-ADB devices"
 fi
 mapfile -t DEVICES < <(printf '%s\n' "$devices_output" | awk 'NR > 1 && $2 == "device" {print $1}')
 [[ "${#DEVICES[@]}" -eq 1 ]] || fail "exactly one self-ADB physical device is required; found ${#DEVICES[@]}"
 SERIAL="${DEVICES[0]}"
+[[ "$SERIAL" == "$SAVED_SELF_ADB_ENDPOINT" ]] || \
+  fail "connected ADB target does not match the persisted Wireless Debugging self-ADB endpoint"
 ADB=(adb -s "$SERIAL")
 QEMU="$("${ADB[@]}" shell getprop ro.kernel.qemu | tr -d '\r\n')"
 [[ "$QEMU" != "1" && "$SERIAL" != emulator-* ]] || fail "emulator detected"
@@ -117,17 +130,33 @@ EVIDENCE_DIR="$EVIDENCE_ROOT/install-$WINDOW"
 mkdir -p "$EVIDENCE_DIR"
 chmod 700 "$EVIDENCE_DIR"
 
-if ! pre_pm_output="$("${ADB[@]}" shell pm path "$PACKAGE_ID" 2>&1)"; then
-  fail "unable to query installed Aurora package before mutation"
+if ! pre_package_list="$("${ADB[@]}" shell cmd package list packages "$PACKAGE_ID" 2>&1)"; then
+  fail "unable to prove Aurora package presence before mutation"
 fi
-pre_pm_output="${pre_pm_output//$'\r'/}"
-unexpected_pre_pm="$(printf '%s\n' "$pre_pm_output" | sed '/^package:/d;/^[[:space:]]*$/d')"
-[[ -z "$unexpected_pre_pm" ]] || fail "unexpected package-manager response before mutation"
+pre_package_list="${pre_package_list//$'\r'/}"
+unexpected_pre_list="$(
+  printf '%s\n' "$pre_package_list" |
+    sed "/^package:${PACKAGE_ID}$/d;/^[[:space:]]*$/d"
+)"
+[[ -z "$unexpected_pre_list" ]] || fail "unexpected package-list response before mutation"
+pre_package_matches="$(printf '%s\n' "$pre_package_list" | grep -Fxc "package:$PACKAGE_ID" || true)"
+[[ "$pre_package_matches" == "0" || "$pre_package_matches" == "1" ]] || \
+  fail "package-list response is ambiguous before mutation"
+
 PRE_PATHS=()
-while IFS= read -r path; do
-  [[ -n "$path" ]] && PRE_PATHS+=("$path")
-done < <(printf '%s\n' "$pre_pm_output" | sed -n 's/^package://p')
-[[ "${#PRE_PATHS[@]}" -le 1 ]] || fail "installed package is split/non-canonical"
+if [[ "$pre_package_matches" == "1" ]]; then
+  if ! pre_pm_output="$("${ADB[@]}" shell pm path "$PACKAGE_ID" 2>&1)"; then
+    fail "unable to query installed Aurora package path before mutation"
+  fi
+  pre_pm_output="${pre_pm_output//$'\r'/}"
+  unexpected_pre_pm="$(printf '%s\n' "$pre_pm_output" | sed '/^package:/d;/^[[:space:]]*$/d')"
+  [[ -z "$unexpected_pre_pm" ]] || fail "unexpected package-manager response before mutation"
+  while IFS= read -r path; do
+    [[ -n "$path" ]] && PRE_PATHS+=("$path")
+  done < <(printf '%s\n' "$pre_pm_output" | sed -n 's/^package://p')
+  [[ "${#PRE_PATHS[@]}" -eq 1 ]] || fail "installed Aurora package must resolve to exactly one base APK"
+fi
+
 prior_present=false
 prior_sha="NOT_INSTALLED"
 prior_exact=false
@@ -191,6 +220,8 @@ cat >"$EVIDENCE_DIR/install-evidence.json" <<EOF
   "observedAtUtc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "deviceModel": "$MODEL",
   "deviceSerialSha256": "$SERIAL_SHA",
+  "selfAdbEndpointSha256": "$SERIAL_SHA",
+  "selfAdbBindingVerified": true,
   "mainSha": "$EXPECTED_MAIN_SHA",
   "androidSha": "$EXPECTED_ANDROID_SHA",
   "hostSha": "$EXPECTED_HOST_SHA",
