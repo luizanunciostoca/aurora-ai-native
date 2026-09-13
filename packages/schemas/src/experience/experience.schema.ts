@@ -32,7 +32,11 @@ const VOICE_COMPONENTS = new Set<string>(VOICE_RUNTIME_COMPONENTS);
 const MAX_REASON_CHARS = 512;
 const MAX_COMPONENTS = VOICE_RUNTIME_COMPONENTS.length;
 
-function parseEnum<T extends string>(value: unknown, allowed: ReadonlySet<string>, label: string): T {
+function parseEnum<T extends string>(
+  value: unknown,
+  allowed: ReadonlySet<string>,
+  label: string,
+): T {
   if (typeof value !== 'string' || !allowed.has(value)) {
     throw new TypeError(`${label} is invalid`);
   }
@@ -41,8 +45,14 @@ function parseEnum<T extends string>(value: unknown, allowed: ReadonlySet<string
 
 function parseOptionalBoundedString(value: unknown, label: string): string | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== 'string' || value.trim().length === 0 || value.length > MAX_REASON_CHARS) {
-    throw new TypeError(`${label} must be a non-empty string of at most ${MAX_REASON_CHARS} characters`);
+  if (
+    typeof value !== 'string' ||
+    value.trim().length === 0 ||
+    value.length > MAX_REASON_CHARS
+  ) {
+    throw new TypeError(
+      `${label} must be a non-empty string of at most ${MAX_REASON_CHARS} characters`,
+    );
   }
   return value;
 }
@@ -53,7 +63,9 @@ function requireNonAuthority(record: Record<string, unknown>, label: string): vo
     record.provesExecutionSuccess !== false ||
     record.retryAuthorized !== false
   ) {
-    throw new TypeError(`${label} cannot carry authority, verified outcome, or retry authorization`);
+    throw new TypeError(
+      `${label} cannot carry authority, verified outcome, or retry authorization`,
+    );
   }
 }
 
@@ -127,7 +139,9 @@ export const UnifiedInteractionInputSchema = createRuntimeSchema<UnifiedInteract
     correlationId: CorrelationIdSchema.parse(record.correlationId),
     ...(record.interactionSessionId === undefined
       ? {}
-      : { interactionSessionId: InteractionSessionIdSchema.parse(record.interactionSessionId) }),
+      : {
+          interactionSessionId: InteractionSessionIdSchema.parse(record.interactionSessionId),
+        }),
     source,
     modality,
     content: InteractionTextContentSchema.parse(record.content),
@@ -185,7 +199,9 @@ export const AuroraExperienceStateSnapshotSchema =
       correlationId: CorrelationIdSchema.parse(record.correlationId),
       ...(record.interactionSessionId === undefined
         ? {}
-        : { interactionSessionId: InteractionSessionIdSchema.parse(record.interactionSessionId) }),
+        : {
+            interactionSessionId: InteractionSessionIdSchema.parse(record.interactionSessionId),
+          }),
       state: AuroraExperienceStateSchema.parse(record.state),
       observedAt: Rfc3339TimestampSchema.parse(record.observedAt),
       ...(record.staleAfter === undefined
@@ -196,7 +212,9 @@ export const AuroraExperienceStateSnapshotSchema =
         : { reasonCode: parseOptionalBoundedString(record.reasonCode, 'reasonCode') }),
       ...(parseOptionalBoundedString(record.reasonReference, 'reasonReference') === undefined
         ? {}
-        : { reasonReference: parseOptionalBoundedString(record.reasonReference, 'reasonReference') }),
+        : {
+            reasonReference: parseOptionalBoundedString(record.reasonReference, 'reasonReference'),
+          }),
       dataClassification: DataClassificationSchema.parse(record.dataClassification),
       authorizesExecution: false,
       provesExecutionSuccess: false,
@@ -263,7 +281,9 @@ export const VoiceRuntimeHealthSnapshotSchema = createRuntimeSchema<VoiceRuntime
     if (!Array.isArray(record.components) || record.components.length > MAX_COMPONENTS) {
       throw new TypeError(`components must contain at most ${MAX_COMPONENTS} entries`);
     }
-    const components = record.components.map((entry) => VoiceRuntimeComponentHealthSchema.parse(entry));
+    const components = record.components.map((entry) =>
+      VoiceRuntimeComponentHealthSchema.parse(entry),
+    );
     if (new Set(components.map((entry) => entry.component)).size !== components.length) {
       throw new TypeError('components must not contain duplicate component identities');
     }
@@ -278,7 +298,9 @@ export const VoiceRuntimeHealthSnapshotSchema = createRuntimeSchema<VoiceRuntime
       correlationId: CorrelationIdSchema.parse(record.correlationId),
       ...(record.interactionSessionId === undefined
         ? {}
-        : { interactionSessionId: InteractionSessionIdSchema.parse(record.interactionSessionId) }),
+        : {
+            interactionSessionId: InteractionSessionIdSchema.parse(record.interactionSessionId),
+          }),
       state,
       components: Object.freeze(components),
       observedAt: Rfc3339TimestampSchema.parse(record.observedAt),
