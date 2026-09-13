@@ -171,7 +171,11 @@ function runtime(): Runtime {
 
   const store = new MemoryInteractionStore();
   let interactionNow = 1_000;
-  const interaction = new InteractionSessionManager(store, interactionIds(), () => ++interactionNow);
+  const interaction = new InteractionSessionManager(
+    store,
+    interactionIds(),
+    () => ++interactionNow,
+  );
   const adapter = new InteractionGatewayAdapter(gateway, deviceTrust, interaction, {
     ingressDataClassification: 'CONFIDENTIAL',
     clock: () => 2_000,
