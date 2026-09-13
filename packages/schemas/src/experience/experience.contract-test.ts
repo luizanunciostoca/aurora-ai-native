@@ -99,6 +99,37 @@ test('experience projection supports speaking state but remains non-authoritativ
   assert.equal(snapshot.authorizesExecution, false);
 });
 
+test('execution uncertain projection requires canonical reference and freshness', () => {
+  const base = {
+    kind: 'AURORA_EXPERIENCE_STATE',
+    schemaVersion: 1,
+    tenantId,
+    correlationId,
+    interactionSessionId,
+    state: 'EXECUTION_UNCERTAIN',
+    observedAt,
+    staleAfter: '2026-09-12T22:00:05.000Z',
+    reasonCode: 'RECONCILIATION_PENDING',
+    reasonReference: 'execution-reconciliation:exe_01JW14V0170000000000000000',
+    dataClassification: 'INTERNAL',
+    authorizesExecution: false,
+    provesExecutionSuccess: false,
+    retryAuthorized: false,
+  };
+
+  const parsed = AuroraExperienceStateSnapshotSchema.parse(base);
+  assert.equal(parsed.state, 'EXECUTION_UNCERTAIN');
+  assert.equal(parsed.reasonReference, base.reasonReference);
+  assert.equal(
+    AuroraExperienceStateSnapshotSchema.safeParse({ ...base, reasonReference: undefined }).success,
+    false,
+  );
+  assert.equal(
+    AuroraExperienceStateSnapshotSchema.safeParse({ ...base, staleAfter: undefined }).success,
+    false,
+  );
+});
+
 test('voice supervisor health rejects duplicate components and false healthy aggregate', () => {
   const base = {
     kind: 'VOICE_RUNTIME_HEALTH',
@@ -138,4 +169,31 @@ test('voice supervisor health rejects duplicate components and false healthy agg
     VoiceRuntimeHealthSnapshotSchema.safeParse({ ...base, state: 'HEALTHY' }).success,
     false,
   );
+  assert.equal(
+    VoiceRuntimeHealthSnapshotSchema.safeParse({ ...base, state: 'HEALTHY', components: [] })
+      .success,
+    false,
+  );
+  assert.equal(
+    VoiceRuntimeHealthSnapshotSchema.safeParse({
+      ...base,
+      state: 'HEALTHY',
+      components: [{ component: 'WAKE_WORD', state: 'HEALTHY' }],
+    }).success,
+    false,
+  );
+
+  const healthy = VoiceRuntimeHealthSnapshotSchema.parse({
+    ...base,
+    state: 'HEALTHY',
+    components: [
+      { component: 'WAKE_WORD', state: 'HEALTHY' },
+      { component: 'MICROPHONE', state: 'HEALTHY' },
+      { component: 'STT', state: 'HEALTHY' },
+      { component: 'TTS', state: 'HEALTHY' },
+      { component: 'AUDIO_FOCUS', state: 'HEALTHY' },
+      { component: 'GATEWAY', state: 'HEALTHY' },
+    ],
+  });
+  assert.equal(healthy.components.length, 6);
 });
