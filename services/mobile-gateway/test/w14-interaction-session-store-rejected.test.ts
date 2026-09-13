@@ -46,28 +46,31 @@ const ids: InteractionSessionIdFactory = {
   turnId: () => TURN,
 };
 
-test('store create rejection fails closed without authority or persisted state', () => {
-  const store = new RejectingCreateStore();
-  const manager = new InteractionSessionManager(store, ids, () => 1_000);
+test(
+  'store create rejection fails closed without authority or persisted state',
+  () => {
+    const store = new RejectingCreateStore();
+    const manager = new InteractionSessionManager(store, ids, () => 1_000);
 
-  const result = manager.open({
-    tenantId: TENANT,
-    participant: { kind: 'DEVICE', bindingReference: 'device:sm-x820' },
-    modality: 'VOICE',
-    dataClassification: 'INTERNAL',
-    references: {
-      artifactRefs: [],
-      pendingHumanControlRequestRefs: [],
-    },
-  });
+    const result = manager.open({
+      tenantId: TENANT,
+      participant: { kind: 'DEVICE', bindingReference: 'device:sm-x820' },
+      modality: 'VOICE',
+      dataClassification: 'INTERNAL',
+      references: {
+        artifactRefs: [],
+        pendingHumanControlRequestRefs: [],
+      },
+    });
 
-  assert.equal(result.ok, false);
-  if (result.ok) throw new Error('expected store rejection');
-  assert.equal(result.code, 'STORE_REJECTED');
-  assert.equal(result.retryable, false);
-  assert.equal(result.authorizesExecution, false);
-  assert.equal(result.provesExecutionSuccess, false);
-  assert.equal(result.retryAuthorized, false);
-  assert.equal(store.createAttempts, 1);
-  assert.equal(store.read(SESSION), null);
-});
+    assert.equal(result.ok, false);
+    if (result.ok) throw new Error('expected store rejection');
+    assert.equal(result.code, 'STORE_REJECTED');
+    assert.equal(result.retryable, false);
+    assert.equal(result.authorizesExecution, false);
+    assert.equal(result.provesExecutionSuccess, false);
+    assert.equal(result.retryAuthorized, false);
+    assert.equal(store.createAttempts, 1);
+    assert.equal(store.read(SESSION), null);
+  },
+);
