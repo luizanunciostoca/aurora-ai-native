@@ -15,11 +15,7 @@ import {
 import { DataClassificationSchema } from '../context/data-classification.schema';
 import { Rfc3339TimestampSchema } from '../context/deadline.schema';
 import { asRecord, assertExactKeys, createRuntimeSchema } from '../context/internal';
-import {
-  CorrelationIdSchema,
-  InteractionSessionIdSchema,
-  TenantIdSchema,
-} from '../ids/id.schemas';
+import { CorrelationIdSchema, InteractionSessionIdSchema, TenantIdSchema } from '../ids/id.schemas';
 import {
   InteractionModalitySchema,
   InteractionTextContentSchema,
@@ -45,11 +41,7 @@ function parseEnum<T extends string>(
 
 function parseOptionalBoundedString(value: unknown, label: string): string | undefined {
   if (value === undefined) return undefined;
-  if (
-    typeof value !== 'string' ||
-    value.trim().length === 0 ||
-    value.length > MAX_REASON_CHARS
-  ) {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > MAX_REASON_CHARS) {
     throw new TypeError(
       `${label} must be a non-empty string of at most ${MAX_REASON_CHARS} characters`,
     );
@@ -85,73 +77,75 @@ export const VoiceRuntimeComponentSchema = createRuntimeSchema<VoiceRuntimeCompo
   parseEnum<VoiceRuntimeComponent>(value, VOICE_COMPONENTS, 'VoiceRuntimeComponent'),
 );
 
-export const UnifiedInteractionInputSchema = createRuntimeSchema<UnifiedInteractionInput>((value) => {
-  const record = asRecord(value, 'UnifiedInteractionInput');
-  assertExactKeys(
-    record,
-    [
-      'kind',
-      'schemaVersion',
-      'tenantId',
-      'correlationId',
-      'interactionSessionId',
-      'source',
-      'modality',
-      'content',
-      'observedAt',
-      'dataClassification',
-      'authorizesExecution',
-      'provesExecutionSuccess',
-      'retryAuthorized',
-    ],
-    [
-      'kind',
-      'schemaVersion',
-      'tenantId',
-      'correlationId',
-      'source',
-      'modality',
-      'content',
-      'observedAt',
-      'dataClassification',
-      'authorizesExecution',
-      'provesExecutionSuccess',
-      'retryAuthorized',
-    ],
-    'UnifiedInteractionInput',
-  );
-  if (record.kind !== 'UNIFIED_INTERACTION_INPUT' || record.schemaVersion !== 1) {
-    throw new TypeError('UnifiedInteractionInput kind/schemaVersion is invalid');
-  }
-  requireNonAuthority(record, 'UnifiedInteractionInput');
-  const source = InteractionInputSourceSchema.parse(record.source);
-  const modality = InteractionModalitySchema.parse(record.modality);
-  if ((source === 'WAKE_WORD' || source === 'MANUAL_MIC') && modality === 'TEXT') {
-    throw new TypeError('voice activation source cannot declare TEXT-only modality');
-  }
-  if (source === 'TEXT_INPUT' && modality === 'VOICE') {
-    throw new TypeError('text input source cannot declare VOICE-only modality');
-  }
-  return Object.freeze({
-    kind: 'UNIFIED_INTERACTION_INPUT',
-    schemaVersion: 1,
-    tenantId: TenantIdSchema.parse(record.tenantId),
-    correlationId: CorrelationIdSchema.parse(record.correlationId),
-    ...(record.interactionSessionId === undefined
-      ? {}
-      : {
-          interactionSessionId: InteractionSessionIdSchema.parse(record.interactionSessionId),
-        }),
-    source,
-    modality,
-    content: InteractionTextContentSchema.parse(record.content),
-    observedAt: Rfc3339TimestampSchema.parse(record.observedAt),
-    dataClassification: DataClassificationSchema.parse(record.dataClassification),
-    authorizesExecution: false,
-    provesExecutionSuccess: false,
-    retryAuthorized: false,
-  });
-});
+export const UnifiedInteractionInputSchema = createRuntimeSchema<UnifiedInteractionInput>(
+  (value) => {
+    const record = asRecord(value, 'UnifiedInteractionInput');
+    assertExactKeys(
+      record,
+      [
+        'kind',
+        'schemaVersion',
+        'tenantId',
+        'correlationId',
+        'interactionSessionId',
+        'source',
+        'modality',
+        'content',
+        'observedAt',
+        'dataClassification',
+        'authorizesExecution',
+        'provesExecutionSuccess',
+        'retryAuthorized',
+      ],
+      [
+        'kind',
+        'schemaVersion',
+        'tenantId',
+        'correlationId',
+        'source',
+        'modality',
+        'content',
+        'observedAt',
+        'dataClassification',
+        'authorizesExecution',
+        'provesExecutionSuccess',
+        'retryAuthorized',
+      ],
+      'UnifiedInteractionInput',
+    );
+    if (record.kind !== 'UNIFIED_INTERACTION_INPUT' || record.schemaVersion !== 1) {
+      throw new TypeError('UnifiedInteractionInput kind/schemaVersion is invalid');
+    }
+    requireNonAuthority(record, 'UnifiedInteractionInput');
+    const source = InteractionInputSourceSchema.parse(record.source);
+    const modality = InteractionModalitySchema.parse(record.modality);
+    if ((source === 'WAKE_WORD' || source === 'MANUAL_MIC') && modality === 'TEXT') {
+      throw new TypeError('voice activation source cannot declare TEXT-only modality');
+    }
+    if (source === 'TEXT_INPUT' && modality === 'VOICE') {
+      throw new TypeError('text input source cannot declare VOICE-only modality');
+    }
+    return Object.freeze({
+      kind: 'UNIFIED_INTERACTION_INPUT',
+      schemaVersion: 1,
+      tenantId: TenantIdSchema.parse(record.tenantId),
+      correlationId: CorrelationIdSchema.parse(record.correlationId),
+      ...(record.interactionSessionId === undefined
+        ? {}
+        : {
+            interactionSessionId: InteractionSessionIdSchema.parse(record.interactionSessionId),
+          }),
+      source,
+      modality,
+      content: InteractionTextContentSchema.parse(record.content),
+      observedAt: Rfc3339TimestampSchema.parse(record.observedAt),
+      dataClassification: DataClassificationSchema.parse(record.dataClassification),
+      authorizesExecution: false,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    });
+  },
+);
 
 export const AuroraExperienceStateSnapshotSchema =
   createRuntimeSchema<AuroraExperienceStateSnapshot>((value) => {
