@@ -22,7 +22,7 @@
     "workspace:check": "node ./tools/workspace/check.mjs",
     "workspace:list": "node ./tools/workspace/check.mjs --list",
     "format": "node ./tools/quality/run.mjs format:write",
-    "format:check": "prettier --write packages/schemas/src/experience/experience.contract-test.ts packages/schemas/src/experience/experience.schema.ts && git diff --no-color -- packages/schemas/src/experience/experience.contract-test.ts packages/schemas/src/experience/experience.schema.ts && exit 1",
+    "format:check": "node ./tools/quality/run.mjs format:check",
     "lint": "node ./tools/quality/run.mjs lint",
     "typecheck": "node ./tools/quality/run.mjs typecheck",
     "quality": "node ./tools/quality/run.mjs all",
