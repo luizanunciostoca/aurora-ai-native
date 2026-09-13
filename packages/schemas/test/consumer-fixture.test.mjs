@@ -6,6 +6,7 @@ const require = createRequire(import.meta.url);
 
 test('consumer can resolve root packages and governed subpaths', () => {
   const contracts = require('@aurora/contracts');
+  const contractExperience = require('@aurora/contracts/experience');
   const contractIds = require('@aurora/contracts/ids');
   const contractIdentityResolution = require('@aurora/contracts/identity-resolution');
   const contractPolicyEngine = require('@aurora/contracts/policy-engine');
@@ -16,6 +17,7 @@ test('consumer can resolve root packages and governed subpaths', () => {
 
   const schemas = require('@aurora/schemas');
   const schemaConsent = require('@aurora/schemas/consent');
+  const schemaExperience = require('@aurora/schemas/experience');
   const schemaIdentityResolution = require('@aurora/schemas/identity-resolution');
   const schemaIds = require('@aurora/schemas/ids');
   const schemaJurisdiction = require('@aurora/schemas/jurisdiction');
@@ -36,6 +38,9 @@ test('consumer can resolve root packages and governed subpaths', () => {
 
   assert.equal(contracts.COMMAND_ENVELOPE_KIND, 'COMMAND');
   assert.equal(contracts.EVENT_ENVELOPE_KIND, 'EVENT');
+  assert.ok(Array.isArray(contracts.AURORA_EXPERIENCE_STATES));
+  assert.ok(Array.isArray(contractExperience.AURORA_EXPERIENCE_STATES));
+  assert.equal(contracts.AURORA_EXPERIENCE_STATES, contractExperience.AURORA_EXPERIENCE_STATES);
   assert.equal(contractIds.CANONICAL_ID_GENERATION_RESPONSIBILITY, 'PRODUCER');
   assert.ok(Array.isArray(contractIdentityResolution.IDENTITY_RESOLUTION_STATUSES));
   assert.ok(Array.isArray(contractPolicyEngine.POLICY_EVALUATION_DECISIONS));
@@ -47,7 +52,11 @@ test('consumer can resolve root packages and governed subpaths', () => {
   assert.ok(Array.isArray(contractTenantBoundary.TENANT_BOUNDARY_REASONS));
 
   assert.equal(typeof schemas.TenantIdSchema.parse, 'function');
+  assert.equal(typeof schemas.UnifiedInteractionInputSchema.parse, 'function');
   assert.equal(typeof schemaConsent.ConsentRecordSchema.parse, 'function');
+  assert.equal(typeof schemaExperience.UnifiedInteractionInputSchema.parse, 'function');
+  assert.equal(typeof schemaExperience.AuroraExperienceStateSnapshotSchema.parse, 'function');
+  assert.equal(typeof schemaExperience.VoiceRuntimeHealthSnapshotSchema.parse, 'function');
   assert.equal(typeof schemaIdentityResolution.IdentityResolutionRequestSchema.parse, 'function');
   assert.equal(typeof schemaIdentityResolution.IdentityResolutionResultSchema.parse, 'function');
   assert.equal(typeof schemaIds.CorrelationIdSchema.parse, 'function');
