@@ -88,6 +88,7 @@ const mobileGatewaySourceProjects = [
   'services/mobile-gateway/src/device-session/tsconfig.json',
   'services/mobile-gateway/src/device-command-delivery/tsconfig.json',
   'services/mobile-gateway/src/device-receipt-ingress/tsconfig.json',
+  'services/mobile-gateway/src/interaction-session/tsconfig.json',
 ];
 
 const contextTests = [];
@@ -114,6 +115,16 @@ if (
 ) {
   const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   status = run(npm, ['run', 'build', '--workspace', '@aurora/contracts']);
+}
+
+if (status === 0 && mobileGatewayTests.length > 0) {
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  status = run(npm, ['run', 'build', '--workspace', '@aurora/registries']);
+}
+
+if (status === 0 && mobileGatewayTests.length > 0) {
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  status = run(npm, ['run', 'build', '--workspace', '@aurora/schemas']);
 }
 
 if (status === 0) {

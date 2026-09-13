@@ -30,7 +30,7 @@ const TURN_ROLES = new Set<string>(INTERACTION_TURN_ROLES);
 const MAX_TEXT_CHARS = 4_096;
 const MAX_REFERENCE_CHARS = 512;
 const MAX_REFERENCE_LIST = 64;
-const MAX_TURNS = 128;
+export const INTERACTION_SESSION_MAX_TURNS = 128;
 const MAX_SEQUENCE = 1_000_000;
 const LANGUAGE_TAG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u;
 
@@ -359,8 +359,10 @@ export const InteractionSessionSchema = createRuntimeSchema<InteractionSession>(
       'InteractionSession cannot carry authority, verified outcome, or retry authority',
     );
   }
-  if (!Array.isArray(record.turns) || record.turns.length > MAX_TURNS) {
-    throw new TypeError(`InteractionSession.turns must contain at most ${MAX_TURNS} turns`);
+  if (!Array.isArray(record.turns) || record.turns.length > INTERACTION_SESSION_MAX_TURNS) {
+    throw new TypeError(
+      `InteractionSession.turns must contain at most ${INTERACTION_SESSION_MAX_TURNS} turns`,
+    );
   }
 
   const interactionSessionId = InteractionSessionIdSchema.parse(record.interactionSessionId);
