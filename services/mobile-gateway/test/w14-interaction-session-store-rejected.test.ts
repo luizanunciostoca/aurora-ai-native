@@ -18,8 +18,12 @@ const TURN = 'itr_00000000000000000000000001' as InteractionTurnId;
 
 class RejectingCreateStore implements InteractionSessionStore {
   createAttempts = 0;
+  readAttempts = 0;
+  reserveTurnIdAttempts = 0;
+  compareAndSwapAttempts = 0;
 
   read(): StoredInteractionSession | null {
+    this.readAttempts += 1;
     return null;
   }
 
@@ -29,10 +33,12 @@ class RejectingCreateStore implements InteractionSessionStore {
   }
 
   reserveTurnId(): boolean {
+    this.reserveTurnIdAttempts += 1;
     return false;
   }
 
   compareAndSwap(): boolean {
+    this.compareAndSwapAttempts += 1;
     return false;
   }
 }
@@ -46,16 +52,19 @@ test('store create rejection fails closed without authority or persisted state',
   const store = new RejectingCreateStore();
   const manager = new InteractionSessionManager(store, ids, () => 1_000);
 
-  const result = manager.open({
+  const openInput = {
     tenantId: TENANT,
-    participant: { kind: 'DEVICE', bindingReference: 'device:sm-x820' },
-    modality: 'VOICE',
-    dataClassification: 'INTERNAL',
+    participant: { kind: 'DEVICE', bindingReference: 'device:sm-x820' } as const,
+    modality: 'VOICE' as const,
+    dataClassification: 'INTERNAL' as const,
     references: {
       artifactRefs: [],
       pendingHumanControlRequestRefs: [],
     },
-  });
+  };
+
+  const result = manager.open(openInput);
+  const repeated = manager.open(openInput);
 
   assert.equal(result.ok, false);
   if (result.ok) throw new Error('expected store rejection');
@@ -64,6 +73,17 @@ test('store create rejection fails closed without authority or persisted state',
   assert.equal(result.authorizesExecution, false);
   assert.equal(result.provesExecutionSuccess, false);
   assert.equal(result.retryAuthorized, false);
-  assert.equal(store.createAttempts, 1);
+  assert.equal(repeated.ok, false);
+  if (repeated.ok) throw new Error('expected repeated store rejection');
+  assert.equal(repeated.code, 'STORE_REJECTED');
+  assert.equal(repeated.retryable, false);
+  assert.equal(repeated.authorizesExecution, false);
+  assert.equal(repeated.provesExecutionSuccess, false);
+  assert.equal(repeated.retryAuthorized, false);
+  assert.equal(store.createAttempts, 2);
+  assert.equal(store.reserveTurnIdAttempts, 0);
+  assert.equal(store.compareAndSwapAttempts, 0);
+  assert.equal(store.readAttempts, 0);
   assert.equal(store.read(SESSION), null);
+  assert.equal(store.readAttempts, 1);
 });

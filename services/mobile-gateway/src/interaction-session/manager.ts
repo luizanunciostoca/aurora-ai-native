@@ -8,6 +8,7 @@ import type {
   InteractionTurn,
 } from '@aurora/contracts/interaction-session';
 import {
+  INTERACTION_SESSION_MAX_TURNS,
   InteractionCanonicalReferencesSchema,
   InteractionParticipantRefSchema,
   InteractionSessionSchema,
@@ -38,7 +39,6 @@ import {
 
 const MIN_RESUME_WINDOW_MS = 1_000;
 const MAX_RESUME_WINDOW_MS = 10 * 60 * 1000;
-const MAX_TURNS = 128;
 const NANOSECONDS_PER_MILLISECOND = 1_000_000n;
 const MIN_RFC3339_TIMESTAMP_NS = BigInt(MIN_RFC3339_TIMESTAMP_MS) * NANOSECONDS_PER_MILLISECOND;
 const MAX_RFC3339_TIMESTAMP_NS =
@@ -449,7 +449,7 @@ export class InteractionSessionManager {
     if (session.state !== 'ACTIVE') {
       return failure('SESSION_NOT_ACTIVE', 'interaction session is not active');
     }
-    if (session.turns.length >= MAX_TURNS) {
+    if (session.turns.length >= INTERACTION_SESSION_MAX_TURNS) {
       return failure('TURN_LIMIT_REACHED', 'interaction session reached the bounded turn limit');
     }
 

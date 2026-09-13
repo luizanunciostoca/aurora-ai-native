@@ -1,4 +1,5 @@
 export {
+  INTERACTION_SESSION_MAX_TURNS,
   InteractionCanonicalReferencesSchema,
   InteractionModalitySchema,
   InteractionParticipantRefSchema,
