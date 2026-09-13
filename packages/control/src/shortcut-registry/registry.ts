@@ -2,7 +2,9 @@ import type { CorrelationId, TenantId } from '../../../contracts/src/ids/types.t
 import {
   evaluateCapabilityAvailability,
   findCapability,
+  type CapabilityBindingDescriptor,
   type CapabilityCurrentAvailability,
+  type CapabilityDescriptor,
   type CapabilityRegistrySnapshot,
 } from '../../../registries/src/capabilities/registry.ts';
 
@@ -110,6 +112,35 @@ function validShortcutShape(entry: UserShortcutEntry): boolean {
   return false;
 }
 
+function selectBindingForTenant(
+  capability: CapabilityDescriptor,
+  bindingId: string,
+  tenantId: TenantId,
+):
+  | { readonly status: 'FOUND'; readonly binding: CapabilityBindingDescriptor }
+  | { readonly status: 'UNKNOWN_BINDING' }
+  | { readonly status: 'TENANT_MISMATCH' } {
+  let globalBinding: CapabilityBindingDescriptor | undefined;
+  let sawBindingId = false;
+
+  for (const binding of capability.bindings) {
+    if (binding.bindingId !== bindingId) continue;
+    sawBindingId = true;
+    if (binding.tenantId === tenantId) {
+      return { status: 'FOUND', binding };
+    }
+    if (binding.tenantId === undefined) {
+      globalBinding ??= binding;
+    }
+  }
+
+  if (globalBinding !== undefined) {
+    return { status: 'FOUND', binding: globalBinding };
+  }
+
+  return { status: sawBindingId ? 'TENANT_MISMATCH' : 'UNKNOWN_BINDING' };
+}
+
 function targetExistsForTenant(
   entry: UserShortcutEntry,
   capabilities: CapabilityRegistrySnapshot,
@@ -120,13 +151,8 @@ function targetExistsForTenant(
     return 'TENANT_MISMATCH';
   }
   if (entry.target.kind === 'CAPABILITY') return 'OK';
-  const targetBindingId = entry.target.bindingId;
-  const binding = capability.bindings.find((candidate) => candidate.bindingId === targetBindingId);
-  if (binding === undefined) return 'UNKNOWN_BINDING';
-  if (binding.tenantId !== undefined && binding.tenantId !== entry.tenantId) {
-    return 'TENANT_MISMATCH';
-  }
-  return 'OK';
+  const bindingSelection = selectBindingForTenant(capability, entry.target.bindingId, entry.tenantId);
+  return bindingSelection.status === 'FOUND' ? 'OK' : bindingSelection.status;
 }
 
 export function createUserShortcutRegistry(
@@ -251,13 +277,11 @@ export function resolveUserShortcut(
   let currentAvailability = capabilityAvailability;
   let bindingId: string | undefined;
   if (entry.target.kind === 'CAPABILITY_BINDING') {
-    const targetBindingId = entry.target.bindingId;
-    const binding = capability.bindings.find(
-      (candidate) =>
-        candidate.bindingId === targetBindingId &&
-        (candidate.tenantId === undefined || candidate.tenantId === tenantId),
-    );
-    if (binding === undefined) return { status: 'NOT_FOUND', authorizesExecution: false };
+    const bindingSelection = selectBindingForTenant(capability, entry.target.bindingId, tenantId);
+    if (bindingSelection.status !== 'FOUND') {
+      return { status: 'NOT_FOUND', authorizesExecution: false };
+    }
+    const binding = bindingSelection.binding;
     bindingId = binding.bindingId;
     if (capabilityAvailability === 'CURRENT_AVAILABLE') {
       currentAvailability = evaluateCapabilityAvailability(binding.availability, nowEpochMs);

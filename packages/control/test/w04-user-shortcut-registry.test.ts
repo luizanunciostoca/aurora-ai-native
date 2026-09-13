@@ -179,6 +179,57 @@ test('preserves capability-level unavailability before evaluating a current bind
   assert.equal(resolved.currentAvailability, 'UNAVAILABLE');
 });
 
+test('prefers an exact-tenant binding over an earlier foreign duplicate binding id', () => {
+  const capabilities = createCapabilityRegistry('w04-shortcuts.1', [
+    capability({
+      bindings: [
+        {
+          bindingId: 'android-package:com.spotify.music',
+          targetKind: 'DEVICE',
+          compatibilityKey: 'android.app.launch.v1',
+          tenantId: otherTenant,
+          availability: {
+            state: 'UNAVAILABLE',
+            observedAt: '2026-09-12T18:59:00.000Z',
+            maxAgeMs: 600_000,
+            source: 'android-app-discovery',
+          },
+        },
+        {
+          bindingId: 'android-package:com.spotify.music',
+          targetKind: 'DEVICE',
+          compatibilityKey: 'android.app.launch.v1',
+          tenantId: tenant,
+          availability: {
+            state: 'AVAILABLE',
+            observedAt: '2026-09-12T18:59:00.000Z',
+            maxAgeMs: 600_000,
+            source: 'android-app-discovery',
+          },
+        },
+      ],
+    }),
+  ]);
+  assert.equal(capabilities.status, 'CREATED');
+  if (capabilities.status !== 'CREATED') return;
+
+  const shortcuts = createUserShortcutRegistry('shortcuts.1', [shortcut()], capabilities.registry);
+  assert.equal(shortcuts.status, 'CREATED');
+  if (shortcuts.status !== 'CREATED') return;
+
+  const resolved = resolveUserShortcut(
+    shortcuts.registry,
+    capabilities.registry,
+    tenant,
+    correlation,
+    'spotify',
+    now,
+  );
+  assert.equal(resolved.status, 'RESOLVED');
+  if (resolved.status !== 'RESOLVED') return;
+  assert.equal(resolved.currentAvailability, 'CURRENT_AVAILABLE');
+});
+
 test('preserves tenant isolation and never falls through to a cross-tenant binding', () => {
   const capabilities = createCapabilityRegistry('w04-shortcuts.1', [capability()]);
   assert.equal(capabilities.status, 'CREATED');
@@ -222,4 +273,42 @@ test('rejects a shortcut whose capability binding belongs to another tenant', ()
   const result = createUserShortcutRegistry('shortcuts.1', [shortcut()], capabilities.registry);
   assert.equal(result.status, 'REJECTED');
   if (result.status === 'REJECTED') assert.equal(result.code, 'TENANT_MISMATCH');
+});
+
+test('allows registry creation when a tenant binding follows a foreign duplicate binding id', () => {
+  const capabilities = createCapabilityRegistry('w04-shortcuts.1', [
+    capability({
+      bindings: [
+        {
+          bindingId: 'android-package:com.spotify.music',
+          targetKind: 'DEVICE',
+          compatibilityKey: 'android.app.launch.v1',
+          tenantId: otherTenant,
+          availability: {
+            state: 'AVAILABLE',
+            observedAt: '2026-09-12T18:59:00.000Z',
+            maxAgeMs: 600_000,
+            source: 'android-app-discovery',
+          },
+        },
+        {
+          bindingId: 'android-package:com.spotify.music',
+          targetKind: 'DEVICE',
+          compatibilityKey: 'android.app.launch.v1',
+          tenantId: tenant,
+          availability: {
+            state: 'AVAILABLE',
+            observedAt: '2026-09-12T18:59:00.000Z',
+            maxAgeMs: 600_000,
+            source: 'android-app-discovery',
+          },
+        },
+      ],
+    }),
+  ]);
+  assert.equal(capabilities.status, 'CREATED');
+  if (capabilities.status !== 'CREATED') return;
+
+  const result = createUserShortcutRegistry('shortcuts.1', [shortcut()], capabilities.registry);
+  assert.equal(result.status, 'CREATED');
 });
