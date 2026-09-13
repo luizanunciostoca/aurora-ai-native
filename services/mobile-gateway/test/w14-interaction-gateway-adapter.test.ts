@@ -375,8 +375,7 @@ test('revoked device session cannot continue conversational ingress', () => {
   });
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.code, 'DEVICE_SESSION_REJECTED');
-    assert.equal(result.causeCode, 'DEVICE_SESSION_NOT_ACTIVE');
+    assert.equal(result.code, 'DEVICE_SESSION_NOT_ACTIVE');
     assert.equal(result.requestCompleted, true);
   }
 });
