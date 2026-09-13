@@ -22,7 +22,7 @@
     "workspace:check": "node ./tools/workspace/check.mjs",
     "workspace:list": "node ./tools/workspace/check.mjs --list",
     "format": "node ./tools/quality/run.mjs format:write",
-    "format:check": "prettier --write packages/control/src/shortcut-registry/registry.ts && git diff --no-color -- packages/control/src/shortcut-registry/registry.ts && exit 1",
+    "format:check": "node ./tools/quality/run.mjs format:check",
     "lint": "node ./tools/quality/run.mjs lint",
     "typecheck": "node ./tools/quality/run.mjs typecheck",
     "quality": "node ./tools/quality/run.mjs all",
