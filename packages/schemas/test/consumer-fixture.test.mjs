@@ -17,6 +17,7 @@ test('consumer can resolve root packages and governed subpaths', () => {
 
   const schemas = require('@aurora/schemas');
   const schemaConsent = require('@aurora/schemas/consent');
+  const schemaExperience = require('@aurora/schemas/experience');
   const schemaIdentityResolution = require('@aurora/schemas/identity-resolution');
   const schemaIds = require('@aurora/schemas/ids');
   const schemaJurisdiction = require('@aurora/schemas/jurisdiction');
@@ -51,7 +52,11 @@ test('consumer can resolve root packages and governed subpaths', () => {
   assert.ok(Array.isArray(contractTenantBoundary.TENANT_BOUNDARY_REASONS));
 
   assert.equal(typeof schemas.TenantIdSchema.parse, 'function');
+  assert.equal(typeof schemas.UnifiedInteractionInputSchema.parse, 'function');
   assert.equal(typeof schemaConsent.ConsentRecordSchema.parse, 'function');
+  assert.equal(typeof schemaExperience.UnifiedInteractionInputSchema.parse, 'function');
+  assert.equal(typeof schemaExperience.AuroraExperienceStateSnapshotSchema.parse, 'function');
+  assert.equal(typeof schemaExperience.VoiceRuntimeHealthSnapshotSchema.parse, 'function');
   assert.equal(typeof schemaIdentityResolution.IdentityResolutionRequestSchema.parse, 'function');
   assert.equal(typeof schemaIdentityResolution.IdentityResolutionResultSchema.parse, 'function');
   assert.equal(typeof schemaIds.CorrelationIdSchema.parse, 'function');
