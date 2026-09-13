@@ -171,11 +171,7 @@ function runtime(): Runtime {
 
   const store = new MemoryInteractionStore();
   let interactionNow = 1_000;
-  const interaction = new InteractionSessionManager(
-    store,
-    interactionIds(),
-    () => ++interactionNow,
-  );
+  const interaction = new InteractionSessionManager(store, interactionIds(), () => ++interactionNow);
   const adapter = new InteractionGatewayAdapter(gateway, deviceTrust, interaction, {
     ingressDataClassification: 'CONFIDENTIAL',
     clock: () => 2_000,
@@ -363,7 +359,7 @@ test('revoked device session cannot continue conversational ingress', () => {
   const revoked = rt.deviceTrust.revokeSession({
     deviceSessionId: DEVICE_SESSION_ID,
     connectionId: rt.connectionId,
-    revokedAtMs: 2_050,
+    revokedAtMs: 1_950,
     reasonReference: 'test:revoked',
   });
   assert.equal(revoked.ok, true);
