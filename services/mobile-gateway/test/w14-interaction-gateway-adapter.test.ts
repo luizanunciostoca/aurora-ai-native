@@ -179,7 +179,6 @@ function runtime(): Runtime {
   const adapter = new InteractionGatewayAdapter(gateway, deviceTrust, interaction, {
     ingressDataClassification: 'CONFIDENTIAL',
     clock: () => 2_000,
-    clock: () => 2_000,
   });
   let requestIndex = 0;
   return {
@@ -376,7 +375,8 @@ test('revoked device session cannot continue conversational ingress', () => {
   });
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.equal(result.code, 'DEVICE_SESSION_NOT_ACTIVE');
+    assert.equal(result.code, 'DEVICE_SESSION_REJECTED');
+    assert.equal(result.causeCode, 'DEVICE_SESSION_NOT_ACTIVE');
     assert.equal(result.requestCompleted, true);
   }
 });
@@ -396,7 +396,6 @@ test('adapter independently rejects a gateway/device binding mismatch', () => {
   };
   const adapter = new InteractionGatewayAdapter(rt.gateway, spoofTrust, rt.interaction, {
     ingressDataClassification: 'CONFIDENTIAL',
-    clock: () => 2_000,
     clock: () => 2_000,
   });
   const result = adapter.open({
@@ -455,7 +454,7 @@ test('request completion failure after mutation requires state reconciliation', 
     completionFailGateway,
     rt.deviceTrust,
     rt.interaction,
-    { ingressDataClassification: 'CONFIDENTIAL' },
+    { ingressDataClassification: 'CONFIDENTIAL', clock: () => 2_000 },
   );
   const result = adapter.open({
     gatewayRequest: rt.request(2_000),
