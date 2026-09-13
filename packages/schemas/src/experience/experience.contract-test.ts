@@ -130,6 +130,26 @@ test('execution uncertain projection requires canonical reference and freshness'
   );
 });
 
+test('experience projection rejects stale bounds before the observation', () => {
+  assert.equal(
+    AuroraExperienceStateSnapshotSchema.safeParse({
+      kind: 'AURORA_EXPERIENCE_STATE',
+      schemaVersion: 1,
+      tenantId,
+      correlationId,
+      interactionSessionId,
+      state: 'SPEAKING',
+      observedAt,
+      staleAfter: '2026-09-12T21:59:59.999Z',
+      dataClassification: 'INTERNAL',
+      authorizesExecution: false,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    }).success,
+    false,
+  );
+});
+
 test('voice supervisor health rejects duplicate components and false healthy aggregate', () => {
   const base = {
     kind: 'VOICE_RUNTIME_HEALTH',
