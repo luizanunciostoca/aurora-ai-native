@@ -186,8 +186,17 @@ export const AuroraExperienceStateSnapshotSchema =
       throw new TypeError('AuroraExperienceStateSnapshot kind/schemaVersion is invalid');
     }
     requireNonAuthority(record, 'AuroraExperienceStateSnapshot');
+    const state = AuroraExperienceStateSchema.parse(record.state);
+    const observedAt = Rfc3339TimestampSchema.parse(record.observedAt);
+    const staleAfter =
+      record.staleAfter === undefined ? undefined : Rfc3339TimestampSchema.parse(record.staleAfter);
     const reasonCode = parseOptionalBoundedString(record.reasonCode, 'reasonCode');
     const reasonReference = parseOptionalBoundedString(record.reasonReference, 'reasonReference');
+    if (state === 'EXECUTION_UNCERTAIN' && (reasonReference === undefined || staleAfter === undefined)) {
+      throw new TypeError(
+        'EXECUTION_UNCERTAIN requires canonical reasonReference and staleAfter freshness',
+      );
+    }
     return Object.freeze({
       kind: 'AURORA_EXPERIENCE_STATE',
       schemaVersion: 1,
@@ -198,11 +207,9 @@ export const AuroraExperienceStateSnapshotSchema =
         : {
             interactionSessionId: InteractionSessionIdSchema.parse(record.interactionSessionId),
           }),
-      state: AuroraExperienceStateSchema.parse(record.state),
-      observedAt: Rfc3339TimestampSchema.parse(record.observedAt),
-      ...(record.staleAfter === undefined
-        ? {}
-        : { staleAfter: Rfc3339TimestampSchema.parse(record.staleAfter) }),
+      state,
+      observedAt,
+      ...(staleAfter === undefined ? {} : { staleAfter }),
       ...(reasonCode === undefined ? {} : { reasonCode }),
       ...(reasonReference === undefined ? {} : { reasonReference }),
       dataClassification: DataClassificationSchema.parse(record.dataClassification),
@@ -278,8 +285,11 @@ export const VoiceRuntimeHealthSnapshotSchema = createRuntimeSchema<VoiceRuntime
       throw new TypeError('components must not contain duplicate component identities');
     }
     const state = VoiceRuntimeHealthStateSchema.parse(record.state);
-    if (state === 'HEALTHY' && components.some((entry) => entry.state !== 'HEALTHY')) {
-      throw new TypeError('HEALTHY aggregate state cannot contain an unhealthy component');
+    if (
+      state === 'HEALTHY' &&
+      (components.length !== MAX_COMPONENTS || components.some((entry) => entry.state !== 'HEALTHY'))
+    ) {
+      throw new TypeError('HEALTHY aggregate state requires every voice component to be HEALTHY');
     }
     return Object.freeze({
       kind: 'VOICE_RUNTIME_HEALTH',
