@@ -116,9 +116,8 @@ function targetExistsForTenant(
     return 'TENANT_MISMATCH';
   }
   if (entry.target.kind === 'CAPABILITY') return 'OK';
-  const binding = capability.bindings.find(
-    (candidate) => candidate.bindingId === entry.target.bindingId,
-  );
+  const targetBindingId = entry.target.bindingId;
+  const binding = capability.bindings.find((candidate) => candidate.bindingId === targetBindingId);
   if (binding === undefined) return 'UNKNOWN_BINDING';
   if (binding.tenantId !== undefined && binding.tenantId !== entry.tenantId) {
     return 'TENANT_MISMATCH';
@@ -244,9 +243,10 @@ export function resolveUserShortcut(
   let currentAvailability = evaluateCapabilityAvailability(capability.availability, nowEpochMs);
   let bindingId: string | undefined;
   if (entry.target.kind === 'CAPABILITY_BINDING') {
+    const targetBindingId = entry.target.bindingId;
     const binding = capability.bindings.find(
       (candidate) =>
-        candidate.bindingId === entry.target.bindingId &&
+        candidate.bindingId === targetBindingId &&
         (candidate.tenantId === undefined || candidate.tenantId === tenantId),
     );
     if (binding === undefined) return { status: 'NOT_FOUND', authorizesExecution: false };
