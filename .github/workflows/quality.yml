@@ -21,11 +21,6 @@ jobs:
           node-version: 22.16.0
           cache: npm
       - run: npm ci
-      - name: Diagnostic canonical Prettier output
-        run: |
-          ./node_modules/.bin/prettier --write services/mobile-gateway/test/w14-interaction-session-store-rejected.test.ts
-          git diff -- services/mobile-gateway/test/w14-interaction-session-store-rejected.test.ts
-          exit 1
       - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
