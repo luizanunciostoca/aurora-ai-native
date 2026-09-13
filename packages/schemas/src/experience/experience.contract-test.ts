@@ -1,7 +1,7 @@
 // @ts-expect-error -- schemas contract harness intentionally has no @types/node.
-import assert from 'node:assert/strict';
+import * as assert from 'node:assert/strict';
 // @ts-expect-error -- schemas contract harness intentionally has no @types/node.
-import test from 'node:test';
+import { test } from 'node:test';
 
 import {
   AuroraExperienceStateSnapshotSchema,
