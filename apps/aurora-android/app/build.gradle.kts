@@ -11,23 +11,45 @@ val auroraReleaseTupleId = providers.environmentVariable("AURORA_RELEASE_TUPLE_I
 val auroraLocalGatewayOrigin =
     providers.environmentVariable("AURORA_LOCAL_GATEWAY_ORIGIN").orElse("http://10.0.2.2:8080").get()
 
-val physicalDevSigningValues =
-    mapOf(
-        "storeFile" to providers.environmentVariable("AURORA_PHYSICAL_DEV_KEYSTORE").orNull,
-        "storePassword" to providers.environmentVariable("AURORA_PHYSICAL_DEV_STORE_PASSWORD").orNull,
-        "keyAlias" to providers.environmentVariable("AURORA_PHYSICAL_DEV_KEY_ALIAS").orNull,
-        "keyPassword" to providers.environmentVariable("AURORA_PHYSICAL_DEV_KEY_PASSWORD").orNull,
+val physicalDevSigningEnvironment =
+    listOf(
+        "AURORA_PHYSICAL_DEV_KEYSTORE",
+        "AURORA_PHYSICAL_DEV_STORE_PASSWORD",
+        "AURORA_PHYSICAL_DEV_KEY_ALIAS",
+        "AURORA_PHYSICAL_DEV_KEY_PASSWORD",
     )
+val physicalDevSigningRequested =
+    physicalDevSigningEnvironment.any { providers.environmentVariable(it).isPresent }
+
+// The physical-development signing lane handles persistent key material. Never resolve those values
+// into AGP's signing model while Gradle configuration caching is active, because the configured model
+// can be serialized to disk. Normal unsigned/debug builds retain the repository-wide cache setting;
+// physical signing must be invoked explicitly with --no-configuration-cache.
+require(!physicalDevSigningRequested || !gradle.startParameter.isConfigurationCacheRequested) {
+    "physical development signing requires --no-configuration-cache so signing credentials are not persisted in Gradle configuration-cache state"
+}
+
+val physicalDevSigningValues =
+    if (physicalDevSigningRequested) {
+        mapOf(
+            "storeFile" to providers.environmentVariable("AURORA_PHYSICAL_DEV_KEYSTORE").orNull,
+            "storePassword" to providers.environmentVariable("AURORA_PHYSICAL_DEV_STORE_PASSWORD").orNull,
+            "keyAlias" to providers.environmentVariable("AURORA_PHYSICAL_DEV_KEY_ALIAS").orNull,
+            "keyPassword" to providers.environmentVariable("AURORA_PHYSICAL_DEV_KEY_PASSWORD").orNull,
+        )
+    } else {
+        emptyMap()
+    }
 val configuredPhysicalDevSigningValues =
     physicalDevSigningValues.filterValues { !it.isNullOrBlank() }
 require(
     configuredPhysicalDevSigningValues.isEmpty() ||
-        configuredPhysicalDevSigningValues.size == physicalDevSigningValues.size,
+        configuredPhysicalDevSigningValues.size == physicalDevSigningEnvironment.size,
 ) {
     "physical development signing must be either fully configured or completely absent"
 }
 val physicalDevSigningConfigured =
-    configuredPhysicalDevSigningValues.size == physicalDevSigningValues.size
+    configuredPhysicalDevSigningValues.size == physicalDevSigningEnvironment.size
 
 android {
     namespace = "ai.aurora.device"
