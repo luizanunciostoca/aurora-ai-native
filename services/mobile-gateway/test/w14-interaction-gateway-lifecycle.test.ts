@@ -59,7 +59,10 @@ function stored(state: 'ACTIVE' | 'SUSPENDED' | 'ENDED'): StoredInteractionSessi
       dataClassification: 'CONFIDENTIAL',
       resume:
         state === 'SUSPENDED'
-          ? { resumable: true, resumableUntil: '2026-09-13T08:01:00.000Z' as Rfc3339Timestamp }
+          ? {
+              resumable: true,
+              resumableUntil: '2026-09-13T08:01:00.000Z' as Rfc3339Timestamp,
+            }
           : { resumable: false },
       references: { artifactRefs: [], pendingHumanControlRequestRefs: [] },
       turns: [],
@@ -70,7 +73,9 @@ function stored(state: 'ACTIVE' | 'SUSPENDED' | 'ENDED'): StoredInteractionSessi
   };
 }
 
-function success(state: 'ACTIVE' | 'SUSPENDED' | 'ENDED'): InteractionSessionManagerResult {
+function success(
+  state: 'ACTIVE' | 'SUSPENDED' | 'ENDED',
+): InteractionSessionManagerResult {
   return {
     ok: true,
     value: stored(state),
@@ -92,7 +97,10 @@ function failure(code: InteractionSessionManagerErrorCode): InteractionSessionMa
   };
 }
 
-function snapshot(state: 'ACTIVE' | 'COMPLETED', requestId: string): GatewayRequestSnapshot {
+function snapshot(
+  state: 'ACTIVE' | 'COMPLETED',
+  requestId: string,
+): GatewayRequestSnapshot {
   return {
     requestId,
     sessionId: GATEWAY_SESSION_ID,
@@ -105,7 +113,10 @@ function snapshot(state: 'ACTIVE' | 'COMPLETED', requestId: string): GatewayRequ
   };
 }
 
-function gateway(): GatewayInteractionRequestPort & { begins: string[]; completes: string[] } {
+function gateway(): GatewayInteractionRequestPort & {
+  begins: string[];
+  completes: string[];
+} {
   const begins: string[] = [];
   const completes: string[] = [];
   return {
@@ -191,7 +202,9 @@ function input(index: number) {
   };
 }
 
-function continuity(overrides: Partial<InteractionContinuityPort> = {}): InteractionContinuityPort {
+function continuity(
+  overrides: Partial<InteractionContinuityPort> = {},
+): InteractionContinuityPort {
   return {
     open: () => success('ACTIVE'),
     current: () => success('ACTIVE'),
