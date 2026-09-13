@@ -103,7 +103,11 @@ function validShortcutShape(entry: UserShortcutEntry): boolean {
   ) {
     return false;
   }
-  return entry.target.kind === 'CAPABILITY' || nonEmptyBounded(entry.target.bindingId);
+  if (entry.target.kind === 'CAPABILITY') return true;
+  if (entry.target.kind === 'CAPABILITY_BINDING') {
+    return nonEmptyBounded(entry.target.bindingId);
+  }
+  return false;
 }
 
 function targetExistsForTenant(
@@ -240,7 +244,8 @@ export function resolveUserShortcut(
     return { status: 'NOT_FOUND', authorizesExecution: false };
   }
 
-  let currentAvailability = evaluateCapabilityAvailability(capability.availability, nowEpochMs);
+  const capabilityAvailability = evaluateCapabilityAvailability(capability.availability, nowEpochMs);
+  let currentAvailability = capabilityAvailability;
   let bindingId: string | undefined;
   if (entry.target.kind === 'CAPABILITY_BINDING') {
     const targetBindingId = entry.target.bindingId;
@@ -251,7 +256,9 @@ export function resolveUserShortcut(
     );
     if (binding === undefined) return { status: 'NOT_FOUND', authorizesExecution: false };
     bindingId = binding.bindingId;
-    currentAvailability = evaluateCapabilityAvailability(binding.availability, nowEpochMs);
+    if (capabilityAvailability === 'CURRENT_AVAILABLE') {
+      currentAvailability = evaluateCapabilityAvailability(binding.availability, nowEpochMs);
+    }
   }
 
   return Object.freeze({
