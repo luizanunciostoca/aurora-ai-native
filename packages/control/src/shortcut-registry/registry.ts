@@ -244,7 +244,10 @@ export function resolveUserShortcut(
     return { status: 'NOT_FOUND', authorizesExecution: false };
   }
 
-  const capabilityAvailability = evaluateCapabilityAvailability(capability.availability, nowEpochMs);
+  const capabilityAvailability = evaluateCapabilityAvailability(
+    capability.availability,
+    nowEpochMs,
+  );
   let currentAvailability = capabilityAvailability;
   let bindingId: string | undefined;
   if (entry.target.kind === 'CAPABILITY_BINDING') {
