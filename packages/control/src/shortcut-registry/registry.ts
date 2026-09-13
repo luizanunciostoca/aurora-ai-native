@@ -1,4 +1,7 @@
-import type { CorrelationId, TenantId } from '../../../contracts/src/ids/types.ts';
+import type {
+  CorrelationId,
+  TenantId,
+} from '../../../contracts/src/ids/types.ts';
 import {
   evaluateCapabilityAvailability,
   findCapability,
@@ -15,7 +18,8 @@ export const USER_SHORTCUT_TARGET_KINDS = [
   'CAPABILITY',
   'CAPABILITY_BINDING',
 ] as const;
-export type UserShortcutTargetKind = (typeof USER_SHORTCUT_TARGET_KINDS)[number];
+export type UserShortcutTargetKind =
+  (typeof USER_SHORTCUT_TARGET_KINDS)[number];
 
 export type UserShortcutTarget =
   | {
@@ -82,7 +86,10 @@ export type UserShortcutResolveResult =
       readonly retryAuthorized: false;
     };
 
-function nonEmptyBounded(value: string, maxLength = MAX_REFERENCE_CHARS): boolean {
+function nonEmptyBounded(
+  value: string,
+  maxLength = MAX_REFERENCE_CHARS,
+): boolean {
   return value.trim().length > 0 && value.length <= maxLength;
 }
 
@@ -110,7 +117,9 @@ function validShortcutShape(entry: UserShortcutEntry): boolean {
   ) {
     return false;
   }
-  return entry.target.kind === 'CAPABILITY' || nonEmptyBounded(entry.target.bindingId);
+  return (
+    entry.target.kind === 'CAPABILITY' || nonEmptyBounded(entry.target.bindingId)
+  );
 }
 
 function targetExistsForTenant(
@@ -119,7 +128,10 @@ function targetExistsForTenant(
 ): 'OK' | 'UNKNOWN_CAPABILITY' | 'UNKNOWN_BINDING' | 'TENANT_MISMATCH' {
   const capability = findCapability(capabilities, entry.target.capabilityId);
   if (capability === undefined) return 'UNKNOWN_CAPABILITY';
-  if (capability.tenantId !== undefined && capability.tenantId !== entry.tenantId) {
+  if (
+    capability.tenantId !== undefined &&
+    capability.tenantId !== entry.tenantId
+  ) {
     return 'TENANT_MISMATCH';
   }
   if (entry.target.kind === 'CAPABILITY') return 'OK';
@@ -127,7 +139,10 @@ function targetExistsForTenant(
     (candidate) => candidate.bindingId === entry.target.bindingId,
   );
   if (binding === undefined) return 'UNKNOWN_BINDING';
-  if (binding.tenantId !== undefined && binding.tenantId !== entry.tenantId) {
+  if (
+    binding.tenantId !== undefined &&
+    binding.tenantId !== entry.tenantId
+  ) {
     return 'TENANT_MISMATCH';
   }
   return 'OK';
@@ -215,7 +230,9 @@ export function createUserShortcutRegistry(
       registryKind: 'AURORA_USER_SHORTCUT_REGISTRY',
       registryVersion,
       entries: Object.freeze(
-        frozenEntries.sort((left, right) => left.shortcutId.localeCompare(right.shortcutId)),
+        frozenEntries.sort((left, right) =>
+          left.shortcutId.localeCompare(right.shortcutId),
+        ),
       ),
     }),
   };
@@ -230,9 +247,8 @@ export function resolveUserShortcut(
   nowEpochMs: number,
 ): UserShortcutResolveResult {
   const normalized = normalizeShortcutAlias(utterance);
-  if (!validAlias(normalized)) {
+  if (!validAlias(normalized))
     return { status: 'NOT_FOUND', authorizesExecution: false };
-  }
 
   const entry = registry.entries.find(
     (candidate) =>
@@ -240,9 +256,8 @@ export function resolveUserShortcut(
       candidate.tenantId === tenantId &&
       candidate.aliases.some((alias) => alias === normalized),
   );
-  if (entry === undefined) {
+  if (entry === undefined)
     return { status: 'NOT_FOUND', authorizesExecution: false };
-  }
 
   const capability = findCapability(capabilities, entry.target.capabilityId);
   if (
@@ -252,7 +267,10 @@ export function resolveUserShortcut(
     return { status: 'NOT_FOUND', authorizesExecution: false };
   }
 
-  let currentAvailability = evaluateCapabilityAvailability(capability.availability, nowEpochMs);
+  let currentAvailability = evaluateCapabilityAvailability(
+    capability.availability,
+    nowEpochMs,
+  );
   let bindingId: string | undefined;
   if (entry.target.kind === 'CAPABILITY_BINDING') {
     const binding = capability.bindings.find(
@@ -260,11 +278,13 @@ export function resolveUserShortcut(
         candidate.bindingId === entry.target.bindingId &&
         (candidate.tenantId === undefined || candidate.tenantId === tenantId),
     );
-    if (binding === undefined) {
+    if (binding === undefined)
       return { status: 'NOT_FOUND', authorizesExecution: false };
-    }
     bindingId = binding.bindingId;
-    currentAvailability = evaluateCapabilityAvailability(binding.availability, nowEpochMs);
+    currentAvailability = evaluateCapabilityAvailability(
+      binding.availability,
+      nowEpochMs,
+    );
   }
 
   return Object.freeze({
