@@ -133,6 +133,52 @@ test('rejects duplicate normalized aliases and unknown capability targets', () =
   if (unknown.status === 'REJECTED') assert.equal(unknown.code, 'UNKNOWN_CAPABILITY');
 });
 
+test('rejects malformed runtime target kinds instead of widening to capability resolution', () => {
+  const capabilities = createCapabilityRegistry('w04-shortcuts.1', [capability()]);
+  assert.equal(capabilities.status, 'CREATED');
+  if (capabilities.status !== 'CREATED') return;
+
+  const malformed = shortcut({
+    target: {
+      kind: 'OTHER',
+      capabilityId: 'device.app.launch',
+      bindingId: 'android-package:com.spotify.music',
+    } as unknown as UserShortcutEntry['target'],
+  });
+  const result = createUserShortcutRegistry('shortcuts.1', [malformed], capabilities.registry);
+  assert.equal(result.status, 'REJECTED');
+  if (result.status === 'REJECTED') assert.equal(result.code, 'INVALID_SHORTCUT');
+});
+
+test('preserves capability-level unavailability before evaluating a current binding', () => {
+  const blockedCapability = capability({
+    availability: {
+      state: 'UNAVAILABLE',
+      observedAt: '2026-09-12T18:59:00.000Z',
+      maxAgeMs: 600_000,
+      source: 'android-app-discovery',
+    },
+  });
+  const capabilities = createCapabilityRegistry('w04-shortcuts.1', [blockedCapability]);
+  assert.equal(capabilities.status, 'CREATED');
+  if (capabilities.status !== 'CREATED') return;
+  const shortcuts = createUserShortcutRegistry('shortcuts.1', [shortcut()], capabilities.registry);
+  assert.equal(shortcuts.status, 'CREATED');
+  if (shortcuts.status !== 'CREATED') return;
+
+  const resolved = resolveUserShortcut(
+    shortcuts.registry,
+    capabilities.registry,
+    tenant,
+    correlation,
+    'spotify',
+    now,
+  );
+  assert.equal(resolved.status, 'RESOLVED');
+  if (resolved.status !== 'RESOLVED') return;
+  assert.equal(resolved.currentAvailability, 'UNAVAILABLE');
+});
+
 test('preserves tenant isolation and never falls through to a cross-tenant binding', () => {
   const capabilities = createCapabilityRegistry('w04-shortcuts.1', [capability()]);
   assert.equal(capabilities.status, 'CREATED');
