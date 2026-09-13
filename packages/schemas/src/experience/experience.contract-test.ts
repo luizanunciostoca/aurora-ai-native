@@ -54,8 +54,9 @@ test('unifies wake voice and typed input without granting authority', () => {
 
 test('rejects source/modality spoofing, raw audio, and authority injection', () => {
   assert.equal(
-    UnifiedInteractionInputSchema.safeParse(unifiedInput({ source: 'TEXT_INPUT', modality: 'VOICE' }))
-      .success,
+    UnifiedInteractionInputSchema.safeParse(
+      unifiedInput({ source: 'TEXT_INPUT', modality: 'VOICE' }),
+    ).success,
     false,
   );
   assert.equal(
@@ -108,7 +109,11 @@ test('voice supervisor health rejects duplicate components and false healthy agg
     state: 'DEGRADED',
     components: [
       { component: 'WAKE_WORD', state: 'HEALTHY' },
-      { component: 'STT', state: 'DEGRADED', reasonCode: 'NETWORK_FALLBACK' },
+      {
+        component: 'STT',
+        state: 'DEGRADED',
+        reasonCode: 'NETWORK_FALLBACK',
+      },
     ],
     observedAt,
     dataClassification: 'INTERNAL',
