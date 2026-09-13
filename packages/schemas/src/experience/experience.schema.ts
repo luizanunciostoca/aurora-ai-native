@@ -189,9 +189,10 @@ export const AuroraExperienceStateSnapshotSchema =
     const state = AuroraExperienceStateSchema.parse(record.state);
     const observedAt = Rfc3339TimestampSchema.parse(record.observedAt);
     const staleAfter =
-      record.staleAfter === undefined
-        ? undefined
-        : Rfc3339TimestampSchema.parse(record.staleAfter);
+      record.staleAfter === undefined ? undefined : Rfc3339TimestampSchema.parse(record.staleAfter);
+    if (staleAfter !== undefined && Date.parse(staleAfter) < Date.parse(observedAt)) {
+      throw new TypeError('staleAfter must not precede observedAt');
+    }
     const reasonCode = parseOptionalBoundedString(record.reasonCode, 'reasonCode');
     const reasonReference = parseOptionalBoundedString(record.reasonReference, 'reasonReference');
     if (
