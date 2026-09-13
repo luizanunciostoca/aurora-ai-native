@@ -52,101 +52,90 @@ test('unifies wake voice and typed input without granting authority', () => {
   assert.equal(text.modality, 'TEXT');
 });
 
-test(
-  'rejects source/modality spoofing, raw audio, and authority injection',
-  () => {
-    assert.equal(
-      UnifiedInteractionInputSchema.safeParse(
-        unifiedInput({ source: 'TEXT_INPUT', modality: 'VOICE' }),
-      ).success,
-      false,
-    );
-    assert.equal(
-      UnifiedInteractionInputSchema.safeParse(
-        unifiedInput({
-          content: {
-            kind: 'TEXT',
-            text: 'raw audio attempt',
-            languageTag: 'pt-BR',
-            audio: 'pcm-bytes',
-          },
-        }),
-      ).success,
-      false,
-    );
-    assert.equal(
-      UnifiedInteractionInputSchema.safeParse(
-        unifiedInput({ authorizesExecution: true }),
-      ).success,
-      false,
-    );
-  },
-);
-
-test(
-  'experience projection supports speaking state but remains non-authoritative',
-  () => {
-    const snapshot = AuroraExperienceStateSnapshotSchema.parse({
-      kind: 'AURORA_EXPERIENCE_STATE',
-      schemaVersion: 1,
-      tenantId,
-      correlationId,
-      interactionSessionId,
-      state: 'SPEAKING',
-      observedAt,
-      staleAfter: '2026-09-12T22:00:05.000Z',
-      reasonCode: 'TTS_ACTIVE',
-      reasonReference: 'voice-runtime:tts',
-      dataClassification: 'INTERNAL',
-      authorizesExecution: false,
-      provesExecutionSuccess: false,
-      retryAuthorized: false,
-    });
-    assert.equal(snapshot.state, 'SPEAKING');
-    assert.equal(snapshot.authorizesExecution, false);
-  },
-);
-
-test(
-  'voice supervisor health rejects duplicate components and false healthy aggregate',
-  () => {
-    const base = {
-      kind: 'VOICE_RUNTIME_HEALTH',
-      schemaVersion: 1,
-      tenantId,
-      correlationId,
-      interactionSessionId,
-      state: 'DEGRADED',
-      components: [
-        { component: 'WAKE_WORD', state: 'HEALTHY' },
-        {
-          component: 'STT',
-          state: 'DEGRADED',
-          reasonCode: 'NETWORK_FALLBACK',
+test('rejects source/modality spoofing, raw audio, and authority injection', () => {
+  assert.equal(
+    UnifiedInteractionInputSchema.safeParse(
+      unifiedInput({ source: 'TEXT_INPUT', modality: 'VOICE' }),
+    ).success,
+    false,
+  );
+  assert.equal(
+    UnifiedInteractionInputSchema.safeParse(
+      unifiedInput({
+        content: {
+          kind: 'TEXT',
+          text: 'raw audio attempt',
+          languageTag: 'pt-BR',
+          audio: 'pcm-bytes',
         },
-      ],
-      observedAt,
-      dataClassification: 'INTERNAL',
-      authorizesExecution: false,
-      provesExecutionSuccess: false,
-      retryAuthorized: false,
-    };
-    const degraded = VoiceRuntimeHealthSnapshotSchema.parse(base);
-    assert.equal(degraded.state, 'DEGRADED');
+      }),
+    ).success,
+    false,
+  );
+  assert.equal(
+    UnifiedInteractionInputSchema.safeParse(unifiedInput({ authorizesExecution: true })).success,
+    false,
+  );
+});
 
-    assert.equal(
-      VoiceRuntimeHealthSnapshotSchema.safeParse({
-        ...base,
-        components: [
-          { component: 'STT', state: 'DEGRADED' },
-          { component: 'STT', state: 'HEALTHY' },
-        ],
-      }).success,
-      false,
-    );
-    assert.equal(
-      VoiceRuntimeHealthSnapshotSchema.safeParse({ ...base, state: 'HEALTHY' }).success,
-      false,
-    );
-  },
-);
+test('experience projection supports speaking state but remains non-authoritative', () => {
+  const snapshot = AuroraExperienceStateSnapshotSchema.parse({
+    kind: 'AURORA_EXPERIENCE_STATE',
+    schemaVersion: 1,
+    tenantId,
+    correlationId,
+    interactionSessionId,
+    state: 'SPEAKING',
+    observedAt,
+    staleAfter: '2026-09-12T22:00:05.000Z',
+    reasonCode: 'TTS_ACTIVE',
+    reasonReference: 'voice-runtime:tts',
+    dataClassification: 'INTERNAL',
+    authorizesExecution: false,
+    provesExecutionSuccess: false,
+    retryAuthorized: false,
+  });
+  assert.equal(snapshot.state, 'SPEAKING');
+  assert.equal(snapshot.authorizesExecution, false);
+});
+
+test('voice supervisor health rejects duplicate components and false healthy aggregate', () => {
+  const base = {
+    kind: 'VOICE_RUNTIME_HEALTH',
+    schemaVersion: 1,
+    tenantId,
+    correlationId,
+    interactionSessionId,
+    state: 'DEGRADED',
+    components: [
+      { component: 'WAKE_WORD', state: 'HEALTHY' },
+      {
+        component: 'STT',
+        state: 'DEGRADED',
+        reasonCode: 'NETWORK_FALLBACK',
+      },
+    ],
+    observedAt,
+    dataClassification: 'INTERNAL',
+    authorizesExecution: false,
+    provesExecutionSuccess: false,
+    retryAuthorized: false,
+  };
+  const degraded = VoiceRuntimeHealthSnapshotSchema.parse(base);
+  assert.equal(degraded.state, 'DEGRADED');
+
+  assert.equal(
+    VoiceRuntimeHealthSnapshotSchema.safeParse({
+      ...base,
+      components: [
+        { component: 'STT', state: 'DEGRADED' },
+        { component: 'STT', state: 'HEALTHY' },
+      ],
+    }).success,
+    false,
+  );
+  assert.equal(
+    VoiceRuntimeHealthSnapshotSchema.safeParse({ ...base, state: 'HEALTHY' }).success,
+    false,
+  );
+});
