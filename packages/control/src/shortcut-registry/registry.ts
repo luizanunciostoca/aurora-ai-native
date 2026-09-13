@@ -11,7 +11,10 @@ const MAX_ALIASES_PER_SHORTCUT = 16;
 const MAX_ALIAS_CHARS = 128;
 const MAX_REFERENCE_CHARS = 512;
 
-export const USER_SHORTCUT_TARGET_KINDS = ['CAPABILITY', 'CAPABILITY_BINDING'] as const;
+export const USER_SHORTCUT_TARGET_KINDS = [
+  'CAPABILITY',
+  'CAPABILITY_BINDING',
+] as const;
 export type UserShortcutTargetKind = (typeof USER_SHORTCUT_TARGET_KINDS)[number];
 
 export type UserShortcutTarget =
@@ -44,7 +47,10 @@ export interface UserShortcutRegistrySnapshot {
 }
 
 export type UserShortcutRegistryCreateResult =
-  | { readonly status: 'CREATED'; readonly registry: UserShortcutRegistrySnapshot }
+  | {
+      readonly status: 'CREATED';
+      readonly registry: UserShortcutRegistrySnapshot;
+    }
   | {
       readonly status: 'REJECTED';
       readonly code:
@@ -81,7 +87,11 @@ function nonEmptyBounded(value: string, maxLength = MAX_REFERENCE_CHARS): boolea
 }
 
 export function normalizeShortcutAlias(value: string): string {
-  return value.normalize('NFKC').trim().toLocaleLowerCase('en-US').replace(/\s+/gu, ' ');
+  return value
+    .normalize('NFKC')
+    .trim()
+    .toLocaleLowerCase('en-US')
+    .replace(/\s+/gu, ' ');
 }
 
 function validAlias(value: string): boolean {
@@ -113,7 +123,9 @@ function targetExistsForTenant(
     return 'TENANT_MISMATCH';
   }
   if (entry.target.kind === 'CAPABILITY') return 'OK';
-  const binding = capability.bindings.find((candidate) => candidate.bindingId === entry.target.bindingId);
+  const binding = capability.bindings.find(
+    (candidate) => candidate.bindingId === entry.target.bindingId,
+  );
   if (binding === undefined) return 'UNKNOWN_BINDING';
   if (binding.tenantId !== undefined && binding.tenantId !== entry.tenantId) {
     return 'TENANT_MISMATCH';
@@ -139,28 +151,50 @@ export function createUserShortcutRegistry(
 
   for (const entry of entries) {
     if (!validShortcutShape(entry)) {
-      return { status: 'REJECTED', code: 'INVALID_SHORTCUT', shortcutId: entry.shortcutId };
+      return {
+        status: 'REJECTED',
+        code: 'INVALID_SHORTCUT',
+        shortcutId: entry.shortcutId,
+      };
     }
     if (shortcutIds.has(entry.shortcutId)) {
-      return { status: 'REJECTED', code: 'DUPLICATE_SHORTCUT_ID', shortcutId: entry.shortcutId };
+      return {
+        status: 'REJECTED',
+        code: 'DUPLICATE_SHORTCUT_ID',
+        shortcutId: entry.shortcutId,
+      };
     }
     shortcutIds.add(entry.shortcutId);
 
     const targetStatus = targetExistsForTenant(entry, capabilities);
     if (targetStatus !== 'OK') {
-      return { status: 'REJECTED', code: targetStatus, shortcutId: entry.shortcutId };
+      return {
+        status: 'REJECTED',
+        code: targetStatus,
+        shortcutId: entry.shortcutId,
+      };
     }
 
     const normalizedAliases = entry.aliases.map(normalizeShortcutAlias);
     const localAliases = new Set<string>();
     for (const alias of normalizedAliases) {
       if (localAliases.has(alias)) {
-        return { status: 'REJECTED', code: 'DUPLICATE_ALIAS', shortcutId: entry.shortcutId, alias };
+        return {
+          status: 'REJECTED',
+          code: 'DUPLICATE_ALIAS',
+          shortcutId: entry.shortcutId,
+          alias,
+        };
       }
       localAliases.add(alias);
       const tenantAliasKey = `${entry.tenantId}\u0000${alias}`;
       if (aliasesByTenant.has(tenantAliasKey)) {
-        return { status: 'REJECTED', code: 'DUPLICATE_ALIAS', shortcutId: entry.shortcutId, alias };
+        return {
+          status: 'REJECTED',
+          code: 'DUPLICATE_ALIAS',
+          shortcutId: entry.shortcutId,
+          alias,
+        };
       }
       aliasesByTenant.add(tenantAliasKey);
     }
@@ -196,7 +230,9 @@ export function resolveUserShortcut(
   nowEpochMs: number,
 ): UserShortcutResolveResult {
   const normalized = normalizeShortcutAlias(utterance);
-  if (!validAlias(normalized)) return { status: 'NOT_FOUND', authorizesExecution: false };
+  if (!validAlias(normalized)) {
+    return { status: 'NOT_FOUND', authorizesExecution: false };
+  }
 
   const entry = registry.entries.find(
     (candidate) =>
@@ -204,7 +240,9 @@ export function resolveUserShortcut(
       candidate.tenantId === tenantId &&
       candidate.aliases.some((alias) => alias === normalized),
   );
-  if (entry === undefined) return { status: 'NOT_FOUND', authorizesExecution: false };
+  if (entry === undefined) {
+    return { status: 'NOT_FOUND', authorizesExecution: false };
+  }
 
   const capability = findCapability(capabilities, entry.target.capabilityId);
   if (
@@ -222,7 +260,9 @@ export function resolveUserShortcut(
         candidate.bindingId === entry.target.bindingId &&
         (candidate.tenantId === undefined || candidate.tenantId === tenantId),
     );
-    if (binding === undefined) return { status: 'NOT_FOUND', authorizesExecution: false };
+    if (binding === undefined) {
+      return { status: 'NOT_FOUND', authorizesExecution: false };
+    }
     bindingId = binding.bindingId;
     currentAvailability = evaluateCapabilityAvailability(binding.availability, nowEpochMs);
   }
