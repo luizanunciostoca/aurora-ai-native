@@ -319,7 +319,7 @@ test('expired resume persists non-resumable state and adapter marks reconciliati
   });
   assert.equal(suspended.ok, true);
 
-  rt.setInteractionNow(2_000);
+  rt.setInteractionNow(2_001);
   const result = adapter.resume({
     gatewayRequest: rt.request(),
     deviceSessionId: DEVICE_SESSION_ID,
