@@ -73,9 +73,7 @@ function stored(state: 'ACTIVE' | 'SUSPENDED' | 'ENDED'): StoredInteractionSessi
   };
 }
 
-function success(
-  state: 'ACTIVE' | 'SUSPENDED' | 'ENDED',
-): InteractionSessionManagerResult {
+function success(state: 'ACTIVE' | 'SUSPENDED' | 'ENDED'): InteractionSessionManagerResult {
   return {
     ok: true,
     value: stored(state),
@@ -97,10 +95,7 @@ function failure(code: InteractionSessionManagerErrorCode): InteractionSessionMa
   };
 }
 
-function snapshot(
-  state: 'ACTIVE' | 'COMPLETED',
-  requestId: string,
-): GatewayRequestSnapshot {
+function snapshot(state: 'ACTIVE' | 'COMPLETED', requestId: string): GatewayRequestSnapshot {
   return {
     requestId,
     sessionId: GATEWAY_SESSION_ID,
@@ -202,9 +197,7 @@ function input(index: number) {
   };
 }
 
-function continuity(
-  overrides: Partial<InteractionContinuityPort> = {},
-): InteractionContinuityPort {
+function continuity(overrides: Partial<InteractionContinuityPort> = {}): InteractionContinuityPort {
   return {
     open: () => success('ACTIVE'),
     current: () => success('ACTIVE'),
