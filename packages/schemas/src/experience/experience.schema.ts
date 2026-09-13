@@ -186,6 +186,8 @@ export const AuroraExperienceStateSnapshotSchema =
       throw new TypeError('AuroraExperienceStateSnapshot kind/schemaVersion is invalid');
     }
     requireNonAuthority(record, 'AuroraExperienceStateSnapshot');
+    const reasonCode = parseOptionalBoundedString(record.reasonCode, 'reasonCode');
+    const reasonReference = parseOptionalBoundedString(record.reasonReference, 'reasonReference');
     return Object.freeze({
       kind: 'AURORA_EXPERIENCE_STATE',
       schemaVersion: 1,
@@ -201,14 +203,8 @@ export const AuroraExperienceStateSnapshotSchema =
       ...(record.staleAfter === undefined
         ? {}
         : { staleAfter: Rfc3339TimestampSchema.parse(record.staleAfter) }),
-      ...(parseOptionalBoundedString(record.reasonCode, 'reasonCode') === undefined
-        ? {}
-        : { reasonCode: parseOptionalBoundedString(record.reasonCode, 'reasonCode') }),
-      ...(parseOptionalBoundedString(record.reasonReference, 'reasonReference') === undefined
-        ? {}
-        : {
-            reasonReference: parseOptionalBoundedString(record.reasonReference, 'reasonReference'),
-          }),
+      ...(reasonCode === undefined ? {} : { reasonCode }),
+      ...(reasonReference === undefined ? {} : { reasonReference }),
       dataClassification: DataClassificationSchema.parse(record.dataClassification),
       authorizesExecution: false,
       provesExecutionSuccess: false,
