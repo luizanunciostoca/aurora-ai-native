@@ -78,8 +78,8 @@ Local verification on 2026-09-14:
 - The repository test runner passed its first 120 tests, then its build stage stopped because
   `tsc` was unavailable. This is not a full repository test-suite pass.
 - These checks are not a Gradle APK build, emulator rendering check or physical acceptance.
-- Exact-head CI and a draft PR are pending: automatic approval review blocked the GitHub push
-  because external publication requires explicit user authorization. Changes remain local.
+- Exact-head CI and device validation are pending on draft PR #529. Publication is complete;
+  this document does not claim CI or physical acceptance.
 
 Automated acceptance for this patch:
 
