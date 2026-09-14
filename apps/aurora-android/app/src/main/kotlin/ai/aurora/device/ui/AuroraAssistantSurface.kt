@@ -11,9 +11,16 @@ import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+
+internal data class AuroraActionFocusSnapshot(
+    val stableId: String,
+    val keyboardFocused: Boolean,
+    val accessibilityFocused: Boolean,
+)
 
 class AuroraAssistantSurface private constructor(
     private val activity: Activity,
@@ -73,26 +80,95 @@ class AuroraAssistantSurface private constructor(
     fun addPrimaryAction(
         label: String,
         action: () -> Unit,
-    ): Button = addAction(label = label, primary = true, action = action)
+    ): Button = addPrimaryAction(label, PRIMARY_ACTION_STABLE_ID, action)
+
+    fun addPrimaryAction(
+        label: String,
+        stableId: String,
+        action: () -> Unit,
+    ): Button = addAction(label = label, stableId = stableId, primary = true, action = action)
 
     fun addSecondaryAction(
         label: String,
         action: () -> Unit,
-    ): Button = addAction(label = label, primary = false, action = action)
+    ): Button = addSecondaryAction(label, "secondary:$label", action)
+
+    fun addSecondaryAction(
+        label: String,
+        stableId: String,
+        action: () -> Unit,
+    ): Button = addAction(label = label, stableId = stableId, primary = false, action = action)
+
+    fun captureActionFocus(): AuroraActionFocusSnapshot? {
+        for (container in arrayOf(primaryActions, actions)) {
+            for (index in 0 until container.childCount) {
+                val button = container.getChildAt(index) as? Button ?: continue
+                val keyboardFocused = button.hasFocus()
+                val accessibilityFocused =
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP && button.isAccessibilityFocused
+                if (keyboardFocused || accessibilityFocused) {
+                    val stableId = button.tag as? String ?: continue
+                    return AuroraActionFocusSnapshot(
+                        stableId = stableId,
+                        keyboardFocused = keyboardFocused,
+                        accessibilityFocused = accessibilityFocused,
+                    )
+                }
+            }
+        }
+        return null
+    }
+
+    fun restoreActionFocus(snapshot: AuroraActionFocusSnapshot?) {
+        if (snapshot == null) return
+        val exact = findAction(snapshot.stableId)
+        val target =
+            exact
+                ?: if (snapshot.stableId == PRIMARY_ACTION_STABLE_ID) {
+                    primaryActions.getChildAt(0) as? Button
+                } else {
+                    null
+                }
+                ?: return
+
+        if (snapshot.keyboardFocused) target.requestFocus()
+        if (snapshot.accessibilityFocused && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            target.post {
+                if (target.isAttachedToWindow && target.visibility == View.VISIBLE) {
+                    target.performAccessibilityAction(
+                        AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS,
+                        null,
+                    )
+                }
+            }
+        }
+    }
 
     fun clearActions() {
         primaryActions.removeAllViews()
         actions.removeAllViews()
     }
 
+    private fun findAction(stableId: String): Button? {
+        for (container in arrayOf(primaryActions, actions)) {
+            for (index in 0 until container.childCount) {
+                val button = container.getChildAt(index) as? Button ?: continue
+                if (button.tag == stableId) return button
+            }
+        }
+        return null
+    }
+
     private fun addAction(
         label: String,
+        stableId: String,
         primary: Boolean,
         action: () -> Unit,
     ): Button {
         val button =
             Button(activity).apply {
                 text = label
+                tag = stableId
                 contentDescription = label
                 isAllCaps = false
                 textSize = 16f
@@ -151,6 +227,8 @@ class AuroraAssistantSurface private constructor(
         }
 
     companion object {
+        private const val PRIMARY_ACTION_STABLE_ID = "primary"
+
         fun create(activity: Activity): AuroraAssistantSurface {
             activity.window.statusBarColor = Color.rgb(5, 9, 21)
             activity.window.navigationBarColor = Color.rgb(5, 9, 21)
@@ -184,7 +262,10 @@ class AuroraAssistantSurface private constructor(
                 },
             )
 
-            val orb = AuroraOrbView(activity)
+            val orb =
+                AuroraOrbView(activity).apply {
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }
             val configuration = activity.resources.configuration
             val orbSize =
                 AuroraActivityUi.dp(
