@@ -9,6 +9,8 @@ import android.os.Bundle
 import android.provider.Settings
 import ai.aurora.device.bootstrap.GatewayBootstrapSetupActivity
 import ai.aurora.device.config.AuroraEnvironment
+import ai.aurora.device.ui.AuroraActionRefreshPolicy
+import ai.aurora.device.ui.AuroraActionSetKey
 import ai.aurora.device.ui.AuroraAssistantStage
 import ai.aurora.device.ui.AuroraAssistantSurface
 import ai.aurora.device.ui.AuroraDeveloperModePreferences
@@ -36,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var microphonePermissionHistory: MicrophonePermissionRequestHistory
     private var assistantFeedback: String? = null
     private var wakeRuntimeRefreshAttempts = 0
+    private var lastActionSetKey: AuroraActionSetKey? = null
     private val wakeRuntimeRefreshRunnable =
         Runnable {
             if (::surface.isInitialized && !isFinishing && !isDestroyed) {
@@ -238,6 +241,26 @@ class MainActivity : Activity() {
         microphoneGranted: Boolean,
         privacyEnabled: Boolean,
     ) {
+        val developerModeEnabled = developerMode.enabled()
+        val showDeveloperToggle = aurora.environmentConfig.environment == AuroraEnvironment.LOCAL
+        val showLocalRuntime =
+            developerModeEnabled &&
+                showDeveloperToggle &&
+                aurora.environmentConfig.allowCleartextTraffic
+        val nextActionSetKey =
+            AuroraActionSetKey(
+                step = step,
+                primaryLabel = primaryLabel,
+                assistantSelected = assistantSelected,
+                microphoneGranted = microphoneGranted,
+                privacyEnabled = privacyEnabled,
+                developerModeEnabled = developerModeEnabled,
+                showLocalRuntime = showLocalRuntime,
+                showDeveloperToggle = showDeveloperToggle,
+            )
+        if (!AuroraActionRefreshPolicy.shouldRebuild(lastActionSetKey, nextActionSetKey)) return
+
+        val focusSnapshot = surface.captureActionFocus()
         surface.clearActions()
         surface.addPrimaryAction(primaryLabel) {
             when (step) {
@@ -258,39 +281,39 @@ class MainActivity : Activity() {
         }
 
         if (step != AuroraOnboardingStep.READY && microphoneGranted && !privacyEnabled) {
-            surface.addSecondaryAction("Falar sem wake word") { openVoiceSession() }
+            surface.addSecondaryAction("Falar sem wake word", ACTION_VOICE_WITHOUT_WAKE) { openVoiceSession() }
         }
 
         if (!assistantSelected && step != AuroraOnboardingStep.ASSISTANT_ROLE) {
-            surface.addSecondaryAction("Definir Aurora como assistente") {
+            surface.addSecondaryAction("Definir Aurora como assistente", ACTION_ASSISTANT_ROLE) {
                 handleAssistantLaunch(
                     AuroraAssistantRoleCoordinator.requestSelection(this, REQUEST_ASSISTANT_ROLE),
                 )
             }
         }
 
-        surface.addSecondaryAction("Voz, wake word e privacidade") {
+        surface.addSecondaryAction("Voz, wake word e privacidade", ACTION_WAKE_SETTINGS) {
             openWakeSetup()
         }
 
-        if (
-            developerMode.enabled() &&
-            aurora.environmentConfig.environment == AuroraEnvironment.LOCAL &&
-            aurora.environmentConfig.allowCleartextTraffic
-        ) {
-            surface.addSecondaryAction("Conectar runtime LOCAL") {
+        if (showLocalRuntime) {
+            surface.addSecondaryAction("Conectar runtime LOCAL", ACTION_LOCAL_RUNTIME) {
                 startActivity(Intent(this, GatewayBootstrapSetupActivity::class.java))
             }
         }
 
-        if (aurora.environmentConfig.environment == AuroraEnvironment.LOCAL) {
+        if (showDeveloperToggle) {
             surface.addSecondaryAction(
-                if (developerMode.enabled()) "Ocultar modo desenvolvedor" else "Modo desenvolvedor",
+                if (developerModeEnabled) "Ocultar modo desenvolvedor" else "Modo desenvolvedor",
+                ACTION_DEVELOPER_MODE,
             ) {
                 developerMode.setEnabled(!developerMode.enabled())
                 renderStatus()
             }
         }
+
+        lastActionSetKey = nextActionSetKey
+        surface.restoreActionFocus(focusSnapshot)
     }
 
     private fun openWakeSetup(action: WakeSetupOnboardingAction? = null) {
@@ -369,5 +392,10 @@ class MainActivity : Activity() {
         private const val REQUEST_MICROPHONE = 1402
         private const val WAKE_RUNTIME_REFRESH_MS = 500L
         private const val MAX_WAKE_RUNTIME_REFRESH_ATTEMPTS = 12
+        private const val ACTION_VOICE_WITHOUT_WAKE = "voice-without-wake"
+        private const val ACTION_ASSISTANT_ROLE = "assistant-role"
+        private const val ACTION_WAKE_SETTINGS = "wake-settings"
+        private const val ACTION_LOCAL_RUNTIME = "local-runtime"
+        private const val ACTION_DEVELOPER_MODE = "developer-mode"
     }
 }
