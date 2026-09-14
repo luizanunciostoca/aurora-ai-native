@@ -99,7 +99,7 @@ class AuroraAssistantSurface private constructor(
         action: () -> Unit,
     ): Button = addAction(label = label, stableId = stableId, primary = false, action = action)
 
-    fun captureActionFocus(): AuroraActionFocusSnapshot? {
+    internal fun captureActionFocus(): AuroraActionFocusSnapshot? {
         for (container in arrayOf(primaryActions, actions)) {
             for (index in 0 until container.childCount) {
                 val button = container.getChildAt(index) as? Button ?: continue
@@ -119,7 +119,7 @@ class AuroraAssistantSurface private constructor(
         return null
     }
 
-    fun restoreActionFocus(snapshot: AuroraActionFocusSnapshot?) {
+    internal fun restoreActionFocus(snapshot: AuroraActionFocusSnapshot?) {
         if (snapshot == null) return
         val exact = findAction(snapshot.stableId)
         val target =
