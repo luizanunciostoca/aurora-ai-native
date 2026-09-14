@@ -8,7 +8,7 @@ Status: **W15 LOCAL PRESENTATION PREVIEW / NOT PHYSICALLY ACCEPTED**.
 - Interactive v0.16 candidate #517: `bd9081d1016bdf83af0a0ef0959ae97f59e0dc49`.
 - v0.17 development foundation #522: `efbc46e1046d55d6ad693efe79e613485eda7da3`.
 - This preview stacks on #522; it does not change #517's packaged APK or the DP5 tuple.
-- Scope: existing W15 native Presence/Conversation Views and their local rendering behavior.
+- Scope: existing W15 native Presence/Conversation Views, setup surfaces and their local rendering behavior.
 - W16 Workspace, Compose migration and runtime design-system publication remain dependency-gated.
 
 The repository ADR-003, UX/UI handoff and ownership matrix were reviewed alongside the local
@@ -35,20 +35,26 @@ from the primary action in short windows and with large text. The state was repr
 an accessible orb and live text, and unchanged text was reassigned during status refreshes.
 The primary action followed the entire transcript, making long interactions harder to continue.
 
+A second accessibility issue existed in the Home refresh path: `renderStatus()` rebuilt every
+action View even when the semantic action set had not changed. During wake-runtime polling this
+could replace focused controls every 500 ms. The setup/bootstrap surfaces also relied on the
+platform-default button appearance instead of the same dark visual language and visible focus
+feedback used by the Home preview.
+
 ## Revised delivery sequence
 
 | Increment | Work | Dependency and evidence | Status |
 | --- | --- | --- | --- |
 | W15-P1 | Local orb motion/resource behavior, primary-action priority, readable text and focus feedback | Existing W15 presentation states; JVM/Android build plus device UX checks | Implemented in this preview; physical checks pending |
-| W15-P2 | Preserve keyboard/TalkBack focus across action-list refreshes; review setup and voice-screen navigation | Existing W15 callbacks and lifecycle only; accessibility regression evidence | Next scoped increment |
-| W15-P3 | Tablet portrait/landscape, split-screen, 200% font, captions and long-response review | Exact preview APK, representative-device screenshots and observations | Pending |
+| W15-P2 | Preserve keyboard/TalkBack focus across action-list refreshes; review setup and voice-screen navigation | Existing W15 callbacks and lifecycle only; accessibility regression evidence | Implemented in this preview; physical TalkBack/keyboard checks pending |
+| W15-P3 | Tablet portrait/landscape, split-screen, 200% font, captions and long-response review | Exact preview APK, representative-device screenshots and observations | Pending physical preview review |
 | W16-M0 | Reconcile state vocabulary, path ownership, projection contracts and visual test fixtures | Readiness only; consume accepted owner contracts before integration | Pending reconciliation |
 | W16-M1–M3 | Compose foundation, full Presence renderer, conversation continuity and text entry | W15-J acceptance, W16-00 BUILD release, published W14 contracts | Blocked for integrated BUILD |
 | W16-M4–M7 | Workspace, Dynamic Views, progress, approval/evidence and operational views | Accepted read models and owner-wave gates | Readiness/specification only |
 | W16-M8–M9 | Visual goldens, performance, E2E and acceptance | Exact-head gates plus physical evidence | Future acceptance work |
 
-This preview does not count W15-P1 as completion of W16 UI IDs or M1/M2. It keeps Android Views
-and existing presentation states; no Compose dependency, public schema or duplicate renderer
+This preview does not count W15-P1 or W15-P2 as completion of W16 UI IDs or M1/M2. It keeps Android
+Views and existing presentation states; no Compose dependency, public schema or duplicate renderer
 framework is introduced. The planned conversation-first product direction is retained.
 
 ## W15-P1 behavior
@@ -66,28 +72,44 @@ framework is introduced. The planned conversation-first product direction is ret
 - Buttons retain 54 dp minimum height and expose pressed feedback and a visible keyboard-focus border.
 - Diagnostics remain opt-in and use brighter text on the dark surface.
 
+## W15-P2 behavior
+
+- Home actions have stable semantic identities instead of being treated as disposable controls.
+- An unchanged wake-runtime/status refresh retains the existing action Views and therefore does not
+  deliberately discard keyboard or accessibility focus.
+- A real semantic action-set change captures the focused action before rebuilding and restores the
+  matching action afterward. The primary role may carry focus to the replacement primary action.
+- No focus is forced when no action had keyboard or accessibility focus before the rebuild.
+- The orb is explicitly excluded from accessibility traversal so readable textual state remains the
+  single accessibility representation of presence.
+- Shared native setup/bootstrap helpers now use the same dark surface, readable text hierarchy,
+  54 dp controls, disabled styling, ripple feedback and visible keyboard-focus border as the Home.
+- This changes presentation only: existing click callbacks, permission flow, wake enrollment,
+  privacy choice, assistant selection, LOCAL bootstrap, authority and execution remain unchanged.
+
 ## Validation and remaining checks
 
-Local verification on 2026-09-14:
+Local verification on 2026-09-14 before publication of the P2 increment:
 
-- JUnit: all eight rendering-policy tests passed using Kotlin 2.2.10 and JVM target 17.
-- Modified native UI sources compiled against the official Android 36 SDK stubs. The compiler
+- JUnit: all eight orb rendering-policy tests passed using Kotlin 2.2.10 and JVM target 17.
+- Modified P1 native UI sources compiled against the official Android 36 SDK stubs. The compiler
   reported only deprecated system-bar color APIs in the existing surface setup.
-- Markdown formatting and `git diff --check` passed. Scope review found only this plan,
-  the surface, the orb, its presentation policy and its tests changed from the #522 base.
-- The repository test runner passed its first 120 tests, then its build stage stopped because
-  `tsc` was unavailable. This is not a full repository test-suite pass.
-- These checks are not a Gradle APK build, emulator rendering check or physical acceptance.
-- Exact-head CI and device validation are pending on draft PR #529. Publication is complete;
-  this document does not claim CI or physical acceptance.
+- Markdown formatting and `git diff --check` passed for the earlier P1 increment.
+- The repository test runner passed its first 120 tests for that earlier increment, then its build
+  stage stopped because `tsc` was unavailable. This was not a full repository test-suite pass.
+- P2 adds pure JVM tests for action-refresh identity. Exact-head GitHub Android Foundation, Quality,
+  Test Build and Security are the authoritative automated validation for the published branch.
+- These checks are not an emulator rendering check or physical acceptance.
 
-Automated acceptance for this patch:
+Automated acceptance for this preview:
 
 1. JVM rendering-policy tests cover all eight stages, every visibility/accessibility/power constraint,
    foreground restoration, narrow-window bounds and large-text layout decisions.
-2. Android Foundation must compile the Views and run local unit tests on the exact PR head.
-3. Quality, Test Build and Security must pass on that same head; results belong in the PR.
-4. Scope review must show no change to W02/W03/W07/W14, voice capture, executors, signing or DP5 scripts.
+2. Action-refresh policy tests cover initial creation, unchanged wake-runtime refresh and semantic
+   action changes that must rebuild controls.
+3. Android Foundation must compile the native Views and run local unit tests on the exact PR head.
+4. Quality, Test Build and Security must pass on that same head; results belong in the PR.
+5. Scope review must show no change to W02/W03/W07/W14, voice capture, executors, signing or DP5 scripts.
 
 Device checks remain **NOT RUN** until recorded against an exact preview build:
 
@@ -101,12 +123,14 @@ Device checks remain **NOT RUN** until recorded against an exact preview build:
 | Home/background, hidden view, window focus loss, detach/reattach | No background animation; eligible foreground state can resume |
 | Portrait/landscape, split screen, font scale 1.0/1.3/2.0 | No horizontal orb overflow; text and actions scroll normally |
 | Long transcript and response | Primary action comes first; text remains selectable and reachable |
-| Keyboard navigation | Visible focus border; actions perform their original callbacks |
+| Wake-runtime polling with focused action | Identical refresh keeps the same control instance and focus |
+| Semantic onboarding transition with focused action | Matching stable control regains focus; primary role may move to new primary action |
+| Setup/bootstrap keyboard navigation | Visible focus border and original callbacks remain intact |
 | Wake, assistant role, microphone and LOCAL bootstrap | Existing behavior unchanged; no authority inferred from visuals |
 
 No emulator screenshots, physical TalkBack checks, frame timings or battery measurements are
-claimed by the policy tests. Full focus continuity during MainActivity's rebuilding of actions
-is a known follow-up, not a completed accessibility guarantee.
+claimed by the policy tests. Focus continuity is implemented at View/action identity level but is
+not a physical accessibility acceptance claim until verified on the exact preview APK.
 
 ## Release and handoff
 
@@ -115,7 +139,7 @@ candidate, start a host, renew consent or execute a physical effect. Any future 
 must record exact source/host/variant/signing identity and hashes; successful software checks do
 not grant DP5 or W16 acceptance. No secrets, audio, transcripts or new telemetry are persisted here.
 
-Risk review: correctness relies on unchanged caller-supplied stages; authority and execution are
-untouched; rendering work is event-driven; callbacks/observers have paired lifecycle cleanup.
-Physical resource savings and accessibility acceptance remain unmeasured. Owner review is still
-required before merge or promotion.
+Risk review: correctness relies on unchanged caller-supplied stages and callbacks; authority and
+execution are untouched; rendering work is event-driven; callbacks/observers have paired lifecycle
+cleanup. Physical resource savings and accessibility acceptance remain unmeasured. Owner review is
+still required before merge or promotion.
