@@ -1,9 +1,13 @@
 package ai.aurora.device.ui
 
 import android.app.Activity
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.graphics.drawable.StateListDrawable
+import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -22,6 +26,7 @@ class AuroraAssistantSurface private constructor(
     private val transcriptCard: LinearLayout,
     private val transcriptView: TextView,
     private val responseView: TextView,
+    private val primaryActions: LinearLayout,
     private val actions: LinearLayout,
     private val diagnosticsView: TextView,
 ) {
@@ -32,10 +37,10 @@ class AuroraAssistantSurface private constructor(
     ) {
         val presentation = AuroraAssistantExperience.presentation(stage)
         orb.setStage(stage)
-        orb.contentDescription = "Aurora: ${titleOverride ?: presentation.title}"
-        eyebrowView.text = presentation.eyebrow
-        titleView.text = titleOverride ?: presentation.title
-        detailView.text = detailOverride ?: presentation.detail
+        // The orb is decorative. Announce the textual state once, not again through the orb.
+        eyebrowView.setTextIfChanged(presentation.eyebrow)
+        titleView.setTextIfChanged(titleOverride ?: presentation.title)
+        detailView.setTextIfChanged(detailOverride ?: presentation.detail)
     }
 
     fun showConversation(
@@ -48,12 +53,12 @@ class AuroraAssistantSurface private constructor(
         transcriptCard.visibility = if (visible) View.VISIBLE else View.GONE
         transcriptView.visibility = if (cleanTranscript.isNotBlank()) View.VISIBLE else View.GONE
         responseView.visibility = if (cleanResponse.isNotBlank()) View.VISIBLE else View.GONE
-        transcriptView.text = if (cleanTranscript.isBlank()) "" else "Você  ·  $cleanTranscript"
-        responseView.text = if (cleanResponse.isBlank()) "" else "Aurora  ·  $cleanResponse"
+        transcriptView.setTextIfChanged(if (cleanTranscript.isBlank()) "" else "Você  ·  $cleanTranscript")
+        responseView.setTextIfChanged(if (cleanResponse.isBlank()) "" else "Aurora  ·  $cleanResponse")
     }
 
     fun setStatusLine(text: String) {
-        statusLineView.text = text
+        statusLineView.setTextIfChanged(text)
         statusLineView.visibility = if (text.isBlank()) View.GONE else View.VISIBLE
     }
 
@@ -76,6 +81,7 @@ class AuroraAssistantSurface private constructor(
     ): Button = addAction(label = label, primary = false, action = action)
 
     fun clearActions() {
+        primaryActions.removeAllViews()
         actions.removeAllViews()
     }
 
@@ -99,12 +105,23 @@ class AuroraAssistantSurface private constructor(
                     AuroraActivityUi.dp(activity, 12),
                 )
                 setTextColor(if (primary) Color.rgb(7, 12, 29) else Color.rgb(226, 232, 255))
-                background =
-                    roundedBackground(
-                        fill = if (primary) Color.rgb(178, 240, 255) else Color.argb(70, 95, 112, 170),
-                        stroke = if (primary) Color.TRANSPARENT else Color.argb(150, 138, 155, 215),
-                        radiusDp = 18,
-                    )
+                val fill = if (primary) Color.rgb(178, 240, 255) else Color.rgb(30, 38, 62)
+                val states =
+                    StateListDrawable().apply {
+                        addState(
+                            intArrayOf(android.R.attr.state_focused),
+                            roundedBackground(fill, Color.WHITE, 18, strokeWidthDp = 3),
+                        )
+                        addState(
+                            intArrayOf(),
+                            roundedBackground(
+                                fill,
+                                if (primary) Color.TRANSPARENT else Color.rgb(105, 124, 179),
+                                18,
+                            ),
+                        )
+                    }
+                background = RippleDrawable(ColorStateList.valueOf(Color.argb(65, 255, 255, 255)), states, null)
                 setOnClickListener { action() }
                 layoutParams =
                     LinearLayout.LayoutParams(
@@ -114,7 +131,7 @@ class AuroraAssistantSurface private constructor(
                         topMargin = AuroraActivityUi.dp(activity, 10)
                     }
             }
-        actions.addView(button)
+        (if (primary) primaryActions else actions).addView(button)
         return button
     }
 
@@ -122,13 +139,14 @@ class AuroraAssistantSurface private constructor(
         fill: Int,
         stroke: Int,
         radiusDp: Int,
+        strokeWidthDp: Int = 1,
     ): GradientDrawable =
         GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             setColor(fill)
             cornerRadius = AuroraActivityUi.dp(activity, radiusDp).toFloat()
             if (stroke != Color.TRANSPARENT) {
-                setStroke(AuroraActivityUi.dp(activity, 1), stroke)
+                setStroke(AuroraActivityUi.dp(activity, strokeWidthDp), stroke)
             }
         }
 
@@ -166,16 +184,22 @@ class AuroraAssistantSurface private constructor(
                 },
             )
 
-            val orb =
-                AuroraOrbView(activity).apply {
-                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-                    contentDescription = "Estado visual da Aurora"
-                }
+            val orb = AuroraOrbView(activity)
+            val configuration = activity.resources.configuration
+            val orbSize =
+                AuroraActivityUi.dp(
+                    activity,
+                    AuroraOrbPresentationPolicy.preferredSizeDp(
+                        configuration.screenWidthDp,
+                        configuration.screenHeightDp,
+                        configuration.fontScale,
+                    ),
+                )
             content.addView(
                 orb,
                 LinearLayout.LayoutParams(
-                    AuroraActivityUi.dp(activity, 270),
-                    AuroraActivityUi.dp(activity, 270),
+                    orbSize,
+                    orbSize,
                 ).apply {
                     gravity = Gravity.CENTER_HORIZONTAL
                     topMargin = AuroraActivityUi.dp(activity, 2)
@@ -190,6 +214,7 @@ class AuroraAssistantSurface private constructor(
                     gravity = Gravity.CENTER
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                     accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isAccessibilityHeading = true
                 }
             content.addView(
                 title,
@@ -235,6 +260,16 @@ class AuroraAssistantSurface private constructor(
                 },
             )
 
+            // Keep the current action before potentially long transcripts and secondary settings.
+            val primaryActions = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+            content.addView(
+                primaryActions,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { bottomMargin = AuroraActivityUi.dp(activity, 16) },
+            )
+
             val conversationCard =
                 LinearLayout(activity).apply {
                     orientation = LinearLayout.VERTICAL
@@ -262,6 +297,7 @@ class AuroraAssistantSurface private constructor(
                     setTextColor(Color.rgb(205, 216, 247))
                     setLineSpacing(0f, 1.12f)
                     accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    setTextIsSelectable(true)
                 }
             val response =
                 TextView(activity).apply {
@@ -271,6 +307,7 @@ class AuroraAssistantSurface private constructor(
                     setLineSpacing(0f, 1.12f)
                     setPadding(0, AuroraActivityUi.dp(activity, 10), 0, 0)
                     accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    setTextIsSelectable(true)
                 }
             conversationCard.addView(transcript)
             conversationCard.addView(response)
@@ -301,7 +338,7 @@ class AuroraAssistantSurface private constructor(
             val diagnostics =
                 TextView(activity).apply {
                     textSize = 12f
-                    setTextColor(Color.rgb(111, 129, 176))
+                    setTextColor(Color.rgb(151, 176, 231))
                     gravity = Gravity.CENTER
                     setLineSpacing(0f, 1.12f)
                     visibility = View.GONE
@@ -327,9 +364,14 @@ class AuroraAssistantSurface private constructor(
                 transcriptCard = conversationCard,
                 transcriptView = transcript,
                 responseView = response,
+                primaryActions = primaryActions,
                 actions = actions,
                 diagnosticsView = diagnostics,
             ).also { it.render(AuroraAssistantStage.READY) }
         }
     }
+}
+
+private fun TextView.setTextIfChanged(value: String) {
+    if (text.toString() != value) text = value
 }
