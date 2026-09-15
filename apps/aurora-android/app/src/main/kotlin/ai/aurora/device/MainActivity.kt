@@ -16,6 +16,7 @@ import ai.aurora.device.ui.AuroraAssistantSurface
 import ai.aurora.device.ui.AuroraDeveloperModePreferences
 import ai.aurora.device.ui.AuroraOnboardingInput
 import ai.aurora.device.ui.AuroraOnboardingPolicy
+import ai.aurora.device.ui.AuroraOnboardingProgressPolicy
 import ai.aurora.device.ui.AuroraOnboardingStep
 import ai.aurora.device.ui.AuroraSystemStatusItem
 import ai.aurora.device.wake.AuroraAssistantRoleCoordinator
@@ -158,6 +159,7 @@ class MainActivity : Activity() {
                     wakeRuntimeReady = wakeRuntimeReady,
                 ),
             )
+        val setupProgress = AuroraOnboardingProgressPolicy.resolve(onboarding.step)
         val runtimeLabel =
             WakeSetupUiPolicy.runtimeLabel(
                 state = runtime.state,
@@ -180,30 +182,54 @@ class MainActivity : Activity() {
         )
 
         surface.setSystemStatus(
-            listOf(
-                AuroraSystemStatusItem(
-                    label = "Microfone",
-                    value = if (microphoneGranted) "Autorizado" else "Pendente",
-                ),
-                AuroraSystemStatusItem(
-                    label = "Assistente",
-                    value = if (assistant.selected) "Selecionada" else "Pendente",
-                ),
-                AuroraSystemStatusItem(
-                    label = "Wake word",
-                    value = if (wakeOperational) "Ativo" else "Inativo",
-                ),
-                AuroraSystemStatusItem(
-                    label = "Privacidade",
-                    value = if (privacyEnabled) "Ativa" else "Normal",
-                ),
-            ),
+            buildList {
+                if (setupProgress.showTrack) {
+                    add(
+                        AuroraSystemStatusItem(
+                            label = "Configuração",
+                            value = setupProgress.summaryLabel,
+                        ),
+                    )
+                }
+                add(
+                    AuroraSystemStatusItem(
+                        label = "Microfone",
+                        value = if (microphoneGranted) "Autorizado" else "Pendente",
+                    ),
+                )
+                add(
+                    AuroraSystemStatusItem(
+                        label = "Assistente",
+                        value = if (assistant.selected) "Selecionada" else "Pendente",
+                    ),
+                )
+                add(
+                    AuroraSystemStatusItem(
+                        label = "Wake word",
+                        value = if (wakeOperational) "Ativo" else "Inativo",
+                    ),
+                )
+                add(
+                    AuroraSystemStatusItem(
+                        label = "Privacidade",
+                        value = if (privacyEnabled) "Ativa" else "Normal",
+                    ),
+                )
+            },
         )
         surface.setStatusLine(
             buildString {
-                append(onboarding.progressLabel)
-                assistantFeedback?.let { append("\n$it") }
-                if (!developerMode.enabled()) errorLabel?.let { append("\n$it") }
+                if (!setupProgress.showTrack) append(onboarding.progressLabel)
+                assistantFeedback?.let {
+                    if (isNotEmpty()) append('\n')
+                    append(it)
+                }
+                if (!developerMode.enabled()) {
+                    errorLabel?.let {
+                        if (isNotEmpty()) append('\n')
+                        append(it)
+                    }
+                }
             },
         )
 
