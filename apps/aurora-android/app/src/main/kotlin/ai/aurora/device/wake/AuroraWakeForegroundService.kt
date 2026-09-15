@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -44,6 +45,7 @@ class AuroraWakeForegroundService : Service() {
     override fun onDestroy() {
         engine?.close()
         engine = null
+        stopForeground(STOP_FOREGROUND_REMOVE)
         PROCESS_REARM_GATE.markInactive()
         super.onDestroy()
     }
@@ -70,16 +72,21 @@ class AuroraWakeForegroundService : Service() {
                 config = config,
                 privacyBlocked = preferences::privacyModeEnabled,
                 playbackState = WakePlaybackAwareness::snapshot,
-                onState = { state -> statusStore.update(state.name, model.modelVersion) },
+                onState = { state ->
+                    statusStore.update(state.name, model.modelVersion)
+                    if (state in TERMINAL_ENGINE_STATES) {
+                        mainHandler.post(::stopForegroundDetector)
+                    }
+                },
                 onConfirmed = { candidate -> onWakeConfirmed(candidate) },
                 onRejectedOrIgnored = statusStore::incrementRejectedOrIgnored,
                 onError = { message ->
                     statusStore.update("WAKE_ENGINE_ERROR", model.modelVersion, message)
-                    mainHandler.post { stopSelf() }
+                    mainHandler.post(::stopForegroundDetector)
                 },
             )
         engine = localEngine
-        if (!localEngine.start()) stopSelf()
+        if (!localEngine.start()) stopForegroundDetector()
     }
 
     private fun onWakeConfirmed(candidate: WakeCandidate) {
@@ -139,6 +146,12 @@ class AuroraWakeForegroundService : Service() {
     private fun stopWithState(state: String) {
         PROCESS_REARM_GATE.markInactive()
         statusStore.update(state)
+        stopForegroundDetector()
+    }
+
+    private fun stopForegroundDetector() {
+        engine?.close()
+        engine = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -156,21 +169,42 @@ class AuroraWakeForegroundService : Service() {
         )
     }
 
-    private fun buildNotification(text: String): Notification =
-        Notification.Builder(this, CHANNEL_ID)
+    private fun buildNotification(text: String): Notification {
+        val settingsIntent =
+            Intent(this, WakeSetupActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            }
+        val settingsPendingIntent =
+            PendingIntent.getActivity(
+                this,
+                NOTIFICATION_REQUEST_CODE,
+                settingsIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        return Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Aurora")
             .setContentText(text)
+            .setContentIntent(settingsPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
+    }
 
     companion object {
         const val ACTION_ARM = "ai.aurora.action.ARM_WAKE"
         const val ACTION_DISARM = "ai.aurora.action.DISARM_WAKE"
         private const val CHANNEL_ID = "aurora-wake-v1"
         private const val NOTIFICATION_ID = 15001
+        private const val NOTIFICATION_REQUEST_CODE = 15002
         private const val HANDOFF_RECOVERY_MS = 1_800L
+        private val TERMINAL_ENGINE_STATES =
+            setOf(
+                WakeState.PRIVACY_BLOCKED,
+                WakeState.PERMISSION_REQUIRED,
+                WakeState.ENGINE_UNAVAILABLE,
+                WakeState.ERROR,
+            )
         private val PROCESS_REARM_GATE = WakeProcessRearmGate()
 
         /**

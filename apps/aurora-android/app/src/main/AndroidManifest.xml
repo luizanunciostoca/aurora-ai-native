@@ -30,6 +30,11 @@
             android:name=".wake.WakeSetupActivity"
             android:exported="false" />
         <activity
+            android:name=".wake.AuroraAssistantSettingsActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true" />
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop">
@@ -50,6 +55,16 @@
             android:exported="false"
             android:foregroundServiceType="microphone"
             android:stopWithTask="false" />
+
+        <service
+            android:name=".media.AuroraMediaSessionListenerService"
+            android:exported="true"
+            android:label="Aurora media control"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <service
             android:name=".wake.AuroraVoiceInteractionService"
