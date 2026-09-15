@@ -57,12 +57,18 @@ internal fun interface GatewayVoiceRuntimeConnector {
     fun connectAndInstall(grant: GatewayBootstrapGrant, expectedRegistrationVersion: Int?): Boolean
 }
 
+internal fun interface GatewayVoiceRuntimeReconnector {
+    /** Rebinds one already-composed W14 runtime to a fresh authenticated transport generation. */
+    fun reconnectAndInstall(grant: GatewayBootstrapGrant, expectedRegistrationVersion: Int): Boolean
+}
+
 internal enum class GatewayVoiceRuntimeCompositionError {
     LOCAL_RUNTIME_UNAVAILABLE,
     LOCAL_BINDING_INVALID,
     BOOTSTRAP_REJECTED,
     TENANT_BINDING_MISMATCH,
     CONNECTION_REJECTED,
+    RECONNECT_REJECTED,
 }
 
 internal sealed interface GatewayVoiceRuntimeCompositionResult {
@@ -94,6 +100,8 @@ internal class GatewayVoiceRuntimeComposition(
     private val grantSource: GatewayBootstrapGrantSource,
     private val bindingProvider: () -> LocalGatewayBinding,
     private val connector: GatewayVoiceRuntimeConnector,
+    private val reconnector: GatewayVoiceRuntimeReconnector =
+        GatewayVoiceRuntimeReconnector { _, _ -> false },
     private val clearRuntime: () -> Unit,
 ) {
     @Synchronized
@@ -136,6 +144,46 @@ internal class GatewayVoiceRuntimeComposition(
         if (!connected) {
             clearRuntime()
             return rejected(GatewayVoiceRuntimeCompositionError.CONNECTION_REJECTED)
+        }
+        return GatewayVoiceRuntimeCompositionResult.Composed
+    }
+
+    @Synchronized
+    fun reconnect(): GatewayVoiceRuntimeCompositionResult {
+        val binding = runCatching { bindingProvider() }.getOrElse {
+            clearRuntime()
+            return rejected(GatewayVoiceRuntimeCompositionError.LOCAL_BINDING_INVALID)
+        }
+        val bound = binding as? LocalGatewayBinding.Bound
+            ?: run {
+                clearRuntime()
+                return rejected(GatewayVoiceRuntimeCompositionError.LOCAL_BINDING_INVALID)
+            }
+
+        val exchange =
+            runCatching { grantSource.exchange(bound.deviceId, bound.deviceSessionId) }.getOrElse {
+                return rejected(GatewayVoiceRuntimeCompositionError.BOOTSTRAP_REJECTED)
+            }
+        val grant =
+            when (exchange) {
+                is GatewayBootstrapClientResult.Success -> exchange.value
+                is GatewayBootstrapClientResult.Rejected ->
+                    return rejected(
+                        GatewayVoiceRuntimeCompositionError.BOOTSTRAP_REJECTED,
+                        exchange.error,
+                    )
+            }
+
+        if (grant.tenantId != bound.tenantId) {
+            clearRuntime()
+            return rejected(GatewayVoiceRuntimeCompositionError.TENANT_BINDING_MISMATCH)
+        }
+        val reconnected =
+            runCatching { reconnector.reconnectAndInstall(grant, bound.registrationVersion) }
+                .getOrDefault(false)
+        if (!reconnected) {
+            clearRuntime()
+            return rejected(GatewayVoiceRuntimeCompositionError.RECONNECT_REJECTED)
         }
         return GatewayVoiceRuntimeCompositionResult.Composed
     }

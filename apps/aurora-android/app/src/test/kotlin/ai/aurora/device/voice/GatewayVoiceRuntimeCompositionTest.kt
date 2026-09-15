@@ -194,6 +194,74 @@ class GatewayVoiceRuntimeCompositionTest {
     }
 
     @Test
+    fun `reconnect uses exact active binding without clearing healthy runtime`() {
+        val binding = localGatewayBindingFrom(boundState()) as LocalGatewayBinding.Bound
+        var observedDeviceId: String? = null
+        var observedSessionId: String? = null
+        var observedRegistrationVersion: Int? = null
+        var observedGrant: GatewayBootstrapGrant? = null
+        var clearCount = 0
+        val composition =
+            GatewayVoiceRuntimeComposition(
+                grantSource = GatewayBootstrapGrantSource { deviceId, deviceSessionId ->
+                    observedDeviceId = deviceId
+                    observedSessionId = deviceSessionId
+                    GatewayBootstrapClientResult.Success(grant())
+                },
+                bindingProvider = { binding },
+                connector = GatewayVoiceRuntimeConnector { _, _ -> error("connect must not run") },
+                reconnector = GatewayVoiceRuntimeReconnector { value, registrationVersion ->
+                    observedGrant = value
+                    observedRegistrationVersion = registrationVersion
+                    true
+                },
+                clearRuntime = { clearCount += 1 },
+            )
+
+        assertTrue(composition.reconnect() is GatewayVoiceRuntimeCompositionResult.Composed)
+        assertEquals(DEVICE_ID, observedDeviceId)
+        assertEquals(DEVICE_SESSION_ID, observedSessionId)
+        assertEquals(REGISTRATION_VERSION, observedRegistrationVersion)
+        assertEquals(grant().gatewaySessionId, observedGrant?.gatewaySessionId)
+        assertEquals(0, clearCount)
+    }
+
+    @Test
+    fun `reconnect requires bound runtime and clears after reconnect rejection`() {
+        var sourceCalls = 0
+        var clearCount = 0
+        val fresh =
+            GatewayVoiceRuntimeComposition(
+                grantSource = GatewayBootstrapGrantSource { _, _ ->
+                    sourceCalls += 1
+                    GatewayBootstrapClientResult.Success(grant())
+                },
+                bindingProvider = { LocalGatewayBinding.FreshInstall },
+                connector = GatewayVoiceRuntimeConnector { _, _ -> true },
+                clearRuntime = { clearCount += 1 },
+            )
+        val freshResult = fresh.reconnect() as GatewayVoiceRuntimeCompositionResult.Rejected
+        assertEquals(GatewayVoiceRuntimeCompositionError.LOCAL_BINDING_INVALID, freshResult.error)
+        assertEquals(0, sourceCalls)
+        assertEquals(1, clearCount)
+
+        val bound = localGatewayBindingFrom(boundState()) as LocalGatewayBinding.Bound
+        val rejected =
+            GatewayVoiceRuntimeComposition(
+                grantSource = GatewayBootstrapGrantSource { _, _ ->
+                    GatewayBootstrapClientResult.Success(grant())
+                },
+                bindingProvider = { bound },
+                connector = GatewayVoiceRuntimeConnector { _, _ -> true },
+                reconnector = GatewayVoiceRuntimeReconnector { _, _ -> false },
+                clearRuntime = { clearCount += 1 },
+            ).reconnect() as GatewayVoiceRuntimeCompositionResult.Rejected
+        assertEquals(GatewayVoiceRuntimeCompositionError.RECONNECT_REJECTED, rejected.error)
+        assertFalse(rejected.retryAuthorized)
+        assertEquals(2, clearCount)
+    }
+
+    @Test
     fun `bootstrap credential provider is process local one shot and clearable`() {
         val provider = OneShotGatewayCredentialProvider("gwc_${"c".repeat(43)}")
         assertTrue(provider.currentCredential().startsWith("gwc_"))

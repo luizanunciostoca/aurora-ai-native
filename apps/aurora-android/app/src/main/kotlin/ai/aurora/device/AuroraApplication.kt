@@ -17,6 +17,7 @@ import ai.aurora.device.lifecycle.PresenceEngine
 import ai.aurora.device.lifecycle.PresenceSnapshot
 import ai.aurora.device.network.GatewayDevicePlaneClient
 import ai.aurora.device.network.GatewayDevicePlaneConnectRequest
+import ai.aurora.device.network.GatewayDevicePlaneReconnectRequest
 import ai.aurora.device.network.GatewayDevicePlaneResult
 import ai.aurora.device.security.AndroidKeystoreSigningKeyStore
 import ai.aurora.device.session.AndroidDeviceSessionMetadataStore
@@ -27,6 +28,7 @@ import ai.aurora.device.voice.GatewayVoiceRuntimeComposition
 import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionError
 import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionResult
 import ai.aurora.device.voice.GatewayVoiceRuntimeConnector
+import ai.aurora.device.voice.GatewayVoiceRuntimeReconnector
 import ai.aurora.device.voice.GovernedW07VoiceAuthorityIngress
 import ai.aurora.device.voice.InstalledGatewayVoiceProjection
 import ai.aurora.device.voice.OneShotGatewayCredentialProvider
@@ -104,6 +106,10 @@ class AuroraApplication : Application() {
                         GatewayVoiceRuntimeConnector { grant, expectedRegistrationVersion ->
                             connectLocalGatewayVoiceIngress(grant, expectedRegistrationVersion)
                         },
+                    reconnector =
+                        GatewayVoiceRuntimeReconnector { grant, expectedRegistrationVersion ->
+                            reconnectLocalGatewayVoiceIngress(grant, expectedRegistrationVersion)
+                        },
                     clearRuntime = ::clearLocalGatewayVoiceRuntime,
                 )
         }
@@ -130,6 +136,12 @@ class AuroraApplication : Application() {
 
     internal fun composeLocalVoiceIngressFromPendingBootstrap(): GatewayVoiceRuntimeCompositionResult =
         localGatewayVoiceRuntimeComposition?.compose()
+            ?: GatewayVoiceRuntimeCompositionResult.Rejected(
+                GatewayVoiceRuntimeCompositionError.LOCAL_RUNTIME_UNAVAILABLE,
+            )
+
+    internal fun reconnectLocalVoiceIngressFromPendingBootstrap(): GatewayVoiceRuntimeCompositionResult =
+        localGatewayVoiceRuntimeComposition?.reconnect()
             ?: GatewayVoiceRuntimeCompositionResult.Rejected(
                 GatewayVoiceRuntimeCompositionError.LOCAL_RUNTIME_UNAVAILABLE,
             )
@@ -219,6 +231,62 @@ class AuroraApplication : Application() {
         // short-lived W07 authorization carried in the exact W14 claim envelope.
         WakeVoiceRuntimeRegistry.projectionStore.replace(installedProjection.bundle)
         activeGatewayDevicePlaneClient = client
+        activeGatewayVoiceProjection = installedProjection
+        activeGatewayCommandConsumer = consumer
+        WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
+        return true
+    }
+
+    private fun reconnectLocalGatewayVoiceIngress(
+        grant: GatewayBootstrapGrant,
+        expectedRegistrationVersion: Int,
+    ): Boolean {
+        val client = activeGatewayDevicePlaneClient ?: return false
+        val credentialProvider = OneShotGatewayCredentialProvider(grant.credential)
+        val request =
+            GatewayDevicePlaneReconnectRequest(
+                gatewaySessionId = grant.gatewaySessionId,
+                tenantId = grant.tenantId,
+                actorKind = grant.actor.kind,
+                actorIdentityId = grant.actor.identityId,
+                correlationId = grant.correlationId,
+                deviceId = grant.deviceId,
+                deviceSessionId = grant.deviceSessionId,
+                credentialProvider = credentialProvider,
+                expectedRegistrationVersion = expectedRegistrationVersion,
+            )
+
+        val result =
+            try {
+                client.reconnect(request)
+            } catch (_: Exception) {
+                null
+            } finally {
+                credentialProvider.clear()
+            }
+        if (result !is GatewayDevicePlaneResult.Success) return false
+
+        val projectionResult = runCatching { client.fetchVoiceProjection() }.getOrNull()
+        if (projectionResult !is GatewayDevicePlaneResult.Success) return false
+        val installedProjection =
+            runCatching {
+                installableGatewayVoiceProjection(
+                    context = this,
+                    projection = projectionResult.value,
+                    expectedTenantId = grant.tenantId,
+                )
+            }.getOrNull() ?: return false
+        val consumer =
+            runCatching {
+                W15JGatewayDeviceCommandConsumer.forAndroid(
+                    client = client,
+                    capabilityBridge = installedProjection.capabilityBridge,
+                    permissionContext = this,
+                    actionPort = AndroidAudioVolumeActionPort(this),
+                )
+            }.getOrNull() ?: return false
+
+        WakeVoiceRuntimeRegistry.projectionStore.replace(installedProjection.bundle)
         activeGatewayVoiceProjection = installedProjection
         activeGatewayCommandConsumer = consumer
         WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
