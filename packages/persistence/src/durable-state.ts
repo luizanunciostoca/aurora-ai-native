@@ -1,8 +1,6 @@
 export type W03JsonPrimitive = string | number | boolean | null;
 export type W03JsonValue =
-  | W03JsonPrimitive
-  | readonly W03JsonValue[]
-  | { readonly [key: string]: W03JsonValue };
+  W03JsonPrimitive | readonly W03JsonValue[] | { readonly [key: string]: W03JsonValue };
 
 export const W03_DURABLE_STATE_TABLE = 'w03_durable_state' as const;
 export const W03_DURABLE_STATE_MIGRATION_ID = '002_w03_durable_state' as const;
@@ -15,8 +13,9 @@ export interface W03DurableStateAddress {
   readonly stateKey: string;
 }
 
-export interface W03DurableStateRecord<TPayload extends W03JsonValue = W03JsonValue>
-  extends W03DurableStateAddress {
+export interface W03DurableStateRecord<
+  TPayload extends W03JsonValue = W03JsonValue,
+> extends W03DurableStateAddress {
   readonly revision: number;
   readonly payload: TPayload;
   readonly createdAt: string;
@@ -138,7 +137,10 @@ function assertAddress(address: W03DurableStateAddress): void {
   }
 }
 
-export function isW03JsonValue(value: unknown, seen: Set<object> = new Set()): value is W03JsonValue {
+export function isW03JsonValue(
+  value: unknown,
+  seen: Set<object> = new Set(),
+): value is W03JsonValue {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
   if (typeof value === 'number') return Number.isFinite(value);
   if (typeof value !== 'object') return false;
@@ -256,7 +258,8 @@ export function createW03PostgresDurableStateStore(executor: W03SqlExecutor): W0
       if (result.rows.length > 1) throw new Error('W03_DURABLE_STATE_WRITE_AMBIGUOUS');
       if (result.rows.length === 1) {
         const record = parseRecord<TPayload>(result.rows[0] as DurableStateRow, request);
-        const unchanged = request.expectedRevision > 0 && record.revision === request.expectedRevision;
+        const unchanged =
+          request.expectedRevision > 0 && record.revision === request.expectedRevision;
         return {
           status: unchanged ? 'UNCHANGED' : 'APPLIED',
           record,

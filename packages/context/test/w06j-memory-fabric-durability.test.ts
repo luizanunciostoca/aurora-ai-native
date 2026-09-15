@@ -168,8 +168,8 @@ test('W06-J persists a durable candidate and reconstructs it after repository re
 
   const firstRepository = createDurableMemoryFabricRepository(store);
   const saved = await firstRepository.save(staged.snapshot, 0);
+  if (saved.status === 'CONFLICT') throw new Error('first durable write must apply');
   assert.equal(saved.status, 'APPLIED');
-  if (saved.status === 'CONFLICT') assert.fail('first durable write must apply');
   assert.equal(saved.durableRevision, 1);
 
   const restartedRepository = createDurableMemoryFabricRepository(store);
@@ -199,7 +199,10 @@ test('W06-J never persists transient working memory', async () => {
     restored.snapshot.records.map((record) => record.projectionReference),
     ['mem:semantic:durable-test'],
   );
-  assert.equal(restored.snapshot.records.some((record) => record.boundary === 'WORKING'), false);
+  assert.equal(
+    restored.snapshot.records.some((record) => record.boundary === 'WORKING'),
+    false,
+  );
 });
 
 test('W06-J identical durable save is idempotent and keeps the durable revision', async () => {
@@ -208,12 +211,12 @@ test('W06-J identical durable save is idempotent and keeps the durable revision'
   const repository = createDurableMemoryFabricRepository(store);
 
   const first = await repository.save(staged.snapshot, 0);
+  if (first.status === 'CONFLICT') throw new Error('first durable write must apply');
   assert.equal(first.status, 'APPLIED');
-  if (first.status === 'CONFLICT') assert.fail('first durable write must apply');
 
   const duplicate = await repository.save(staged.snapshot, first.durableRevision);
+  if (duplicate.status === 'CONFLICT') throw new Error('equal write must be idempotent');
   assert.equal(duplicate.status, 'UNCHANGED');
-  if (duplicate.status === 'CONFLICT') assert.fail('equal write must be idempotent');
   assert.equal(duplicate.durableRevision, first.durableRevision);
 });
 
@@ -249,7 +252,7 @@ test('W06-J fails closed when persisted payload tenant does not match requested 
     namespace: 'aurora.w06.memory-fabric.v1',
     stateKey: 'snapshot',
   });
-  assert.ok(seededRecord);
+  if (!seededRecord) throw new Error('seeded durable record expected');
 
   const tamperedStore: MemoryFabricDurableStateStorePort = {
     load: async () => ({

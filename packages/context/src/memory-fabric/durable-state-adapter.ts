@@ -3,11 +3,7 @@ import type { TenantContext } from '@aurora/contracts/context';
 import { validateMemoryBoundaryCandidate } from '../memory-boundaries/model.js';
 import { MEMORY_BOUNDARY_KINDS } from '../memory-boundaries/types.js';
 import { createMemoryFabricSnapshot } from './fabric.js';
-import {
-  MEMORY_CONTENT_KINDS,
-  MEMORY_LIFECYCLE_STATES,
-  MEMORY_PRODUCER_KINDS,
-} from './types.js';
+import { MEMORY_CONTENT_KINDS, MEMORY_LIFECYCLE_STATES, MEMORY_PRODUCER_KINDS } from './types.js';
 import type { MemoryFabricSnapshot, MemoryProjectionRecord } from './types.js';
 
 export type MemoryFabricJsonPrimitive = string | number | boolean | null;
@@ -191,7 +187,9 @@ function recordValid(
   if (!MEMORY_BOUNDARY_KINDS.includes(value.boundary as (typeof MEMORY_BOUNDARY_KINDS)[number])) {
     return false;
   }
-  if (!MEMORY_LIFECYCLE_STATES.includes(value.lifecycle as (typeof MEMORY_LIFECYCLE_STATES)[number])) {
+  if (
+    !MEMORY_LIFECYCLE_STATES.includes(value.lifecycle as (typeof MEMORY_LIFECYCLE_STATES)[number])
+  ) {
     return false;
   }
   if (
@@ -210,11 +208,16 @@ function recordValid(
   if (value.lifecycle === 'TRANSIENT' && value.boundary !== 'WORKING') return false;
 
   if (!plainObject(value.producer)) return false;
-  if (!MEMORY_PRODUCER_KINDS.includes(value.producer.kind as (typeof MEMORY_PRODUCER_KINDS)[number])) {
+  if (
+    !MEMORY_PRODUCER_KINDS.includes(value.producer.kind as (typeof MEMORY_PRODUCER_KINDS)[number])
+  ) {
     return false;
   }
   if (!nonEmpty(value.producer.producerReference)) return false;
-  if (value.producer.providerReference !== undefined && !nonEmpty(value.producer.providerReference)) {
+  if (
+    value.producer.providerReference !== undefined &&
+    !nonEmpty(value.producer.providerReference)
+  ) {
     return false;
   }
   if (value.producer.modelReference !== undefined && !nonEmpty(value.producer.modelReference)) {
@@ -225,7 +228,8 @@ function recordValid(
   if (!MEMORY_CONTENT_KINDS.includes(value.content.kind as (typeof MEMORY_CONTENT_KINDS)[number])) {
     return false;
   }
-  if (!nonEmpty(value.content.digest) || !isMemoryFabricJsonValue(value.content.payload)) return false;
+  if (!nonEmpty(value.content.digest) || !isMemoryFabricJsonValue(value.content.payload))
+    return false;
   if (containsForbiddenDurableKey(value.content.payload)) return false;
 
   if (
@@ -240,10 +244,12 @@ function recordValid(
     maxDataClassification: 'RESTRICTED',
     candidate: {
       boundary: value.boundary as MemoryProjectionRecord['boundary'],
-      tenant: value.tenant as MemoryProjectionRecord['tenant'],
+      tenant: value.tenant as unknown as MemoryProjectionRecord['tenant'],
       ...(value.subject === undefined
         ? {}
-        : { subject: value.subject as MemoryProjectionRecord['subject'] }),
+        : {
+            subject: value.subject as unknown as NonNullable<MemoryProjectionRecord['subject']>,
+          }),
       classification: value.classification as MemoryProjectionRecord['classification'],
       sourceOwner: value.sourceOwner as MemoryProjectionRecord['sourceOwner'],
       sourceReference: value.sourceReference as string,
@@ -307,7 +313,9 @@ export function decodeDurableMemoryFabricSnapshot(
   return cloneJson(payload) as unknown as MemoryFabricSnapshot;
 }
 
-export function encodeDurableMemoryFabricSnapshot(snapshot: MemoryFabricSnapshot): MemoryFabricJsonValue {
+export function encodeDurableMemoryFabricSnapshot(
+  snapshot: MemoryFabricSnapshot,
+): MemoryFabricJsonValue {
   if (
     snapshot.kind !== 'MemoryFabricSnapshot' ||
     snapshot.authorizesExecution !== false ||

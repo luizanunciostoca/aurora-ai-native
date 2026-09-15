@@ -51,7 +51,10 @@ test('W03 durable state SQL keeps load tenant-scoped and CAS atomic without blin
   assert.match(W03_DURABLE_STATE_LOAD_SQL, /state_namespace = \$2/);
   assert.match(W03_DURABLE_STATE_LOAD_SQL, /state_key = \$3/);
   assert.match(W03_DURABLE_STATE_CAS_SQL, /revision = \$5::bigint/);
-  assert.match(W03_DURABLE_STATE_CAS_SQL, /ON CONFLICT \(tenant_id, state_namespace, state_key\) DO NOTHING/);
+  assert.match(
+    W03_DURABLE_STATE_CAS_SQL,
+    /ON CONFLICT \(tenant_id, state_namespace, state_key\) DO NOTHING/,
+  );
   assert.match(W03_DURABLE_STATE_CAS_SQL, /WHEN payload = \$4::jsonb THEN revision/);
 });
 
@@ -134,7 +137,11 @@ test('W03 compare-and-swap returns conflict and current revision without auto-re
 });
 
 test('W03 durable state fails closed for invalid tenant, key and payload', async () => {
-  const executor = { async query() { return { rows: [] }; } };
+  const executor = {
+    async query() {
+      return { rows: [] };
+    },
+  };
   const store = createW03PostgresDurableStateStore(executor);
 
   await assert.rejects(
