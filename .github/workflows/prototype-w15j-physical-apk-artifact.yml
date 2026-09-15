@@ -25,13 +25,13 @@ jobs:
       - name: Checkout exact W15-J candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 005d77c73985599e569291c33ff390d8213a0930
+          ref: 95aa7bddcc041d46c8485c7cf64a7f53ce933a34
           persist-credentials: false
       - name: Assert exact source candidate
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "005d77c73985599e569291c33ff390d8213a0930"
+          test "$(git rev-parse HEAD)" = "95aa7bddcc041d46c8485c7cf64a7f53ce933a34"
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
@@ -70,6 +70,14 @@ jobs:
           test "$PACKAGE_ID" = "ai.aurora.device.local"
           test "$VERSION_CODE" = "1"
           test "$VERSION_NAME" = "0.15.0-alpha.1-local"
+
+          DEX_STRINGS="$(mktemp)"
+          for dex in $(unzip -Z1 "$APK" | grep -E '^classes[0-9]*\.dex$'); do
+            unzip -p "$APK" "$dex" | strings >> "$DEX_STRINGS"
+          done
+          grep -Fxq 'aurora.wake.model.v2' "$DEX_STRINGS"
+          grep -Fxq 'aurora.wake.model.aead.v2' "$DEX_STRINGS"
+          grep -Fxq 'AES/GCM/NoPadding' "$DEX_STRINGS"
 
           ARTIFACT_DIR=/tmp/w15j-tablet-loopback-apk
           mkdir -p "$ARTIFACT_DIR"
