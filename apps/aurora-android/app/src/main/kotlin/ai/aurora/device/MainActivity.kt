@@ -97,8 +97,10 @@ class MainActivity : Activity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQUEST_MICROPHONE) return
+        val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        if (granted) microphonePermissionHistory.clear()
         assistantFeedback =
-            if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            if (granted) {
                 "Microfone autorizado. Podemos continuar a configuração."
             } else {
                 "O microfone ainda não está autorizado."
@@ -114,14 +116,12 @@ class MainActivity : Activity() {
     ) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_ASSISTANT_ROLE) return
-        val selected = AuroraAssistantRoleCoordinator.snapshot(this).selected
-        assistantFeedback =
-            if (selected) {
-                "Aurora foi selecionada como assistente padrão."
-            } else {
-                "Aurora ainda não foi selecionada como assistente padrão."
-            }
-        renderStatus()
+        // Some OEM role sheets return without changing the role or may immediately cancel. The
+        // user's original tap was an explicit request to configure the assistant, so continue to a
+        // public Android settings surface instead of leaving the button looking unresponsive.
+        handleAssistantLaunch(
+            AuroraAssistantRoleCoordinator.continueSelectionAfterRoleResult(this),
+        )
     }
 
     private fun renderInvocation(currentIntent: Intent?) {
@@ -147,6 +147,11 @@ class MainActivity : Activity() {
         val modelReady = AuroraWakeModelStore(this).hasValidModel()
         val microphoneGranted =
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (microphoneGranted && ::microphonePermissionHistory.isInitialized) {
+            // A previous denial must not permanently suppress Android's permission dialog after a
+            // later grant (including one-time grants that may subsequently expire).
+            microphonePermissionHistory.clear()
+        }
         val assistant = AuroraAssistantRoleCoordinator.snapshot(this)
         val wakeRuntimeReady = AuroraOnboardingPolicy.isWakeRuntimeReady(runtime.state)
         val onboarding =
@@ -378,27 +383,13 @@ class MainActivity : Activity() {
     }
 
     private fun openVoiceSession() {
-        startActivity(
-            Intent(this, WakeVoiceActivity::class.java).apply {
-                putExtra(WakeVoiceActivity.EXTRA_SYSTEM_ASSIST_INVOCATION, true)
-            },
-        )
+        // This is an explicit in-app user action, not a system-assistant invocation. Wake/system
+        // entry points add their own provenance when they create WakeVoiceActivity.
+        startActivity(Intent(this, WakeVoiceActivity::class.java))
     }
 
     private fun handleAssistantLaunch(result: AuroraAssistantSelectionLaunch) {
-        assistantFeedback =
-            when (result) {
-                AuroraAssistantSelectionLaunch.ALREADY_SELECTED ->
-                    "Aurora já é o assistente padrão deste dispositivo."
-                AuroraAssistantSelectionLaunch.ROLE_REQUEST ->
-                    "Confirme Aurora na tela de seleção do Android."
-                AuroraAssistantSelectionLaunch.DEFAULT_APPS_SETTINGS,
-                AuroraAssistantSelectionLaunch.VOICE_INPUT_SETTINGS,
-                AuroraAssistantSelectionLaunch.GENERAL_SETTINGS,
-                -> "Selecione Aurora como assistente digital nas configurações do Android."
-                AuroraAssistantSelectionLaunch.FAILED ->
-                    "O Android não expôs a seleção automaticamente. Abra Apps padrão e escolha Aurora."
-            }
+        assistantFeedback = AuroraAssistantRoleCoordinator.userGuidance(result)
         renderStatus()
     }
 
