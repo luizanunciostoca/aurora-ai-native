@@ -146,7 +146,9 @@ function inspectPayload(root: unknown): PayloadInspection {
   return 'SAFE';
 }
 
-function validProducer(producer: MemoryProducerDescriptor | undefined): MemoryCaptureIntakeReason | null {
+function validProducer(
+  producer: MemoryProducerDescriptor | undefined,
+): MemoryCaptureIntakeReason | null {
   if (!producer || !MEMORY_PRODUCER_KINDS.includes(producer.kind)) return 'INVALID_PRODUCER';
   if (producer.kind === 'SOURCE_ADAPTER') return 'SOURCE_ADAPTER_PRODUCER_FORBIDDEN';
   if (!nonEmptyBounded(producer.producerReference, MAX_REFERENCE_LENGTH)) return 'INVALID_PRODUCER';
