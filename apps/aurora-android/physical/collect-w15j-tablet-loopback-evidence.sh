@@ -360,7 +360,7 @@ EOF
   capture battery-before.txt adb_shell dumpsys battery
   capture meminfo-before.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
   capture cpuinfo-before.txt adb_shell dumpsys cpuinfo
-  capture storage-before.txt adb_shell du -sk "/data/user/0/$PACKAGE_ID"
+  capture storage-before.txt adb_shell run-as "$PACKAGE_ID" du -sk .
   capture services-before.txt adb_shell dumpsys activity services "$PACKAGE_ID"
   adb_shell am force-stop "$PACKAGE_ID"
   sleep 1
@@ -374,7 +374,7 @@ EOF
   sleep 2
   capture meminfo-after-restart.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
   capture cpuinfo-after-restart.txt adb_shell dumpsys cpuinfo
-  capture storage-after-restart.txt adb_shell du -sk "/data/user/0/$PACKAGE_ID"
+  capture storage-after-restart.txt adb_shell run-as "$PACKAGE_ID" du -sk .
   capture services-after-restart.txt adb_shell dumpsys activity services "$PACKAGE_ID"
 
   cat >"$OUTPUT_DIR/acceptance-status.txt" <<EOF
@@ -414,7 +414,7 @@ else
   capture battery-after.txt adb_shell dumpsys battery
   capture meminfo-after.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
   capture cpuinfo-after.txt adb_shell dumpsys cpuinfo
-  capture storage-after.txt adb_shell du -sk "/data/user/0/$PACKAGE_ID"
+  capture storage-after.txt adb_shell run-as "$PACKAGE_ID" du -sk .
   capture services-after.txt adb_shell dumpsys activity services "$PACKAGE_ID"
   capture package-path-finalize.txt adb_shell pm path "$PACKAGE_ID"
   pull_installed_apk finalize "$OUTPUT_DIR/package-path-finalize.txt"
