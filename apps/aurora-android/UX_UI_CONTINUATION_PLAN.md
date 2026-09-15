@@ -4,7 +4,7 @@ Status: **W15 LOCAL PRESENTATION PREVIEW / NOT PHYSICALLY ACCEPTED**.
 
 ## Review baseline and ownership
 
-- Live main: `d2089407e88480686b879928cf2863c0dc81718e`.
+- Live main baseline reviewed for this preview: `d2089407e88480686b879928cf2863c0dc81718e`.
 - Interactive v0.16 candidate #517: `bd9081d1016bdf83af0a0ef0959ae97f59e0dc49`.
 - v0.17 development foundation #522: `efbc46e1046d55d6ad693efe79e613485eda7da3`.
 - This preview stacks on #522; it does not change #517's packaged APK or the DP5 tuple.
@@ -50,20 +50,27 @@ The Home also compressed setup progress, microphone, assistant, wake and privacy
 line. That was technically complete but visually dense on tablet and especially weak under large text.
 The source states were already available and did not require any new runtime or authority contract.
 
+After separating state and progress, the remaining hierarchy issue was that transcript/response and
+secondary configuration buttons were visually adjacent without explicit section landmarks. That made
+it harder to distinguish the current conversation from settings when navigating with large text or
+accessibility headings.
+
 ## Revised delivery sequence
 
 | Increment | Work | Dependency and evidence | Status |
 | --- | --- | --- | --- |
 | W15-P1 | Local orb motion/resource behavior, primary-action priority, readable text and focus feedback | Existing W15 presentation states; JVM/Android build plus device UX checks | Implemented in this preview; physical checks pending |
 | W15-P2 | Preserve keyboard/TalkBack focus across action-list refreshes; review setup and voice-screen navigation | Existing W15 callbacks and lifecycle only; accessibility regression evidence | Implemented in this preview; physical TalkBack/keyboard checks pending |
-| W15-P3 | Tablet portrait/landscape, split-screen, 200% font and long-response layout hardening | Pure layout policy + exact-head Android build; physical screenshots/observations remain required | Implemented in this preview; exact-head CI passed on `39803da6…`; physical layout acceptance pending |
-| W15-P4 | Separate system-state summary from progress/error copy and adapt its layout | Existing local state only; no new authority/runtime contract | Implemented in this preview; exact-head CI pending |
+| W15-P3 | Tablet portrait/landscape, split-screen, 200% font and long-response layout hardening | Pure layout policy + exact-head Android build | Implemented; CI passed on `39803da6…`; physical layout acceptance pending |
+| W15-P4 | Separate system-state summary from progress/error copy and adapt its layout | Existing local state only; no new authority/runtime contract | Implemented; CI passed on `94c24383…`; physical layout acceptance pending |
+| W15-P5 | Map existing onboarding state to a visual four-step progress summary | Existing `AuroraOnboardingStep` only | Implemented; CI passed on `5149250b…`; physical layout acceptance pending |
+| W15-P6 | Add explicit Conversation and Settings hierarchy landmarks without changing actions | Existing shared native surface only | Implemented in preview; exact-head CI pending |
 | W16-M0 | Reconcile state vocabulary, path ownership, projection contracts and visual test fixtures | Readiness only; consume accepted owner contracts before integration | Pending reconciliation |
 | W16-M1–M3 | Compose foundation, full Presence renderer, conversation continuity and text entry | W15-J acceptance, W16-00 BUILD release, published W14 contracts | Blocked for integrated BUILD |
 | W16-M4–M7 | Workspace, Dynamic Views, progress, approval/evidence and operational views | Accepted read models and owner-wave gates | Readiness/specification only |
 | W16-M8–M9 | Visual goldens, performance, E2E and acceptance | Exact-head gates plus physical evidence | Future acceptance work |
 
-This preview does not count W15-P1 through W15-P4 as completion of W16 UI IDs or M1/M2. It keeps
+This preview does not count W15-P1 through W15-P6 as completion of W16 UI IDs or M1/M2. It keeps
 Android Views and existing presentation states; no Compose dependency, public schema or duplicate
 renderer framework is introduced. The planned conversation-first product direction is retained.
 
@@ -92,7 +99,7 @@ renderer framework is introduced. The planned conversation-first product directi
 - No focus is forced when no action had keyboard or accessibility focus before the rebuild.
 - The orb is explicitly excluded from accessibility traversal so readable textual state remains the
   single accessibility representation of presence.
-- Shared native setup/bootstrap helpers now use the same dark surface, readable text hierarchy,
+- Shared native setup/bootstrap helpers use the same dark surface, readable text hierarchy,
   54 dp controls, disabled styling, ripple feedback and visible keyboard-focus border as the Home.
 - This changes presentation only: existing click callbacks, permission flow, wake enrollment,
   privacy choice, assistant selection, LOCAL bootstrap, authority and execution remain unchanged.
@@ -107,12 +114,9 @@ renderer framework is introduced. The planned conversation-first product directi
 - Short landscape and large-text windows reduce decorative vertical padding to 12 dp.
 - Wide tablet windows keep content width constrained; compact windows use the available width and
   continue to scroll vertically.
-- Native helper buttons and Home actions explicitly allow line wrapping rather than horizontal
-  scrolling or clipping.
+- Native helper buttons and Home actions explicitly allow line wrapping rather than clipping.
 - Headings, detail/status copy, transcript, response and diagnostics use Android readable line-break
-  and hyphenation strategies where the platform supports them.
-- The Home's extra top/bottom decorative spacing follows the responsive vertical policy instead of
-  remaining fixed.
+  and hyphenation strategies where supported.
 - WakeVoiceActivity inherits these changes through the shared `AuroraAssistantSurface`; STT, TTS,
   governed dispatch, device execution and wake re-arm logic are unchanged.
 
@@ -127,36 +131,49 @@ renderer framework is introduced. The planned conversation-first product directi
 - Status cards are non-interactive and expose explicit `label: value` accessibility descriptions.
 - Unchanged status-item lists are not rebuilt, avoiding unnecessary accessibility-tree churn during
   the 500 ms wake-runtime refresh loop.
-- Onboarding progress, user feedback and sanitized error text remain in the separate readable status
-  line below the cards.
+
+## W15-P5 behavior
+
+- A pure `AuroraOnboardingProgressPolicy` maps only the already-selected onboarding step to display
+  progress; it never decides readiness, permission, assistant-role, wake state, authority or DP5.
+- Setup steps display `Etapa 1 de 4` through `Etapa 4 de 4` without marking the active step complete.
+- `WAKE_RUNTIME` displays `4 de 4 · Validando`; `READY` displays `Concluída`.
+- `PRIVACY_BLOCKED` hides the progress summary so the UI does not reveal or infer the setup point
+  that existed before the user's privacy choice.
+- JVM tests cover sequential setup progress, runtime validation, ready and privacy-blocked behavior.
+
+## W15-P6 behavior
+
+- The primary action remains isolated before conversation history and remains the dominant next step.
+- A visible conversation card contains an explicit `CONVERSA` heading before transcript/response.
+- Secondary configuration controls are grouped under `AJUSTES` only when at least one secondary
+  action exists; the heading disappears with `clearActions()` and is not shown for an empty group.
+- Both section labels are Android accessibility headings on supported versions, creating useful
+  navigation landmarks without creating new interactive controls.
+- Existing action IDs, listeners, focus capture/restore and action order are unchanged.
+- W15-P6 changes presentation hierarchy only; voice, execution, permissions, wake state and DP5 are
+  not consulted or modified.
 
 ## Validation and remaining checks
 
 Verification history:
 
-- JUnit: all eight orb rendering-policy tests passed using Kotlin 2.2.10 and JVM target 17.
-- Modified P1 native UI sources compiled against the official Android 36 SDK stubs. The compiler
-  reported only deprecated system-bar color APIs in the existing surface setup.
-- P2 added pure JVM tests for action-refresh identity.
-- P3 added pure JVM coverage for full-tablet, split-screen, very narrow, 200% font and short-landscape
-  geometry.
-- Exact head `39803da680878ddc8f1ea7f64cb5e1aa72a1cc78` passed Security, Quality, Test Build and Android
-  Foundation before the P4 status-card increment.
-- P4 extends the window-layout policy with adaptive status-card stacking and adds coverage at the
-  1.3 accessibility text-scale threshold. Its own exact-head CI is required before promotion.
+- P1 rendering-policy tests cover all eight assistant stages and animation/resource constraints.
+- P2 action-refresh tests cover initial creation, unchanged polling refresh and semantic rebuilds.
+- P3 window-layout tests cover full tablet, split-screen, very narrow, 130%/200% font and short landscape.
+- P5 onboarding-progress tests cover the four setup steps, runtime validation, READY and privacy block.
+- Exact head `39803da680878ddc8f1ea7f64cb5e1aa72a1cc78` passed Security, Quality, Test Build and Android Foundation.
+- Exact head `94c24383ab34ff2b432bbe4b4d1ef42d644b32ac` passed Security, Quality, Test Build and Android Foundation.
+- Exact head `5149250bc0924d1ae060d9dd034dc8fa1c47f0f0` passed Security, Quality, Test Build and Android Foundation.
+- P6 exact-head CI is required before this increment is considered software-validated.
 - These checks are not emulator rendering checks or physical acceptance.
 
 Automated acceptance for this preview:
 
-1. JVM rendering-policy tests cover all eight stages, visibility/accessibility/power constraints,
-   foreground restoration, narrow-window bounds and large-text orb decisions.
-2. Action-refresh policy tests cover initial creation, unchanged wake-runtime refresh and semantic
-   action changes that must rebuild controls.
-3. Window-layout policy tests cover full tablet, split-screen, very narrow width, 130%/200% font and
-   short landscape without shrinking requested text scale.
-4. Android Foundation must compile the native Views and run local unit tests on the exact PR head.
-5. Quality, Test Build and Security must pass on that same head; results belong in the PR.
-6. Scope review must show no change to W02/W03/W07/W14, voice capture, executors, signing or DP5 scripts.
+1. JVM policy tests cover orb behavior, focus-refresh identity, responsive geometry and onboarding progress.
+2. Android Foundation must compile the native Views and run local unit tests on the exact PR head.
+3. Quality, Test Build and Security must pass on that same head.
+4. Scope review must show no change to W02/W03/W07/W14, voice capture, executors, signing or DP5 scripts.
 
 Device checks remain **NOT RUN** until recorded against an exact preview build:
 
@@ -164,22 +181,24 @@ Device checks remain **NOT RUN** until recorded against an exact preview build:
 | --- | --- |
 | Home/setup at rest | Static orb; current setup action remains available |
 | Home status summary | Four readable status cards; progress/feedback remains separate |
+| Onboarding progress | Correct 1/4–4/4/validating/complete summary; hidden under privacy block |
 | Active voice session | Existing stage text and response behavior remain correct |
+| Conversation history | `CONVERSA` landmark precedes selectable transcript/response |
+| Secondary actions | `AJUSTES` appears only when secondary controls exist |
 | Remove animations enabled, including returning from Settings | No pulse; equivalent visible state text |
-| TalkBack toggled while open | No duplicate orb stop; state/status text remains readable; pulse stops |
+| TalkBack toggled while open | No duplicate orb stop; state/status/section headings remain readable |
 | Battery saver toggled while open | Pulse stops without changing the interaction state |
-| Home/background, hidden view, window focus loss, detach/reattach | No background animation; eligible foreground state can resume |
-| Portrait/landscape, split screen, font scale 1.0/1.3/2.0 | No horizontal orb/action/status overflow; text wraps and the surface scrolls normally |
-| Long transcript and response | Primary action comes first; text wraps, remains selectable and reachable |
+| Portrait/landscape, split screen, font scale 1.0/1.3/2.0 | No horizontal overflow; text wraps and the surface scrolls normally |
+| Long transcript and response | Primary action comes first; content remains selectable and reachable |
 | Wake-runtime polling with focused action | Identical refresh keeps the same control instance and focus |
 | Semantic onboarding transition with focused action | Matching stable control regains focus; primary role may move to new primary action |
 | Setup/bootstrap keyboard navigation | Visible focus border, wrapped labels and original callbacks remain intact |
 | Wake, assistant role, microphone and LOCAL bootstrap | Existing behavior unchanged; no authority inferred from visuals |
 
 No emulator screenshots, physical TalkBack checks, frame timings or battery measurements are
-claimed by the policy tests. Focus continuity, responsive geometry and the status-card presentation
-are implemented at the View/policy level but are not physical accessibility/layout acceptance until
-verified on the exact preview APK.
+claimed by the policy tests. Focus continuity, responsive geometry, state cards, onboarding progress
+and section hierarchy are implemented at the View/policy level but are not physical accessibility or
+layout acceptance until verified on the exact preview APK.
 
 ## Release and handoff
 
