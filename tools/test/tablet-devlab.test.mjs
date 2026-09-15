@@ -7,14 +7,14 @@ import test from 'node:test';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', name), 'utf8');
 
-const MAIN_SHA = 'a5af41c57ef08179197c7a94646bcd59af8eb5e1';
-const ANDROID_SHA = '4de5530a6f8b166b016b7d5dc547c38920f31f10';
-const HOST_SHA = 'c302e03ea44a06b9b13a9e837d14720bde5b505c';
-const PACKAGING_SHA = 'd36369f387ea06332f29073713556c4f793defcb';
-const APK_SHA = '20cfeeec3406ee3c414e43ffd53cb62c0874743f7650fef5d465807a56877e66';
-const ARTIFACT_ID = '10379008397';
-const RUN_ID = '34923631152';
-const ZIP_SHA = '564eb61eb4e969a4b0e714d3d6acfd99f11f99afb93090cffd3a1d3b8b636bdb';
+const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
+const ANDROID_SHA = '1e8c04d301ce76c60b0f8a47b6ae5866b1c5cd71';
+const HOST_SHA = '611d2b9e2eb879a54860753833f113d9ed6ac997';
+const PACKAGING_SHA = '560ee2bfd9e8c636dfe3e4c6a9604d51fcef3cda';
+const APK_SHA = '357e5e7992abe9f211a4de080fcc9342f34422589e8dd7b82c78a1c42772a431';
+const ARTIFACT_ID = '10379413734';
+const RUN_ID = '34925593612';
+const ZIP_SHA = '454561e20b5e2d382055d5be7c4410b87195bc50f2ac8b907c951f4fba709082';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
