@@ -24,10 +24,7 @@ export {
   stageMemoryProposalWithClassification,
   transitionMemoryProjection,
 } from './fabric.js';
-export {
-  MEMORY_FABRIC_SESSION_STATES,
-  openMemoryFabricSession,
-} from './session-coordinator.js';
+export { MEMORY_FABRIC_SESSION_STATES, openMemoryFabricSession } from './session-coordinator.js';
 export type {
   MemoryFabricCheckpointResult,
   MemoryFabricSession,

@@ -293,7 +293,10 @@ test('W06-K keeps WORKING memory live in-session and removes it across restart',
     sourceRequest(restartedAdapter.descriptor.adapterId, restartedAdapter.descriptor.sourceClass),
   );
   assert.equal(afterRestart.items.length, 0);
-  assert.equal(restarted.snapshot().records.some((record) => record.boundary === 'WORKING'), false);
+  assert.equal(
+    restarted.snapshot().records.some((record) => record.boundary === 'WORKING'),
+    false,
+  );
 });
 
 test('W06-K checkpoints durable candidates and reconstructs them after a new session opens', async () => {

@@ -5,11 +5,7 @@ import type { ContextSourceAdapter } from '../sources/types.js';
 import type { DurableMemoryFabricRepository } from './durable-state-adapter.js';
 import { stageMemoryProposal } from './fabric.js';
 import { createMemoryFabricSourceAdapter } from './source-adapter.js';
-import type {
-  MemoryFabricSnapshot,
-  MemoryStageResult,
-  MemoryWriteProposal,
-} from './types.js';
+import type { MemoryFabricSnapshot, MemoryStageResult, MemoryWriteProposal } from './types.js';
 
 export const MEMORY_FABRIC_SESSION_STATES = ['OPEN', 'CONFLICTED', 'CLOSED'] as const;
 export type MemoryFabricSessionState = (typeof MEMORY_FABRIC_SESSION_STATES)[number];
