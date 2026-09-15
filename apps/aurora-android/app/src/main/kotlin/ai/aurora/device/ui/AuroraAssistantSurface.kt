@@ -23,6 +23,11 @@ internal data class AuroraActionFocusSnapshot(
     val accessibilityFocused: Boolean,
 )
 
+internal data class AuroraSystemStatusItem(
+    val label: String,
+    val value: String,
+)
+
 class AuroraAssistantSurface private constructor(
     private val activity: Activity,
     val root: View,
@@ -30,6 +35,8 @@ class AuroraAssistantSurface private constructor(
     private val eyebrowView: TextView,
     private val titleView: TextView,
     private val detailView: TextView,
+    private val systemStatusView: LinearLayout,
+    private val stackSystemStatusItems: Boolean,
     private val statusLineView: TextView,
     private val transcriptCard: LinearLayout,
     private val transcriptView: TextView,
@@ -38,6 +45,8 @@ class AuroraAssistantSurface private constructor(
     private val actions: LinearLayout,
     private val diagnosticsView: TextView,
 ) {
+    private var lastSystemStatusItems: List<AuroraSystemStatusItem> = emptyList()
+
     fun render(
         stage: AuroraAssistantStage,
         titleOverride: String? = null,
@@ -63,6 +72,58 @@ class AuroraAssistantSurface private constructor(
         responseView.visibility = if (cleanResponse.isNotBlank()) View.VISIBLE else View.GONE
         transcriptView.setTextIfChanged(if (cleanTranscript.isBlank()) "" else "Você  ·  $cleanTranscript")
         responseView.setTextIfChanged(if (cleanResponse.isBlank()) "" else "Aurora  ·  $cleanResponse")
+    }
+
+    internal fun setSystemStatus(items: List<AuroraSystemStatusItem>) {
+        if (items == lastSystemStatusItems) return
+        lastSystemStatusItems = items.toList()
+        systemStatusView.removeAllViews()
+        systemStatusView.visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
+        if (items.isEmpty()) return
+
+        items.forEachIndexed { index, item ->
+            val chip =
+                TextView(activity).apply {
+                    text = "${item.label.uppercase()}\n${item.value}"
+                    contentDescription = "${item.label}: ${item.value}"
+                    textSize = 14f
+                    setTextColor(Color.rgb(238, 243, 255))
+                    gravity = Gravity.CENTER
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    minHeight = AuroraActivityUi.dp(activity, 64)
+                    setPadding(
+                        AuroraActivityUi.dp(activity, 12),
+                        AuroraActivityUi.dp(activity, 10),
+                        AuroraActivityUi.dp(activity, 12),
+                        AuroraActivityUi.dp(activity, 10),
+                    )
+                    enableReadableWrapping(balanceLines = true)
+                    background =
+                        roundedBackground(
+                            fill = Color.rgb(20, 28, 49),
+                            stroke = Color.rgb(76, 96, 145),
+                            radiusDp = 16,
+                        )
+                }
+            val params =
+                if (stackSystemStatusItems) {
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        if (index > 0) topMargin = AuroraActivityUi.dp(activity, 6)
+                    }
+                } else {
+                    LinearLayout.LayoutParams(
+                        0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        1f,
+                    ).apply {
+                        if (index > 0) marginStart = AuroraActivityUi.dp(activity, 6)
+                    }
+                }
+            systemStatusView.addView(chip, params)
+        }
     }
 
     fun setStatusLine(text: String) {
@@ -336,6 +397,22 @@ class AuroraAssistantSurface private constructor(
                 },
             )
 
+            val systemStatus =
+                LinearLayout(activity).apply {
+                    orientation = if (windowLayout.stackStatusItems) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER
+                    visibility = View.GONE
+                }
+            content.addView(
+                systemStatus,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    bottomMargin = AuroraActivityUi.dp(activity, 12)
+                },
+            )
+
             val statusLine =
                 TextView(activity).apply {
                     textSize = 13f
@@ -457,6 +534,8 @@ class AuroraAssistantSurface private constructor(
                 eyebrowView = eyebrow,
                 titleView = title,
                 detailView = detail,
+                systemStatusView = systemStatus,
+                stackSystemStatusItems = windowLayout.stackStatusItems,
                 statusLineView = statusLine,
                 transcriptCard = conversationCard,
                 transcriptView = transcript,
