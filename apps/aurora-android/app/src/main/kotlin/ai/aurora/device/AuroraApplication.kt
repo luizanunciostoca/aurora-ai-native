@@ -8,7 +8,7 @@ import ai.aurora.device.bootstrap.GatewayBootstrapGrant
 import ai.aurora.device.bootstrap.ProcessLocalGatewayBootstrapRuntime
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.config.RuntimeEnvironmentConfig
-import ai.aurora.device.executor.AndroidAudioVolumeActionPort
+import ai.aurora.device.executor.AndroidDeviceActionPorts
 import ai.aurora.device.executor.W15JDeviceCommandConsumptionResult
 import ai.aurora.device.executor.W15JGatewayDeviceCommandConsumer
 import ai.aurora.device.lifecycle.AndroidPresenceCheckpointStore
@@ -206,7 +206,7 @@ class AuroraApplication : Application() {
                     client = client,
                     capabilityBridge = installedProjection.capabilityBridge,
                     permissionContext = this,
-                    actionPort = AndroidAudioVolumeActionPort(this),
+                    actionPort = AndroidDeviceActionPorts.create(this),
                 )
             }.getOrNull()
         if (consumer == null) {
