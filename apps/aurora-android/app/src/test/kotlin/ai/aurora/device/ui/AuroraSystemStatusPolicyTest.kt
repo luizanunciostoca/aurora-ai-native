@@ -9,12 +9,16 @@ class AuroraSystemStatusPolicyTest {
         completed: Int = 2,
         total: Int = 4,
         show: Boolean = true,
+        summary: String = "Etapa 3 de 4",
+        complete: Boolean = false,
     ) =
         AuroraOnboardingProgress(
             completedSteps = completed,
             totalSteps = total,
             activeStepIndex = if (completed < total) completed else null,
             showTrack = show,
+            summaryLabel = summary,
+            isComplete = complete,
         )
 
     @Test
@@ -22,7 +26,7 @@ class AuroraSystemStatusPolicyTest {
         val items =
             AuroraSystemStatusPolicy.items(
                 AuroraSystemStatusInput(
-                    setupProgress = progress(completed = 4),
+                    setupProgress = progress(completed = 4, summary = "Concluída", complete = true),
                     microphoneGranted = true,
                     assistantSelected = true,
                     wakeOperational = true,
@@ -36,6 +40,24 @@ class AuroraSystemStatusPolicyTest {
         assertEquals(AuroraSystemStatusTone.POSITIVE, items[2].tone)
         assertEquals(AuroraSystemStatusTone.POSITIVE, items[3].tone)
         assertEquals(AuroraSystemStatusTone.NEUTRAL, items[4].tone)
+    }
+
+    @Test
+    fun runtimeValidationDoesNotLookReadyEvenAfterFourSetupSteps() {
+        val items =
+            AuroraSystemStatusPolicy.items(
+                AuroraSystemStatusInput(
+                    setupProgress = progress(completed = 4, summary = "4 de 4 · Validando"),
+                    microphoneGranted = true,
+                    assistantSelected = true,
+                    wakeOperational = false,
+                    privacyEnabled = false,
+                ),
+            )
+
+        assertEquals("4 de 4 · Validando", items.first().value)
+        assertEquals(AuroraSystemStatusTone.NEUTRAL, items.first().tone)
+        assertEquals(AuroraSystemStatusTone.ATTENTION, items[3].tone)
     }
 
     @Test
