@@ -2,6 +2,8 @@ package ai.aurora.device.voice
 
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import ai.aurora.device.wake.AuroraAudioArbiter.AudioOwner
@@ -35,6 +37,7 @@ enum class AuroraSpeechOutputFailure {
     AUDIO_OWNERSHIP_UNAVAILABLE,
     ENGINE_UNAVAILABLE,
     SPEAK_FAILED,
+    TIMEOUT,
 }
 
 class AuroraTextToSpeechOutput(
@@ -42,11 +45,13 @@ class AuroraTextToSpeechOutput(
     private val languageTag: String = "pt-BR",
 ) : AutoCloseable {
     private val appContext = context.applicationContext
+    private val handler = Handler(Looper.getMainLooper())
     private val active = AtomicBoolean(false)
     private var engine: TextToSpeech? = null
     private var ready = false
     private var pendingText: String? = null
     private var pendingUtteranceId: String? = null
+    private var timeoutRunnable: Runnable? = null
     private var completion: ((AuroraSpeechOutputReceipt) -> Unit)? = null
     private var failure: ((AuroraSpeechOutputFailure) -> Unit)? = null
 
@@ -74,6 +79,7 @@ class AuroraTextToSpeechOutput(
         pendingUtteranceId = "aurora-tts-${UUID.randomUUID()}"
         completion = onComplete
         failure = onFailure
+        scheduleTimeout(text.length)
 
         val existing = engine
         if (existing != null && ready) {
@@ -82,6 +88,7 @@ class AuroraTextToSpeechOutput(
         }
         engine =
             TextToSpeech(appContext) { status ->
+                if (!active.get()) return@TextToSpeech
                 val local = engine
                 if (status != TextToSpeech.SUCCESS || local == null) {
                     fail(AuroraSpeechOutputFailure.ENGINE_UNAVAILABLE)
@@ -103,7 +110,10 @@ class AuroraTextToSpeechOutput(
     }
 
     override fun close() {
-        if (active.get()) fail(null)
+        if (active.get()) {
+            runCatching { engine?.stop() }
+            fail(null)
+        }
         val local = engine
         engine = null
         ready = false
@@ -111,7 +121,20 @@ class AuroraTextToSpeechOutput(
         runCatching { local?.shutdown() }
     }
 
+    private fun scheduleTimeout(textLength: Int) {
+        timeoutRunnable?.let(handler::removeCallbacks)
+        val timeout =
+            Runnable {
+                if (!active.get()) return@Runnable
+                runCatching { engine?.stop() }
+                fail(AuroraSpeechOutputFailure.TIMEOUT)
+            }
+        timeoutRunnable = timeout
+        handler.postDelayed(timeout, timeoutForText(textLength))
+    }
+
     private fun speakNow(local: TextToSpeech) {
+        if (!active.get()) return
         val text = pendingText ?: return fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
         val utteranceId = pendingUtteranceId ?: return fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
         WakePlaybackAwareness.onTtsStarted(text)
@@ -125,7 +148,7 @@ class AuroraTextToSpeechOutput(
 
             override fun onDone(utteranceId: String?) {
                 val expected = pendingUtteranceId
-                if (expected == null || utteranceId != expected) return
+                if (expected == null || utteranceId != expected || !active.get()) return
                 val callback = completion
                 finish()
                 callback?.invoke(
@@ -138,23 +161,30 @@ class AuroraTextToSpeechOutput(
 
             @Deprecated("Deprecated in Android")
             override fun onError(utteranceId: String?) {
-                if (utteranceId == pendingUtteranceId) fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
+                if (utteranceId == pendingUtteranceId && active.get()) {
+                    fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
+                }
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
-                if (utteranceId == pendingUtteranceId) fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
+                if (utteranceId == pendingUtteranceId && active.get()) {
+                    fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
+                }
             }
         }
 
     private fun fail(reason: AuroraSpeechOutputFailure?) {
+        if (!active.get()) return
         val callback = failure
         finish()
         if (reason != null) callback?.invoke(reason)
     }
 
     private fun finish() {
+        if (!active.compareAndSet(true, false)) return
+        timeoutRunnable?.let(handler::removeCallbacks)
+        timeoutRunnable = null
         WakePlaybackAwareness.onTtsStopped()
-        active.set(false)
         pendingText = null
         pendingUtteranceId = null
         completion = null
@@ -164,5 +194,14 @@ class AuroraTextToSpeechOutput(
 
     companion object {
         const val MAX_TEXT_CHARS = 2_048
+        private const val BASE_TIMEOUT_MS = 10_000L
+        private const val PER_CHARACTER_TIMEOUT_MS = 80L
+        private const val MAX_TIMEOUT_MS = 180_000L
+
+        internal fun timeoutForText(textLength: Int): Long {
+            require(textLength in 1..MAX_TEXT_CHARS)
+            return (BASE_TIMEOUT_MS + textLength * PER_CHARACTER_TIMEOUT_MS)
+                .coerceAtMost(MAX_TIMEOUT_MS)
+        }
     }
 }

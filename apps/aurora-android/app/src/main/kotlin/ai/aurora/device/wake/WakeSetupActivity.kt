@@ -2,11 +2,9 @@ package ai.aurora.device.wake
 
 import android.Manifest
 import android.app.Activity
-import android.app.role.RoleManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
@@ -21,6 +19,7 @@ class WakeSetupActivity : Activity() {
     private lateinit var preferences: WakeRuntimePreferences
     private lateinit var modelStore: AuroraWakeModelStore
     private lateinit var statusStore: WakeRuntimeStatusStore
+    private lateinit var microphonePermissionHistory: MicrophonePermissionRequestHistory
     private lateinit var statusView: TextView
     private lateinit var guidanceView: TextView
     private lateinit var microphoneButton: Button
@@ -36,6 +35,8 @@ class WakeSetupActivity : Activity() {
     private var wakeSuspendedForEnrollment = false
     private var enrollmentStartAttempts = 0
     private var wakeRearmAttempts = 0
+    private var onboardingActionConsumed = false
+    private var assistantSelectionFeedback: String? = null
     private val enrollmentStartRunnable = Runnable(::startEnrollmentWhenAudioIdle)
     private val nextEnrollmentSampleRunnable = Runnable(::captureNextEnrollmentSample)
     private val wakeRearmRunnable = Runnable(::rearmWakeWhenAudioIdle)
@@ -43,9 +44,12 @@ class WakeSetupActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        onboardingActionConsumed =
+            savedInstanceState?.getBoolean(STATE_ONBOARDING_ACTION_CONSUMED, false) == true
         preferences = WakeRuntimePreferences(this)
         modelStore = AuroraWakeModelStore(this)
         statusStore = WakeRuntimeStatusStore(this)
+        microphonePermissionHistory = MicrophonePermissionRequestHistory(this)
 
         val screen = AuroraActivityUi.createScrollableScreen(this)
         val layout = screen.content
@@ -95,11 +99,17 @@ class WakeSetupActivity : Activity() {
         layout.addView(privacyButton)
         setContentView(screen.root)
         refresh()
+        consumePendingOnboardingAction()
     }
 
     override fun onResume() {
         super.onResume()
         refresh()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean(STATE_ONBOARDING_ACTION_CONSUMED, onboardingActionConsumed)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onPause() {
@@ -163,13 +173,50 @@ class WakeSetupActivity : Activity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQUEST_MICROPHONE) return
         val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
-        if (!granted) {
+        if (granted) {
+            microphonePermissionHistory.clear()
+        } else {
             statusStore.update(
                 "WAKE_PERMISSION_BLOCKED",
                 lastError = "microphone permission denied by user",
             )
         }
         refresh()
+    }
+
+    @Deprecated("RoleManager still returns its user-consent result through the Activity result API")
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?,
+    ) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_ASSISTANT_ROLE) return
+        handleAssistantSelectionLaunch(
+            AuroraAssistantRoleCoordinator.continueSelectionAfterRoleResult(this),
+        )
+    }
+
+    private fun consumePendingOnboardingAction() {
+        if (onboardingActionConsumed) return
+        val action =
+            WakeSetupOnboardingActionCodec.decode(
+                intent?.getStringExtra(WakeSetupOnboardingActionCodec.EXTRA_ONBOARDING_ACTION),
+            ) ?: return
+        onboardingActionConsumed = true
+        intent?.removeExtra(WakeSetupOnboardingActionCodec.EXTRA_ONBOARDING_ACTION)
+        statusView.post {
+            if (isFinishing || isDestroyed) return@post
+            when (action) {
+                WakeSetupOnboardingAction.TRAIN_WAKE -> beginOrResumeEnrollment()
+                WakeSetupOnboardingAction.ENABLE_WAKE -> enableWake()
+                WakeSetupOnboardingAction.REVIEW_PRIVACY -> {
+                    refresh()
+                    guidanceView.text =
+                        "Revise o modo de privacidade abaixo. A Aurora não altera essa escolha sem um toque explícito seu."
+                }
+            }
+        }
     }
 
     private fun beginOrResumeEnrollment() {
@@ -416,37 +463,49 @@ class WakeSetupActivity : Activity() {
     }
 
     private fun requestMicrophonePermissionOrSettings() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            refresh()
-            return
-        }
-        val previouslyDenied = statusStore.snapshot().state == "WAKE_PERMISSION_BLOCKED"
-        if (previouslyDenied && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
-            runCatching {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:$packageName"),
-                    ),
-                )
+        val permissionGranted =
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val shouldShowRationale =
+            !permissionGranted &&
+                shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+        when (
+            MicrophonePermissionFlow.nextAction(
+                granted = permissionGranted,
+                requestAttempted = microphonePermissionHistory.attempted(),
+                shouldShowRationale = shouldShowRationale,
+            )
+        ) {
+            MicrophonePermissionAction.NONE -> refresh()
+            MicrophonePermissionAction.REQUEST -> {
+                microphonePermissionHistory.markAttempted()
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MICROPHONE)
             }
-            return
+            MicrophonePermissionAction.OPEN_SETTINGS -> {
+                runCatching {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName"),
+                        ),
+                    )
+                }.onFailure {
+                    guidanceView.text =
+                        "Abra Configurações > Aplicativos > Aurora > Permissões e autorize o microfone."
+                }
+            }
         }
-        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MICROPHONE)
     }
 
     private fun requestAssistantRole() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roles = getSystemService(RoleManager::class.java)
-            if (roles.isRoleAvailable(RoleManager.ROLE_ASSISTANT) && !roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)) {
-                startActivityForResult(
-                    roles.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT),
-                    REQUEST_ASSISTANT_ROLE,
-                )
-            }
-        } else {
-            runCatching { startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)) }
-        }
+        assistantSelectionFeedback = null
+        handleAssistantSelectionLaunch(
+            AuroraAssistantRoleCoordinator.requestSelection(this, REQUEST_ASSISTANT_ROLE),
+        )
+    }
+
+    private fun handleAssistantSelectionLaunch(result: AuroraAssistantSelectionLaunch) {
+        assistantSelectionFeedback = AuroraAssistantRoleCoordinator.userGuidance(result)
+        refresh()
     }
 
     private fun refresh() {
@@ -454,16 +513,13 @@ class WakeSetupActivity : Activity() {
         val runtime = statusStore.snapshot()
         val permissionGranted =
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        val roleAvailable: Boolean
-        val assistantSelected: Boolean
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val roles = getSystemService(RoleManager::class.java)
-            roleAvailable = roles.isRoleAvailable(RoleManager.ROLE_ASSISTANT)
-            assistantSelected = roleAvailable && roles.isRoleHeld(RoleManager.ROLE_ASSISTANT)
-        } else {
-            roleAvailable = true
-            assistantSelected = false
+        if (permissionGranted && ::microphonePermissionHistory.isInitialized) {
+            microphonePermissionHistory.clear()
         }
+        val assistant = AuroraAssistantRoleCoordinator.snapshot(this)
+        val roleAvailable = assistant.roleAvailable
+        val assistantSelected = assistant.selected
+        if (assistantSelected) assistantSelectionFeedback = null
         val modelReady = modelStore.hasValidModel()
         val ui =
             WakeSetupUiPolicy.present(
@@ -493,12 +549,17 @@ class WakeSetupActivity : Activity() {
                 append("Rejeitados/ignorados: ${runtime.rejectedOrIgnoredCount}")
                 ui.errorLabel?.let { append("\nAtenção: $it") }
             }
-        guidanceView.text = ui.guidance
+        guidanceView.text = assistantSelectionFeedback ?: ui.guidance
 
-        val permanentlyDenied =
-            !permissionGranted &&
-                runtime.state == "WAKE_PERMISSION_BLOCKED" &&
-                !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+        val microphonePermissionAction =
+            MicrophonePermissionFlow.nextAction(
+                granted = permissionGranted,
+                requestAttempted = microphonePermissionHistory.attempted(),
+                shouldShowRationale =
+                    !permissionGranted &&
+                        shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO),
+            )
+        val permanentlyDenied = microphonePermissionAction == MicrophonePermissionAction.OPEN_SETTINGS
         microphoneButton.text =
             if (permanentlyDenied) "Abrir configurações do microfone" else ui.microphoneButtonLabel
         microphoneButton.isEnabled = ui.canRequestMicrophone
@@ -513,6 +574,7 @@ class WakeSetupActivity : Activity() {
     }
 
     companion object {
+        private const val STATE_ONBOARDING_ACTION_CONSUMED = "wake_setup_onboarding_action_consumed"
         private const val REQUEST_MICROPHONE = 1501
         private const val REQUEST_ASSISTANT_ROLE = 1502
         private const val ENROLLMENT_SAMPLES = 3
