@@ -1,4 +1,23 @@
 export {
+  createDurableMemoryFabricRepository,
+  decodeDurableMemoryFabricSnapshot,
+  encodeDurableMemoryFabricSnapshot,
+  isMemoryFabricJsonValue,
+  MEMORY_FABRIC_DURABLE_NAMESPACE,
+  MEMORY_FABRIC_DURABLE_STATE_KEY,
+} from './durable-state-adapter.js';
+export type {
+  DurableMemoryFabricLoadResult,
+  DurableMemoryFabricRepository,
+  DurableMemoryFabricSaveResult,
+  MemoryFabricDurableStateAddress,
+  MemoryFabricDurableStateRecord,
+  MemoryFabricDurableStateStorePort,
+  MemoryFabricDurableStateWriteResult,
+  MemoryFabricJsonPrimitive,
+  MemoryFabricJsonValue,
+} from './durable-state-adapter.js';
+export {
   createMemoryFabricSnapshot,
   readMemoryProjection,
   stageMemoryProposal,
