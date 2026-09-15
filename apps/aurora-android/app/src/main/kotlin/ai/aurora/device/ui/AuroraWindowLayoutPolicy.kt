@@ -4,13 +4,15 @@ internal data class AuroraWindowLayout(
     val horizontalPaddingDp: Int,
     val verticalPaddingDp: Int,
     val constrainContentWidth: Boolean,
+    val stackStatusItems: Boolean,
 )
 
 /**
  * Presentation-only policy for Android window geometry.
  *
  * The policy deliberately does not inspect Aurora runtime, authority, voice, execution or DP5
- * state. It only decides how much safe-space padding to reserve around scrollable native content.
+ * state. It only decides how much safe-space padding to reserve around scrollable native content
+ * and whether compact status items need vertical stacking for readable text.
  */
 internal object AuroraWindowLayoutPolicy {
     fun resolve(
@@ -37,11 +39,13 @@ internal object AuroraWindowLayoutPolicy {
             }
         val verticalPadding = if (shortWindow || largeText) 12 else 20
         val constrainContentWidth = widthDp >= maxContentWidthDp + (horizontalPadding * 2)
+        val stackStatusItems = widthDp < 720 || fontScale >= 1.3f
 
         return AuroraWindowLayout(
             horizontalPaddingDp = horizontalPadding,
             verticalPaddingDp = verticalPadding,
             constrainContentWidth = constrainContentWidth,
+            stackStatusItems = stackStatusItems,
         )
     }
 }
