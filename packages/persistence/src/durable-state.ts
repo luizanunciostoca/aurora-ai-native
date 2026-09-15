@@ -209,25 +209,29 @@ function parseRecord<TPayload extends W03JsonValue>(
   };
 }
 
+async function loadFromExecutor<TPayload extends W03JsonValue = W03JsonValue>(
+  executor: W03SqlExecutor,
+  address: W03DurableStateAddress,
+): Promise<W03DurableStateRecord<TPayload> | null> {
+  assertAddress(address);
+  const result = await executor.query<DurableStateRow>(W03_DURABLE_STATE_LOAD_SQL, [
+    address.tenantId,
+    address.namespace,
+    address.stateKey,
+  ]);
+  if (result.rows.length === 0) return null;
+  if (result.rows.length !== 1) throw new Error('W03_DURABLE_STATE_LOAD_AMBIGUOUS');
+  return parseRecord<TPayload>(result.rows[0] as DurableStateRow, address);
+}
+
 /**
  * W03-owned generic durable JSON state with optimistic concurrency.
  * It stores opaque domain payloads and never interprets them as authority.
  */
 export function createW03PostgresDurableStateStore(executor: W03SqlExecutor): W03DurableStateStore {
   return {
-    load: async <TPayload extends W03JsonValue = W03JsonValue>(
-      address: W03DurableStateAddress,
-    ): Promise<W03DurableStateRecord<TPayload> | null> => {
-      assertAddress(address);
-      const result = await executor.query<DurableStateRow>(W03_DURABLE_STATE_LOAD_SQL, [
-        address.tenantId,
-        address.namespace,
-        address.stateKey,
-      ]);
-      if (result.rows.length === 0) return null;
-      if (result.rows.length !== 1) throw new Error('W03_DURABLE_STATE_LOAD_AMBIGUOUS');
-      return parseRecord<TPayload>(result.rows[0] as DurableStateRow, address);
-    },
+    load: <TPayload extends W03JsonValue = W03JsonValue>(address: W03DurableStateAddress) =>
+      loadFromExecutor<TPayload>(executor, address),
 
     compareAndSwap: async <TPayload extends W03JsonValue = W03JsonValue>(
       request: W03DurableStateCompareAndSwapRequest<TPayload>,
@@ -261,7 +265,7 @@ export function createW03PostgresDurableStateStore(executor: W03SqlExecutor): W0
         };
       }
 
-      const current = await this.load(request);
+      const current = await loadFromExecutor(executor, request);
       return {
         status: 'CONFLICT',
         currentRevision: current?.revision ?? null,
