@@ -30,6 +30,7 @@ class AuroraAssistantSurface private constructor(
     private val eyebrowView: TextView,
     private val titleView: TextView,
     private val detailView: TextView,
+    private val systemStatusHeadingView: TextView,
     private val systemStatusView: LinearLayout,
     private val stackSystemStatusItems: Boolean,
     private val statusLineView: TextView,
@@ -73,9 +74,11 @@ class AuroraAssistantSurface private constructor(
     internal fun setSystemStatus(items: List<AuroraSystemStatusItem>) {
         if (items == lastSystemStatusItems) return
         lastSystemStatusItems = items.toList()
+        val visible = items.isNotEmpty()
+        systemStatusHeadingView.visibility = if (visible) View.VISIBLE else View.GONE
+        systemStatusView.visibility = if (visible) View.VISIBLE else View.GONE
         systemStatusView.removeAllViews()
-        systemStatusView.visibility = if (items.isEmpty()) View.GONE else View.VISIBLE
-        if (items.isEmpty()) return
+        if (!visible) return
 
         items.forEachIndexed { index, item ->
             val tone = statusToneColors(item.tone)
@@ -432,6 +435,27 @@ class AuroraAssistantSurface private constructor(
                 },
             )
 
+            val systemStatusHeading =
+                TextView(activity).apply {
+                    text = "ESTADO"
+                    textSize = 12f
+                    letterSpacing = 0.14f
+                    setTextColor(Color.rgb(142, 168, 230))
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    visibility = View.GONE
+                    enableReadableWrapping(balanceLines = true)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isAccessibilityHeading = true
+                }
+            content.addView(
+                systemStatusHeading,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    bottomMargin = AuroraActivityUi.dp(activity, 6)
+                },
+            )
+
             val systemStatus =
                 LinearLayout(activity).apply {
                     orientation = if (windowLayout.stackStatusItems) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
@@ -618,6 +642,7 @@ class AuroraAssistantSurface private constructor(
                 eyebrowView = eyebrow,
                 titleView = title,
                 detailView = detail,
+                systemStatusHeadingView = systemStatusHeading,
                 systemStatusView = systemStatus,
                 stackSystemStatusItems = windowLayout.stackStatusItems,
                 statusLineView = statusLine,
