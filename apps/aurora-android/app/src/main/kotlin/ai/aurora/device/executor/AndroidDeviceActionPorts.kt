@@ -35,7 +35,12 @@ object AndroidDeviceActionPorts {
                 ),
                 DeviceActionBinding(
                     W15_OPEN_VALIDATED_APP_ACTION,
-                    AndroidAppLaunchActionPort.CAPABILITY_ID,
+                    AndroidAppLaunchActionPort.OPEN_CAPABILITY_ID,
+                    app,
+                ),
+                DeviceActionBinding(
+                    W15_OPEN_VALIDATED_APP_LINK_ACTION,
+                    AndroidAppLaunchActionPort.APP_LINK_CAPABILITY_ID,
                     app,
                 ),
                 DeviceActionBinding(W15_MEDIA_PLAY_ACTION, AndroidMediaActionPort.PLAY_CAPABILITY_ID, media),
