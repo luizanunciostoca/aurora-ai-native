@@ -3,15 +3,15 @@ import { spawnSync } from 'node:child_process';
 // @ts-expect-error -- context harness has no @types/node; Node 22 provides this built-in.
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 // @ts-expect-error -- context harness has no @types/node; Node 22 provides this built-in.
-import { dirname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+// @ts-expect-error -- context harness has no @types/node; Node 22 provides this built-in.
+import { cwd } from 'node:process';
 // @ts-expect-error -- context harness has no @types/node; Node 22 provides this built-in.
 import test from 'node:test';
-// @ts-expect-error -- context harness has no @types/node; Node 22 provides this built-in.
-import { fileURLToPath } from 'node:url';
 
 import * as prettier from 'prettier';
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
+const repoRoot = cwd();
 const targets = [
   'packages/context/src/memory-fabric/fabric.ts',
   'packages/context/src/memory-fabric/index.ts',
@@ -32,10 +32,20 @@ test('W06-I emits exact Prettier diffs for the candidate files', async () => {
     writeFileSync(temporaryPath, formatted, 'utf8');
     const diff = spawnSync(
       'diff',
-      ['-u', '--label', relativePath, '--label', `${relativePath} (prettier)`, absolutePath, temporaryPath],
+      [
+        '-u',
+        '--label',
+        relativePath,
+        '--label',
+        `${relativePath} (prettier)`,
+        absolutePath,
+        temporaryPath,
+      ],
       { encoding: 'utf8' },
     );
-    console.log(`\n=== W06-I PRETTIER DIFF: ${relativePath} ===\n${diff.stdout}\n=== END W06-I PRETTIER DIFF ===\n`);
+    console.log(
+      `\n=== W06-I PRETTIER DIFF: ${relativePath} ===\n${diff.stdout}\n=== END W06-I PRETTIER DIFF ===\n`,
+    );
     rmSync(temporaryPath, { force: true });
   }
 });
