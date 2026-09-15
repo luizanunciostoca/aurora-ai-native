@@ -5,16 +5,17 @@ import ai.aurora.device.voice.VoiceFastPathDecision
 import ai.aurora.device.voice.WakeVoiceFallbackReason
 import ai.aurora.device.voice.WakeVoiceRoute
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AuroraAssistantResponseComposerTest {
     @Test
-    fun volumeCapabilityHasSpecificSuccessCopy() {
-        assertEquals(
-            "Pronto. Aumentei o volume.",
-            AuroraAssistantResponseComposer.successForCapability("audio.volume.set"),
-        )
+    fun volumeCapabilitySuccessDoesNotInventDirection() {
+        val response = AuroraAssistantResponseComposer.successForCapability("audio.volume.set")
+        assertEquals("Pronto. Ajustei o volume.", response)
+        assertFalse(response.contains("aument", ignoreCase = true))
+        assertFalse(response.contains("diminu", ignoreCase = true))
     }
 
     @Test

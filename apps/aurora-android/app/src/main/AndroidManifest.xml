@@ -30,6 +30,11 @@
             android:name=".wake.WakeSetupActivity"
             android:exported="false" />
         <activity
+            android:name=".wake.AuroraAssistantSettingsActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true" />
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop">

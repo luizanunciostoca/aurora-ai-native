@@ -12,6 +12,14 @@ internal class MicrophonePermissionRequestHistory(context: Context) {
         preferences.edit().putBoolean(KEY_ATTEMPTED, true).apply()
     }
 
+    /**
+     * A successful grant starts a new permission lifecycle. Clearing the old request bit prevents a
+     * later one-time/revoked grant from being misclassified as a permanent denial.
+     */
+    fun clear() {
+        preferences.edit().remove(KEY_ATTEMPTED).apply()
+    }
+
     private companion object {
         const val PREFERENCES_NAME = "aurora_permission_history"
         const val KEY_ATTEMPTED = "microphone_permission_request_attempted"
