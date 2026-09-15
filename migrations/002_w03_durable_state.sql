@@ -6,10 +6,7 @@ CREATE TABLE IF NOT EXISTS w03_durable_state (
         char_length(state_namespace) BETWEEN 1 AND 128 AND
         state_namespace ~ '^[a-z][a-z0-9._:-]*$'
     ),
-    state_key TEXT NOT NULL CHECK (
-        char_length(state_key) BETWEEN 1 AND 512 AND
-        position(chr(0) in state_key) = 0
-    ),
+    state_key TEXT NOT NULL CHECK (char_length(state_key) BETWEEN 1 AND 512),
     revision BIGINT NOT NULL CHECK (revision > 0),
     payload JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
