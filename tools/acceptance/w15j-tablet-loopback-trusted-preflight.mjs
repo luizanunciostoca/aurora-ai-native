@@ -317,19 +317,33 @@ function assertNoReverse(textValue, label) {
 }
 
 function validateControlTowerTuple(input) {
+  const stableSigning = Object.hasOwn(input, 'signing');
   exactKeys(
     input,
-    [
-      'schemaVersion',
-      'repository',
-      'workflowRun',
-      'androidCandidateSha',
-      'hostCandidateSha',
-      'reconciledMainSha',
-      'packagingHeadSha',
-      'artifact',
-      'apk',
-    ],
+    stableSigning
+      ? [
+          'schemaVersion',
+          'repository',
+          'workflowRun',
+          'androidCandidateSha',
+          'hostCandidateSha',
+          'reconciledMainSha',
+          'packagingHeadSha',
+          'artifact',
+          'apk',
+          'signing',
+        ]
+      : [
+          'schemaVersion',
+          'repository',
+          'workflowRun',
+          'androidCandidateSha',
+          'hostCandidateSha',
+          'reconciledMainSha',
+          'packagingHeadSha',
+          'artifact',
+          'apk',
+        ],
     'Control Tower tuple',
   );
   exactKeys(
@@ -339,9 +353,18 @@ function validateControlTowerTuple(input) {
   );
   exactKeys(
     input.artifact,
-    ['id', 'name', 'zipSha256', 'digestSourceRef'],
+    stableSigning
+      ? ['id', 'name', 'zipSha256', 'presignApkSha256', 'digestSourceRef']
+      : ['id', 'name', 'zipSha256', 'digestSourceRef'],
     'Control Tower artifact',
   );
+  if (stableSigning) {
+    exactKeys(
+      input.signing,
+      ['profile', 'signerCertSha256', 'deterministic', 'privateKeyExported'],
+      'Control Tower signing',
+    );
+  }
   exactKeys(
     input.apk,
     ['applicationId', 'variant', 'versionCode', 'versionName', 'sha256'],
@@ -370,6 +393,13 @@ function validateControlTowerTuple(input) {
   if (!input.artifact.digestSourceRef.startsWith(`${runUrl}#artifact-${artifactId}`)) {
     throw new Error('artifact digest source does not bind exact run/artifact');
   }
+  if (stableSigning) {
+    if (input.signing.profile !== 'PHYSICAL_DEV_STABLE_LOCAL')
+      throw new Error('stable signing profile invalid');
+    if (input.signing.deterministic !== true || input.signing.privateKeyExported !== false) {
+      throw new Error('stable signing invariants invalid');
+    }
+  }
   return Object.freeze({
     repository: input.repository,
     workflowRun: Object.freeze({ ...input.workflowRun, id: runId }),
@@ -381,6 +411,15 @@ function validateControlTowerTuple(input) {
       id: artifactId,
       name: requiredString(input.artifact.name, 'artifact name'),
       zipSha256: exact(input.artifact.zipSha256, SHA256, 'artifact ZIP SHA'),
+      ...(stableSigning
+        ? {
+            presignApkSha256: exact(
+              input.artifact.presignApkSha256,
+              SHA256,
+              'artifact pre-sign APK SHA',
+            ),
+          }
+        : {}),
       digestSourceRef: input.artifact.digestSourceRef,
     }),
     apk: Object.freeze({
@@ -390,10 +429,225 @@ function validateControlTowerTuple(input) {
       versionName: requiredString(input.apk.versionName, 'APK versionName'),
       sha256: exact(input.apk.sha256, SHA256, 'APK SHA'),
     }),
+    ...(stableSigning
+      ? {
+          signing: Object.freeze({
+            profile: input.signing.profile,
+            signerCertSha256: exact(
+              input.signing.signerCertSha256,
+              SHA256,
+              'signer certificate SHA',
+            ),
+            deterministic: input.signing.deterministic,
+            privateKeyExported: input.signing.privateKeyExported,
+          }),
+        }
+      : {}),
   });
 }
 
+function validateStableSignedArtifact(snapshot, controlTower) {
+  const artifact = kv(snapshot, 'artifact-metadata.txt');
+  exactKeys(
+    artifact,
+    [
+      'packaging_head_sha',
+      'packaging_run_id',
+      'artifact_id',
+      'artifact_name',
+      'artifact_zip_sha256',
+      'presign_apk_sha256',
+      'expected_final_apk_sha256',
+      'expected_signer_cert_sha256',
+    ],
+    'stable-signing artifact metadata',
+  );
+  const build = kv(snapshot, 'BUILD_IDENTITY.txt');
+  exactKeys(
+    build,
+    [
+      'artifact_purpose',
+      'source_candidate_sha',
+      'source_branch',
+      'paired_local_host_candidate_sha',
+      'reconciled_main_parent_sha',
+      'packaging_head_sha',
+      'packaging_branch',
+      'packaging_run_id',
+      'gateway_environment',
+      'device_gateway_port',
+      'bootstrap_port',
+      'gateway_transport_scope',
+      'apk_variant',
+      'package_id',
+      'version_code',
+      'version_name',
+      'canonical_acceptance',
+      'physical_evidence_required',
+      'dp5_status',
+      'input_signing_profile',
+      'final_signing_profile',
+      'local_signing_required',
+      'expected_signer_cert_sha256',
+    ],
+    'stable-signing BUILD_IDENTITY',
+  );
+  const signing = kv(snapshot, 'FINAL_SIGNING_IDENTITY.txt');
+  exactKeys(
+    signing,
+    [
+      'signing_profile',
+      'presign_apk_sha256',
+      'final_apk_sha256',
+      'signer_cert_sha256',
+      'apk_signature_v1',
+      'apk_signature_v2',
+      'apk_signature_v3',
+      'signer_count',
+      'deterministic_signing',
+      'private_key_exported',
+    ],
+    'FINAL_SIGNING_IDENTITY',
+  );
+  for (const [key, expected] of [
+    ['artifact_purpose', 'W15-J-DP5-physical-evidence-input'],
+    ['source_branch', 'wave/15j-physical-device-integration-acceptance'],
+    ['packaging_branch', 'prototype/w15j-physical-apk-artifact'],
+    ['gateway_environment', 'LOCAL'],
+    ['device_gateway_port', '8080'],
+    ['bootstrap_port', '8081'],
+    ['gateway_transport_scope', TRANSPORT],
+    ['canonical_acceptance', 'false'],
+    ['physical_evidence_required', 'true'],
+    ['dp5_status', 'INCOMPLETE'],
+    ['input_signing_profile', 'DEBUG_FALLBACK'],
+    ['final_signing_profile', 'PHYSICAL_DEV_STABLE_LOCAL'],
+    ['local_signing_required', 'true'],
+  ]) {
+    if (required(build, key, 'BUILD_IDENTITY') !== expected)
+      throw new Error(`BUILD_IDENTITY.${key} stable-signing drift`);
+  }
+  if (
+    artifact.expected_signer_cert_sha256 !== controlTower.signing.signerCertSha256 ||
+    build.expected_signer_cert_sha256 !== controlTower.signing.signerCertSha256 ||
+    signing.signer_cert_sha256 !== controlTower.signing.signerCertSha256
+  )
+    throw new Error('stable signer certificate drift');
+  if (
+    signing.signing_profile !== 'PHYSICAL_DEV_STABLE_LOCAL' ||
+    signing.apk_signature_v1 !== 'false' ||
+    signing.apk_signature_v2 !== 'true' ||
+    signing.apk_signature_v3 !== 'true' ||
+    signing.signer_count !== '1' ||
+    signing.deterministic_signing !== 'true' ||
+    signing.private_key_exported !== 'false'
+  )
+    throw new Error('stable signing identity invariants invalid');
+  const presignSha = exact(artifact.presign_apk_sha256, SHA256, 'pre-sign APK SHA');
+  const finalSha = exact(artifact.expected_final_apk_sha256, SHA256, 'final APK SHA');
+  if (presignSha !== controlTower.artifact.presignApkSha256)
+    throw new Error('pre-sign APK SHA differs from Control Tower');
+  if (finalSha !== controlTower.apk.sha256)
+    throw new Error('final APK SHA differs from Control Tower');
+  if (signing.presign_apk_sha256 !== presignSha || signing.final_apk_sha256 !== finalSha) {
+    throw new Error('stable signing identity APK chain drift');
+  }
+  const zipDigest = digest(snapshot.bytes['artifact.zip']);
+  if (
+    zipDigest !== exact(artifact.artifact_zip_sha256, SHA256, 'artifact ZIP SHA') ||
+    zipDigest !== controlTower.artifact.zipSha256
+  ) {
+    throw new Error('stable artifact ZIP digest drift');
+  }
+  const temp = mkdtempSync(join(tmpdir(), 'w15j-tablet-stable-artifact-'));
+  try {
+    const zipPath = join(temp, 'artifact.zip');
+    writeFileSync(zipPath, snapshot.bytes['artifact.zip'], { flag: 'wx', mode: 0o600 });
+    const entries = execFileSync('unzip', ['-Z1', zipPath], { encoding: 'utf8' })
+      .trim()
+      .split(/\r?\n/u)
+      .sort();
+    const sumMatch = /^([a-f0-9]{64}) {2}([A-Za-z0-9._-]+\.apk)$/u.exec(
+      text(snapshot, 'SHA256SUMS.txt').trim(),
+    );
+    if (!sumMatch)
+      throw new Error('SHA256SUMS.txt must contain exactly one canonical pre-sign APK entry');
+    const expectedEntries = ['BUILD_IDENTITY.txt', 'SHA256SUMS.txt', sumMatch[2]].sort();
+    if (JSON.stringify(entries) !== JSON.stringify(expectedEntries))
+      throw new Error('stable artifact ZIP inventory is not exact');
+    execFileSync('unzip', ['-q', zipPath, '-d', temp]);
+    const extractedBuild = readFileSync(join(temp, 'BUILD_IDENTITY.txt'));
+    const extractedSums = readFileSync(join(temp, 'SHA256SUMS.txt'));
+    const extractedPresign = readFileSync(join(temp, sumMatch[2]));
+    if (!extractedBuild.equals(snapshot.bytes['BUILD_IDENTITY.txt']))
+      throw new Error('BUILD_IDENTITY copy drift');
+    if (!extractedSums.equals(snapshot.bytes['SHA256SUMS.txt']))
+      throw new Error('SHA256SUMS copy drift');
+    if (
+      !snapshot.bytes['candidate-presign.apk'] ||
+      !extractedPresign.equals(snapshot.bytes['candidate-presign.apk'])
+    ) {
+      throw new Error('manifested pre-sign APK differs from artifact ZIP');
+    }
+    if (digest(extractedPresign) !== presignSha || sumMatch[1] !== presignSha)
+      throw new Error('pre-sign APK digest drift');
+    if (!snapshot.bytes['candidate.apk'] || digest(snapshot.bytes['candidate.apk']) !== finalSha)
+      throw new Error('final candidate APK digest drift');
+    const tuple = {
+      androidCandidateSha: exact(build.source_candidate_sha, GIT_SHA, 'Android candidate SHA'),
+      hostCandidateSha: exact(build.paired_local_host_candidate_sha, GIT_SHA, 'host candidate SHA'),
+      reconciledMainSha: exact(build.reconciled_main_parent_sha, GIT_SHA, 'main SHA'),
+      packagingHeadSha: exact(artifact.packaging_head_sha, GIT_SHA, 'packaging head SHA'),
+      artifact: {
+        id: exact(artifact.artifact_id, POSITIVE_INTEGER, 'artifact id'),
+        name: artifact.artifact_name,
+        zipSha256: zipDigest,
+        presignApkSha256: presignSha,
+      },
+      apk: {
+        applicationId: build.package_id,
+        variant: build.apk_variant,
+        versionCode: build.version_code,
+        versionName: build.version_name,
+        sha256: finalSha,
+      },
+      signing: controlTower.signing,
+    };
+    if (
+      build.packaging_head_sha !== tuple.packagingHeadSha ||
+      build.packaging_run_id !== artifact.packaging_run_id
+    ) {
+      throw new Error('stable embedded packaging provenance drift');
+    }
+    if (
+      tuple.packagingHeadSha !== controlTower.packagingHeadSha ||
+      artifact.packaging_run_id !== controlTower.workflowRun.id
+    ) {
+      throw new Error('stable packaging provenance differs from Control Tower');
+    }
+    for (const key of ['androidCandidateSha', 'hostCandidateSha', 'reconciledMainSha']) {
+      if (tuple[key] !== controlTower[key]) throw new Error(`${key} differs from Control Tower`);
+    }
+    for (const key of ['id', 'name', 'zipSha256', 'presignApkSha256']) {
+      if (tuple.artifact[key] !== controlTower.artifact[key])
+        throw new Error(`artifact.${key} differs from Control Tower`);
+    }
+    for (const key of ['applicationId', 'variant', 'versionCode', 'versionName', 'sha256']) {
+      if (tuple.apk[key] !== controlTower.apk[key])
+        throw new Error(`apk.${key} differs from Control Tower`);
+    }
+    return Object.freeze({
+      ...tuple,
+      artifact: Object.freeze(tuple.artifact),
+      apk: Object.freeze(tuple.apk),
+    });
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
 function validateArtifact(snapshot, controlTower) {
+  if (controlTower.signing) return validateStableSignedArtifact(snapshot, controlTower);
   const artifact = kv(snapshot, 'artifact-metadata.txt');
   exactKeys(
     artifact,

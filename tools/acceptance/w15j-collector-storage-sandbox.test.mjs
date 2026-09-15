@@ -23,3 +23,18 @@ for (const relative of [
     );
   });
 }
+
+test('tablet-loopback collector separates pre-sign artifact from stable-signed physical APK', () => {
+  const source = readFileSync(
+    resolve(root, 'apps/aurora-android/physical/collect-w15j-tablet-loopback-evidence.sh'),
+    'utf8',
+  );
+  assert.match(source, /AURORA_FINAL_SIGNING_IDENTITY/u);
+  assert.match(source, /presign_apk_sha256/u);
+  assert.match(source, /expected_final_apk_sha256/u);
+  assert.match(source, /PHYSICAL_DEV_STABLE_LOCAL/u);
+  assert.match(source, /candidate-presign\.apk/u);
+  assert.match(source, /deterministic_signing=true/u);
+  assert.match(source, /private_key_exported=false/u);
+  assert.doesNotMatch(source, /store\.pass|aurora-physical-dev\.p12|private key/u);
+});
