@@ -7,7 +7,7 @@ import org.junit.Test
 
 class AuroraWindowLayoutPolicyTest {
     @Test
-    fun tabletUsesComfortablePaddingAndConstrainedContent() {
+    fun tabletUsesComfortablePaddingConstrainedContentAndInlineStatus() {
         val layout =
             AuroraWindowLayoutPolicy.resolve(
                 widthDp = 1_200,
@@ -19,10 +19,11 @@ class AuroraWindowLayoutPolicyTest {
         assertEquals(24, layout.horizontalPaddingDp)
         assertEquals(20, layout.verticalPaddingDp)
         assertTrue(layout.constrainContentWidth)
+        assertFalse(layout.stackStatusItems)
     }
 
     @Test
-    fun splitScreenPreservesMoreHorizontalRoom() {
+    fun splitScreenPreservesMoreHorizontalRoomAndStacksStatus() {
         val layout =
             AuroraWindowLayoutPolicy.resolve(
                 widthDp = 420,
@@ -33,6 +34,7 @@ class AuroraWindowLayoutPolicyTest {
 
         assertEquals(16, layout.horizontalPaddingDp)
         assertFalse(layout.constrainContentWidth)
+        assertTrue(layout.stackStatusItems)
     }
 
     @Test
@@ -47,6 +49,7 @@ class AuroraWindowLayoutPolicyTest {
 
         assertEquals(12, layout.horizontalPaddingDp)
         assertFalse(layout.constrainContentWidth)
+        assertTrue(layout.stackStatusItems)
     }
 
     @Test
@@ -62,6 +65,23 @@ class AuroraWindowLayoutPolicyTest {
         assertEquals(16, layout.horizontalPaddingDp)
         assertEquals(12, layout.verticalPaddingDp)
         assertTrue(layout.constrainContentWidth)
+        assertTrue(layout.stackStatusItems)
+    }
+
+    @Test
+    fun accessibilityTextScaleStacksStatusBeforeLargeTextThreshold() {
+        val layout =
+            AuroraWindowLayoutPolicy.resolve(
+                widthDp = 900,
+                heightDp = 1_200,
+                fontScale = 1.3f,
+                maxContentWidthDp = 760,
+            )
+
+        assertEquals(24, layout.horizontalPaddingDp)
+        assertEquals(20, layout.verticalPaddingDp)
+        assertTrue(layout.constrainContentWidth)
+        assertTrue(layout.stackStatusItems)
     }
 
     @Test
@@ -77,5 +97,6 @@ class AuroraWindowLayoutPolicyTest {
         assertEquals(24, layout.horizontalPaddingDp)
         assertEquals(12, layout.verticalPaddingDp)
         assertTrue(layout.constrainContentWidth)
+        assertFalse(layout.stackStatusItems)
     }
 }
