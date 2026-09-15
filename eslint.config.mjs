@@ -14,6 +14,7 @@ const ignoredPaths = [
   '**/legacy-reference/**',
   '**/legacy-manus-reference/**',
   'docs/migration/**',
+  'worktrees/**',
 ];
 
 export default tseslint.config(
