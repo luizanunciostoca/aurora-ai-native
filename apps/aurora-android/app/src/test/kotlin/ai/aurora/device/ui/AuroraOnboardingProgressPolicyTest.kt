@@ -17,20 +17,24 @@ class AuroraOnboardingProgressPolicyTest {
         assertEquals(0, microphone.completedSteps)
         assertEquals(0, microphone.activeStepIndex)
         assertEquals("Etapa 1 de 4", microphone.summaryLabel)
+        assertFalse(microphone.isComplete)
         assertEquals(1, assistant.completedSteps)
         assertEquals(1, assistant.activeStepIndex)
         assertEquals("Etapa 2 de 4", assistant.summaryLabel)
+        assertFalse(assistant.isComplete)
         assertEquals(2, model.completedSteps)
         assertEquals(2, model.activeStepIndex)
         assertEquals("Etapa 3 de 4", model.summaryLabel)
+        assertFalse(model.isComplete)
         assertEquals(3, enable.completedSteps)
         assertEquals(3, enable.activeStepIndex)
         assertEquals("Etapa 4 de 4", enable.summaryLabel)
         assertEquals(4, enable.totalSteps)
+        assertFalse(enable.isComplete)
     }
 
     @Test
-    fun runtimeVerificationShowsSetupCompleteButDoesNotCreateExtraStep() {
+    fun runtimeVerificationShowsSetupStepsDoneWithoutClaimingReadiness() {
         val progress = AuroraOnboardingProgressPolicy.resolve(AuroraOnboardingStep.WAKE_RUNTIME)
 
         assertEquals(4, progress.completedSteps)
@@ -38,16 +42,18 @@ class AuroraOnboardingProgressPolicyTest {
         assertNull(progress.activeStepIndex)
         assertEquals("4 de 4 · Validando", progress.summaryLabel)
         assertTrue(progress.showTrack)
+        assertFalse(progress.isComplete)
     }
 
     @Test
-    fun readyKeepsAllSetupSegmentsComplete() {
+    fun readyIsTheOnlyCompletedProgressState() {
         val progress = AuroraOnboardingProgressPolicy.resolve(AuroraOnboardingStep.READY)
 
         assertEquals(4, progress.completedSteps)
         assertNull(progress.activeStepIndex)
         assertEquals("Concluída", progress.summaryLabel)
         assertTrue(progress.showTrack)
+        assertTrue(progress.isComplete)
     }
 
     @Test
@@ -58,5 +64,6 @@ class AuroraOnboardingProgressPolicyTest {
         assertNull(progress.activeStepIndex)
         assertEquals("Pausada", progress.summaryLabel)
         assertFalse(progress.showTrack)
+        assertFalse(progress.isComplete)
     }
 }
