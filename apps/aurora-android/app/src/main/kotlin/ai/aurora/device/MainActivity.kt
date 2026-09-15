@@ -18,7 +18,8 @@ import ai.aurora.device.ui.AuroraOnboardingInput
 import ai.aurora.device.ui.AuroraOnboardingPolicy
 import ai.aurora.device.ui.AuroraOnboardingProgressPolicy
 import ai.aurora.device.ui.AuroraOnboardingStep
-import ai.aurora.device.ui.AuroraSystemStatusItem
+import ai.aurora.device.ui.AuroraSystemStatusInput
+import ai.aurora.device.ui.AuroraSystemStatusPolicy
 import ai.aurora.device.wake.AuroraAssistantRoleCoordinator
 import ai.aurora.device.wake.AuroraAssistantSelectionLaunch
 import ai.aurora.device.wake.AuroraWakeModelStore
@@ -182,40 +183,15 @@ class MainActivity : Activity() {
         )
 
         surface.setSystemStatus(
-            buildList {
-                if (setupProgress.showTrack) {
-                    add(
-                        AuroraSystemStatusItem(
-                            label = "Configuração",
-                            value = setupProgress.summaryLabel,
-                        ),
-                    )
-                }
-                add(
-                    AuroraSystemStatusItem(
-                        label = "Microfone",
-                        value = if (microphoneGranted) "Autorizado" else "Pendente",
-                    ),
-                )
-                add(
-                    AuroraSystemStatusItem(
-                        label = "Assistente",
-                        value = if (assistant.selected) "Selecionada" else "Pendente",
-                    ),
-                )
-                add(
-                    AuroraSystemStatusItem(
-                        label = "Wake word",
-                        value = if (wakeOperational) "Ativo" else "Inativo",
-                    ),
-                )
-                add(
-                    AuroraSystemStatusItem(
-                        label = "Privacidade",
-                        value = if (privacyEnabled) "Ativa" else "Normal",
-                    ),
-                )
-            },
+            AuroraSystemStatusPolicy.items(
+                AuroraSystemStatusInput(
+                    setupProgress = setupProgress,
+                    microphoneGranted = microphoneGranted,
+                    assistantSelected = assistant.selected,
+                    wakeOperational = wakeOperational,
+                    privacyEnabled = privacyEnabled,
+                ),
+            ),
         )
         surface.setStatusLine(
             buildString {
