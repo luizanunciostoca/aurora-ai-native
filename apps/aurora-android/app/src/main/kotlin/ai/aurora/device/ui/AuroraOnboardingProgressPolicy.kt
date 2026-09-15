@@ -6,6 +6,7 @@ internal data class AuroraOnboardingProgress(
     val activeStepIndex: Int?,
     val showTrack: Boolean,
     val summaryLabel: String,
+    val isComplete: Boolean,
 )
 
 /**
@@ -26,6 +27,7 @@ internal object AuroraOnboardingProgressPolicy {
                     activeStepIndex = null,
                     showTrack = false,
                     summaryLabel = "Pausada",
+                    isComplete = false,
                 )
             AuroraOnboardingStep.MICROPHONE -> setupStep(index = 0)
             AuroraOnboardingStep.ASSISTANT_ROLE -> setupStep(index = 1)
@@ -38,6 +40,7 @@ internal object AuroraOnboardingProgressPolicy {
                     activeStepIndex = null,
                     showTrack = true,
                     summaryLabel = "4 de 4 · Validando",
+                    isComplete = false,
                 )
             AuroraOnboardingStep.READY ->
                 AuroraOnboardingProgress(
@@ -46,6 +49,7 @@ internal object AuroraOnboardingProgressPolicy {
                     activeStepIndex = null,
                     showTrack = true,
                     summaryLabel = "Concluída",
+                    isComplete = true,
                 )
         }
 
@@ -56,5 +60,6 @@ internal object AuroraOnboardingProgressPolicy {
             activeStepIndex = index,
             showTrack = true,
             summaryLabel = "Etapa ${index + 1} de $TOTAL_SETUP_STEPS",
+            isComplete = false,
         )
 }
