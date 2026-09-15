@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 // @ts-expect-error -- context harness has no @types/node; Node 22 provides this built-in.
 import test from 'node:test';
 
-import type { CorrelationContext, Rfc3339Timestamp, TenantContext } from '@aurora/contracts/context';
+import type {
+  CorrelationContext,
+  Rfc3339Timestamp,
+  TenantContext,
+} from '@aurora/contracts/context';
 import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
 import type { JurisdictionContext } from '@aurora/contracts/jurisdiction';
 import type { PurposeContext } from '@aurora/contracts/purpose';
@@ -21,10 +25,7 @@ import {
   stageMemoryProposal,
   transitionMemoryProjection,
 } from '../src/memory-fabric/index.js';
-import type {
-  MemoryFabricSnapshot,
-  MemoryWriteProposal,
-} from '../src/memory-fabric/index.js';
+import type { MemoryFabricSnapshot, MemoryWriteProposal } from '../src/memory-fabric/index.js';
 import type { ContextSourceReadRequest } from '../src/sources/types.js';
 
 const version = '1.0.0' as ContractVersion;
@@ -104,10 +105,7 @@ function proposal(
   };
 }
 
-function stage(
-  snapshot: MemoryFabricSnapshot,
-  item: MemoryWriteProposal,
-) {
+function stage(snapshot: MemoryFabricSnapshot, item: MemoryWriteProposal) {
   return stageMemoryProposal({
     snapshot,
     proposal: item,
@@ -216,7 +214,10 @@ test('W06-I rejects lifecycle skipping and requires a source commit before valid
 });
 
 test('W06-I preserves conflicts and requires explicit supersession instead of silent overwrite', () => {
-  const firstStage = stage(createMemoryFabricSnapshot(tenant), proposal('mem:conflict:a', 'SEMANTIC', 'sha256:a'));
+  const firstStage = stage(
+    createMemoryFabricSnapshot(tenant),
+    proposal('mem:conflict:a', 'SEMANTIC', 'sha256:a'),
+  );
   const firstValidated = validateCandidate(firstStage.snapshot, 'mem:conflict:a');
   const firstCanonical = promoteCanonical(firstValidated.snapshot, 'mem:conflict:a');
   assert.equal(firstCanonical.applied, true);
@@ -306,7 +307,11 @@ test('W06-I fails closed on cross-tenant, over-classified and unsupported raw-au
   const rawAudioLike = stage(
     snapshot,
     proposal('mem:audio:1', 'SEMANTIC', 'sha256:audio', {
-      content: { kind: 'RAW_AUDIO' as never, digest: 'sha256:audio', payload: new Uint8Array([1, 2]) },
+      content: {
+        kind: 'RAW_AUDIO' as never,
+        digest: 'sha256:audio',
+        payload: new Uint8Array([1, 2]),
+      },
     }),
   );
   assert.equal(rawAudioLike.status, 'REJECTED');
@@ -354,7 +359,10 @@ test('W06-I revocation immediately removes a previously eligible projection from
 test('W06-I source adapter exposes validated/canonical Aurora memory to any model through the existing context path', async () => {
   const staged = stage(createMemoryFabricSnapshot(tenant), proposal('mem:adapter:1'));
   const validated = validateCandidate(staged.snapshot, 'mem:adapter:1');
-  const candidateOnly = stage(validated.snapshot, proposal('mem:adapter:candidate', 'SEMANTIC', 'sha256:candidate'));
+  const candidateOnly = stage(
+    validated.snapshot,
+    proposal('mem:adapter:candidate', 'SEMANTIC', 'sha256:candidate'),
+  );
 
   const adapter = createMemoryFabricSourceAdapter({
     boundary: 'SEMANTIC',

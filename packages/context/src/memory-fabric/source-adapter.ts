@@ -81,11 +81,7 @@ function validateDirectRead(
   if (!nonEmpty(request.selector.value) || request.selector.value === '*') {
     throw new Error('MEMORY_FABRIC_SELECTOR_INVALID');
   }
-  if (
-    !Number.isInteger(request.limit) ||
-    request.limit <= 0 ||
-    request.limit > maxItemsPerRead
-  ) {
+  if (!Number.isInteger(request.limit) || request.limit <= 0 || request.limit > maxItemsPerRead) {
     throw new Error('MEMORY_FABRIC_LIMIT_INVALID');
   }
 }

@@ -5,7 +5,10 @@ export {
   stageMemoryProposalWithClassification,
   transitionMemoryProjection,
 } from './fabric.js';
-export { createMemoryFabricSourceAdapter, MEMORY_SOURCE_CLASS_BY_BOUNDARY } from './source-adapter.js';
+export {
+  createMemoryFabricSourceAdapter,
+  MEMORY_SOURCE_CLASS_BY_BOUNDARY,
+} from './source-adapter.js';
 export type { MemoryFabricSourceAdapterOptions } from './source-adapter.js';
 export {
   MEMORY_CONTENT_KINDS,

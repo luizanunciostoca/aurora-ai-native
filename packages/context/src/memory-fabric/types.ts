@@ -22,7 +22,13 @@ export const MEMORY_LIFECYCLE_STATES = [
 ] as const;
 export type MemoryLifecycleState = (typeof MEMORY_LIFECYCLE_STATES)[number];
 
-export const MEMORY_PRODUCER_KINDS = ['USER', 'MODEL', 'AGENT', 'SYSTEM', 'SOURCE_ADAPTER'] as const;
+export const MEMORY_PRODUCER_KINDS = [
+  'USER',
+  'MODEL',
+  'AGENT',
+  'SYSTEM',
+  'SOURCE_ADAPTER',
+] as const;
 export type MemoryProducerKind = (typeof MEMORY_PRODUCER_KINDS)[number];
 
 export const MEMORY_CONTENT_KINDS = ['TEXT', 'STRUCTURED', 'REFERENCE'] as const;

@@ -28,11 +28,7 @@ const MAX_DIGEST_LENGTH = 256;
 const MAX_READ_LIMIT = 100;
 
 const TERMINAL_STATES = new Set<MemoryLifecycleState>(['SUPERSEDED', 'REVOKED']);
-const READ_ELIGIBLE_STATES = new Set<MemoryLifecycleState>([
-  'TRANSIENT',
-  'VALIDATED',
-  'CANONICAL',
-]);
+const READ_ELIGIBLE_STATES = new Set<MemoryLifecycleState>(['TRANSIENT', 'VALIDATED', 'CANONICAL']);
 
 function nonEmptyBounded(value: unknown, maxLength: number): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.length <= maxLength;
@@ -42,19 +38,23 @@ function sameTenant(left: TenantContext | undefined, right: TenantContext | unde
   return Boolean(left?.tenantId && right?.tenantId && left.tenantId === right.tenantId);
 }
 
-function validSnapshot(snapshot: MemoryFabricSnapshot | undefined): snapshot is MemoryFabricSnapshot {
+function validSnapshot(
+  snapshot: MemoryFabricSnapshot | undefined,
+): snapshot is MemoryFabricSnapshot {
   return Boolean(
     snapshot &&
-      snapshot.kind === 'MemoryFabricSnapshot' &&
-      snapshot.tenant?.tenantId &&
-      Number.isInteger(snapshot.revision) &&
-      snapshot.revision >= 0 &&
-      Array.isArray(snapshot.records) &&
-      snapshot.authorizesExecution === false,
+    snapshot.kind === 'MemoryFabricSnapshot' &&
+    snapshot.tenant?.tenantId &&
+    Number.isInteger(snapshot.revision) &&
+    snapshot.revision >= 0 &&
+    Array.isArray(snapshot.records) &&
+    snapshot.authorizesExecution === false,
   );
 }
 
-function validProposalShape(proposal: MemoryWriteProposal | undefined): MemoryProposalRejectionReason[] {
+function validProposalShape(
+  proposal: MemoryWriteProposal | undefined,
+): MemoryProposalRejectionReason[] {
   const reasons: MemoryProposalRejectionReason[] = [];
   if (!proposal || proposal.kind !== 'MemoryWriteProposal') reasons.push('INVALID_PROPOSAL_KIND');
   if (!nonEmptyBounded(proposal?.proposalReference, MAX_REFERENCE_LENGTH)) {
@@ -133,10 +133,7 @@ function mergeConflictState(
   detectedConflicts: readonly string[],
 ): MemoryProjectionRecord['conflictState'] {
   if (proposal.boundaryCandidate.conflictState === 'UNRESOLVED') return 'UNRESOLVED';
-  if (
-    proposal.boundaryCandidate.conflictState === 'CONFLICTING' ||
-    detectedConflicts.length > 0
-  ) {
+  if (proposal.boundaryCandidate.conflictState === 'CONFLICTING' || detectedConflicts.length > 0) {
     return 'CONFLICTING';
   }
   return 'NONE';
@@ -226,9 +223,7 @@ export function stageMemoryProposal(request: MemoryStageRequest): MemoryStageRes
   }
 
   const sameContent = snapshot.records.find(
-    (record) =>
-      activeForConflict(record) &&
-      recordIdentityEquivalent(record, proposal),
+    (record) => activeForConflict(record) && recordIdentityEquivalent(record, proposal),
   );
   if (sameContent) {
     return {
@@ -464,7 +459,10 @@ export function transitionMemoryProjection(
   return transitionRejected(snapshot, 'TRANSITION_NOT_ALLOWED');
 }
 
-function selectorMatch(record: MemoryProjectionRecord, request: MemoryProjectionReadRequest): boolean {
+function selectorMatch(
+  record: MemoryProjectionRecord,
+  request: MemoryProjectionReadRequest,
+): boolean {
   if (request.key === 'memoryKey') return record.memoryKey === request.value;
   if (request.key === 'sourceReference') {
     return (
