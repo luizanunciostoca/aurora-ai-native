@@ -301,9 +301,17 @@ if [[ "$MODE" == "preflight" ]]; then
   probe_host preflight 8080 DEVICE_GATEWAY
   probe_host preflight 8081 BOOTSTRAP_EXCHANGE
 
-  capture apk-install.txt "$ADB_BIN" -s "$SERIAL" install -r "$APK_PATH"
+  # Installation is owned by the exact-APK installer before the physical collector starts.
+  # Reinstalling here can rotate/invalidate Android Keystore material used by wake enrollment.
   capture package-path.txt adb_shell pm path "$PACKAGE_ID"
   pull_installed_apk preflight "$OUTPUT_DIR/package-path.txt"
+  cat >"$OUTPUT_DIR/apk-install.txt" <<EOF
+disposition=PREINSTALLED_EXACT_APK_VERIFIED
+mutation=NONE
+installer_owner=tools/tablet-devlab/install-exact-apk.sh
+installed_apk_sha256=$EMBEDDED_APK_SHA
+EOF
+  printf '0\n' >"$OUTPUT_DIR/apk-install.txt.exit-code"
   capture package-dump.txt adb_shell dumpsys package "$PACKAGE_ID"
   VERSION_CODE="$(sed -n 's/.*versionCode=\([0-9][0-9]*\).*/\1/p' "$OUTPUT_DIR/package-dump.txt" | head -n 1)"
   VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName=\(.*\)$/\1/p' "$OUTPUT_DIR/package-dump.txt" | head -n 1)"
