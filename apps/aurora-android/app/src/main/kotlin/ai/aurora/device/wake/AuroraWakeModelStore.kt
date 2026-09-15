@@ -163,8 +163,6 @@ private object AndroidKeystoreWakeModelKeyProvider {
         return generator.generateKey()
     }
 
-    companion object {
-        private const val KEYSTORE = "AndroidKeyStore"
-        private const val KEY_ALIAS = "aurora.wake.model.aead.v2"
-    }
+    private const val KEYSTORE = "AndroidKeyStore"
+    private const val KEY_ALIAS = "aurora.wake.model.aead.v2"
 }
