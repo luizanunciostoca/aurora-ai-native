@@ -42,18 +42,20 @@ Current exact tuple defaults:
 
 ```text
 main      77f0f8532197025ee913dd02fcb56878d9d667a9
-android   ccffbfc0b722ac7871ee24f8d2c03e2cf522c6f6
+android   54d9fd47e48736fde80e5963b28cdcc121989648
 host      7d9c9bebb8d12b00b8e0629387edd483e14638b6
-packaging 76e09ea514276556e845d2bb301087aa460fe915
-run       35014031636
-artifact  10414677915
-name      aurora-w15j-tablet-loopback-apk-ccffbfc0-host-7d9c9beb
-zip       078cca0cea33e1e68f5fb8e6e3a56cc5d7dda6197fb219dd0550aa854f3cb762
-apk       b610bb99892345cd67ff0f5356547b1ca6041aecab10cf6ff93dc9f1f739ff6b
+packaging 3987ba0808512f5324fd13264f93ab155508b2b0
+run       35022834461
+artifact  10417783170
+name      aurora-w15j-v017-presign-apk-54d9fd47-host-7d9c9beb
+zip       9aea4fed45dcb1da6e606f6d5e15e3193304a68060da8f6161c401b0a576fc7f
+presign   99af33d2d786560fbb3351396706f6e1eb3185ebeebb4bb34f32721b736bbbc4
+apk       f1d390cc6743b0d235fd62451caf39c0f8bf169281dfbe734e5bc6300d4d657d
+signer    e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb
 transport LOCAL_TABLET_LOOPBACK
 ```
 
-The exact APK is signed with a CI-generated debug signing identity. If a different Aurora debug build is already installed, a clean uninstall/install may be required before byte-exact DP5 readback.
+GitHub Actions produces the exact pre-sign APK bound to the source/host tuple. The tablet then signs it locally with the persistent `PHYSICAL_DEV_STABLE_LOCAL` identity. The private key never leaves the tablet. Future APKs signed by the same identity can use Android in-place update and preserve wake enrollment/preferences; clean uninstall remains an explicit fallback only when Android rejects the stable update.
 
 ## One-time setup
 
@@ -89,13 +91,21 @@ bash tools/tablet-devlab/worktrees.sh
 bash tools/tablet-devlab/fetch-current-artifact.sh
 ```
 
-7. Verify/install the exact APK:
+7. Produce and verify the stable-signed physical APK locally:
+
+```bash
+bash tools/tablet-devlab/sign-current-artifact.sh
+```
+
+The signer requires the private PKCS#12 identity under `~/.aurora-signing/physical-dev-v017`, Debian `apksigner`, the exact pre-sign SHA, v2+v3 signatures, one signer, the expected certificate fingerprint, and deterministic byte-identical output.
+
+8. Verify/install the exact stable-signed APK:
 
 ```bash
 bash tools/tablet-devlab/install-exact-apk.sh
 ```
 
-The installer first pulls and hashes the currently installed Aurora APK before any mutation. If the exact artifact is already installed, it exits without reinstalling. If a different Aurora APK is installed, it fails without modifying the tablet.
+The installer first pulls and hashes the currently installed Aurora APK before any mutation. If the exact artifact is already installed, it exits without reinstalling. If a different Aurora APK is installed, it first attempts an Android `install -r` stable-signature update. If Android rejects that update, no uninstall occurs unless destructive replacement is explicitly authorized.
 
 When clean replacement is required, use the explicit opt-in:
 
@@ -105,7 +115,7 @@ AURORA_ALLOW_CLEAN_INSTALL=YES bash tools/tablet-devlab/install-exact-apk.sh
 
 That explicit mode uninstalls only package `ai.aurora.device.local`, which removes Aurora's local application data, installs the exact APK, then independently pulls `/base.apk` and requires byte-for-byte equality with the artifact. The resulting evidence remains `READY_NOT_ACCEPTED` and is not execution authority.
 
-8. Prepare the LOCAL PostgreSQL state owned by W03 and apply the exact W03 migrations:
+9. Prepare the LOCAL PostgreSQL state owned by W03 and apply the exact W03 migrations:
 
 ```bash
 bash tools/tablet-devlab/setup-postgres.sh
@@ -113,7 +123,7 @@ bash tools/tablet-devlab/setup-postgres.sh
 
 The script creates a private native-Termux PostgreSQL cluster under the DevLab root, binds only to `127.0.0.1`, applies W03 migrations 001/002/003 and verifies the idempotency, execution-attempt quota and containment tables. The generated database environment file remains local, mode `0600`, outside Git. Database readiness does not authorize execution and does not constitute physical acceptance.
 
-9. On the physical tablet, record an interactive exact-tuple operator consent for the one bounded positive-effect window:
+10. On the physical tablet, record an interactive exact-tuple operator consent for the one bounded positive-effect window:
 
 ```bash
 bash tools/tablet-devlab/authorize-dp5-effect.sh

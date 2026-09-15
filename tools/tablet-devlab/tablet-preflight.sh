@@ -14,22 +14,28 @@ PACKAGE_ID="${AURORA_PACKAGE_ID:-ai.aurora.device.local}"
 ARTIFACT_DIR="$DEVLAB_ROOT/artifacts"
 APK="$ARTIFACT_DIR/Aurora-W15J-Physical-localDebug.apk"
 BUILD_IDENTITY="$ARTIFACT_DIR/BUILD_IDENTITY.txt"
+SIGNING_IDENTITY="$ARTIFACT_DIR/FINAL_SIGNING_IDENTITY.txt"
 STATE_DIR="$DEVLAB_ROOT/state"
 EVIDENCE_ROOT="$DEVLAB_ROOT/evidence"
 READINESS_FILE="$STATE_DIR/last-readiness-termux.txt"
-EXPECTED_APK_SHA="${AURORA_APK_SHA256:-b610bb99892345cd67ff0f5356547b1ca6041aecab10cf6ff93dc9f1f739ff6b}"
-EXPECTED_ANDROID_SHA="${AURORA_ANDROID_SHA:-ccffbfc0b722ac7871ee24f8d2c03e2cf522c6f6}"
+EXPECTED_APK_SHA="${AURORA_APK_SHA256:-f1d390cc6743b0d235fd62451caf39c0f8bf169281dfbe734e5bc6300d4d657d}"
+EXPECTED_ANDROID_SHA="${AURORA_ANDROID_SHA:-54d9fd47e48736fde80e5963b28cdcc121989648}"
 EXPECTED_HOST_SHA="${AURORA_HOST_SHA:-7d9c9bebb8d12b00b8e0629387edd483e14638b6}"
 EXPECTED_MAIN_SHA="${AURORA_MAIN_SHA:-77f0f8532197025ee913dd02fcb56878d9d667a9}"
 EXPECTED_TRANSPORT_SCOPE="LOCAL_TABLET_LOOPBACK"
+EXPECTED_CERT_SHA="${AURORA_PHYSICAL_SIGNER_CERT_SHA256:-e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb}"
 
-[[ -f "$APK" && -f "$BUILD_IDENTITY" ]] || fail "artifact is missing; run fetch-current-artifact.sh"
+[[ -f "$APK" && -f "$BUILD_IDENTITY" && -f "$SIGNING_IDENTITY" ]] || fail "signed artifact is missing; run fetch-current-artifact.sh then sign-current-artifact.sh"
 [[ "$(sha256sum "$APK" | awk '{print $1}')" == "$EXPECTED_APK_SHA" ]] || fail "artifact APK hash drift"
-[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "19" ]] || fail "BUILD_IDENTITY must contain exactly 19 lines"
+[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "23" ]] || fail "BUILD_IDENTITY must contain exactly 23 lines"
 
 grep -Fxq 'canonical_acceptance=false' "$BUILD_IDENTITY" || fail "artifact cannot self-declare acceptance"
 grep -Fxq 'physical_evidence_required=true' "$BUILD_IDENTITY" || fail "physical evidence requirement missing"
 grep -Fxq 'dp5_status=INCOMPLETE' "$BUILD_IDENTITY" || fail "artifact must remain DP5 incomplete before physical evidence"
+grep -Fxq 'signing_profile=PHYSICAL_DEV_STABLE_LOCAL' "$SIGNING_IDENTITY" || fail "stable local signing identity missing"
+grep -Fxq "final_apk_sha256=$EXPECTED_APK_SHA" "$SIGNING_IDENTITY" || fail "signed APK identity drift"
+grep -Fxq "signer_cert_sha256=$EXPECTED_CERT_SHA" "$SIGNING_IDENTITY" || fail "signer certificate identity drift"
+grep -Fxq 'deterministic_signing=true' "$SIGNING_IDENTITY" || fail "deterministic signing proof missing"
 
 mapfile -t DEVICES < <(adb devices | awk 'NR > 1 && $2 == "device" {print $1}')
 [[ "${#DEVICES[@]}" -eq 1 ]] || fail "exactly one self-ADB device required; found ${#DEVICES[@]}"
@@ -112,6 +118,8 @@ cat >"$EVIDENCE_DIR/tablet-loopback-preflight.json" <<EOF
   "hostCandidateSha": "$HOST_SHA",
   "reconciledMainSha": "$MAIN_SHA",
   "apkSha256": "$INSTALLED_SHA",
+  "signerCertSha256": "$EXPECTED_CERT_SHA",
+  "signingProfile": "PHYSICAL_DEV_STABLE_LOCAL",
   "artifactTransportScope": "$ARTIFACT_SCOPE",
   "actualTransportScope": "LOCAL_TABLET_LOOPBACK",
   "selfAdbControlPlane": true,

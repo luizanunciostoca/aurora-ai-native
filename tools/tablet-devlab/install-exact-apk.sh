@@ -14,19 +14,22 @@ PACKAGE_ID="${AURORA_PACKAGE_ID:-ai.aurora.device.local}"
 ARTIFACT_DIR="$DEVLAB_ROOT/artifacts"
 APK="$ARTIFACT_DIR/Aurora-W15J-Physical-localDebug.apk"
 BUILD_IDENTITY="$ARTIFACT_DIR/BUILD_IDENTITY.txt"
-EXPECTED_APK_SHA="${AURORA_APK_SHA256:-b610bb99892345cd67ff0f5356547b1ca6041aecab10cf6ff93dc9f1f739ff6b}"
-EXPECTED_ANDROID_SHA="${AURORA_ANDROID_SHA:-ccffbfc0b722ac7871ee24f8d2c03e2cf522c6f6}"
+SIGNING_IDENTITY="$ARTIFACT_DIR/FINAL_SIGNING_IDENTITY.txt"
+EXPECTED_APK_SHA="${AURORA_APK_SHA256:-f1d390cc6743b0d235fd62451caf39c0f8bf169281dfbe734e5bc6300d4d657d}"
+EXPECTED_ANDROID_SHA="${AURORA_ANDROID_SHA:-54d9fd47e48736fde80e5963b28cdcc121989648}"
 EXPECTED_HOST_SHA="${AURORA_HOST_SHA:-7d9c9bebb8d12b00b8e0629387edd483e14638b6}"
 EXPECTED_MAIN_SHA="${AURORA_MAIN_SHA:-77f0f8532197025ee913dd02fcb56878d9d667a9}"
 EXPECTED_TRANSPORT_SCOPE="LOCAL_TABLET_LOOPBACK"
+EXPECTED_CERT_SHA="${AURORA_PHYSICAL_SIGNER_CERT_SHA256:-e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb}"
 EVIDENCE_ROOT="$DEVLAB_ROOT/evidence"
 STATE_DIR="$DEVLAB_ROOT/state"
 
 [[ -f "$APK" && ! -L "$APK" ]] || fail "exact APK is missing; run fetch-current-artifact.sh first"
 [[ -f "$BUILD_IDENTITY" && ! -L "$BUILD_IDENTITY" ]] || fail "BUILD_IDENTITY is missing"
+[[ -f "$SIGNING_IDENTITY" && ! -L "$SIGNING_IDENTITY" ]] || fail "FINAL_SIGNING_IDENTITY is missing; run sign-current-artifact.sh"
 [[ "$EXPECTED_APK_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "expected APK SHA must be lowercase 64-hex"
 [[ "$(sha256sum "$APK" | awk '{print $1}')" == "$EXPECTED_APK_SHA" ]] || fail "artifact APK hash drift"
-[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "19" ]] || fail "BUILD_IDENTITY must contain exactly 19 lines"
+[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "23" ]] || fail "BUILD_IDENTITY must contain exactly 23 lines"
 
 embedded_android="$(sed -n 's/^source_candidate_sha=//p' "$BUILD_IDENTITY")"
 embedded_host="$(sed -n 's/^paired_local_host_candidate_sha=//p' "$BUILD_IDENTITY")"
@@ -39,6 +42,11 @@ embedded_scope="$(sed -n 's/^gateway_transport_scope=//p' "$BUILD_IDENTITY")"
 grep -Fxq 'canonical_acceptance=false' "$BUILD_IDENTITY" || fail "artifact cannot self-declare acceptance"
 grep -Fxq 'physical_evidence_required=true' "$BUILD_IDENTITY" || fail "physical evidence requirement missing"
 grep -Fxq 'dp5_status=INCOMPLETE' "$BUILD_IDENTITY" || fail "artifact must remain DP5 incomplete before physical evidence"
+grep -Fxq 'signing_profile=PHYSICAL_DEV_STABLE_LOCAL' "$SIGNING_IDENTITY" || fail "stable local signing identity missing"
+grep -Fxq "final_apk_sha256=$EXPECTED_APK_SHA" "$SIGNING_IDENTITY" || fail "signed APK identity drift"
+grep -Fxq "signer_cert_sha256=$EXPECTED_CERT_SHA" "$SIGNING_IDENTITY" || fail "signer certificate identity drift"
+grep -Fxq 'signer_count=1' "$SIGNING_IDENTITY" || fail "exactly one signer required"
+grep -Fxq 'deterministic_signing=true' "$SIGNING_IDENTITY" || fail "deterministic signing proof missing"
 
 mapfile -t DEVICES < <(adb devices | awk 'NR > 1 && $2 == "device" {print $1}')
 [[ "${#DEVICES[@]}" -eq 1 ]] || fail "exactly one self-ADB device required; found ${#DEVICES[@]}"
@@ -81,52 +89,59 @@ if [[ "${#PRE_PATHS[@]}" -eq 1 ]]; then
   fi
 fi
 
+update_in_place=false
+
 if [[ "$prior_exact" == "true" ]]; then
   installed_sha="$prior_sha"
   disposition="EXACT_APK_ALREADY_INSTALLED_READY_NOT_ACCEPTED"
 else
+  install_ready=false
   if [[ "$prior_present" == "true" ]]; then
-    if [[ "${AURORA_ALLOW_CLEAN_INSTALL:-NO}" != "YES" ]]; then
-      cat >&2 <<EOF
-A different Aurora APK is installed on the tablet.
+    if update_output="$("${ADB[@]}" install -r "$APK" 2>&1)" && grep -Fq 'Success' <<<"$update_output"; then
+      printf '%s\n' "$update_output" >"$EVIDENCE_DIR/update-in-place.txt"
+      update_in_place=true
+      install_ready=true
+    else
+      printf '%s\n' "$update_output" >"$EVIDENCE_DIR/update-in-place.txt"
+      if [[ "${AURORA_ALLOW_CLEAN_INSTALL:-NO}" != "YES" ]]; then
+        cat >&2 <<EOF
+A different Aurora APK is installed and stable in-place update was rejected by Android.
 prior_apk_sha256=$prior_sha
 required_apk_sha256=$EXPECTED_APK_SHA
 
-Replacing it requires a clean uninstall because the exact DP5 artifact uses a different CI debug signing identity.
-A clean uninstall removes Aurora's local application data.
-
-No mutation was performed.
-To explicitly authorize replacement, run:
+No uninstall was performed. To explicitly authorize destructive replacement, run:
   AURORA_ALLOW_CLEAN_INSTALL=YES bash tools/tablet-devlab/install-exact-apk.sh
 EOF
-      exit 3
+        exit 3
+      fi
+      clean_install=true
+      "${ADB[@]}" shell dumpsys package "$PACKAGE_ID" >"$EVIDENCE_DIR/package-before-uninstall.txt" 2>&1 || true
+      uninstall_output="$("${ADB[@]}" uninstall "$PACKAGE_ID" 2>&1)" || fail "clean uninstall failed"
+      printf '%s\n' "$uninstall_output" >"$EVIDENCE_DIR/uninstall.txt"
+      grep -Fxq 'Success' "$EVIDENCE_DIR/uninstall.txt" || fail "clean uninstall did not report Success"
     fi
-
-    clean_install=true
-    "${ADB[@]}" shell dumpsys package "$PACKAGE_ID" >"$EVIDENCE_DIR/package-before-uninstall.txt" 2>&1 || true
-    uninstall_output="$("${ADB[@]}" uninstall "$PACKAGE_ID" 2>&1)" || fail "clean uninstall failed"
-    printf '%s\n' "$uninstall_output" >"$EVIDENCE_DIR/uninstall.txt"
-    grep -Fxq 'Success' "$EVIDENCE_DIR/uninstall.txt" || fail "clean uninstall did not report Success"
-
-    mapfile -t AFTER_UNINSTALL_PATHS < <("${ADB[@]}" shell pm path "$PACKAGE_ID" 2>/dev/null | tr -d '\r' | sed -n 's/^package://p')
-    [[ "${#AFTER_UNINSTALL_PATHS[@]}" -eq 0 ]] || fail "package still present after uninstall"
   fi
 
-  install_output="$("${ADB[@]}" install "$APK" 2>&1)" || fail "exact APK install failed"
-  printf '%s\n' "$install_output" >"$EVIDENCE_DIR/install.txt"
-  grep -Fxq 'Success' "$EVIDENCE_DIR/install.txt" || fail "APK install did not report Success"
+  if [[ "$install_ready" != "true" ]]; then
+    install_output="$("${ADB[@]}" install "$APK" 2>&1)" || fail "exact APK install failed"
+    printf '%s\n' "$install_output" >"$EVIDENCE_DIR/install.txt"
+    grep -Fxq 'Success' "$EVIDENCE_DIR/install.txt" || fail "APK install did not report Success"
+  fi
 
   mapfile -t POST_PATHS < <("${ADB[@]}" shell pm path "$PACKAGE_ID" | tr -d '\r' | sed -n 's/^package://p')
   [[ "${#POST_PATHS[@]}" -eq 1 ]] || fail "exactly one installed base APK required after install; found ${#POST_PATHS[@]} paths"
   POST_PATH="${POST_PATHS[0]}"
   [[ "$POST_PATH" == */base.apk ]] || fail "installed package is split/non-canonical after install: $POST_PATH"
-
   POST_APK="$EVIDENCE_DIR/installed-base-after.apk"
   "${ADB[@]}" pull "$POST_PATH" "$POST_APK" >"$EVIDENCE_DIR/pull-after.txt" 2>&1 || fail "installed APK readback failed after install"
   installed_sha="$(sha256sum "$POST_APK" | awk '{print $1}')"
   [[ "$installed_sha" == "$EXPECTED_APK_SHA" ]] || fail "installed APK SHA does not match exact artifact"
   cmp -s "$APK" "$POST_APK" || fail "installed APK differs byte-for-byte from exact artifact"
-  disposition="EXACT_APK_INSTALLED_READY_NOT_ACCEPTED"
+  if [[ "$update_in_place" == "true" ]]; then
+    disposition="EXACT_APK_UPDATED_IN_PLACE_READY_NOT_ACCEPTED"
+  else
+    disposition="EXACT_APK_INSTALLED_READY_NOT_ACCEPTED"
+  fi
 fi
 
 cat >"$EVIDENCE_DIR/install-evidence.json" <<EOF
@@ -146,6 +161,8 @@ cat >"$EVIDENCE_DIR/install-evidence.json" <<EOF
   "priorApkSha256": "$prior_sha",
   "priorExactArtifact": $prior_exact,
   "cleanInstallPerformed": $clean_install,
+  "updateInPlacePerformed": $update_in_place,
+  "signerCertSha256": "$EXPECTED_CERT_SHA",
   "device": {
     "serialSha256": "$SERIAL_SHA",
     "manufacturer": "$MANUFACTURER",

@@ -19,7 +19,7 @@ proot-distro login debian -- bash -lc "
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y git curl ca-certificates build-essential python3 python3-pip jq unzip zip openssh-client procps lsof postgresql-client
+apt-get install -y git curl ca-certificates build-essential python3 python3-pip jq unzip zip openssh-client procps lsof postgresql-client apksigner
 
 # Android app UIDs/GIDs are high numeric values. A freshly created Debian/PRoot
 # may already contain an unrelated group with the same numeric GID. Reuse the
@@ -71,6 +71,7 @@ other=$((10#$mode % 10))
 group=$(((10#$mode / 10) % 10))
 (( (group & 2) == 0 && (other & 2) == 0 )) || { echo "/usr/bin/git must not be group/other writable" >&2; exit 2; }
 command -v psql >/dev/null 2>&1 || { echo "psql client missing" >&2; exit 2; }
+command -v apksigner >/dev/null 2>&1 || { echo "apksigner missing" >&2; exit 2; }
 '
 
 mkdir -p "$DEVLAB_ROOT/state"

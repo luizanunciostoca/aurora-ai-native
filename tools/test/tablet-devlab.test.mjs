@@ -8,13 +8,15 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', name), 'utf8');
 
 const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
-const ANDROID_SHA = 'ccffbfc0b722ac7871ee24f8d2c03e2cf522c6f6';
+const ANDROID_SHA = '54d9fd47e48736fde80e5963b28cdcc121989648';
 const HOST_SHA = '7d9c9bebb8d12b00b8e0629387edd483e14638b6';
-const PACKAGING_SHA = '76e09ea514276556e845d2bb301087aa460fe915';
-const APK_SHA = 'b610bb99892345cd67ff0f5356547b1ca6041aecab10cf6ff93dc9f1f739ff6b';
-const ARTIFACT_ID = '10414677915';
-const RUN_ID = '35014031636';
-const ZIP_SHA = '078cca0cea33e1e68f5fb8e6e3a56cc5d7dda6197fb219dd0550aa854f3cb762';
+const PACKAGING_SHA = '3987ba0808512f5324fd13264f93ab155508b2b0';
+const PRESIGN_SHA = '99af33d2d786560fbb3351396706f6e1eb3185ebeebb4bb34f32721b736bbbc4';
+const APK_SHA = 'f1d390cc6743b0d235fd62451caf39c0f8bf169281dfbe734e5bc6300d4d657d';
+const CERT_SHA = 'e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb';
+const ARTIFACT_ID = '10417783170';
+const RUN_ID = '35022834461';
+const ZIP_SHA = '9aea4fed45dcb1da6e606f6d5e15e3193304a68060da8f6161c401b0a576fc7f';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -32,6 +34,7 @@ test('Debian setup pins W15-J host to Node 22 and preserves fixed git boundary',
   assert.match(source, /major!==22 \|\| minor<16/);
   assert.match(source, /\/usr\/bin\/git/);
   assert.match(source, /root-owned/);
+  assert.match(source, /apksigner/);
 });
 
 test('self adb exposes physical observation without publishing raw serial', () => {
@@ -55,7 +58,7 @@ test('tablet host remains fail closed until trusted provider is configured', () 
   assert.doesNotMatch(provider, /postgres(?:ql)?:\/\/[^\s]*:[^\s]*@/i);
 });
 
-test('artifact fetch emits five-key metadata and binds the exact tablet-loopback tuple', () => {
+test('artifact fetch binds the exact presign and final-signing tuple', () => {
   const source = read('fetch-current-artifact.sh');
   for (const key of [
     'packaging_head_sha',
@@ -63,6 +66,9 @@ test('artifact fetch emits five-key metadata and binds the exact tablet-loopback
     'artifact_id',
     'artifact_name',
     'artifact_zip_sha256',
+    'presign_apk_sha256',
+    'expected_final_apk_sha256',
+    'expected_signer_cert_sha256',
   ]) {
     assert.match(source, new RegExp(`^${key}=`, 'm'));
   }
@@ -71,7 +77,9 @@ test('artifact fetch emits five-key metadata and binds the exact tablet-loopback
     ANDROID_SHA,
     HOST_SHA,
     MAIN_SHA,
+    PRESIGN_SHA,
     APK_SHA,
+    CERT_SHA,
     ARTIFACT_ID,
     RUN_ID,
     ZIP_SHA,
@@ -87,6 +95,24 @@ test('artifact fetch emits five-key metadata and binds the exact tablet-loopback
   assert.match(source, /LOCAL_TABLET_LOOPBACK/);
   assert.match(source, /canonical_acceptance=false/);
   assert.match(source, /dp5_status=INCOMPLETE/);
+  assert.match(source, /PHYSICAL_DEV_STABLE_LOCAL/);
+  assert.match(source, /local_signing_required=true/);
+});
+
+test('physical signing tool is deterministic, local-only and certificate-bound', () => {
+  const source = read('sign-current-artifact.sh');
+  for (const value of [PRESIGN_SHA, APK_SHA, CERT_SHA]) {
+    assert.match(source, new RegExp(escaped(value)));
+  }
+  assert.match(source, /PKCS12/);
+  assert.match(source, /--v2-signing-enabled true/);
+  assert.match(source, /--v3-signing-enabled true/);
+  assert.match(source, /--v1-signing-enabled false/);
+  assert.match(source, /cmp -s .*DET_APK/);
+  assert.match(source, /signer_count=1/);
+  assert.match(source, /deterministic_signing=true/);
+  assert.match(source, /private_key_exported=false/);
+  assert.doesNotMatch(source, /pass:<password>/);
 });
 
 test('worktrees default to the exact current tablet-loopback tuple', () => {
@@ -110,12 +136,17 @@ test('tablet loopback preflight refuses reverse-port ambiguity and binds current
   assert.match(source, /authorizesExecution.*false/);
   assert.match(source, /provesExecutionSuccess.*false/);
   assert.match(source, /retryAuthorized.*false/);
+  assert.match(source, new RegExp(escaped(CERT_SHA)));
+  assert.match(source, /PHYSICAL_DEV_STABLE_LOCAL/);
 });
 
 test('exact APK installer binds the current APK and requires explicit destructive replacement opt-in', () => {
   const source = read('install-exact-apk.sh');
   assert.match(source, /AURORA_ALLOW_CLEAN_INSTALL:-NO/);
   assert.match(source, /AURORA_ALLOW_CLEAN_INSTALL=YES/);
+  assert.match(source, /install -r/);
+  assert.match(source, /EXACT_APK_UPDATED_IN_PLACE_READY_NOT_ACCEPTED/);
+  assert.match(source, new RegExp(escaped(CERT_SHA)));
   assert.match(source, /installed APK readback failed before any mutation/);
   assert.match(source, /installed package is split\/non-canonical/);
   assert.match(source, new RegExp(escaped(APK_SHA)));
@@ -213,7 +244,9 @@ test('live control-tower tuple capture retries transient GitHub reads and cannot
     ANDROID_SHA,
     HOST_SHA,
     PACKAGING_SHA,
+    PRESIGN_SHA,
     APK_SHA,
+    CERT_SHA,
     ARTIFACT_ID,
     RUN_ID,
     ZIP_SHA,
@@ -278,6 +311,7 @@ test('tablet devlab documentation keeps independent reviewer and exact tuple req
   assert.match(source, /refresh-bootstrap\.sh/);
   assert.match(source, /refresh-reconnect\.sh/);
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED=YES/);
-  assert.match(source, /clean uninstall\/install/i);
+  assert.match(source, /clean (?:uninstall|replacement)/i);
+  assert.match(source, /sign-current-artifact\.sh/);
   assert.match(source, /install-exact-apk\.sh/);
 });
