@@ -42,14 +42,14 @@ Current exact tuple defaults:
 
 ```text
 main      77f0f8532197025ee913dd02fcb56878d9d667a9
-android   182743a9284129e7e98a91349428cf020da88f36
-host      611d2b9e2eb879a54860753833f113d9ed6ac997
-packaging 26365988daed922c273fc227e2a6376b50bd8a18
-run       34926967987
-artifact  10379979465
-name      aurora-w15j-tablet-loopback-apk-182743a9-host-611d2b9e
-zip       5a31ba71281b5222b51049752e3f1cc44fc24ebda4959055b100d16b2326bf43
-apk       500a79a98324df19c8b9baf3feec8daba13ae7982a9454ba6ed18ea85b4ad43e
+android   005d77c73985599e569291c33ff390d8213a0930
+host      7d9c9bebb8d12b00b8e0629387edd483e14638b6
+packaging ebf64ec8b7c09948bb0d4d0f8f63ac70b924dd09
+run       34936090565
+artifact  10383194301
+name      aurora-w15j-tablet-loopback-apk-005d77c7-host-7d9c9beb
+zip       638fc86d8b2cbb6975a49d8cded6ead0925d9c39e704c3e1079d39388235a9f9
+apk       1ad8705e00f5ce7223f99838ba783096c43b041da524b1c6fe74694b6f1960db
 transport LOCAL_TABLET_LOOPBACK
 ```
 
