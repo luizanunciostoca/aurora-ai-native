@@ -50,7 +50,7 @@ class AuroraAssistantSurface private constructor(
     ) {
         val presentation = AuroraAssistantExperience.presentation(stage)
         orb.setStage(stage)
-        // The orb is decorative. Announce the textual state once, not again through the orb.
+        // The orb and eyebrow are decorative. Detail is the single live stage narration.
         eyebrowView.setTextIfChanged(presentation.eyebrow)
         titleView.setTextIfChanged(titleOverride ?: presentation.title)
         detailView.setTextIfChanged(detailOverride ?: presentation.detail)
@@ -125,8 +125,15 @@ class AuroraAssistantSurface private constructor(
     }
 
     fun setStatusLine(text: String) {
+        if (text.isBlank()) {
+            statusLineView.visibility = View.GONE
+            statusLineView.setTextIfChanged("")
+            return
+        }
+        // Make the live region observable before mutating its content so accessibility services
+        // receive the actual message change rather than relying on a later visibility event.
+        statusLineView.visibility = View.VISIBLE
         statusLineView.setTextIfChanged(text)
-        statusLineView.visibility = if (text.isBlank()) View.GONE else View.VISIBLE
     }
 
     fun setDiagnostics(text: String) {
@@ -350,6 +357,7 @@ class AuroraAssistantSurface private constructor(
                     setTextColor(Color.rgb(142, 168, 230))
                     gravity = Gravity.CENTER
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     enableReadableWrapping(balanceLines = true)
                 }
             content.addView(
@@ -393,7 +401,6 @@ class AuroraAssistantSurface private constructor(
                     setTextColor(Color.WHITE)
                     gravity = Gravity.CENTER
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
                     enableReadableWrapping(balanceLines = true)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isAccessibilityHeading = true
                 }
