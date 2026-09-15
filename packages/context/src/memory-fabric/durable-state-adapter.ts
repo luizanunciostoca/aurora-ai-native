@@ -95,6 +95,22 @@ export interface DurableMemoryFabricRepository {
   ) => Promise<DurableMemoryFabricSaveResult>;
 }
 
+const FORBIDDEN_DURABLE_KEYS = new Set([
+  'apikey',
+  'audiobytes',
+  'credential',
+  'credentials',
+  'ownerdeccision',
+  'ownerdecision',
+  'password',
+  'policytoken',
+  'privatekey',
+  'rawaudio',
+  'refreshtoken',
+  'secret',
+  'accesstoken',
+]);
+
 function nonEmpty(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -126,8 +142,42 @@ export function isMemoryFabricJsonValue(
   }
 }
 
+function containsForbiddenDurableKey(value: MemoryFabricJsonValue): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some(containsForbiddenDurableKey);
+  return Object.entries(value).some(
+    ([key, nested]) =>
+      FORBIDDEN_DURABLE_KEYS.has(key.toLowerCase().replace(/[^a-z]/g, '')) ||
+      containsForbiddenDurableKey(nested),
+  );
+}
+
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function lifecycleEvidenceValid(value: Record<string, unknown>): boolean {
+  if (value.lifecycle === 'VALIDATED') {
+    return nonEmpty(value.sourceCommitReference) && nonEmpty(value.validationReference);
+  }
+  if (value.lifecycle === 'CANONICAL') {
+    return (
+      nonEmpty(value.sourceCommitReference) &&
+      nonEmpty(value.validationReference) &&
+      nonEmpty(value.promotionReference)
+    );
+  }
+  if (value.lifecycle === 'SUPERSEDED') {
+    return (
+      nonEmpty(value.sourceCommitReference) &&
+      nonEmpty(value.validationReference) &&
+      nonEmpty(value.promotionReference) &&
+      nonEmpty(value.supersededByProjectionReference) &&
+      nonEmpty(value.supersedeReference)
+    );
+  }
+  if (value.lifecycle === 'REVOKED') return nonEmpty(value.revocationReference);
+  return true;
 }
 
 function recordValid(
@@ -144,7 +194,11 @@ function recordValid(
   if (!MEMORY_LIFECYCLE_STATES.includes(value.lifecycle as (typeof MEMORY_LIFECYCLE_STATES)[number])) {
     return false;
   }
-  if (!Number.isSafeInteger(value.lifecycleRevision) || Number(value.lifecycleRevision) < 0) {
+  if (
+    typeof value.lifecycleRevision !== 'number' ||
+    !Number.isSafeInteger(value.lifecycleRevision) ||
+    value.lifecycleRevision < 0
+  ) {
     return false;
   }
   if (value.authorizesExecution !== false) return false;
@@ -172,6 +226,7 @@ function recordValid(
     return false;
   }
   if (!nonEmpty(value.content.digest) || !isMemoryFabricJsonValue(value.content.payload)) return false;
+  if (containsForbiddenDurableKey(value.content.payload)) return false;
 
   if (
     !Array.isArray(value.conflictsWithProjectionReferences) ||
@@ -215,6 +270,7 @@ function recordValid(
   if (optionalReferences.some((reference) => reference !== undefined && !nonEmpty(reference))) {
     return false;
   }
+  if (!lifecycleEvidenceValid(value)) return false;
 
   if (value.subject !== undefined && !plainObject(value.subject)) return false;
   return true;
@@ -227,13 +283,20 @@ export function decodeDurableMemoryFabricSnapshot(
   if (!isMemoryFabricJsonValue(payload) || !plainObject(payload)) {
     throw new Error('MEMORY_FABRIC_DURABLE_PAYLOAD_INVALID');
   }
+  if (containsForbiddenDurableKey(payload)) {
+    throw new Error('MEMORY_FABRIC_DURABLE_FORBIDDEN_MATERIAL');
+  }
   if (payload.kind !== 'MemoryFabricSnapshot' || payload.authorizesExecution !== false) {
     throw new Error('MEMORY_FABRIC_DURABLE_PAYLOAD_INVALID');
   }
   if (!plainObject(payload.tenant) || payload.tenant.tenantId !== tenant.tenantId) {
     throw new Error('MEMORY_FABRIC_DURABLE_TENANT_MISMATCH');
   }
-  if (!Number.isSafeInteger(payload.revision) || Number(payload.revision) < 0) {
+  if (
+    typeof payload.revision !== 'number' ||
+    !Number.isSafeInteger(payload.revision) ||
+    payload.revision < 0
+  ) {
     throw new Error('MEMORY_FABRIC_DURABLE_PAYLOAD_INVALID');
   }
   if (!Array.isArray(payload.records)) throw new Error('MEMORY_FABRIC_DURABLE_PAYLOAD_INVALID');
@@ -266,6 +329,9 @@ export function encodeDurableMemoryFabricSnapshot(snapshot: MemoryFabricSnapshot
   };
   if (!isMemoryFabricJsonValue(durableSnapshot)) {
     throw new Error('MEMORY_FABRIC_DURABLE_JSON_UNSAFE');
+  }
+  if (containsForbiddenDurableKey(durableSnapshot)) {
+    throw new Error('MEMORY_FABRIC_DURABLE_FORBIDDEN_MATERIAL');
   }
   return cloneJson(durableSnapshot) as unknown as MemoryFabricJsonValue;
 }
