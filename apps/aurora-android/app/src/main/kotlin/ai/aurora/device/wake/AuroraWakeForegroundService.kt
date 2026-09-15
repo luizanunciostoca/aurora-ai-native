@@ -25,6 +25,7 @@ class AuroraWakeForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        PROCESS_REARM_GATE.markActive()
         preferences = WakeRuntimePreferences(this)
         statusStore = WakeRuntimeStatusStore(this)
         modelStore = AuroraWakeModelStore(this)
@@ -45,6 +46,7 @@ class AuroraWakeForegroundService : Service() {
         engine?.close()
         engine = null
         stopForeground(STOP_FOREGROUND_REMOVE)
+        PROCESS_REARM_GATE.markInactive()
         super.onDestroy()
     }
 
@@ -142,6 +144,7 @@ class AuroraWakeForegroundService : Service() {
     }
 
     private fun stopWithState(state: String) {
+        PROCESS_REARM_GATE.markInactive()
         statusStore.update(state)
         stopForegroundDetector()
     }
@@ -202,6 +205,7 @@ class AuroraWakeForegroundService : Service() {
                 WakeState.ENGINE_UNAVAILABLE,
                 WakeState.ERROR,
             )
+        private val PROCESS_REARM_GATE = WakeProcessRearmGate()
 
         /**
          * Best-effort platform re-arm only. This does not create authority or imply that a wake
@@ -218,11 +222,16 @@ class AuroraWakeForegroundService : Service() {
                 return false
             }
             if (!AuroraWakeModelStore(appContext).hasValidModel()) return false
+            if (!PROCESS_REARM_GATE.tryBeginStart()) return true
             return runCatching {
                 appContext.startForegroundService(
                     Intent(appContext, AuroraWakeForegroundService::class.java).setAction(ACTION_ARM),
                 )
-            }.isSuccess
+                true
+            }.getOrElse {
+                PROCESS_REARM_GATE.markInactive()
+                false
+            }
         }
     }
 }
