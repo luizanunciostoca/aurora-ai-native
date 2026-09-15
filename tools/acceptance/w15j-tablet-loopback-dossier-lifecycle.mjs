@@ -62,19 +62,33 @@ function required(record, key, label) {
 }
 
 function validateControlTowerTuple(input) {
+  const stableSigning = Object.hasOwn(input, 'signing');
   exactKeys(
     input,
-    [
-      'schemaVersion',
-      'repository',
-      'workflowRun',
-      'androidCandidateSha',
-      'hostCandidateSha',
-      'reconciledMainSha',
-      'packagingHeadSha',
-      'artifact',
-      'apk',
-    ],
+    stableSigning
+      ? [
+          'schemaVersion',
+          'repository',
+          'workflowRun',
+          'androidCandidateSha',
+          'hostCandidateSha',
+          'reconciledMainSha',
+          'packagingHeadSha',
+          'artifact',
+          'apk',
+          'signing',
+        ]
+      : [
+          'schemaVersion',
+          'repository',
+          'workflowRun',
+          'androidCandidateSha',
+          'hostCandidateSha',
+          'reconciledMainSha',
+          'packagingHeadSha',
+          'artifact',
+          'apk',
+        ],
     'Control Tower tuple',
   );
   exactKeys(
@@ -84,9 +98,18 @@ function validateControlTowerTuple(input) {
   );
   exactKeys(
     input.artifact,
-    ['id', 'name', 'zipSha256', 'digestSourceRef'],
+    stableSigning
+      ? ['id', 'name', 'zipSha256', 'presignApkSha256', 'digestSourceRef']
+      : ['id', 'name', 'zipSha256', 'digestSourceRef'],
     'Control Tower artifact',
   );
+  if (stableSigning) {
+    exactKeys(
+      input.signing,
+      ['profile', 'signerCertSha256', 'deterministic', 'privateKeyExported'],
+      'Control Tower signing',
+    );
+  }
   exactKeys(
     input.apk,
     ['applicationId', 'variant', 'versionCode', 'versionName', 'sha256'],
@@ -115,6 +138,24 @@ function validateControlTowerTuple(input) {
     },
     apk: { ...input.apk, sha256: exact(input.apk.sha256, SHA256, 'APK SHA') },
   };
+  if (stableSigning) {
+    tuple.artifact.presignApkSha256 = exact(
+      input.artifact.presignApkSha256,
+      SHA256,
+      'artifact pre-sign APK SHA',
+    );
+    if (input.signing.profile !== 'PHYSICAL_DEV_STABLE_LOCAL')
+      throw new Error('stable signing profile invalid');
+    if (input.signing.deterministic !== true || input.signing.privateKeyExported !== false) {
+      throw new Error('stable signing invariants invalid');
+    }
+    tuple.signing = {
+      profile: input.signing.profile,
+      signerCertSha256: exact(input.signing.signerCertSha256, SHA256, 'signer certificate SHA'),
+      deterministic: true,
+      privateKeyExported: false,
+    };
+  }
   if (exact(input.workflowRun.headSha, GIT_SHA, 'workflow head SHA') !== tuple.packagingHeadSha) {
     throw new Error('workflow head differs from packaging SHA');
   }

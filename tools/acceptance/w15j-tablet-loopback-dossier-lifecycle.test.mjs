@@ -182,3 +182,38 @@ test('prepare fails closed on transport or Control Tower tuple mismatch', () => 
     /candidate_sha drift/,
   );
 });
+
+test('stable-signing Control Tower tuple is accepted without widening dossier authority', () => {
+  const stable = tuple();
+  stable.artifact.presignApkSha256 = '3'.repeat(64);
+  stable.signing = {
+    profile: 'PHYSICAL_DEV_STABLE_LOCAL',
+    signerCertSha256: '4'.repeat(64),
+    deterministic: true,
+    privateKeyExported: false,
+  };
+  const dossier = createBoundW15JTabletLoopbackDossier(
+    template,
+    stable,
+    preflight(),
+    apkIdentity(),
+  );
+  assert.equal(dossier.apk.sha256, apkSha);
+  assert.equal(dossier.dp5Status, 'CLOSED_PHYSICAL_EVIDENCE_INCOMPLETE');
+  assert.equal(dossier.environment.gatewayTransport, 'LOCAL_TABLET_LOOPBACK');
+});
+
+test('stable-signing Control Tower tuple fails closed on signer invariant drift', () => {
+  const stable = tuple();
+  stable.artifact.presignApkSha256 = '3'.repeat(64);
+  stable.signing = {
+    profile: 'PHYSICAL_DEV_STABLE_LOCAL',
+    signerCertSha256: '4'.repeat(64),
+    deterministic: false,
+    privateKeyExported: false,
+  };
+  assert.throws(
+    () => createBoundW15JTabletLoopbackDossier(template, stable, preflight(), apkIdentity()),
+    /stable signing invariants invalid/,
+  );
+});

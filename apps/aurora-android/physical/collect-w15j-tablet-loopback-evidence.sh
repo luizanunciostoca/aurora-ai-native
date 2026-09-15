@@ -12,6 +12,7 @@ APK_VARIANT="${AURORA_APK_VARIANT:-}"
 OPERATOR="${AURORA_OPERATOR:-}"
 ARTIFACT_ZIP="${AURORA_ARTIFACT_ZIP:-}"
 ARTIFACT_METADATA="${AURORA_ARTIFACT_METADATA:-}"
+FINAL_SIGNING_IDENTITY="${AURORA_FINAL_SIGNING_IDENTITY:-}"
 HOST_READINESS_DIR="${AURORA_W15J_HOST_READINESS_DIR:-}"
 DEVICE_GATEWAY_PORT=8080
 BOOTSTRAP_PORT=8081
@@ -153,7 +154,7 @@ pull_installed_apk() {
   [[ "${paths[0]}" == */base.apk ]] || fail "split/non-base APK detected at $phase"
   capture "installed-base-$phase-pull.txt" "$ADB_BIN" -s "$SERIAL" pull \
     "${paths[0]}" "$OUTPUT_DIR/installed-base-$phase.apk"
-  [[ "$(sha256sum "$OUTPUT_DIR/installed-base-$phase.apk" | awk '{print $1}')" == "$EMBEDDED_APK_SHA" ]] || \
+  [[ "$(sha256sum "$OUTPUT_DIR/installed-base-$phase.apk" | awk '{print $1}')" == "$FINAL_APK_SHA" ]] || \
     fail "installed APK SHA drift at $phase"
   cmp -s "$APK_PATH" "$OUTPUT_DIR/installed-base-$phase.apk" || fail "installed APK byte drift at $phase"
 }
@@ -191,17 +192,37 @@ QEMU="$(adb_shell getprop ro.kernel.qemu | tr -d '\r\n')"
 [[ "$QEMU" != "1" && "$SERIAL" != emulator-* ]] || fail "physical tablet required"
 
 read_kv "$ARTIFACT_METADATA" ARTIFACT_META
-[[ "${#ARTIFACT_META[@]}" -eq 5 ]] || fail "artifact metadata must have exactly five keys"
+STABLE_SIGNING=false
+if [[ "${#ARTIFACT_META[@]}" -eq 8 ]]; then
+  STABLE_SIGNING=true
+elif [[ "${#ARTIFACT_META[@]}" -ne 5 ]]; then
+  fail "artifact metadata must contain either five legacy keys or eight stable-signing keys"
+fi
 PACKAGING_HEAD_SHA="$(required_kv ARTIFACT_META packaging_head_sha)"
 PACKAGING_RUN_ID="$(required_kv ARTIFACT_META packaging_run_id)"
 ARTIFACT_ID="$(required_kv ARTIFACT_META artifact_id)"
 ARTIFACT_NAME="$(required_kv ARTIFACT_META artifact_name)"
 ARTIFACT_ZIP_SHA256="$(required_kv ARTIFACT_META artifact_zip_sha256)"
+if [[ "$STABLE_SIGNING" == "true" ]]; then
+  PRESIGN_APK_SHA="$(required_kv ARTIFACT_META presign_apk_sha256)"
+  FINAL_APK_SHA="$(required_kv ARTIFACT_META expected_final_apk_sha256)"
+  EXPECTED_SIGNER_CERT_SHA="$(required_kv ARTIFACT_META expected_signer_cert_sha256)"
+else
+  PRESIGN_APK_SHA=""
+  FINAL_APK_SHA=""
+  EXPECTED_SIGNER_CERT_SHA=""
+fi
 [[ "$PACKAGING_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "packaging head invalid"
 [[ "$PACKAGING_RUN_ID" =~ ^[1-9][0-9]*$ ]] || fail "packaging run invalid"
 [[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]] || fail "artifact id invalid"
 [[ "$ARTIFACT_NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "artifact name invalid"
 [[ "$ARTIFACT_ZIP_SHA256" =~ ^[0-9a-f]{64}$ ]] || fail "artifact ZIP SHA invalid"
+if [[ "$STABLE_SIGNING" == "true" ]]; then
+  [[ "$PRESIGN_APK_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "pre-sign APK SHA invalid"
+  [[ "$FINAL_APK_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "final APK SHA invalid"
+  [[ "$EXPECTED_SIGNER_CERT_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "signer certificate SHA invalid"
+  [[ -f "$FINAL_SIGNING_IDENTITY" && ! -L "$FINAL_SIGNING_IDENTITY" ]] || fail "stable signing identity is required"
+fi
 [[ "$(sha256sum "$ARTIFACT_ZIP" | awk '{print $1}')" == "$ARTIFACT_ZIP_SHA256" ]] || fail "artifact ZIP SHA mismatch"
 
 ARTIFACT_TMP="$(mktemp -d)"
@@ -210,7 +231,11 @@ mapfile -t ZIP_ENTRIES < <(unzip -Z1 "$ARTIFACT_ZIP")
 for entry in "${ZIP_ENTRIES[@]}"; do [[ "$entry" =~ ^[A-Za-z0-9._-]+$ ]] || fail "unsafe ZIP path"; done
 unzip -q "$ARTIFACT_ZIP" -d "$ARTIFACT_TMP"
 read_kv "$ARTIFACT_TMP/BUILD_IDENTITY.txt" BUILD_META
-[[ "${#BUILD_META[@]}" -eq 19 ]] || fail "BUILD_IDENTITY must contain exactly nineteen keys"
+if [[ "$STABLE_SIGNING" == "true" ]]; then
+  [[ "${#BUILD_META[@]}" -eq 23 ]] || fail "stable-signing BUILD_IDENTITY must contain exactly twenty-three keys"
+else
+  [[ "${#BUILD_META[@]}" -eq 19 ]] || fail "legacy BUILD_IDENTITY must contain exactly nineteen keys"
+fi
 [[ "$(required_kv BUILD_META artifact_purpose)" == "W15-J-DP5-physical-evidence-input" ]] || fail "artifact purpose drift"
 [[ "$(required_kv BUILD_META source_candidate_sha)" == "$CANDIDATE_SHA" ]] || fail "candidate SHA not bound by artifact"
 [[ "$(required_kv BUILD_META source_branch)" == "wave/15j-physical-device-integration-acceptance" ]] || fail "source branch drift"
@@ -229,13 +254,35 @@ MAIN_SHA="$(required_kv BUILD_META reconciled_main_parent_sha)"
 [[ "$(required_kv BUILD_META canonical_acceptance)" == "false" ]] || fail "artifact cannot claim acceptance"
 [[ "$(required_kv BUILD_META physical_evidence_required)" == "true" ]] || fail "artifact must require physical evidence"
 [[ "$(required_kv BUILD_META dp5_status)" == "INCOMPLETE" ]] || fail "artifact DP5 must remain incomplete"
+if [[ "$STABLE_SIGNING" == "true" ]]; then
+  [[ "$(required_kv BUILD_META input_signing_profile)" == "DEBUG_FALLBACK" ]] || fail "pre-sign input profile drift"
+  [[ "$(required_kv BUILD_META final_signing_profile)" == "PHYSICAL_DEV_STABLE_LOCAL" ]] || fail "final signing profile drift"
+  [[ "$(required_kv BUILD_META local_signing_required)" == "true" ]] || fail "local signing requirement missing"
+  [[ "$(required_kv BUILD_META expected_signer_cert_sha256)" == "$EXPECTED_SIGNER_CERT_SHA" ]] || fail "embedded signer fingerprint drift"
+fi
 
 read -r EMBEDDED_APK_SHA EMBEDDED_APK_NAME <"$ARTIFACT_TMP/SHA256SUMS.txt"
 [[ "$EMBEDDED_APK_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "embedded APK SHA invalid"
 [[ "$EMBEDDED_APK_NAME" =~ ^[A-Za-z0-9._-]+\.apk$ ]] || fail "embedded APK name invalid"
 [[ -f "$ARTIFACT_TMP/$EMBEDDED_APK_NAME" ]] || fail "embedded APK missing"
 [[ "$(sha256sum "$ARTIFACT_TMP/$EMBEDDED_APK_NAME" | awk '{print $1}')" == "$EMBEDDED_APK_SHA" ]] || fail "embedded APK checksum mismatch"
-cmp -s "$APK_PATH" "$ARTIFACT_TMP/$EMBEDDED_APK_NAME" || fail "supplied APK differs from artifact APK"
+if [[ "$STABLE_SIGNING" == "true" ]]; then
+  [[ "$EMBEDDED_APK_SHA" == "$PRESIGN_APK_SHA" ]] || fail "embedded pre-sign APK SHA drift"
+  [[ "$(sha256sum "$APK_PATH" | awk '{print $1}')" == "$FINAL_APK_SHA" ]] || fail "supplied final APK SHA drift"
+  grep -Fxq 'signing_profile=PHYSICAL_DEV_STABLE_LOCAL' "$FINAL_SIGNING_IDENTITY" || fail "stable signing profile missing"
+  grep -Fxq "presign_apk_sha256=$PRESIGN_APK_SHA" "$FINAL_SIGNING_IDENTITY" || fail "signing identity pre-sign SHA drift"
+  grep -Fxq "final_apk_sha256=$FINAL_APK_SHA" "$FINAL_SIGNING_IDENTITY" || fail "signing identity final APK SHA drift"
+  grep -Fxq "signer_cert_sha256=$EXPECTED_SIGNER_CERT_SHA" "$FINAL_SIGNING_IDENTITY" || fail "signing identity signer fingerprint drift"
+  grep -Fxq 'apk_signature_v1=false' "$FINAL_SIGNING_IDENTITY" || fail "stable APK v1 signature expectation drift"
+  grep -Fxq 'apk_signature_v2=true' "$FINAL_SIGNING_IDENTITY" || fail "stable APK v2 signature proof missing"
+  grep -Fxq 'apk_signature_v3=true' "$FINAL_SIGNING_IDENTITY" || fail "stable APK v3 signature proof missing"
+  grep -Fxq 'signer_count=1' "$FINAL_SIGNING_IDENTITY" || fail "stable APK signer count drift"
+  grep -Fxq 'deterministic_signing=true' "$FINAL_SIGNING_IDENTITY" || fail "deterministic signing proof missing"
+  grep -Fxq 'private_key_exported=false' "$FINAL_SIGNING_IDENTITY" || fail "private-key boundary drift"
+else
+  FINAL_APK_SHA="$EMBEDDED_APK_SHA"
+  cmp -s "$APK_PATH" "$ARTIFACT_TMP/$EMBEDDED_APK_NAME" || fail "supplied APK differs from artifact APK"
+fi
 
 HOST_FILES=(
   host-ready-announcement.txt
@@ -269,7 +316,11 @@ if [[ "$MODE" == "preflight" ]]; then
   cp -- "$ARTIFACT_METADATA" "$OUTPUT_DIR/artifact-metadata.txt"
   cp -- "$ARTIFACT_TMP/BUILD_IDENTITY.txt" "$OUTPUT_DIR/BUILD_IDENTITY.txt"
   cp -- "$ARTIFACT_TMP/SHA256SUMS.txt" "$OUTPUT_DIR/SHA256SUMS.txt"
-  cp -- "$ARTIFACT_TMP/$EMBEDDED_APK_NAME" "$OUTPUT_DIR/candidate.apk"
+  cp -- "$APK_PATH" "$OUTPUT_DIR/candidate.apk"
+  if [[ "$STABLE_SIGNING" == "true" ]]; then
+    cp -- "$ARTIFACT_TMP/$EMBEDDED_APK_NAME" "$OUTPUT_DIR/candidate-presign.apk"
+    cp -- "$FINAL_SIGNING_IDENTITY" "$OUTPUT_DIR/FINAL_SIGNING_IDENTITY.txt"
+  fi
   for file in "${HOST_FILES[@]}"; do cp -- "$HOST_READINESS_DIR/$file" "$OUTPUT_DIR/$file"; done
 else
   [[ -d "$OUTPUT_DIR" ]] || fail "finalize requires existing evidence directory"
@@ -283,6 +334,10 @@ else
     cmp -s "$source" "$OUTPUT_DIR/$target" || fail "finalize drift: $target"
   done
   for file in "${HOST_FILES[@]}"; do cmp -s "$HOST_READINESS_DIR/$file" "$OUTPUT_DIR/$file" || fail "host readiness drift: $file"; done
+  if [[ "$STABLE_SIGNING" == "true" ]]; then
+    cmp -s "$ARTIFACT_TMP/$EMBEDDED_APK_NAME" "$OUTPUT_DIR/candidate-presign.apk" || fail "pre-sign APK drift"
+    cmp -s "$FINAL_SIGNING_IDENTITY" "$OUTPUT_DIR/FINAL_SIGNING_IDENTITY.txt" || fail "stable signing identity drift"
+  fi
 fi
 
 MODEL="$(adb_shell getprop ro.product.model | tr -d '\r\n')"
@@ -309,7 +364,7 @@ if [[ "$MODE" == "preflight" ]]; then
 disposition=PREINSTALLED_EXACT_APK_VERIFIED
 mutation=NONE
 installer_owner=tools/tablet-devlab/install-exact-apk.sh
-installed_apk_sha256=$EMBEDDED_APK_SHA
+installed_apk_sha256=$FINAL_APK_SHA
 EOF
   printf '0\n' >"$OUTPUT_DIR/apk-install.txt.exit-code"
   capture package-dump.txt adb_shell dumpsys package "$PACKAGE_ID"
