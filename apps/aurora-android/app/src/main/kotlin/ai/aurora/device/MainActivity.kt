@@ -22,6 +22,7 @@ import ai.aurora.device.ui.AuroraSystemStatusInput
 import ai.aurora.device.ui.AuroraSystemStatusPolicy
 import ai.aurora.device.wake.AuroraAssistantRoleCoordinator
 import ai.aurora.device.wake.AuroraAssistantSelectionLaunch
+import ai.aurora.device.wake.AuroraWakeForegroundService
 import ai.aurora.device.wake.AuroraWakeModelStore
 import ai.aurora.device.wake.MicrophonePermissionAction
 import ai.aurora.device.wake.MicrophonePermissionFlow
@@ -73,6 +74,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        AuroraWakeForegroundService.rearmIfConfigured(this)
         wakeRuntimeRefreshAttempts = 0
         if (::surface.isInitialized) {
             surface.root.removeCallbacks(wakeRuntimeRefreshRunnable)

@@ -209,8 +209,7 @@ class GatewayDevicePlaneClientTest {
         )
         assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
 
-        val result = client.reconnect(GatewayCredentialProvider { "credential-2" })
-            as GatewayDevicePlaneResult.Success
+        val result = client.reconnect(reconnectRequest()) as GatewayDevicePlaneResult.Success
         assertEquals(2, opens)
         assertTrue(initial.closed)
         assertEquals("conn-2", result.value.gateway.connectionId)
@@ -223,6 +222,40 @@ class GatewayDevicePlaneClientTest {
         assertTrue(resumed.requests[2].second.contains("\"previousConnectionId\":\"conn-1\""))
         assertTrue(proofs.messages[proofs.messages.lastIndex - 1].startsWith("AURORA_DEVICE_REGISTRATION_V1\n"))
         assertTrue(proofs.messages.last().endsWith("\nconn-1"))
+    }
+
+    @Test
+    fun `reconnect binding mismatch is rejected before current socket is closed`() {
+        val initial = FakeChannel(
+            gatewayResponse("conn-1", generation = 1),
+            registrationResponse("REGISTERED", version = 1),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-1", generation = 1, version = 2),
+        )
+        val unused = FakeChannel()
+        val channels = ArrayDeque(listOf(initial, unused))
+        var opens = 0
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory {
+                opens += 1
+                channels.removeFirst()
+            },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = RecordingAcceptance(),
+            nowMs = { 600 },
+        )
+        assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
+
+        val result = client.reconnect(
+            reconnectRequest(gatewaySessionId = "gws_01J00000000000000000000001"),
+        ) as GatewayDevicePlaneResult.Rejected
+        assertEquals(GatewayDevicePlaneClientError.CONFIGURATION_REJECTED, result.error)
+        assertFalse(result.retryAuthorized)
+        assertEquals(1, opens)
+        assertFalse(initial.closed)
+        val snapshot = client.currentSnapshot() as GatewayDevicePlaneResult.Success
+        assertEquals("conn-1", snapshot.value.gateway.connectionId)
+        assertEquals(1, snapshot.value.gateway.generation)
     }
 
     @Test
@@ -253,6 +286,21 @@ class GatewayDevicePlaneClientTest {
             deviceId = "dvc_01J00000000000000000000000",
             deviceSessionId = "dvs_01J00000000000000000000000",
             credentialProvider = GatewayCredentialProvider { "credential-1" },
+        )
+
+    private fun reconnectRequest(
+        gatewaySessionId: String = "gws_01J00000000000000000000000",
+    ) =
+        GatewayDevicePlaneReconnectRequest(
+            gatewaySessionId = gatewaySessionId,
+            tenantId = "ten_01J00000000000000000000000",
+            actorKind = "USER",
+            actorIdentityId = "idn_01J00000000000000000000000",
+            correlationId = "cor_01J00000000000000000000000",
+            deviceId = "dvc_01J00000000000000000000000",
+            deviceSessionId = "dvs_01J00000000000000000000000",
+            credentialProvider = GatewayCredentialProvider { "credential-2" },
+            expectedRegistrationVersion = 2,
         )
 
     private fun voiceCandidate() =

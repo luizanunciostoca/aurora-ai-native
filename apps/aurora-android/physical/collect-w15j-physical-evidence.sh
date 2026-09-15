@@ -509,9 +509,16 @@ operator=$OPERATOR
 EOF_PREFLIGHT
 
   sha256sum "$APK_PATH" >"$OUTPUT_DIR/apk-sha256.txt"
-  capture_required apk-install.txt "$ADB_BIN" -s "$SERIAL" install -r "$APK_PATH"
+  # The collector observes an exact preinstalled APK; it never reinstalls during evidence capture.
+  # This preserves Android Keystore-backed wake enrollment and other app-local integrity state.
   capture_required package-path.txt adb_shell pm path "$PACKAGE_ID"
   pull_and_verify_installed_apk preflight "$OUTPUT_DIR/package-path.txt"
+  cat >"$OUTPUT_DIR/apk-install.txt" <<EOF_INSTALL
+disposition=PREINSTALLED_EXACT_APK_VERIFIED
+mutation=NONE
+installed_apk_sha256=$EMBEDDED_APK_SHA
+EOF_INSTALL
+  printf '0\n' >"$OUTPUT_DIR/apk-install.txt.exit-code"
   capture_required package-dump.txt adb_shell dumpsys package "$PACKAGE_ID"
 
   PACKAGE_DUMP="$OUTPUT_DIR/package-dump.txt"
@@ -552,7 +559,7 @@ EOF_APK
   capture_required battery-before.txt adb_shell dumpsys battery
   capture_required meminfo-before.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
   capture_required cpuinfo-before.txt adb_shell dumpsys cpuinfo
-  capture_required storage-before.txt adb_shell du -sk "/data/user/0/$PACKAGE_ID"
+  capture_required storage-before.txt adb_shell run-as "$PACKAGE_ID" du -sk .
   capture_required services-before.txt adb_shell dumpsys activity services "$PACKAGE_ID"
 
   adb_shell am force-stop "$PACKAGE_ID"
@@ -568,7 +575,7 @@ EOF_APK
   sleep 2
   capture_required meminfo-after-restart.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
   capture_required cpuinfo-after-restart.txt adb_shell dumpsys cpuinfo
-  capture_required storage-after-restart.txt adb_shell du -sk "/data/user/0/$PACKAGE_ID"
+  capture_required storage-after-restart.txt adb_shell run-as "$PACKAGE_ID" du -sk .
   capture_required services-after-restart.txt adb_shell dumpsys activity services "$PACKAGE_ID"
 
   cat >"$OUTPUT_DIR/acceptance-status.txt" <<EOF_STATUS
@@ -649,7 +656,7 @@ else
   capture_required battery-after.txt adb_shell dumpsys battery
   capture_required meminfo-after.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
   capture_required cpuinfo-after.txt adb_shell dumpsys cpuinfo
-  capture_required storage-after.txt adb_shell du -sk "/data/user/0/$PACKAGE_ID"
+  capture_required storage-after.txt adb_shell run-as "$PACKAGE_ID" du -sk .
   capture_required services-after.txt adb_shell dumpsys activity services "$PACKAGE_ID"
   capture_required package-path-finalize.txt adb_shell pm path "$PACKAGE_ID"
   pull_and_verify_installed_apk finalize "$OUTPUT_DIR/package-path-finalize.txt"

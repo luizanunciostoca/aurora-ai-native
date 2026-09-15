@@ -229,7 +229,7 @@ AURORA_EVIDENCE_DIR=<evidence-directory> \
 ./apps/aurora-android/physical/collect-w15j-physical-evidence.sh
 ```
 
-Preflight fails closed unless exactly one authorized physical ADB device is present, candidate SHA/APK metadata are supplied, the APK installs, the installed `base.apk` bytes read back from the tablet hash to the artifact APK, INTERNET permission is present, the exact nine-file host readiness contract succeeds, and the required LOCAL reverse mapping is observed. Gateway identity is fixed to `aurora-w15j-local-host`; version is derived as `git:<host SHA>`. Critical capture failures stop collection. If the script created the reverse mapping and preflight fails, it removes that mapping automatically.
+Preflight fails closed unless exactly one authorized physical ADB device is present, candidate SHA/APK metadata are supplied, the exact APK was already installed by the dedicated installer, the installed `base.apk` bytes read back from the tablet hash to the artifact APK, INTERNET permission is present, the exact nine-file host readiness contract succeeds, and the required LOCAL reverse mapping is observed. The collector never reinstalls the package during evidence capture because doing so can invalidate Android Keystore-backed wake enrollment state. Gateway identity is fixed to `aurora-w15j-local-host`; version is derived as `git:<host SHA>`. Critical capture failures stop collection. If the script created the reverse mapping and preflight fails, it removes that mapping automatically.
 
 A successful preflight deliberately leaves the reverse mapping active only for the governed physical scenario window.
 
