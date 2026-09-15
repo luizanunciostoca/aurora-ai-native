@@ -17,10 +17,7 @@ export type {
   MemoryFabricJsonPrimitive,
   MemoryFabricJsonValue,
 } from './durable-state-adapter.js';
-export {
-  assembleMemoryContext,
-  MEMORY_CONTEXT_ASSEMBLY_REASONS,
-} from './context-assembly.js';
+export { assembleMemoryContext, MEMORY_CONTEXT_ASSEMBLY_REASONS } from './context-assembly.js';
 export type {
   MemoryContextAssemblyReason,
   MemoryContextAssemblyRequest,

@@ -38,8 +38,13 @@ import type { ContextSourceAdapter } from '../src/sources/types.js';
 const version = '1.0.0' as ContractVersion;
 const tenant: TenantContext = { tenantId: 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAV' as TenantId };
 const otherTenant: TenantContext = { tenantId: 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAW' as TenantId };
-const correlation: CorrelationContext = { correlationId: 'corr:memory:assembly:1' as CorrelationId };
-const subject = { kind: 'IDENTITY', identityId: 'identity:assembly-subject' as IdentityId } as const;
+const correlation: CorrelationContext = {
+  correlationId: 'corr:memory:assembly:1' as CorrelationId,
+};
+const subject = {
+  kind: 'IDENTITY',
+  identityId: 'identity:assembly-subject' as IdentityId,
+} as const;
 const at = (value: string) => value as Rfc3339Timestamp;
 
 const purpose: PurposeContext = {
@@ -214,7 +219,9 @@ function contextQuery(
   };
 }
 
-function retrievalPolicy(extraTrust: Readonly<Record<string, number>> = {}): ContextRetrievalPolicy {
+function retrievalPolicy(
+  extraTrust: Readonly<Record<string, number>> = {},
+): ContextRetrievalPolicy {
   return {
     evaluatedAt: at('2026-09-15T03:05:00Z'),
     minimumTrustBps: 5_000,
