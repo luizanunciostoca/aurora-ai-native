@@ -16,12 +16,16 @@ class AuroraOnboardingProgressPolicyTest {
 
         assertEquals(0, microphone.completedSteps)
         assertEquals(0, microphone.activeStepIndex)
+        assertEquals("Etapa 1 de 4", microphone.summaryLabel)
         assertEquals(1, assistant.completedSteps)
         assertEquals(1, assistant.activeStepIndex)
+        assertEquals("Etapa 2 de 4", assistant.summaryLabel)
         assertEquals(2, model.completedSteps)
         assertEquals(2, model.activeStepIndex)
+        assertEquals("Etapa 3 de 4", model.summaryLabel)
         assertEquals(3, enable.completedSteps)
         assertEquals(3, enable.activeStepIndex)
+        assertEquals("Etapa 4 de 4", enable.summaryLabel)
         assertEquals(4, enable.totalSteps)
     }
 
@@ -32,6 +36,7 @@ class AuroraOnboardingProgressPolicyTest {
         assertEquals(4, progress.completedSteps)
         assertEquals(4, progress.totalSteps)
         assertNull(progress.activeStepIndex)
+        assertEquals("4 de 4 · Validando", progress.summaryLabel)
         assertTrue(progress.showTrack)
     }
 
@@ -41,6 +46,7 @@ class AuroraOnboardingProgressPolicyTest {
 
         assertEquals(4, progress.completedSteps)
         assertNull(progress.activeStepIndex)
+        assertEquals("Concluída", progress.summaryLabel)
         assertTrue(progress.showTrack)
     }
 
@@ -50,6 +56,7 @@ class AuroraOnboardingProgressPolicyTest {
 
         assertEquals(0, progress.completedSteps)
         assertNull(progress.activeStepIndex)
+        assertEquals("Pausada", progress.summaryLabel)
         assertFalse(progress.showTrack)
     }
 }
