@@ -32,14 +32,17 @@ class AuroraWakeModelStore(context: Context) {
     fun load(): AuroraWakeTemplateModel? {
         val payload = preferences.getString(KEY_PAYLOAD, null) ?: return null
         val signature = preferences.getString(KEY_SIGNATURE, null) ?: return null
-        if (!integrity.verify(payload, signature)) return null
+        // Keystore entries can become unavailable after OS/security changes. Reading the model is a
+        // readiness check, so it must fail closed to "not trained" instead of crashing Home/setup.
+        val verified = runCatching { integrity.verify(payload, signature) }.getOrDefault(false)
+        if (!verified) return null
         return runCatching { decode(payload) }.getOrNull()
     }
 
     fun hasValidModel(): Boolean = load() != null
 
     fun clear() {
-        preferences.edit().clear().commit()
+        check(preferences.edit().clear().commit()) { "failed to clear wake model" }
     }
 
     fun updatedAtMs(): Long = preferences.getLong(KEY_UPDATED_AT, 0L)
