@@ -7,6 +7,12 @@ for (const relative of [
   'apps/aurora-android/physical/collect-w15j-physical-evidence.sh',
   'apps/aurora-android/physical/collect-w15j-tablet-loopback-evidence.sh',
 ]) {
+  test(`${relative} never reinstalls the APK during evidence collection`, () => {
+    const source = readFileSync(resolve(root, relative), 'utf8');
+    assert.doesNotMatch(source, /\binstall\s+-r\b/u);
+    assert.match(source, /PREINSTALLED_EXACT_APK_VERIFIED/u);
+  });
+
   test(`${relative} measures app storage through run-as`, () => {
     const source = readFileSync(resolve(root, relative), 'utf8');
     assert.doesNotMatch(source, /adb_shell du -sk "\/data\/user\/0\/\$PACKAGE_ID"/u);
