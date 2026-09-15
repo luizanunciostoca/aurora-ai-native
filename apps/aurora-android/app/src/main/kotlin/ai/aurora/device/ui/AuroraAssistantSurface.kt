@@ -23,11 +23,6 @@ internal data class AuroraActionFocusSnapshot(
     val accessibilityFocused: Boolean,
 )
 
-internal data class AuroraSystemStatusItem(
-    val label: String,
-    val value: String,
-)
-
 class AuroraAssistantSurface private constructor(
     private val activity: Activity,
     val root: View,
@@ -83,12 +78,13 @@ class AuroraAssistantSurface private constructor(
         if (items.isEmpty()) return
 
         items.forEachIndexed { index, item ->
+            val tone = statusToneColors(item.tone)
             val chip =
                 TextView(activity).apply {
                     text = "${item.label.uppercase()}\n${item.value}"
                     contentDescription = "${item.label}: ${item.value}"
                     textSize = 14f
-                    setTextColor(Color.rgb(238, 243, 255))
+                    setTextColor(Color.rgb(245, 248, 255))
                     gravity = Gravity.CENTER
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                     minHeight = AuroraActivityUi.dp(activity, 64)
@@ -101,9 +97,10 @@ class AuroraAssistantSurface private constructor(
                     enableReadableWrapping(balanceLines = true)
                     background =
                         roundedBackground(
-                            fill = Color.rgb(20, 28, 49),
-                            stroke = Color.rgb(76, 96, 145),
+                            fill = tone.fill,
+                            stroke = tone.stroke,
                             radiusDp = 16,
+                            strokeWidthDp = 2,
                         )
                 }
             val params =
@@ -281,6 +278,30 @@ class AuroraAssistantSurface private constructor(
         return button
     }
 
+    private fun statusToneColors(tone: AuroraSystemStatusTone): StatusToneColors =
+        when (tone) {
+            AuroraSystemStatusTone.POSITIVE ->
+                StatusToneColors(
+                    fill = Color.rgb(14, 43, 40),
+                    stroke = Color.rgb(92, 201, 171),
+                )
+            AuroraSystemStatusTone.ATTENTION ->
+                StatusToneColors(
+                    fill = Color.rgb(51, 37, 18),
+                    stroke = Color.rgb(230, 177, 83),
+                )
+            AuroraSystemStatusTone.PRIVACY ->
+                StatusToneColors(
+                    fill = Color.rgb(38, 30, 65),
+                    stroke = Color.rgb(167, 137, 240),
+                )
+            AuroraSystemStatusTone.NEUTRAL ->
+                StatusToneColors(
+                    fill = Color.rgb(20, 28, 49),
+                    stroke = Color.rgb(92, 113, 168),
+                )
+        }
+
     private fun roundedBackground(
         fill: Int,
         stroke: Int,
@@ -438,7 +459,6 @@ class AuroraAssistantSurface private constructor(
                 },
             )
 
-            // Keep the current action before potentially long transcripts and secondary settings.
             val primaryActions = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
             content.addView(
                 primaryActions,
@@ -586,6 +606,11 @@ class AuroraAssistantSurface private constructor(
         }
     }
 }
+
+private data class StatusToneColors(
+    val fill: Int,
+    val stroke: Int,
+)
 
 private fun TextView.setTextIfChanged(value: String) {
     if (text.toString() != value) text = value
