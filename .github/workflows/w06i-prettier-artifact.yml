@@ -1,0 +1,47 @@
+name: W06-I Prettier Artifact
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    if: github.event_name == 'pull_request' && github.head_ref == 'wave/06i-aurora-memory-fabric'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install workspace
+        run: npm ci
+      - name: Format W06-I candidate files
+        run: >-
+          npx prettier --write
+          packages/context/src/memory-fabric/fabric.ts
+          packages/context/src/memory-fabric/index.ts
+          packages/context/src/memory-fabric/source-adapter.ts
+          packages/context/src/memory-fabric/types.ts
+          packages/context/test/w06i-memory-fabric.test.ts
+      - name: Upload formatted files
+        uses: actions/upload-artifact@v7
+        with:
+          name: w06i-prettier-output
+          path: |
+            packages/context/src/memory-fabric/fabric.ts
+            packages/context/src/memory-fabric/index.ts
+            packages/context/src/memory-fabric/source-adapter.ts
+            packages/context/src/memory-fabric/types.ts
+            packages/context/test/w06i-memory-fabric.test.ts
+          if-no-files-found: error
+          retention-days: 1
