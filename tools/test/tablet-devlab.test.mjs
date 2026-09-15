@@ -48,6 +48,7 @@ test('tablet host remains fail closed until trusted provider is configured', () 
   assert.match(launcher, /TABLET_DEVLAB_PROVIDER_NOT_CONFIGURED/);
   assert.match(launcher, /AURORA_W15J_PROVIDER_MODULE/);
   assert.match(launcher, /AURORA_W15J_BOOTSTRAP_REFRESH_FILE/);
+  assert.match(launcher, /AURORA_W15J_BOOTSTRAP_RECONNECT_FILE/);
   assert.match(provider, /throw new Error/);
   assert.match(provider, /authorizesExecution: false/);
   assert.match(provider, /canGrantPermission: false/);
@@ -275,6 +276,7 @@ test('tablet devlab documentation keeps independent reviewer and exact tuple req
   assert.match(source, /prepare-dp5-provider\.sh/);
   assert.match(source, /provider-doctor\.sh/);
   assert.match(source, /refresh-bootstrap\.sh/);
+  assert.match(source, /refresh-reconnect\.sh/);
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED=YES/);
   assert.match(source, /clean uninstall\/install/i);
   assert.match(source, /install-exact-apk\.sh/);

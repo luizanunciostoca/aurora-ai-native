@@ -155,6 +155,14 @@ The W14 bootstrap reference is deliberately one-shot and short-lived. Do not res
 bash tools/tablet-devlab/refresh-bootstrap.sh
 ```
 
+After an authenticated gateway session exists, stage a one-shot reconnect bootstrap for that same proven host instance with:
+
+```bash
+bash tools/tablet-devlab/refresh-reconnect.sh
+```
+
+The reconnect helper never grants retry or execution authority.
+
 The helper verifies the recorded host PID, the live instance identity on ports 8080 and 8081, listener roles, file ownership/mode and the non-authoritative refresh schema before returning a new `bootstrap_reference=gbr_...`. Paste only that freshly emitted reference into Aurora immediately. A refresh does not authorize execution, retry or physical acceptance.
 
 ## Physical development controls
