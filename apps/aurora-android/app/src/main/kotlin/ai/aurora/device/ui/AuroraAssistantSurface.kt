@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Build
+import android.text.Layout
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -174,6 +175,7 @@ class AuroraAssistantSurface private constructor(
                 textSize = 16f
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 minHeight = AuroraActivityUi.dp(activity, 54)
+                setHorizontallyScrolling(false)
                 setPadding(
                     AuroraActivityUi.dp(activity, 20),
                     AuroraActivityUi.dp(activity, 12),
@@ -236,12 +238,20 @@ class AuroraAssistantSurface private constructor(
             val screen = AuroraActivityUi.createScrollableScreen(activity, maxContentWidthDp = 760)
             screen.root.setBackgroundColor(Color.rgb(5, 9, 21))
             val content = screen.content
+            val configuration = activity.resources.configuration
+            val windowLayout =
+                AuroraWindowLayoutPolicy.resolve(
+                    widthDp = configuration.screenWidthDp.coerceAtLeast(1),
+                    heightDp = configuration.screenHeightDp.coerceAtLeast(1),
+                    fontScale = configuration.fontScale.coerceAtLeast(0.1f),
+                    maxContentWidthDp = 760,
+                )
             content.gravity = Gravity.CENTER_HORIZONTAL
             content.setPadding(
                 0,
-                AuroraActivityUi.dp(activity, 16),
+                AuroraActivityUi.dp(activity, windowLayout.verticalPaddingDp / 2),
                 0,
-                AuroraActivityUi.dp(activity, 24),
+                AuroraActivityUi.dp(activity, windowLayout.verticalPaddingDp),
             )
 
             val eyebrow =
@@ -251,6 +261,7 @@ class AuroraAssistantSurface private constructor(
                     setTextColor(Color.rgb(142, 168, 230))
                     gravity = Gravity.CENTER
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    enableReadableWrapping(balanceLines = true)
                 }
             content.addView(
                 eyebrow,
@@ -266,7 +277,6 @@ class AuroraAssistantSurface private constructor(
                 AuroraOrbView(activity).apply {
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
-            val configuration = activity.resources.configuration
             val orbSize =
                 AuroraActivityUi.dp(
                     activity,
@@ -295,6 +305,7 @@ class AuroraAssistantSurface private constructor(
                     gravity = Gravity.CENTER
                     typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                     accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    enableReadableWrapping(balanceLines = true)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isAccessibilityHeading = true
                 }
             content.addView(
@@ -312,6 +323,7 @@ class AuroraAssistantSurface private constructor(
                     gravity = Gravity.CENTER
                     setLineSpacing(0f, 1.16f)
                     accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    enableReadableWrapping(balanceLines = true)
                 }
             content.addView(
                 detail,
@@ -330,6 +342,7 @@ class AuroraAssistantSurface private constructor(
                     setTextColor(Color.rgb(151, 176, 231))
                     gravity = Gravity.CENTER
                     setLineSpacing(0f, 1.12f)
+                    enableReadableWrapping(balanceLines = true)
                 }
             content.addView(
                 statusLine,
@@ -379,6 +392,7 @@ class AuroraAssistantSurface private constructor(
                     setLineSpacing(0f, 1.12f)
                     accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
                     setTextIsSelectable(true)
+                    enableReadableWrapping()
                 }
             val response =
                 TextView(activity).apply {
@@ -389,6 +403,7 @@ class AuroraAssistantSurface private constructor(
                     setPadding(0, AuroraActivityUi.dp(activity, 10), 0, 0)
                     accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
                     setTextIsSelectable(true)
+                    enableReadableWrapping()
                 }
             conversationCard.addView(transcript)
             conversationCard.addView(response)
@@ -423,6 +438,7 @@ class AuroraAssistantSurface private constructor(
                     gravity = Gravity.CENTER
                     setLineSpacing(0f, 1.12f)
                     visibility = View.GONE
+                    enableReadableWrapping()
                 }
             content.addView(
                 diagnostics,
@@ -455,4 +471,17 @@ class AuroraAssistantSurface private constructor(
 
 private fun TextView.setTextIfChanged(value: String) {
     if (text.toString() != value) text = value
+}
+
+private fun TextView.enableReadableWrapping(balanceLines: Boolean = false) {
+    setHorizontallyScrolling(false)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        breakStrategy =
+            if (balanceLines) {
+                Layout.BREAK_STRATEGY_BALANCED
+            } else {
+                Layout.BREAK_STRATEGY_HIGH_QUALITY
+            }
+        hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NORMAL
+    }
 }
