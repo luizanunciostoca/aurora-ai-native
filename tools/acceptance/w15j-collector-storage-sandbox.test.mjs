@@ -17,6 +17,9 @@ for (const relative of [
     const source = readFileSync(resolve(root, relative), 'utf8');
     assert.doesNotMatch(source, /adb_shell du -sk "\/data\/user\/0\/\$PACKAGE_ID"/u);
     const matches = source.match(/adb_shell run-as "\$PACKAGE_ID" du -sk \./gu) ?? [];
-    assert.ok(matches.length >= 3, `expected all storage captures to use run-as, got ${matches.length}`);
+    assert.ok(
+      matches.length >= 3,
+      `expected all storage captures to use run-as, got ${matches.length}`,
+    );
   });
 }

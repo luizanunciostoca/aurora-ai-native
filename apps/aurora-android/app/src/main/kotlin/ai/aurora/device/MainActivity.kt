@@ -83,7 +83,6 @@ class MainActivity : Activity() {
                 renderInvocation(intent)
             }
         }
-        }
     }
 
     override fun onPause() {

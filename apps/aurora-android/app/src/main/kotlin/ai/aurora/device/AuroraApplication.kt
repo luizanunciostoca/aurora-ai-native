@@ -282,7 +282,7 @@ class AuroraApplication : Application() {
                     client = client,
                     capabilityBridge = installedProjection.capabilityBridge,
                     permissionContext = this,
-                    actionPort = AndroidAudioVolumeActionPort(this),
+                    actionPort = AndroidDeviceActionPorts.create(this),
                 )
             }.getOrNull() ?: return false
 
