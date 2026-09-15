@@ -301,9 +301,17 @@ if [[ "$MODE" == "preflight" ]]; then
   probe_host preflight 8080 DEVICE_GATEWAY
   probe_host preflight 8081 BOOTSTRAP_EXCHANGE
 
-  capture apk-install.txt "$ADB_BIN" -s "$SERIAL" install -r "$APK_PATH"
+  # Installation is owned by the exact-APK installer before the physical collector starts.
+  # Reinstalling here can rotate/invalidate Android Keystore material used by wake enrollment.
   capture package-path.txt adb_shell pm path "$PACKAGE_ID"
   pull_installed_apk preflight "$OUTPUT_DIR/package-path.txt"
+  cat >"$OUTPUT_DIR/apk-install.txt" <<EOF
+disposition=PREINSTALLED_EXACT_APK_VERIFIED
+mutation=NONE
+installer_owner=tools/tablet-devlab/install-exact-apk.sh
+installed_apk_sha256=$EMBEDDED_APK_SHA
+EOF
+  printf '0\n' >"$OUTPUT_DIR/apk-install.txt.exit-code"
   capture package-dump.txt adb_shell dumpsys package "$PACKAGE_ID"
   VERSION_CODE="$(sed -n 's/.*versionCode=\([0-9][0-9]*\).*/\1/p' "$OUTPUT_DIR/package-dump.txt" | head -n 1)"
   VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName=\(.*\)$/\1/p' "$OUTPUT_DIR/package-dump.txt" | head -n 1)"
@@ -360,7 +368,7 @@ EOF
   capture battery-before.txt adb_shell dumpsys battery
   capture meminfo-before.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
   capture cpuinfo-before.txt adb_shell dumpsys cpuinfo
-  capture storage-before.txt adb_shell du -sk "/data/user/0/$PACKAGE_ID"
+  capture storage-before.txt adb_shell run-as "$PACKAGE_ID" du -sk .
   capture services-before.txt adb_shell dumpsys activity services "$PACKAGE_ID"
   adb_shell am force-stop "$PACKAGE_ID"
   sleep 1
@@ -374,7 +382,7 @@ EOF
   sleep 2
   capture meminfo-after-restart.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
   capture cpuinfo-after-restart.txt adb_shell dumpsys cpuinfo
-  capture storage-after-restart.txt adb_shell du -sk "/data/user/0/$PACKAGE_ID"
+  capture storage-after-restart.txt adb_shell run-as "$PACKAGE_ID" du -sk .
   capture services-after-restart.txt adb_shell dumpsys activity services "$PACKAGE_ID"
 
   cat >"$OUTPUT_DIR/acceptance-status.txt" <<EOF
@@ -414,7 +422,7 @@ else
   capture battery-after.txt adb_shell dumpsys battery
   capture meminfo-after.txt adb_shell dumpsys meminfo "$PACKAGE_ID"
   capture cpuinfo-after.txt adb_shell dumpsys cpuinfo
-  capture storage-after.txt adb_shell du -sk "/data/user/0/$PACKAGE_ID"
+  capture storage-after.txt adb_shell run-as "$PACKAGE_ID" du -sk .
   capture services-after.txt adb_shell dumpsys activity services "$PACKAGE_ID"
   capture package-path-finalize.txt adb_shell pm path "$PACKAGE_ID"
   pull_installed_apk finalize "$OUTPUT_DIR/package-path-finalize.txt"

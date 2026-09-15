@@ -12,9 +12,11 @@ import ai.aurora.device.executor.W15JDeviceCommandConsumptionResult
 import ai.aurora.device.ui.AuroraAssistantResponseComposer
 import ai.aurora.device.ui.AuroraAssistantStage
 import ai.aurora.device.ui.AuroraAssistantSurface
+import ai.aurora.device.voice.AndroidLocalDeviceReadProvider
 import ai.aurora.device.voice.AuroraTextToSpeechOutput
 import ai.aurora.device.voice.BoundedSpeechRecognitionFailure
 import ai.aurora.device.voice.BoundedSpeechRecognizer
+import ai.aurora.device.voice.LocalDeviceReadPolicy
 import ai.aurora.device.voice.SingleFlightWorkDispatcher
 import ai.aurora.device.voice.WakeVoiceRoute
 import ai.aurora.device.voice.WakeVoiceRuntimeRegistry
@@ -28,6 +30,7 @@ class WakeVoiceActivity : Activity() {
     private lateinit var surface: AuroraAssistantSurface
     private lateinit var statusStore: WakeRuntimeStatusStore
     private lateinit var preferences: WakeRuntimePreferences
+    private lateinit var localReadProvider: AndroidLocalDeviceReadProvider
     private var recognizer: BoundedSpeechRecognizer? = null
     private var speechOutput: AuroraTextToSpeechOutput? = null
     private var started = false
@@ -42,11 +45,23 @@ class WakeVoiceActivity : Activity() {
         super.onCreate(savedInstanceState)
         statusStore = WakeRuntimeStatusStore(this)
         preferences = WakeRuntimePreferences(this)
+        localReadProvider = AndroidLocalDeviceReadProvider(this)
         surface = AuroraAssistantSurface.create(this)
         surface.clearActions()
         surface.render(AuroraAssistantStage.LISTENING)
         surface.setStatusLine("Microfone ativo  •  Wake pausado durante a conversa")
-        surface.setDiagnostics("Voz local • STT limitado • autoridade e execução permanecem governadas")
+        val sourceLabel =
+            when {
+                intent?.getBooleanExtra(EXTRA_SYSTEM_ASSIST_INVOCATION, false) == true ->
+                    "atalho de assistente Android"
+                intent?.getStringExtra(EXTRA_WAKE_ID).isNullOrBlank().not() -> "wake word"
+                else -> "toque no aplicativo"
+            }
+        // SpeechRecognizer delegates recognition to the Android recognition service; it is not
+        // necessarily offline/local. Keep diagnostics accurate while capture remains bounded.
+        surface.setDiagnostics(
+            "STT do Android • captura limitada • origem: $sourceLabel • autoridade e execução permanecem governadas",
+        )
         setContentView(surface.root)
     }
 
@@ -78,10 +93,26 @@ class WakeVoiceActivity : Activity() {
                             surface.render(AuroraAssistantStage.UNDERSTANDING)
                             surface.setStatusLine("Processando sua solicitação…")
                         }
-                        dispatchGovernedVoiceTurn(
-                            transcript = result.transcript,
-                            transcriptConfidence = result.confidence,
-                        )
+                        val localReadIntent = LocalDeviceReadPolicy.resolve(result.transcript)
+                        if (localReadIntent != null) {
+                            val localRead =
+                                runCatching { localReadProvider.read(localReadIntent) }.getOrNull()
+                            runOnUiThread {
+                                if (isFinishing || isDestroyed) return@runOnUiThread
+                                complete(
+                                    state = "VOICE_LOCAL_READ_${localReadIntent.name}",
+                                    display =
+                                        localRead?.display
+                                            ?: "Não consegui ler essa informação do dispositivo agora.",
+                                    stage = AuroraAssistantStage.COMPLETED,
+                                )
+                            }
+                        } else {
+                            dispatchGovernedVoiceTurn(
+                                transcript = result.transcript,
+                                transcriptConfidence = result.confidence,
+                            )
+                        }
                     },
                     onFailure = { failure ->
                         runOnUiThread {

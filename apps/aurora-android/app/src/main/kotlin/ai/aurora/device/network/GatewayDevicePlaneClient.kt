@@ -72,6 +72,29 @@ data class GatewayDevicePlaneConnectRequest(
     }
 }
 
+data class GatewayDevicePlaneReconnectRequest(
+    val gatewaySessionId: String,
+    val tenantId: String,
+    val actorKind: String,
+    val actorIdentityId: String,
+    val correlationId: String,
+    val deviceId: String,
+    val deviceSessionId: String,
+    val credentialProvider: GatewayCredentialProvider,
+    val expectedRegistrationVersion: Int,
+) {
+    init {
+        requireSafeToken(gatewaySessionId, "gatewaySessionId")
+        requireSafeToken(tenantId, "tenantId", 128)
+        requireSafeToken(actorKind, "actorKind", 64)
+        requireSafeToken(actorIdentityId, "actorIdentityId", 128)
+        requireSafeToken(correlationId, "correlationId", 128)
+        require(DEVICE_ID.matches(deviceId)) { "deviceId must be a canonical dvc_<ULID>" }
+        requireSafeToken(deviceSessionId, "deviceSessionId")
+        require(expectedRegistrationVersion > 0) { "expectedRegistrationVersion must be positive" }
+    }
+}
+
 data class GatewaySessionNetworkView(
     val protocolVersion: String,
     val sessionId: String,
@@ -260,17 +283,20 @@ class GatewayDevicePlaneClient internal constructor(
 
     @Synchronized
     fun reconnect(
-        credentialProvider: GatewayCredentialProvider,
+        request: GatewayDevicePlaneReconnectRequest,
     ): GatewayDevicePlaneResult<GatewayDevicePlaneSnapshot> {
         val currentContext = context ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
         val previousGateway = gateway ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
         val currentRegistration = registration ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
         val currentDeviceSession = deviceSession ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        if (!request.matches(currentContext, currentRegistration, currentDeviceSession)) {
+            return rejected(GatewayDevicePlaneClientError.CONFIGURATION_REJECTED)
+        }
 
         channel?.close()
         channel = tryOpenChannel() ?: return transportRejected()
 
-        val reconnectBody = withCredential(credentialProvider) { credential ->
+        val reconnectBody = withCredential(request.credentialProvider) { credential ->
             StrictJson.encodeObject(
                 listOf(
                     "protocolVersion" to GATEWAY_PROTOCOL_VERSION,
@@ -1039,6 +1065,25 @@ class GatewayDevicePlaneClient internal constructor(
         )
         return "sha256:${digest.toHex()}"
     }
+
+    private fun GatewayDevicePlaneReconnectRequest.matches(
+        current: ConnectionContext,
+        registration: W14DeviceRegistrationView,
+        session: W14DeviceSessionTrustView,
+    ): Boolean =
+        gatewaySessionId == current.gatewaySessionId &&
+            tenantId == current.tenantId &&
+            actorKind == current.actorKind &&
+            actorIdentityId == current.actorIdentityId &&
+            correlationId == current.correlationId &&
+            deviceId == current.deviceId &&
+            deviceSessionId == current.deviceSessionId &&
+            registration.ref.deviceId == deviceId &&
+            registration.ref.tenantId == tenantId &&
+            registration.ref.registrationVersion == expectedRegistrationVersion &&
+            session.deviceSessionId == deviceSessionId &&
+            session.tenantId == tenantId &&
+            session.deviceRef == registration.ref
 
     private fun withCredential(
         provider: GatewayCredentialProvider,

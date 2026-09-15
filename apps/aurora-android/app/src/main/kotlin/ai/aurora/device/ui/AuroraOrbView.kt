@@ -1,14 +1,24 @@
 package ai.aurora.device.ui
 
 import android.animation.ValueAnimator
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.database.ContentObserver
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RadialGradient
 import android.graphics.Shader
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.AttributeSet
 import android.view.View
+import android.view.accessibility.AccessibilityManager
 import android.view.animation.AccelerateDecelerateInterpolator
 import kotlin.math.min
 
@@ -20,6 +30,19 @@ class AuroraOrbView @JvmOverloads constructor(
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private var pulse = 0f
     private var stage: AuroraAssistantStage = AuroraAssistantStage.READY
+    private var animationReady = false
+    private val accessibilityManager = context.getSystemService(AccessibilityManager::class.java)
+    private val powerManager = context.getSystemService(PowerManager::class.java)
+    private val motionObserver =
+        object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) = refreshAnimation()
+        }
+    private val explorationListener =
+        AccessibilityManager.TouchExplorationStateChangeListener { refreshAnimation() }
+    private val powerReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) = refreshAnimation()
+        }
 
     private val animator =
         ValueAnimator.ofFloat(0f, 1f).apply {
@@ -37,22 +60,78 @@ class AuroraOrbView @JvmOverloads constructor(
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         contentDescription = null
         setLayerType(LAYER_TYPE_SOFTWARE, null)
+        animationReady = true
     }
 
     fun setStage(value: AuroraAssistantStage) {
         if (stage == value) return
         stage = value
+        refreshAnimation()
         invalidate()
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        if (!animator.isStarted) animator.start()
+        context.contentResolver.registerContentObserver(
+            Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE),
+            false,
+            motionObserver,
+        )
+        accessibilityManager?.addTouchExplorationStateChangeListener(explorationListener)
+        val filter = IntentFilter(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(powerReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            context.registerReceiver(powerReceiver, filter)
+        }
+        refreshAnimation()
     }
 
     override fun onDetachedFromWindow() {
         animator.cancel()
+        pulse = 0f
+        context.contentResolver.unregisterContentObserver(motionObserver)
+        accessibilityManager?.removeTouchExplorationStateChangeListener(explorationListener)
+        context.unregisterReceiver(powerReceiver)
         super.onDetachedFromWindow()
+    }
+
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        refreshAnimation()
+    }
+
+    override fun onVisibilityAggregated(isVisible: Boolean) {
+        super.onVisibilityAggregated(isVisible)
+        refreshAnimation()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        refreshAnimation()
+    }
+
+    private fun refreshAnimation() {
+        // View may invoke visibility callbacks during construction.
+        if (!animationReady) return
+        val animate =
+            AuroraOrbPresentationPolicy.shouldAnimate(
+                stage = stage,
+                attached = isAttachedToWindow,
+                visible = isShown && windowVisibility == VISIBLE,
+                windowFocused = hasWindowFocus(),
+                systemAnimationsEnabled = ValueAnimator.areAnimatorsEnabled(),
+                touchExplorationEnabled = accessibilityManager?.isTouchExplorationEnabled == true,
+                powerSaveEnabled = powerManager?.isPowerSaveMode ?: true,
+            )
+        if (animate) {
+            if (!animator.isStarted) animator.start()
+        } else {
+            animator.cancel()
+            pulse = 0f
+            invalidate()
+        }
     }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -67,6 +146,7 @@ class AuroraOrbView @JvmOverloads constructor(
         val cx = width / 2f
         val cy = height / 2f
         val base = min(width, height) * 0.24f
+        if (base <= 0f) return
         val expansion = base * (0.08f + pulse * 0.08f)
         val outer = base + expansion
         val palette = paletteFor(stage)
