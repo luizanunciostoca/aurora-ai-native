@@ -10,11 +10,11 @@ const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', nam
 const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
 const ANDROID_SHA = '95aa7bddcc041d46c8485c7cf64a7f53ce933a34';
 const HOST_SHA = '7d9c9bebb8d12b00b8e0629387edd483e14638b6';
-const PACKAGING_SHA = 'dda8383285e14e38d2d81a21e562d3001391c37a';
-const APK_SHA = 'a8368b6ce184d547198b0132cd35631f5099b0b09a8b3fc16dae6883c1e75826';
-const ARTIFACT_ID = '10387665057';
-const RUN_ID = '34945188782';
-const ZIP_SHA = 'c50442019f011ae0edffa09ce1168437e5c5a79c7f2e15d3e65810afab76e884';
+const PACKAGING_SHA = '2ac82a2fa4287185b2b3ccb8f785b26ee7122ef1';
+const APK_SHA = '59310e5c6630328dbc5d0b6b95c426a695e2b8a2ec36497b2c7556483bc6e191';
+const ARTIFACT_ID = '10388470638';
+const RUN_ID = '34948029045';
+const ZIP_SHA = 'c44a16f909bac370495466fbdee714eabc3adb07baa08b41db089305e7c0de34';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
