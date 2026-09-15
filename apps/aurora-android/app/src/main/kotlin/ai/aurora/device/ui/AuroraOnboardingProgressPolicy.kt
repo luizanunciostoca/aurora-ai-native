@@ -5,10 +5,11 @@ internal data class AuroraOnboardingProgress(
     val totalSteps: Int,
     val activeStepIndex: Int?,
     val showTrack: Boolean,
+    val summaryLabel: String,
 )
 
 /**
- * Maps the already-owned onboarding step to a visual progress track only.
+ * Maps the already-owned onboarding step to presentation-only progress information.
  *
  * This policy never decides readiness, permissions, assistant role, wake state, authority or DP5
  * acceptance. Those decisions remain owned by AuroraOnboardingPolicy and their existing sources.
@@ -24,6 +25,7 @@ internal object AuroraOnboardingProgressPolicy {
                     totalSteps = TOTAL_SETUP_STEPS,
                     activeStepIndex = null,
                     showTrack = false,
+                    summaryLabel = "Pausada",
                 )
             AuroraOnboardingStep.MICROPHONE -> setupStep(index = 0)
             AuroraOnboardingStep.ASSISTANT_ROLE -> setupStep(index = 1)
@@ -35,6 +37,7 @@ internal object AuroraOnboardingProgressPolicy {
                     totalSteps = TOTAL_SETUP_STEPS,
                     activeStepIndex = null,
                     showTrack = true,
+                    summaryLabel = "4 de 4 · Validando",
                 )
             AuroraOnboardingStep.READY ->
                 AuroraOnboardingProgress(
@@ -42,6 +45,7 @@ internal object AuroraOnboardingProgressPolicy {
                     totalSteps = TOTAL_SETUP_STEPS,
                     activeStepIndex = null,
                     showTrack = true,
+                    summaryLabel = "Concluída",
                 )
         }
 
@@ -51,5 +55,6 @@ internal object AuroraOnboardingProgressPolicy {
             totalSteps = TOTAL_SETUP_STEPS,
             activeStepIndex = index,
             showTrack = true,
+            summaryLabel = "Etapa ${index + 1} de $TOTAL_SETUP_STEPS",
         )
 }
