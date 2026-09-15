@@ -37,7 +37,7 @@ internal object AuroraSystemStatusPolicy {
                         label = "Configuração",
                         value = input.setupProgress.summaryLabel,
                         tone =
-                            if (input.setupProgress.completedSteps == input.setupProgress.totalSteps) {
+                            if (input.setupProgress.isComplete) {
                                 AuroraSystemStatusTone.POSITIVE
                             } else {
                                 AuroraSystemStatusTone.NEUTRAL
