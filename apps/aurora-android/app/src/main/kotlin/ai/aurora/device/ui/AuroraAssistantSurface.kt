@@ -42,6 +42,7 @@ class AuroraAssistantSurface private constructor(
     private val transcriptView: TextView,
     private val responseView: TextView,
     private val primaryActions: LinearLayout,
+    private val actionsHeadingView: TextView,
     private val actions: LinearLayout,
     private val diagnosticsView: TextView,
 ) {
@@ -209,6 +210,7 @@ class AuroraAssistantSurface private constructor(
     fun clearActions() {
         primaryActions.removeAllViews()
         actions.removeAllViews()
+        actionsHeadingView.visibility = View.GONE
     }
 
     private fun findAction(stableId: String): Button? {
@@ -270,7 +272,12 @@ class AuroraAssistantSurface private constructor(
                         topMargin = AuroraActivityUi.dp(activity, 10)
                     }
             }
-        (if (primary) primaryActions else actions).addView(button)
+        if (primary) {
+            primaryActions.addView(button)
+        } else {
+            actionsHeadingView.visibility = View.VISIBLE
+            actions.addView(button)
+        }
         return button
     }
 
@@ -462,6 +469,16 @@ class AuroraAssistantSurface private constructor(
                             cornerRadius = AuroraActivityUi.dp(activity, 20).toFloat()
                         }
                 }
+            val conversationHeading =
+                TextView(activity).apply {
+                    text = "CONVERSA"
+                    textSize = 12f
+                    letterSpacing = 0.14f
+                    setTextColor(Color.rgb(142, 168, 230))
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    setPadding(0, 0, 0, AuroraActivityUi.dp(activity, 8))
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isAccessibilityHeading = true
+                }
             val transcript =
                 TextView(activity).apply {
                     textSize = 16f
@@ -482,6 +499,7 @@ class AuroraAssistantSurface private constructor(
                     setTextIsSelectable(true)
                     enableReadableWrapping()
                 }
+            conversationCard.addView(conversationHeading)
             conversationCard.addView(transcript)
             conversationCard.addView(response)
             content.addView(
@@ -490,7 +508,29 @@ class AuroraAssistantSurface private constructor(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                 ).apply {
-                    bottomMargin = AuroraActivityUi.dp(activity, 10)
+                    bottomMargin = AuroraActivityUi.dp(activity, 14)
+                },
+            )
+
+            val actionsHeading =
+                TextView(activity).apply {
+                    text = "AJUSTES"
+                    textSize = 12f
+                    letterSpacing = 0.14f
+                    setTextColor(Color.rgb(142, 168, 230))
+                    typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                    visibility = View.GONE
+                    enableReadableWrapping(balanceLines = true)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isAccessibilityHeading = true
+                }
+            content.addView(
+                actionsHeading,
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    topMargin = AuroraActivityUi.dp(activity, 4)
+                    bottomMargin = AuroraActivityUi.dp(activity, 2)
                 },
             )
 
@@ -503,9 +543,7 @@ class AuroraAssistantSurface private constructor(
                 LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT,
-                ).apply {
-                    topMargin = AuroraActivityUi.dp(activity, 2)
-                },
+                ),
             )
 
             val diagnostics =
@@ -541,6 +579,7 @@ class AuroraAssistantSurface private constructor(
                 transcriptView = transcript,
                 responseView = response,
                 primaryActions = primaryActions,
+                actionsHeadingView = actionsHeading,
                 actions = actions,
                 diagnosticsView = diagnostics,
             ).also { it.render(AuroraAssistantStage.READY) }
