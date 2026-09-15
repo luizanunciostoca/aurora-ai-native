@@ -1,3 +1,5 @@
+export * from './durable-state.js';
+
 export const W03_POSTGRES_CONVENTIONS = [
   'Use sequential migration numbers and stable forward-only numbering.',
   'Keep migrations deterministic, idempotent where practical, and record retention and ownership.',

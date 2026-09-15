@@ -14,10 +14,11 @@ This directory holds the W03 Postgres migration baseline for durable event, inbo
 - Preserve canonical `EventEnvelope` identity/context needed for later transport and replay: event ID/type/version, occurrence time, producer identity/kind, source, tenant, correlation/causation, subject/classification, payload and metadata.
 - Keep retention and cleanup policy alongside DDL comments so operators can enforce bounded storage cost and audit retention.
 
-## Baseline migration
+## Baseline and generic durable-state migrations
 
 - `001_w03_postgres_baseline.sql` creates the durable schema primitives required for W03-A: canonical event store, outbox, inbox, idempotency ledger, timers and lease state.
-- Runtime claim, retry, replay, transport and workflow behavior remains owned by W03-B through W03-E; this migration only establishes the persistence constraints they may rely on.
+- `002_w03_durable_state.sql` adds a generic tenant-scoped JSON projection store with optimistic revision fencing. It stores opaque domain state only; the calling domain retains semantic ownership and the store never grants authority.
+- Runtime claim, retry, replay, transport and workflow behavior remains owned by W03-B through W03-E. W03 durable state may preserve a domain projection across restart but does not replace canonical EventEnvelope replay or source-domain validation.
 
 ## Execution-attempt/quota migration
 
