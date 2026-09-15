@@ -550,6 +550,12 @@ export class W15JLocalPhysicalHost {
     return this.#bootstrapDelivery.stage(principal, currentTime(this.#clock));
   }
 
+  stageReconnectBootstrap(
+    principal: AuthenticatedGatewayBootstrapPrincipal,
+  ): GatewayBootstrapStageResult {
+    return this.#bootstrapDelivery.stageReconnect(principal, currentTime(this.#clock));
+  }
+
   async start(): Promise<W15JLocalPhysicalHostAddress> {
     if (this.#started) throw new Error('W15-J LOCAL physical host is already started.');
     const hostInstanceId = this.#hostInstanceProbe.start();

@@ -194,3 +194,136 @@ test('unsafe refresh output path fails host startup closed before any recovery c
     else process.env[REFRESH_ENV] = previous;
   }
 });
+
+const RECONNECT_ENV = 'AURORA_W15J_BOOTSTRAP_RECONNECT_FILE';
+
+test('SIGUSR1 stages reconnect bootstrap only after an established gateway session', async () => {
+  const fixture = mkdtempSync(join(tmpdir(), 'aurora-w15j-bootstrap-reconnect-'));
+  chmodSync(fixture, 0o700);
+  const output = join(fixture, 'bootstrap-reconnect.json');
+  const previous = process.env[RECONNECT_ENV];
+  process.env[RECONNECT_ENV] = output;
+  const runtime = hooks();
+
+  const handle = await startW15JLocalPhysicalHostRunner({
+    host: {
+      databaseUrl: 'postgresql://unused.invalid/aurora_reconnect',
+      gatewayPort: 0,
+      bootstrapPort: 0,
+      clock: () => NOW,
+    },
+    dependencies: {
+      voiceIntake: {
+        evaluate: () => ({
+          ok: false,
+          acceptedForEvaluation: false,
+          authorizesExecution: false,
+          provesExecutionSuccess: false,
+          retryAuthorized: false,
+        }),
+      },
+      receiptEvidenceIngress: {
+        observe: () => ({
+          ok: false,
+          code: 'UNAVAILABLE',
+          retryable: true,
+          authorizesExecution: false,
+          provesExecutionSuccess: false,
+          retryAuthorized: false,
+        }),
+      },
+    },
+    principal,
+    hooks: runtime.value,
+  });
+
+  try {
+    assert.throws(() => handle.reconnectBootstrapReference?.(), /RECONNECT_TARGET_UNAVAILABLE/u);
+    const initial = runtime.announcements[0];
+    if (initial === undefined) throw new Error('initial bootstrap announcement missing');
+
+    const exchange = await fetch(
+      `http://127.0.0.1:${handle.address.bootstrap.port}${handle.address.bootstrap.path}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ bootstrapReference: initial.bootstrapReference }),
+      },
+    );
+    assert.equal(exchange.status, 200);
+    const exchanged = (await exchange.json()) as Readonly<{
+      ok: boolean;
+      value: Readonly<{
+        gatewaySessionId: string;
+        credential: string;
+        tenantId: string;
+        actor: Readonly<{ kind: string; identityId: string }>;
+        correlationId: string;
+      }>;
+    }>;
+    assert.equal(exchanged.ok, true);
+
+    const opened = await fetch(
+      `http://127.0.0.1:${handle.address.gateway.port}/v1/gateway/sessions/open`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          protocolVersion: '1.0',
+          sessionId: exchanged.value.gatewaySessionId,
+          credential: exchanged.value.credential,
+          tenantId: exchanged.value.tenantId,
+          actor: exchanged.value.actor,
+          correlation: { correlationId: exchanged.value.correlationId },
+        }),
+      },
+    );
+    assert.equal(opened.status, 200);
+    const openedBody = (await opened.json()) as Readonly<{
+      ok: boolean;
+      value: Readonly<{ sessionId: string; generation: number; authorizesExecution: boolean }>;
+    }>;
+    assert.equal(openedBody.ok, true);
+    assert.equal(openedBody.value.generation, 1);
+    assert.equal(openedBody.value.authorizesExecution, false);
+
+    process.kill(process.pid, 'SIGUSR1');
+    await waitForFile(output);
+    const reconnect = JSON.parse(readFileSync(output, 'utf8')) as Readonly<Record<string, unknown>>;
+    assert.equal(reconnect.kind, 'W15J_LOCAL_BOOTSTRAP_RECONNECT_READY');
+    assert.equal(reconnect.hostInstanceId, handle.hostInstanceId);
+    assert.match(String(reconnect.bootstrapReference), /^gbr_[A-Za-z0-9_-]{43,128}$/u);
+    assert.equal(reconnect.authorizesExecution, false);
+    assert.equal(reconnect.provesExecutionSuccess, false);
+    assert.equal(reconnect.retryAuthorized, false);
+
+    const reconnectExchange = await fetch(
+      `http://127.0.0.1:${handle.address.bootstrap.port}${handle.address.bootstrap.path}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ bootstrapReference: reconnect.bootstrapReference }),
+      },
+    );
+    assert.equal(reconnectExchange.status, 200);
+    const reconnectBody = (await reconnectExchange.json()) as Readonly<{
+      ok: boolean;
+      value: Readonly<{
+        gatewaySessionId: string;
+        credential: string;
+        authorizesExecution: boolean;
+        retryAuthorized: boolean;
+      }>;
+    }>;
+    assert.equal(reconnectBody.ok, true);
+    assert.equal(reconnectBody.value.gatewaySessionId, exchanged.value.gatewaySessionId);
+    assert.notEqual(reconnectBody.value.credential, exchanged.value.credential);
+    assert.equal(reconnectBody.value.authorizesExecution, false);
+    assert.equal(reconnectBody.value.retryAuthorized, false);
+  } finally {
+    await handle.stop();
+    if (previous === undefined) Reflect.deleteProperty(process.env, RECONNECT_ENV);
+    else process.env[RECONNECT_ENV] = previous;
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});

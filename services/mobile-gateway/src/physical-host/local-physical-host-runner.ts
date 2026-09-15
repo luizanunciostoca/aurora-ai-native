@@ -16,6 +16,8 @@ import type { W15JPhysicalExecutionStateSeed } from './w03-physical-execution-st
 
 const BOOTSTRAP_REFRESH_FILE_ENV = 'AURORA_W15J_BOOTSTRAP_REFRESH_FILE';
 const BOOTSTRAP_REFRESH_SIGNAL = 'SIGUSR2';
+const BOOTSTRAP_RECONNECT_FILE_ENV = 'AURORA_W15J_BOOTSTRAP_RECONNECT_FILE';
+const BOOTSTRAP_RECONNECT_SIGNAL = 'SIGUSR1';
 const HOST_INSTANCE_ID = /^whi_[a-f0-9]{64}$/u;
 
 export type W15JLocalPhysicalHostSignal = 'SIGINT' | 'SIGTERM';
@@ -84,6 +86,7 @@ export interface W15JLocalPhysicalHostRunnerHandle {
    * always supplies the function.
    */
   readonly refreshBootstrapReference?: () => W15JLocalPhysicalHostBootstrapReference;
+  readonly reconnectBootstrapReference?: () => W15JLocalPhysicalHostBootstrapReference;
   stop(): Promise<void>;
 }
 
@@ -209,12 +212,15 @@ function writeBootstrapRefreshOutput(
   target: BootstrapRefreshOutputTarget,
   hostInstanceId: string,
   refreshed: W15JLocalPhysicalHostBootstrapReference,
+  kind:
+    | 'W15J_LOCAL_BOOTSTRAP_REFRESH_READY'
+    | 'W15J_LOCAL_BOOTSTRAP_RECONNECT_READY' = 'W15J_LOCAL_BOOTSTRAP_REFRESH_READY',
 ): void {
   if (!refreshOutputTargetStillSafe(target) || !HOST_INSTANCE_ID.test(hostInstanceId)) {
     throw new Error('bootstrap refresh output target is unsafe');
   }
   const record = JSON.stringify({
-    kind: 'W15J_LOCAL_BOOTSTRAP_REFRESH_READY',
+    kind,
     hostInstanceId,
     bootstrapReference: refreshed.bootstrapReference,
     bootstrapExpiresAtMs: refreshed.bootstrapExpiresAtMs,
@@ -305,6 +311,20 @@ export async function startW15JLocalPhysicalHostRunner(
     });
   };
 
+  const reconnectBootstrapReference = (): W15JLocalPhysicalHostBootstrapReference => {
+    const refreshed = host.stageReconnectBootstrap(input.principal);
+    if (!refreshed.ok) {
+      throw new Error(`W15-J LOCAL bootstrap reconnect failed: ${refreshed.error.code}`);
+    }
+    return Object.freeze({
+      bootstrapReference: refreshed.value.bootstrapReference,
+      bootstrapExpiresAtMs: refreshed.value.expiresAtMs,
+      authorizesExecution: false,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    });
+  };
+
   const refreshOutputReference = process.env[BOOTSTRAP_REFRESH_FILE_ENV];
   const refreshOutput =
     refreshOutputReference === undefined
@@ -313,6 +333,23 @@ export async function startW15JLocalPhysicalHostRunner(
   if (refreshOutputReference !== undefined && refreshOutput === null) {
     await host.stop();
     throw new Error('W15-J LOCAL bootstrap refresh output is invalid.');
+  }
+  const reconnectOutputReference = process.env[BOOTSTRAP_RECONNECT_FILE_ENV];
+  const reconnectOutput =
+    reconnectOutputReference === undefined
+      ? null
+      : bootstrapRefreshOutputTarget(reconnectOutputReference);
+  if (reconnectOutputReference !== undefined && reconnectOutput === null) {
+    await host.stop();
+    throw new Error('W15-J LOCAL bootstrap reconnect output is invalid.');
+  }
+  if (
+    refreshOutput !== null &&
+    reconnectOutput !== null &&
+    refreshOutput.path === reconnectOutput.path
+  ) {
+    await host.stop();
+    throw new Error('W15-J LOCAL bootstrap control outputs must be distinct.');
   }
 
   const removers: Array<() => void> = [];
@@ -351,6 +388,24 @@ export async function startW15JLocalPhysicalHostRunner(
       process.on(BOOTSTRAP_REFRESH_SIGNAL, onRefreshSignal);
       removers.push(() => process.off(BOOTSTRAP_REFRESH_SIGNAL, onRefreshSignal));
     }
+    if (reconnectOutput !== null) {
+      const onReconnectSignal = (): void => {
+        try {
+          if (!refreshOutputTargetStillSafe(reconnectOutput)) return;
+          const refreshed = reconnectBootstrapReference();
+          writeBootstrapRefreshOutput(
+            reconnectOutput,
+            address.hostInstanceId,
+            refreshed,
+            'W15J_LOCAL_BOOTSTRAP_RECONNECT_READY',
+          );
+        } catch {
+          // Reconnect bootstrap is fail-closed and never changes the current live session itself.
+        }
+      };
+      process.on(BOOTSTRAP_RECONNECT_SIGNAL, onReconnectSignal);
+      removers.push(() => process.off(BOOTSTRAP_RECONNECT_SIGNAL, onReconnectSignal));
+    }
     hooks.emit(announcement(address, staged.value.bootstrapReference, staged.value.expiresAtMs));
   } catch {
     await stop();
@@ -365,6 +420,7 @@ export async function startW15JLocalPhysicalHostRunner(
     physicalEvidenceStatus: 'NOT_RUN',
     authorizesExecution: false,
     refreshBootstrapReference,
+    reconnectBootstrapReference,
     stop,
   });
 }
