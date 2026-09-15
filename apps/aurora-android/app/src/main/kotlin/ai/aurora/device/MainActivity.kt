@@ -17,6 +17,7 @@ import ai.aurora.device.ui.AuroraDeveloperModePreferences
 import ai.aurora.device.ui.AuroraOnboardingInput
 import ai.aurora.device.ui.AuroraOnboardingPolicy
 import ai.aurora.device.ui.AuroraOnboardingStep
+import ai.aurora.device.ui.AuroraSystemStatusItem
 import ai.aurora.device.wake.AuroraAssistantRoleCoordinator
 import ai.aurora.device.wake.AuroraAssistantSelectionLaunch
 import ai.aurora.device.wake.AuroraWakeModelStore
@@ -165,6 +166,7 @@ class MainActivity : Activity() {
             )
         val errorLabel = WakeSetupUiPolicy.userFacingError(runtime.lastError)
         val ready = onboarding.step == AuroraOnboardingStep.READY
+        val wakeOperational = wakeEnabled && modelReady && !privacyEnabled && wakeRuntimeReady
 
         surface.render(
             stage =
@@ -177,15 +179,29 @@ class MainActivity : Activity() {
             detailOverride = onboarding.detail,
         )
 
+        surface.setSystemStatus(
+            listOf(
+                AuroraSystemStatusItem(
+                    label = "Microfone",
+                    value = if (microphoneGranted) "Autorizado" else "Pendente",
+                ),
+                AuroraSystemStatusItem(
+                    label = "Assistente",
+                    value = if (assistant.selected) "Selecionada" else "Pendente",
+                ),
+                AuroraSystemStatusItem(
+                    label = "Wake word",
+                    value = if (wakeOperational) "Ativo" else "Inativo",
+                ),
+                AuroraSystemStatusItem(
+                    label = "Privacidade",
+                    value = if (privacyEnabled) "Ativa" else "Normal",
+                ),
+            ),
+        )
         surface.setStatusLine(
             buildString {
                 append(onboarding.progressLabel)
-                append("  •  Microfone ")
-                append(if (microphoneGranted) "autorizado" else "pendente")
-                append("  •  Wake ")
-                append(if (wakeEnabled && modelReady && !privacyEnabled && wakeRuntimeReady) "ativo" else "inativo")
-                append("  •  Privacidade ")
-                append(if (privacyEnabled) "ativa" else "normal")
                 assistantFeedback?.let { append("\n$it") }
                 if (!developerMode.enabled()) errorLabel?.let { append("\n$it") }
             },
