@@ -25,6 +25,17 @@ export {
   transitionMemoryProjection,
 } from './fabric.js';
 export {
+  MEMORY_FABRIC_SESSION_STATES,
+  openMemoryFabricSession,
+} from './session-coordinator.js';
+export type {
+  MemoryFabricCheckpointResult,
+  MemoryFabricSession,
+  MemoryFabricSessionState,
+  MemoryFabricSessionStatus,
+  OpenMemoryFabricSessionRequest,
+} from './session-coordinator.js';
+export {
   createMemoryFabricSourceAdapter,
   MEMORY_SOURCE_CLASS_BY_BOUNDARY,
 } from './source-adapter.js';
