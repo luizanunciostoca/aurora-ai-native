@@ -5,6 +5,18 @@
   "description": "Coordinator-owned W03 shared event package scaffold for parallel leaf implementation.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./delivery": {
+      "types": "./dist/delivery/index.d.ts",
+      "require": "./dist/delivery/index.js",
+      "default": "./dist/delivery/index.js"
+    }
+  },
   "files": [
     "dist",
     "STATUS.md"

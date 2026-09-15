@@ -8,8 +8,10 @@ import type {
   VoiceCandidateNetworkBoundary,
   VoiceCandidateSocketContext,
 } from './voice-candidate-network.js';
+import { VOICE_PROJECTION_DEVICE_ROUTE } from './voice-projection-network.js';
 
 export const VOICE_CANDIDATE_DEVICE_ROUTE = '/v1/device/voice/candidates/evaluate' as const;
+const COMMAND_CLAIM_ROUTE = '/v1/device/commands/claim' as const;
 
 const DEVICE_ID = /^dvc_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const MAX_DATE_MS = 8_640_000_000_000_000;
@@ -17,7 +19,7 @@ const MAX_DATE_MS = 8_640_000_000_000_000;
 export interface GatewayVoiceDeviceRouteDependencies {
   /** Canonical W14-E trust reader. This route owns no trust cache or ledger. */
   readonly deviceSessions: object;
-  /** Accepted W15-G -> W07 sanitized candidate boundary. */
+  /** Accepted W15-G -> W07 candidate, provider projection and W07 authorization boundary. */
   readonly voiceCandidates: VoiceCandidateNetworkBoundary;
 }
 
@@ -51,6 +53,32 @@ function voiceRouteError(statusCode: number, code: string): GatewayDevicePlaneRe
       voiceCandidateError: { code },
       authorizesExecution: false,
       provesExecutionSuccess: false,
+      retryAuthorized: false,
+    },
+  };
+}
+
+function projectionRouteError(statusCode: number, code: string): GatewayDevicePlaneResponse {
+  return {
+    statusCode,
+    body: {
+      ok: false,
+      voiceProjectionError: { code },
+      authorizesExecution: false,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    },
+  };
+}
+
+function executionAuthorizationError(code: string): GatewayDevicePlaneResponse {
+  return {
+    statusCode: 409,
+    body: {
+      ok: false,
+      devicePlaneError: { code },
+      authorizesExecution: false,
+      canGrantPermission: false,
       retryAuthorized: false,
     },
   };
@@ -165,13 +193,82 @@ function contextFromCurrentTrust(
   };
 }
 
+function currentContext(
+  input: GatewayDevicePlaneHandleInput,
+  dependencies: GatewayVoiceDeviceRouteDependencies,
+): VoiceCandidateSocketContext | null {
+  if (!currentGatewayBinding(input)) return null;
+  const deviceSessionId = input.connectionState.deviceSessionId;
+  const deviceRef = currentDeviceRef(input);
+  if (deviceSessionId === undefined || deviceRef === null) return null;
+
+  let currentTrust: unknown;
+  try {
+    currentTrust = invokeCurrentTrust(
+      dependencies.deviceSessions,
+      deviceSessionId,
+      input.gatewaySession.connectionId,
+      input.nowMs,
+    );
+  } catch {
+    return null;
+  }
+  return contextFromCurrentTrust(currentTrust, input, deviceSessionId, deviceRef);
+}
+
+function attachExecutionAuthorization(
+  response: GatewayDevicePlaneResponse,
+  input: GatewayDevicePlaneHandleInput,
+  dependencies: GatewayVoiceDeviceRouteDependencies,
+): GatewayDevicePlaneResponse {
+  if (response.statusCode !== 200 || !isPlainRecord(response.body) || response.body.ok !== true) {
+    return response;
+  }
+  const value = response.body.value;
+  if (!isPlainRecord(value)) return response;
+  const envelope = value.envelope;
+  if (envelope === undefined) return response;
+  if (
+    !isPlainRecord(envelope) ||
+    envelope.authorizesExecution !== false ||
+    envelope.provesExecutionSuccess !== false ||
+    typeof envelope.commandId !== 'string' ||
+    typeof envelope.executionId !== 'string'
+  ) {
+    return executionAuthorizationError('W07_EXECUTION_AUTHORIZATION_PROTOCOL_VIOLATION');
+  }
+  const context = currentContext(input, dependencies);
+  if (context === null) return executionAuthorizationError('AUTHENTICATED_CONTEXT_NOT_CURRENT');
+  const authorization = dependencies.voiceCandidates.currentExecutionAuthorization({
+    commandId: envelope.commandId,
+    executionId: envelope.executionId,
+    context,
+    nowMs: input.nowMs,
+  });
+  if (authorization === null) {
+    return executionAuthorizationError('W07_EXECUTION_AUTHORIZATION_UNAVAILABLE');
+  }
+  return {
+    statusCode: 200,
+    body: {
+      ...response.body,
+      value: {
+        ...value,
+        envelope: {
+          ...envelope,
+          executionAuthorization: authorization,
+        },
+      },
+    },
+  };
+}
+
 /**
  * Narrow W15-G/W07 composition wrapper over the accepted W14 device-plane handler.
  *
- * Existing W14 routes are delegated unchanged. The added voice route derives its
- * identity/device/session context only from current W14 server state and forwards
- * a bounded, non-authoritative voice candidate to the accepted W07 intake boundary.
- * It performs no side effect and cannot mint authority, verified outcome or retry.
+ * Existing W14 routes are delegated unchanged. Voice routes derive identity/device/session context
+ * only from current W14 state. A successful claim is augmented with the exact short-lived W07
+ * authorization issued after all W07 gates; W14 transports it but cannot create/refresh it.
  */
 export class GatewayVoiceDevicePlaneNetworkHandler extends GatewayDevicePlaneNetworkHandler {
   readonly #voiceDependencies: GatewayVoiceDeviceRouteDependencies;
@@ -185,36 +282,41 @@ export class GatewayVoiceDevicePlaneNetworkHandler extends GatewayDevicePlaneNet
   }
 
   override isRoute(path: string): boolean {
-    return path === VOICE_CANDIDATE_DEVICE_ROUTE || super.isRoute(path);
+    return (
+      path === VOICE_CANDIDATE_DEVICE_ROUTE ||
+      path === VOICE_PROJECTION_DEVICE_ROUTE ||
+      super.isRoute(path)
+    );
   }
 
   override async handle(input: GatewayDevicePlaneHandleInput): Promise<GatewayDevicePlaneResponse> {
-    if (input.path !== VOICE_CANDIDATE_DEVICE_ROUTE) return super.handle(input);
-    if (!currentGatewayBinding(input)) {
-      return voiceRouteError(409, 'AUTHENTICATED_CONTEXT_NOT_CURRENT');
+    if (input.path === COMMAND_CLAIM_ROUTE) {
+      const claimed = await super.handle(input);
+      return attachExecutionAuthorization(claimed, input, this.#voiceDependencies);
+    }
+    if (
+      input.path !== VOICE_CANDIDATE_DEVICE_ROUTE &&
+      input.path !== VOICE_PROJECTION_DEVICE_ROUTE
+    ) {
+      return super.handle(input);
     }
 
-    const deviceSessionId = input.connectionState.deviceSessionId;
-    const deviceRef = currentDeviceRef(input);
-    if (deviceSessionId === undefined || deviceRef === null) {
-      return voiceRouteError(409, 'DEVICE_SESSION_BINDING_REQUIRED');
-    }
-
-    let currentTrust: unknown;
-    try {
-      currentTrust = invokeCurrentTrust(
-        this.#voiceDependencies.deviceSessions,
-        deviceSessionId,
-        input.gatewaySession.connectionId,
-        input.nowMs,
-      );
-    } catch {
-      return voiceRouteError(503, 'W14_TRUST_UNAVAILABLE');
-    }
-
-    const context = contextFromCurrentTrust(currentTrust, input, deviceSessionId, deviceRef);
+    const context = currentContext(input, this.#voiceDependencies);
     if (context === null) {
-      return voiceRouteError(409, 'DEVICE_SESSION_NOT_CURRENT');
+      return input.path === VOICE_PROJECTION_DEVICE_ROUTE
+        ? projectionRouteError(409, 'AUTHENTICATED_CONTEXT_NOT_CURRENT')
+        : voiceRouteError(409, 'AUTHENTICATED_CONTEXT_NOT_CURRENT');
+    }
+
+    if (input.path === VOICE_PROJECTION_DEVICE_ROUTE) {
+      if (Object.keys(input.body).length !== 0) {
+        return projectionRouteError(400, 'BODY_MALFORMED');
+      }
+      try {
+        return this.#voiceDependencies.voiceCandidates.currentProjection(context, input.nowMs);
+      } catch {
+        return projectionRouteError(503, 'VOICE_PROJECTION_UNAVAILABLE');
+      }
     }
 
     try {
