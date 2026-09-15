@@ -23,7 +23,7 @@ apt-get install -y git curl ca-certificates build-essential python3 python3-pip 
 
 # Android app UIDs/GIDs are high numeric values. A freshly created Debian/PRoot
 # may already contain an unrelated group with the same numeric GID. Reuse the
-# numeric GID instead of failing because the group name `aurora` is absent.
+# numeric GID instead of failing because the group name 'aurora' is absent.
 if ! getent group $TERMUX_GID >/dev/null 2>&1; then
   groupadd -g $TERMUX_GID aurora
 fi
@@ -53,7 +53,7 @@ source \"\$NVM_DIR/nvm.sh\"
 nvm install 22.16.0
 nvm alias default $NODE_VERSION
 nvm use $NODE_VERSION >/dev/null
-node -e 'const [major,minor]=process.versions.node.split(\".\").map(Number); if (major!==22 || minor<16) { console.error(`Node ${process.versions.node} is outside >=22.16 <23`); process.exit(2); }'
+node -e 'const [major,minor]=process.versions.node.split(\".\").map(Number); if (major!==22 || minor<16) { console.error(\"Node \"+process.versions.node+\" is outside >=22.16 <23\"); process.exit(2); }'
 [[ \"\$(node --version)\" == \"v$NODE_VERSION\" ]] || { echo 'exact Node runtime mismatch' >&2; exit 2; }
 if [[ \"\$(npm --version)\" != \"$NPM_VERSION\" ]]; then
   npm install --global npm@$NPM_VERSION >/dev/null
