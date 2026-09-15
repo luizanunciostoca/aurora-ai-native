@@ -1,0 +1,79 @@
+name: W03-W06 Memory Candidate Finalizer
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.event.pull_request.head.ref == 'wave/03-06-memory-fabric-durability'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: wave/03-06-memory-fabric-durability
+          persist-credentials: true
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.16.0
+          cache: npm
+      - name: Install workspace
+        run: npm ci
+      - name: Apply exact TypeScript fixes
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const adapterPath = 'packages/context/src/memory-fabric/durable-state-adapter.ts';
+          let adapter = fs.readFileSync(adapterPath, 'utf8');
+          adapter = adapter.replace(
+            "tenant: value.tenant as MemoryProjectionRecord['tenant'],",
+            "tenant: value.tenant as unknown as MemoryProjectionRecord['tenant'],",
+          );
+          adapter = adapter.replace(
+            ": { subject: value.subject as MemoryProjectionRecord['subject'] }),",
+            ": {\n            subject: value.subject as unknown as NonNullable<MemoryProjectionRecord['subject']>,\n          }),",
+          );
+          fs.writeFileSync(adapterPath, adapter);
+
+          const testPath = 'packages/context/test/w06j-memory-fabric-durability.test.ts';
+          let tests = fs.readFileSync(testPath, 'utf8');
+          tests = tests.replace(
+            "  assert.equal(saved.status, 'APPLIED');\n  if (saved.status === 'CONFLICT') assert.fail('first durable write must apply');\n  assert.equal(saved.durableRevision, 1);",
+            "  if (saved.status === 'CONFLICT') throw new Error('first durable write must apply');\n  assert.equal(saved.status, 'APPLIED');\n  assert.equal(saved.durableRevision, 1);",
+          );
+          tests = tests.replace(
+            "  assert.equal(first.status, 'APPLIED');\n  if (first.status === 'CONFLICT') assert.fail('first durable write must apply');\n\n  const duplicate = await repository.save(staged.snapshot, first.durableRevision);\n  assert.equal(duplicate.status, 'UNCHANGED');\n  if (duplicate.status === 'CONFLICT') assert.fail('equal write must be idempotent');\n  assert.equal(duplicate.durableRevision, first.durableRevision);",
+            "  if (first.status === 'CONFLICT') throw new Error('first durable write must apply');\n  assert.equal(first.status, 'APPLIED');\n\n  const duplicate = await repository.save(staged.snapshot, first.durableRevision);\n  if (duplicate.status === 'CONFLICT') throw new Error('equal write must be idempotent');\n  assert.equal(duplicate.status, 'UNCHANGED');\n  assert.equal(duplicate.durableRevision, first.durableRevision);",
+          );
+          tests = tests.replace(
+            "  assert.ok(seededRecord);\n\n  const tamperedStore: MemoryFabricDurableStateStorePort = {",
+            "  if (!seededRecord) throw new Error('seeded durable record expected');\n\n  const tamperedStore: MemoryFabricDurableStateStorePort = {",
+          );
+          fs.writeFileSync(testPath, tests);
+          NODE
+      - name: Format candidate files
+        run: >-
+          npx prettier --write
+          packages/context/src/memory-fabric/durable-state-adapter.ts
+          packages/context/test/w06j-memory-fabric-durability.test.ts
+          packages/persistence/src/durable-state.ts
+          packages/persistence/test/w03-durable-state.test.mjs
+      - name: Remove one-shot workflow and commit
+        run: |
+          git rm .github/workflows/w03-w06-memory-finalizer.yml
+          git config user.name aurora-ci-finalizer
+          git config user.email aurora-ci-finalizer@users.noreply.github.com
+          git add packages/context/src/memory-fabric/durable-state-adapter.ts \
+                  packages/context/test/w06j-memory-fabric-durability.test.ts \
+                  packages/persistence/src/durable-state.ts \
+                  packages/persistence/test/w03-durable-state.test.mjs
+          git diff --cached --check
+          git commit -m 'fix: finalize W03-W06 durable memory candidate'
+          git push origin HEAD:wave/03-06-memory-fabric-durability
