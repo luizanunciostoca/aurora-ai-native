@@ -443,10 +443,29 @@ class AuroraAssistantSurface private constructor(
 
             val statusLine =
                 TextView(activity).apply {
-                    textSize = 13f
-                    setTextColor(Color.rgb(151, 176, 231))
+                    textSize = 14f
+                    setTextColor(Color.rgb(220, 229, 252))
                     gravity = Gravity.CENTER
-                    setLineSpacing(0f, 1.12f)
+                    setLineSpacing(0f, 1.15f)
+                    visibility = View.GONE
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+                    accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+                    setPadding(
+                        AuroraActivityUi.dp(activity, 16),
+                        AuroraActivityUi.dp(activity, 10),
+                        AuroraActivityUi.dp(activity, 16),
+                        AuroraActivityUi.dp(activity, 10),
+                    )
+                    background =
+                        GradientDrawable().apply {
+                            shape = GradientDrawable.RECTANGLE
+                            setColor(Color.rgb(16, 24, 43))
+                            setStroke(
+                                AuroraActivityUi.dp(activity, 1),
+                                Color.rgb(92, 113, 168),
+                            )
+                            cornerRadius = AuroraActivityUi.dp(activity, 16).toFloat()
+                        }
                     enableReadableWrapping(balanceLines = true)
                 }
             content.addView(
