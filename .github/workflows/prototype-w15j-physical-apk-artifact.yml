@@ -25,13 +25,13 @@ jobs:
       - name: Checkout exact W15-J candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 4de5530a6f8b166b016b7d5dc547c38920f31f10
+          ref: 1e8c04d301ce76c60b0f8a47b6ae5866b1c5cd71
           persist-credentials: false
       - name: Assert exact source candidate
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "4de5530a6f8b166b016b7d5dc547c38920f31f10"
+          test "$(git rev-parse HEAD)" = "1e8c04d301ce76c60b0f8a47b6ae5866b1c5cd71"
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
@@ -82,10 +82,10 @@ jobs:
 
           cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
           artifact_purpose=W15-J-DP5-physical-evidence-input
-          source_candidate_sha=4de5530a6f8b166b016b7d5dc547c38920f31f10
+          source_candidate_sha=1e8c04d301ce76c60b0f8a47b6ae5866b1c5cd71
           source_branch=wave/15j-physical-device-integration-acceptance
-          paired_local_host_candidate_sha=c302e03ea44a06b9b13a9e837d14720bde5b505c
-          reconciled_main_parent_sha=a5af41c57ef08179197c7a94646bcd59af8eb5e1
+          paired_local_host_candidate_sha=611d2b9e2eb879a54860753833f113d9ed6ac997
+          reconciled_main_parent_sha=77f0f8532197025ee913dd02fcb56878d9d667a9
           packaging_head_sha=${GITHUB_SHA}
           packaging_branch=prototype/w15j-physical-apk-artifact
           packaging_run_id=${GITHUB_RUN_ID}
@@ -109,7 +109,7 @@ jobs:
       - name: Upload exact W15-J tablet-loopback candidate APK
         uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-tablet-loopback-apk-4de5530a-host-c302e03e
+          name: aurora-w15j-tablet-loopback-apk-1e8c04d3-host-611d2b9e
           path: /tmp/w15j-tablet-loopback-apk
           if-no-files-found: error
           retention-days: 14
