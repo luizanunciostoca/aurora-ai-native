@@ -7,6 +7,7 @@ object AndroidDeviceActionPorts {
         val volume = AndroidAudioVolumeActionPort(context)
         val system = AndroidSystemActionPort(context)
         val app = AndroidAppLaunchActionPort(context)
+        val media = AndroidMediaActionPort(context)
         return CompositeDeviceActionPort(
             listOf(
                 DeviceActionBinding(
@@ -37,6 +38,8 @@ object AndroidDeviceActionPorts {
                     AndroidAppLaunchActionPort.CAPABILITY_ID,
                     app,
                 ),
+                DeviceActionBinding(W15_MEDIA_PLAY_ACTION, AndroidMediaActionPort.PLAY_CAPABILITY_ID, media),
+                DeviceActionBinding(W15_MEDIA_PAUSE_ACTION, AndroidMediaActionPort.PAUSE_CAPABILITY_ID, media),
             ),
         )
     }
