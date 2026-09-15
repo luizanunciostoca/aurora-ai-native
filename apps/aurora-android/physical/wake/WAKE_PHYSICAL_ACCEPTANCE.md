@@ -14,8 +14,12 @@ A wake candidate, STT transcript/confidence, Android runtime permission, assista
 
 Every physical run must bind one exact tuple:
 
-1. 40-hex candidate SHA from the canonical remediation/W15-J candidate;
-2. exact tested APK SHA-256, flavor, applicationId, versionCode and versionName;
+1. 40-hex Android candidate, paired host, reconciled main and packaging-head SHAs,
+   plus the canonical per-start host instance id observed on both listeners;
+2. GitHub artifact id/name, recomputed ZIP SHA-256, embedded
+   self-bound packaging head/run/branch and LOCAL dual-port values in
+   `BUILD_IDENTITY.txt`, `SHA256SUMS.txt`, and exact tested APK SHA-256, flavor,
+   applicationId, versionCode and versionName;
 3. physical device manufacturer/model/product + SHA-256 of serial + build fingerprint/API;
 4. Android assistant-role holder and RECORD_AUDIO state;
 5. local wake model version, sensitivity, privacy state and foreground-service state;
@@ -34,7 +38,15 @@ Do not record, persist, attach, upload, or retain raw microphone PCM. Do not exp
 
 Exercise natural pt-BR pronunciations of “Aurora” across multiple speakers, 0.5/1/2/3 m, low/normal/loud speech, quiet/TV/music/conversation/fan/air-conditioning backgrounds, and representative tablet mounting. Record deliberate attempts, confirmed wakes, rejected wakes and latency. Do not invent product thresholds before physical data exists.
 
-At least 100 deliberate wake attempts are required across the matrix plus a passive long-idle false-activation window.
+At least 100 deliberate wake attempts are required across the matrix plus a
+passive long-idle false-activation window. The structured totals must reconcile
+(`confirmedWakes + rejectedWakes == deliberateAttempts`), include at least two
+anonymized speaker identifiers, distances 0.5/1/2/3 m, low/normal/loud volume,
+and quiet/TV/music/conversation/fan/air-conditioning backgrounds.
+Each deliberate attempt is a separate uniquely identified record with speaker,
+distance, volume, background, result, latency, canonical UTC observation inside
+the wake window, and a concrete manifested
+reference. The passive observation also has its own manifested reference.
 
 ## Lifecycle / always-listening matrix
 
@@ -91,6 +103,15 @@ Exercise wake during pending approval, active W07-governed execution and `EXECUT
 ## Resource observations
 
 Capture start/end battery state, process PSS, CPU snapshot, foreground-service state, thermal observations when available, startup/rearm latency and long-idle behavior. These are W15 device observations, not W17 production SLOs.
+
+## Immutable evidence rule
+
+Complete `WAKE_EVIDENCE_TEMPLATE.json` as `wake-evidence.json` in the same
+physical evidence directory before finalize. Every referenced bounded evidence
+or attestation file must be in that directory and covered by the final SHA-256
+manifest. Post-finalize additions or byte changes invalidate the set. Raw PCM
+must remain absent, and the structured `rawPcmPersistence.persisted` value must
+be `false`.
 
 ## Disposition rule
 
