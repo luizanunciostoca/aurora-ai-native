@@ -8,6 +8,8 @@ export {
   EvidenceIdSchema,
   ExecutionIdSchema,
   IdentityIdSchema,
+  InteractionSessionIdSchema,
+  InteractionTurnIdSchema,
   OwnerDecisionIdSchema,
   PolicyTokenIdSchema,
   ProviderExternalIdSchema,

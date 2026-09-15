@@ -13,7 +13,9 @@ export type CanonicalIdName =
   | 'EvidenceId'
   | 'DecisionId'
   | 'PolicyTokenId'
-  | 'ExecutionId';
+  | 'ExecutionId'
+  | 'InteractionSessionId'
+  | 'InteractionTurnId';
 
 export type CanonicalId<Name extends CanonicalIdName> = string & {
   readonly [auroraCanonicalIdBrand]: Name;
@@ -31,6 +33,8 @@ export type EvidenceId = CanonicalId<'EvidenceId'>;
 export type DecisionId = CanonicalId<'DecisionId'>;
 export type PolicyTokenId = CanonicalId<'PolicyTokenId'>;
 export type ExecutionId = CanonicalId<'ExecutionId'>;
+export type InteractionSessionId = CanonicalId<'InteractionSessionId'>;
+export type InteractionTurnId = CanonicalId<'InteractionTurnId'>;
 
 /**
  * Compatibility-only source alias for the coordinator-era name.
@@ -52,7 +56,9 @@ export type InternalCanonicalId =
   | EvidenceId
   | DecisionId
   | PolicyTokenId
-  | ExecutionId;
+  | ExecutionId
+  | InteractionSessionId
+  | InteractionTurnId;
 
 /**
  * Provider-owned opaque identifier. It is intentionally NOT an Aurora

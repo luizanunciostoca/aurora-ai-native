@@ -8,6 +8,8 @@ import { EventIdSchema } from './id.schemas';
 import { EvidenceIdSchema } from './id.schemas';
 import { ExecutionIdSchema } from './id.schemas';
 import { IdentityIdSchema } from './id.schemas';
+import { InteractionSessionIdSchema } from './id.schemas';
+import { InteractionTurnIdSchema } from './id.schemas';
 import { PolicyTokenIdSchema } from './id.schemas';
 import { ProviderExternalIdSchema } from './id.schemas';
 import { ReceiptIdSchema } from './id.schemas';
@@ -51,6 +53,8 @@ verifyCanonical(EvidenceIdSchema, `evd_${ulid}`);
 verifyCanonical(DecisionIdSchema, `odc_${ulid}`);
 verifyCanonical(PolicyTokenIdSchema, `ptk_${ulid}`);
 verifyCanonical(ExecutionIdSchema, `exe_${ulid}`);
+verifyCanonical(InteractionSessionIdSchema, `ins_${ulid}`);
+verifyCanonical(InteractionTurnIdSchema, `itr_${ulid}`);
 
 const commandRoundTrip = CommandIdSchema.parse(`cmd_${ulid}`);
 assert(
@@ -58,7 +62,17 @@ assert(
   'canonical ID serialization round-trip failed',
 );
 
+const interactionRoundTrip = InteractionSessionIdSchema.parse(`ins_${ulid}`);
+assert(
+  InteractionSessionIdSchema.serialize(interactionRoundTrip) === `ins_${ulid}`,
+  'interaction session ID serialization round-trip failed',
+);
+
 assertThrows(() => CommandIdSchema.parse(`evt_${ulid}`), 'wrong branded prefix was accepted');
+assertThrows(
+  () => InteractionSessionIdSchema.parse(`itr_${ulid}`),
+  'interaction turn prefix was accepted as an interaction session',
+);
 assertThrows(() => CommandIdSchema.parse(''), 'empty canonical ID was accepted');
 assertThrows(
   () => CommandIdSchema.parse('cmd_01ARZ3NDEKTSV4RRFFQ69G5FAI'),
