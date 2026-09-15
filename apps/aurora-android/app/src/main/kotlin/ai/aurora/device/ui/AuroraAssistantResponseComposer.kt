@@ -8,7 +8,10 @@ import ai.aurora.device.voice.WakeVoiceRoute
 object AuroraAssistantResponseComposer {
     fun successForCapability(capabilityId: String): String =
         when (capabilityId) {
-            "audio.volume.set" -> "Pronto. Aumentei o volume."
+            // The consumption receipt proves that the governed capability completed, but this
+            // composer is not given the verified target/direction. Do not claim an increase or
+            // decrease that is not present in the receipt exposed to this layer.
+            "audio.volume.set" -> "Pronto. Ajustei o volume."
             else -> "Pronto. A ação disponível foi concluída."
         }
 
