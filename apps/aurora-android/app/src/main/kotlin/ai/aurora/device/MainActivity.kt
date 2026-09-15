@@ -10,6 +10,7 @@ import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.ui.AuroraActivityUi
 import ai.aurora.device.wake.AuroraAssistantRoleCoordinator
 import ai.aurora.device.wake.AuroraAssistantSelectionLaunch
+import ai.aurora.device.wake.AuroraWakeForegroundService
 import ai.aurora.device.wake.AuroraWakeModelStore
 import ai.aurora.device.wake.WakeRuntimePreferences
 import ai.aurora.device.wake.WakeRuntimeStatusStore
@@ -86,6 +87,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        AuroraWakeForegroundService.rearmIfConfigured(this)
         if (::statusView.isInitialized) {
             // ActivityLifecycleCallbacks publish FOREGROUND after the Activity resume callback.
             // Render once on the next UI turn so the visible screen does not remain stuck on the

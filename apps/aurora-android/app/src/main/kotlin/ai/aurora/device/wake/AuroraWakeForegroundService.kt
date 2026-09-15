@@ -24,6 +24,7 @@ class AuroraWakeForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        PROCESS_REARM_GATE.markActive()
         preferences = WakeRuntimePreferences(this)
         statusStore = WakeRuntimeStatusStore(this)
         modelStore = AuroraWakeModelStore(this)
@@ -43,6 +44,7 @@ class AuroraWakeForegroundService : Service() {
     override fun onDestroy() {
         engine?.close()
         engine = null
+        PROCESS_REARM_GATE.markInactive()
         super.onDestroy()
     }
 
@@ -135,6 +137,7 @@ class AuroraWakeForegroundService : Service() {
     }
 
     private fun stopWithState(state: String) {
+        PROCESS_REARM_GATE.markInactive()
         statusStore.update(state)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -168,6 +171,7 @@ class AuroraWakeForegroundService : Service() {
         private const val CHANNEL_ID = "aurora-wake-v1"
         private const val NOTIFICATION_ID = 15001
         private const val HANDOFF_RECOVERY_MS = 1_800L
+        private val PROCESS_REARM_GATE = WakeProcessRearmGate()
 
         /**
          * Best-effort platform re-arm only. This does not create authority or imply that a wake
@@ -184,11 +188,16 @@ class AuroraWakeForegroundService : Service() {
                 return false
             }
             if (!AuroraWakeModelStore(appContext).hasValidModel()) return false
+            if (!PROCESS_REARM_GATE.tryBeginStart()) return true
             return runCatching {
                 appContext.startForegroundService(
                     Intent(appContext, AuroraWakeForegroundService::class.java).setAction(ACTION_ARM),
                 )
-            }.isSuccess
+                true
+            }.getOrElse {
+                PROCESS_REARM_GATE.markInactive()
+                false
+            }
         }
     }
 }
