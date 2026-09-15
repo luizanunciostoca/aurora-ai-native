@@ -46,7 +46,18 @@ class WakeVoiceActivity : Activity() {
         surface.clearActions()
         surface.render(AuroraAssistantStage.LISTENING)
         surface.setStatusLine("Microfone ativo  •  Wake pausado durante a conversa")
-        surface.setDiagnostics("Voz local • STT limitado • autoridade e execução permanecem governadas")
+        val sourceLabel =
+            when {
+                intent?.getBooleanExtra(EXTRA_SYSTEM_ASSIST_INVOCATION, false) == true ->
+                    "atalho de assistente Android"
+                intent?.getStringExtra(EXTRA_WAKE_ID).isNullOrBlank().not() -> "wake word"
+                else -> "toque no aplicativo"
+            }
+        // SpeechRecognizer delegates recognition to the Android recognition service; it is not
+        // necessarily offline/local. Keep diagnostics accurate while capture remains bounded.
+        surface.setDiagnostics(
+            "STT do Android • captura limitada • origem: $sourceLabel • autoridade e execução permanecem governadas",
+        )
         setContentView(surface.root)
     }
 
