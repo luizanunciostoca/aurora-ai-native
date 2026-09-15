@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.graphics.drawable.StateListDrawable
 import android.os.Build
+import android.text.Layout
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -49,11 +50,20 @@ object AuroraActivityUi {
         require(maxContentWidthDp in 320..1_200)
         activity.actionBar?.hide()
 
+        val configuration = activity.resources.configuration
+        val windowLayout =
+            AuroraWindowLayoutPolicy.resolve(
+                widthDp = configuration.screenWidthDp.coerceAtLeast(1),
+                heightDp = configuration.screenHeightDp.coerceAtLeast(1),
+                fontScale = configuration.fontScale.coerceAtLeast(0.1f),
+                maxContentWidthDp = maxContentWidthDp,
+            )
         val root =
             ScrollView(activity).apply {
                 isFillViewport = true
                 clipToPadding = false
                 overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+                isSmoothScrollingEnabled = true
                 setBackgroundColor(surfaceBackground)
                 layoutParams =
                     ViewGroup.LayoutParams(
@@ -70,7 +80,7 @@ object AuroraActivityUi {
                     )
             }
         val contentWidth =
-            if (activity.resources.configuration.screenWidthDp >= maxContentWidthDp + 64) {
+            if (windowLayout.constrainContentWidth) {
                 dp(activity, maxContentWidthDp)
             } else {
                 ViewGroup.LayoutParams.MATCH_PARENT
@@ -95,7 +105,7 @@ object AuroraActivityUi {
                 ViewGroup.LayoutParams.MATCH_PARENT,
             ),
         )
-        installSystemBarInsets(activity, root)
+        installSystemBarInsets(activity, root, windowLayout)
         return AuroraScrollableScreen(root = root, content = content)
     }
 
@@ -109,6 +119,10 @@ object AuroraActivityUi {
             setTextColor(primaryText)
             gravity = Gravity.CENTER_HORIZONTAL
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                breakStrategy = Layout.BREAK_STRATEGY_HIGH_QUALITY
+                hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NORMAL
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) isAccessibilityHeading = true
             setPadding(0, 0, 0, dp(context, 12))
             layoutParams =
@@ -129,6 +143,10 @@ object AuroraActivityUi {
             setTextColor(secondaryText)
             gravity = if (centered) Gravity.CENTER_HORIZONTAL else Gravity.START
             setLineSpacing(0f, 1.12f)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                breakStrategy = Layout.BREAK_STRATEGY_HIGH_QUALITY
+                hyphenationFrequency = Layout.HYPHENATION_FREQUENCY_NORMAL
+            }
             setPadding(0, 0, 0, dp(context, 12))
             layoutParams =
                 LinearLayout.LayoutParams(
@@ -149,6 +167,7 @@ object AuroraActivityUi {
             textSize = 16f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             minHeight = dp(context, 54)
+            setHorizontallyScrolling(false)
             setPadding(
                 dp(context, 20),
                 dp(context, 12),
@@ -219,9 +238,10 @@ object AuroraActivityUi {
     private fun installSystemBarInsets(
         activity: Activity,
         view: View,
+        windowLayout: AuroraWindowLayout,
     ) {
-        val horizontal = dp(activity, 24)
-        val vertical = dp(activity, 20)
+        val horizontal = dp(activity, windowLayout.horizontalPaddingDp)
+        val vertical = dp(activity, windowLayout.verticalPaddingDp)
         view.setOnApplyWindowInsetsListener { target, insets ->
             var left = 0
             var top = 0
