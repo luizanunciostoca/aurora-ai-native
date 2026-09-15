@@ -41,15 +41,15 @@ Self-ADB is used only for external observation/control (`pm path`, `adb pull`, `
 Current exact tuple defaults:
 
 ```text
-main      d2089407e88480686b879928cf2863c0dc81718e
-android   6d44480eae9b99467b20df44290b5c9b17626c3e
-host      294e8754a568838ade40f1907546339385d7e599
-packaging e0f120525a08fa51e6be4b1ac29cc1e203648765
-run       34686121049
-artifact  10296091034
-name      aurora-w15j-tablet-loopback-apk-6d44480e-host-294e8754
-zip       e115c2fcd31416e855cab0a69576ec254a71cc37e2979933ab375de82ed91810
-apk       a0f8ed0b3e5d461592873a522a75a42fd7c079bad2a78dfd2d9968c1763af7e6
+main      a5af41c57ef08179197c7a94646bcd59af8eb5e1
+android   4de5530a6f8b166b016b7d5dc547c38920f31f10
+host      c302e03ea44a06b9b13a9e837d14720bde5b505c
+packaging d36369f387ea06332f29073713556c4f793defcb
+run       34923631152
+artifact  10379008397
+name      aurora-w15j-tablet-loopback-apk-4de5530a-host-c302e03e
+zip       564eb61eb4e969a4b0e714d3d6acfd99f11f99afb93090cffd3a1d3b8b636bdb
+apk       20cfeeec3406ee3c414e43ffd53cb62c0874743f7650fef5d465807a56877e66
 transport LOCAL_TABLET_LOOPBACK
 ```
 
