@@ -24,6 +24,18 @@ export type {
   MemoryContextAssemblyResult,
 } from './context-assembly.js';
 export {
+  captureMemoryObservation,
+  MEMORY_CAPTURE_INTAKE_REASONS,
+  MEMORY_CAPTURE_MAX_CONTENT_UNITS,
+  MEMORY_CAPTURE_MAX_DEPTH,
+  MEMORY_CAPTURE_MAX_NODES,
+} from './capture-intake.js';
+export type {
+  MemoryCaptureIntakeReason,
+  MemoryCaptureRequest,
+  MemoryCaptureResult,
+} from './capture-intake.js';
+export {
   createMemoryFabricSnapshot,
   readMemoryProjection,
   stageMemoryProposal,
