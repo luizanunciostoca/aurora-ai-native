@@ -61,7 +61,8 @@ export interface W15JLocalPhysicalHostOperatorProviderInput {
   /** Already-authenticated server-side W14 principal; never accepted from Android. */
   readonly principal: AuthenticatedGatewayBootstrapPrincipal;
   /** Optional DP5 fixture; the runner writes it only through W03's existing physical stager. */
-  readonly executionStateSeed?: W15JPhysicalExecutionStateSeed;
+  readonly executionStateSeed?:
+    W15JPhysicalExecutionStateSeed | readonly W15JPhysicalExecutionStateSeed[];
 }
 
 export interface W15JLocalPhysicalHostOperatorProviderModule {
@@ -173,11 +174,59 @@ function validDatabaseUrl(value: unknown): value is string {
   }
 }
 
-function validExecutionStateSeed(value: unknown): value is W15JPhysicalExecutionStateSeed {
-  if (!plainDataRecord(value)) return false;
-  // Full canonical validation remains owned by W03PostgresPhysicalExecutionStateStager.
-  // The operator only rejects active objects/getters and explicit authority-bearing input early.
-  return value.authorizesExecution === false;
+function copyExecutionStateSeed(value: unknown): W15JPhysicalExecutionStateSeed | null {
+  if (!plainDataRecord(value) || value.authorizesExecution !== false) return null;
+  if (!plainDataRecord(value.containment)) return null;
+  const containment = value.containment;
+  if (!plainDataRecord(containment.circuit) || !plainDataRecord(containment.killSwitch))
+    return null;
+  const quota = value.quota;
+  if (quota !== undefined && !plainDataRecord(quota)) return null;
+
+  const circuit = Object.freeze({
+    state: containment.circuit.state,
+    consecutiveFailures: containment.circuit.consecutiveFailures,
+    ...(containment.circuit.openedAt === undefined
+      ? {}
+      : { openedAt: containment.circuit.openedAt }),
+  });
+  const copied = {
+    tenantId: value.tenantId,
+    actionIntentId: value.actionIntentId,
+    executionRef: value.executionRef,
+    attemptNumber: value.attemptNumber,
+    maxAttempts: value.maxAttempts,
+    ...(quota === undefined
+      ? {}
+      : { quota: Object.freeze({ limit: quota.limit, used: quota.used }) }),
+    circuitKey: value.circuitKey,
+    containment: Object.freeze({
+      circuit,
+      killSwitch: Object.freeze({
+        state: containment.killSwitch.state,
+        changedAt: containment.killSwitch.changedAt,
+      }),
+      dependencyHealth: containment.dependencyHealth,
+      cancellationRequested: containment.cancellationRequested,
+      currentInFlight: containment.currentInFlight,
+      maxInFlight: containment.maxInFlight,
+      retryDepth: containment.retryDepth,
+      maxRetryDepth: containment.maxRetryDepth,
+    }),
+    updatedAt: value.updatedAt,
+    authorizesExecution: false as const,
+  };
+  return Object.freeze(copied) as unknown as W15JPhysicalExecutionStateSeed;
+}
+
+function copyExecutionStateSeeds(
+  value: unknown,
+): W15JPhysicalExecutionStateSeed | readonly W15JPhysicalExecutionStateSeed[] | null {
+  if (!Array.isArray(value)) return copyExecutionStateSeed(value);
+  if (value.length === 0 || value.length > 8) return null;
+  const copied = value.map(copyExecutionStateSeed);
+  if (copied.some((seed) => seed === null)) return null;
+  return Object.freeze(copied) as readonly W15JPhysicalExecutionStateSeed[];
 }
 
 function validateProviderInput(
@@ -192,10 +241,21 @@ function validateProviderInput(
       providerKeysValid(value) &&
       validDatabaseUrl(value.databaseUrl) &&
       validDependencies(value.dependencies) &&
-      validPrincipal(value.principal, nowMs) &&
-      (value.executionStateSeed === undefined || validExecutionStateSeed(value.executionStateSeed))
+      validPrincipal(value.principal, nowMs)
     ) {
-      return value as unknown as W15JLocalPhysicalHostOperatorProviderInput;
+      const executionStateSeed =
+        value.executionStateSeed === undefined
+          ? undefined
+          : copyExecutionStateSeeds(value.executionStateSeed);
+      if (value.executionStateSeed !== undefined && executionStateSeed === null) {
+        throw new Error('invalid execution state seed');
+      }
+      return Object.freeze({
+        databaseUrl: value.databaseUrl,
+        dependencies: value.dependencies,
+        principal: value.principal,
+        ...(executionStateSeed === undefined ? {} : { executionStateSeed }),
+      }) as W15JLocalPhysicalHostOperatorProviderInput;
     }
   } catch {
     // A provider proxy/getter failure is a malformed provider input, never an escaped exception.

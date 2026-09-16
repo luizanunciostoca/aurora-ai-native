@@ -67,7 +67,8 @@ export interface W15JLocalPhysicalHostRunnerInput {
   /** Already-authenticated server-side W14 bootstrap principal; never supplied by Android. */
   readonly principal: AuthenticatedGatewayBootstrapPrincipal;
   /** Optional server-side DP5 seed written through the existing W03 physical stager. */
-  readonly executionStateSeed?: W15JPhysicalExecutionStateSeed;
+  readonly executionStateSeed?:
+    W15JPhysicalExecutionStateSeed | readonly W15JPhysicalExecutionStateSeed[];
   readonly hooks?: W15JLocalPhysicalHostRunnerHooks;
 }
 
@@ -283,9 +284,14 @@ export async function startW15JLocalPhysicalHostRunner(
   const host = new W15JLocalPhysicalHost(input.host, input.dependencies);
 
   if (input.executionStateSeed !== undefined) {
-    const seeded = host.stageExecutionState(input.executionStateSeed);
-    if (!seeded.ok) {
-      throw new Error(`W15-J LOCAL W03 state staging failed: ${seeded.code}`);
+    const seeds = Array.isArray(input.executionStateSeed)
+      ? input.executionStateSeed
+      : [input.executionStateSeed];
+    for (const seed of seeds) {
+      const seeded = host.stageExecutionState(seed);
+      if (!seeded.ok) {
+        throw new Error(`W15-J LOCAL W03 state staging failed: ${seeded.code}`);
+      }
     }
   }
 

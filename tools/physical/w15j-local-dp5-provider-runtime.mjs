@@ -6,6 +6,10 @@ const MATERIAL_KIND = 'W15J_LOCAL_DP5_OPERATOR_MATERIAL';
 const SCHEMA_VERSION = '1.0.0';
 const CAPABILITY_ID = 'audio.volume.set';
 const ACTION_ID = 'AUDIO_VOLUME_STEP_UP';
+const APP_CAPABILITY_ID = 'app.open';
+const APP_ACTION_ID = 'OPEN_VALIDATED_APP';
+const APP_POLICY_SCOPE = 'app.open';
+const APP_ROUTE_ACTION = 'android.intent.action.MAIN';
 const POLICY_ACTION = ACTION_ID;
 const POLICY_SCOPE = 'audio.volume.set';
 const POLICY_REFERENCE = 'policy:aurora:w15j:local-dp5';
@@ -29,6 +33,22 @@ const IDS = Object.freeze({
   policyTokenId: /^ptk_[0-9A-HJKMNP-TV-Z]{26}$/u,
 });
 const SAFE_TOKEN = /^[A-Za-z0-9._:/+-]+$/u;
+const SHA256 = /^[a-f0-9]{64}$/u;
+const PACKAGE_NAME = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/u;
+const APP_ACTION_KEYS = new Set([
+  'actionIntentId',
+  'commandId',
+  'executionId',
+  'causationId',
+  'policyTokenId',
+  'idempotencyKey',
+  'orderingKey',
+  'orderingSequence',
+  'circuitKey',
+  'appId',
+  'packageName',
+  'trustedSignerSha256',
+]);
 const MATERIAL_KEYS = new Set([
   'kind',
   'schemaVersion',
@@ -49,6 +69,7 @@ const MATERIAL_KEYS = new Set([
   'orderingKey',
   'orderingSequence',
   'circuitKey',
+  'appAction',
   'operatorApprovalReference',
   'authorizesExecution',
   'canGrantPermission',
@@ -81,6 +102,26 @@ function safeToken(value, maximum = 256) {
     value.length > 0 &&
     value.length <= maximum &&
     SAFE_TOKEN.test(value)
+  );
+}
+
+function validAppAction(value) {
+  return (
+    plainRecord(value) &&
+    exactKeys(value, APP_ACTION_KEYS) &&
+    IDS.actionIntentId.test(value.actionIntentId) &&
+    IDS.commandId.test(value.commandId) &&
+    IDS.executionId.test(value.executionId) &&
+    IDS.causationId.test(value.causationId) &&
+    IDS.policyTokenId.test(value.policyTokenId) &&
+    safeToken(value.idempotencyKey, 256) &&
+    safeToken(value.orderingKey, 256) &&
+    Number.isSafeInteger(value.orderingSequence) &&
+    value.orderingSequence > 0 &&
+    safeToken(value.circuitKey, 180) &&
+    safeToken(value.appId, 128) &&
+    PACKAGE_NAME.test(value.packageName) &&
+    SHA256.test(value.trustedSignerSha256)
   );
 }
 
@@ -154,6 +195,7 @@ export function loadAndValidateW15JDp5Material(path, nowMs = Date.now()) {
     !Number.isSafeInteger(material.orderingSequence) ||
     material.orderingSequence <= 0 ||
     !safeToken(material.circuitKey, 180) ||
+    !validAppAction(material.appAction) ||
     !safeToken(material.operatorApprovalReference, 256) ||
     material.authorizesExecution !== false ||
     material.canGrantPermission !== false
@@ -164,38 +206,53 @@ export function loadAndValidateW15JDp5Material(path, nowMs = Date.now()) {
 }
 
 function buildPolicySnapshot(material) {
+  const rule = (ruleId, action, scope, reasonReference) =>
+    Object.freeze({
+      ruleId,
+      effect: 'ALLOW',
+      action,
+      scope: Object.freeze([scope]),
+      tenantIds: Object.freeze([material.tenantId]),
+      actorKinds: Object.freeze(['HUMAN']),
+      actorIdentityIds: Object.freeze([material.actorIdentityId]),
+      subjectReferences: Object.freeze([`identity:${material.subjectIdentityId}`]),
+      purposeIds: Object.freeze([PURPOSE_ID]),
+      jurisdictions: Object.freeze([JURISDICTION]),
+      dataClassifications: Object.freeze([DATA_CLASSIFICATION]),
+      reasonReference,
+    });
   return Object.freeze({
     kind: 'PolicySnapshot',
     policy: Object.freeze({ reference: POLICY_REFERENCE, version: POLICY_VERSION }),
     state: 'ACTIVE',
     rules: Object.freeze([
-      Object.freeze({
-        ruleId: 'rule.w15j.local.volume-step',
-        effect: 'ALLOW',
-        action: POLICY_ACTION,
-        scope: Object.freeze([POLICY_SCOPE]),
-        tenantIds: Object.freeze([material.tenantId]),
-        actorKinds: Object.freeze(['HUMAN']),
-        actorIdentityIds: Object.freeze([material.actorIdentityId]),
-        subjectReferences: Object.freeze([`identity:${material.subjectIdentityId}`]),
-        purposeIds: Object.freeze([PURPOSE_ID]),
-        jurisdictions: Object.freeze([JURISDICTION]),
-        dataClassifications: Object.freeze([DATA_CLASSIFICATION]),
-        reasonReference: 'policy:aurora:w15j:local-dp5#bounded-volume-step',
-      }),
+      rule(
+        'rule.w15j.local.volume-step',
+        POLICY_ACTION,
+        POLICY_SCOPE,
+        'policy:aurora:w15j:local-dp5#bounded-volume-step',
+      ),
+      rule(
+        'rule.w15j.local.aurora-self-launch',
+        APP_ACTION_ID,
+        APP_POLICY_SCOPE,
+        'policy:aurora:w15j:local-dp5#aurora-self-launch',
+      ),
     ]),
   });
 }
 
-function buildPolicyToken(material) {
+function buildPolicyToken(material, kind) {
+  const app = kind === 'app';
+  const source = app ? material.appAction : material;
   return Object.freeze({
     kind: 'POLICY_TOKEN',
     schemaVersion: SCHEMA_VERSION,
-    policyTokenId: material.policyTokenId,
+    policyTokenId: source.policyTokenId,
     tenant: Object.freeze({ tenantId: material.tenantId }),
     subject: Object.freeze({ reference: `identity:${material.subjectIdentityId}` }),
-    action: POLICY_ACTION,
-    scope: Object.freeze([POLICY_SCOPE]),
+    action: app ? APP_ACTION_ID : POLICY_ACTION,
+    scope: Object.freeze([app ? APP_POLICY_SCOPE : POLICY_SCOPE]),
     issuedAt: material.generatedAt,
     expiresAt: material.expiresAt,
     policy: Object.freeze({ reference: POLICY_REFERENCE, version: POLICY_VERSION }),
@@ -204,12 +261,17 @@ function buildPolicyToken(material) {
   });
 }
 
-function buildActionIntent(material) {
+function buildActionIntent(material, kind) {
+  const app = kind === 'app';
+  const source = app ? material.appAction : material;
   return Object.freeze({
     kind: 'ACTION_INTENT',
     schemaVersion: SCHEMA_VERSION,
-    actionIntentId: material.actionIntentId,
-    capability: Object.freeze({ capability: CAPABILITY_ID, actionType: ACTION_ID }),
+    actionIntentId: source.actionIntentId,
+    capability: Object.freeze({
+      capability: app ? APP_CAPABILITY_ID : CAPABILITY_ID,
+      actionType: app ? APP_ACTION_ID : ACTION_ID,
+    }),
     executionTarget: Object.freeze({
       schemaVersion: SCHEMA_VERSION,
       kind: 'DEVICE',
@@ -219,16 +281,17 @@ function buildActionIntent(material) {
     actor: Object.freeze({ kind: 'HUMAN', identityId: material.actorIdentityId }),
     requestOrigin: Object.freeze({ kind: 'HUMAN', identityId: material.actorIdentityId }),
     correlation: Object.freeze({ correlationId: material.correlationId }),
-    resolvedParameters: Object.freeze({}),
-    idempotency: Object.freeze({ mode: 'REQUIRED', key: material.idempotencyKey }),
+    resolvedParameters: Object.freeze(app ? { appId: source.appId } : {}),
+    idempotency: Object.freeze({ mode: 'REQUIRED', key: source.idempotencyKey }),
     preconditions: Object.freeze([]),
     deadlineAt: material.expiresAt,
-    authority: Object.freeze({ kind: 'POLICY_TOKEN', policyTokenId: material.policyTokenId }),
+    authority: Object.freeze({ kind: 'POLICY_TOKEN', policyTokenId: source.policyTokenId }),
     dataClassification: DATA_CLASSIFICATION,
   });
 }
 
-function buildPolicyEvaluationSeed(material, policyToken) {
+function buildPolicyEvaluationSeed(material, policyToken, kind) {
+  const app = kind === 'app';
   return Object.freeze({
     kind: 'PolicyEvaluationRequest',
     schemaVersion: SCHEMA_VERSION,
@@ -247,8 +310,8 @@ function buildPolicyEvaluationSeed(material, policyToken) {
     }),
     actor: Object.freeze({ kind: 'HUMAN', identityId: material.actorIdentityId }),
     subject: Object.freeze({ kind: 'IDENTITY', identityId: material.subjectIdentityId }),
-    action: POLICY_ACTION,
-    requestedScope: Object.freeze([POLICY_SCOPE]),
+    action: app ? APP_ACTION_ID : POLICY_ACTION,
+    requestedScope: Object.freeze([app ? APP_POLICY_SCOPE : POLICY_SCOPE]),
     purpose: Object.freeze({
       kind: 'PurposeContext',
       purposeId: PURPOSE_ID,
@@ -267,59 +330,69 @@ function buildPolicyEvaluationSeed(material, policyToken) {
 }
 
 function buildProjection(material) {
-  const registryProjection = {
-    capabilityId: CAPABILITY_ID,
-    targetKind: 'DEVICE',
-    actionId: ACTION_ID,
-    boundedEffect: 'ONE_MEDIA_VOLUME_STEP_UP',
-  };
-  const vocabularyProjection = {
-    commandId: material.commandId,
-    phrases: ['aumentar volume', 'aumente o volume', 'subir volume'],
-    capabilityId: CAPABILITY_ID,
-  };
+  const registryProjection = [
+    {
+      capabilityId: CAPABILITY_ID,
+      targetKind: 'DEVICE',
+      actionId: ACTION_ID,
+      boundedEffect: 'ONE_MEDIA_VOLUME_STEP_UP',
+    },
+    {
+      capabilityId: APP_CAPABILITY_ID,
+      targetKind: 'DEVICE',
+      actionId: APP_ACTION_ID,
+      boundedEffect: 'AURORA_SELF_LAUNCH',
+    },
+  ];
+  const vocabularyProjection = [
+    {
+      commandId: material.commandId,
+      phrases: ['aumentar volume', 'aumente o volume', 'subir volume'],
+      capabilityId: CAPABILITY_ID,
+    },
+    {
+      commandId: material.appAction.commandId,
+      phrases: ['abrir aurora', 'abra a aurora'],
+      capabilityId: APP_CAPABILITY_ID,
+    },
+  ];
+  const entry = (capabilityId, riskClass = 'LOW') =>
+    Object.freeze({
+      capabilityId,
+      tenantId: material.tenantId,
+      supportedTargetKinds: Object.freeze(['DEVICE']),
+      currentAvailability: 'CURRENT_AVAILABLE',
+      riskClass,
+      observedAtMs: material.generatedAtMs,
+      expiresAtMs: material.expiresAtMs,
+    });
   return Object.freeze({
     kind: 'GOVERNED_VOICE_PROJECTION',
     activeTenantId: material.tenantId,
     registry: Object.freeze({
       registryKind: 'AURORA_CANONICAL_CAPABILITY_REGISTRY',
-      registryVersion: 'w04-dp5-1.0.0',
+      registryVersion: 'w04-dp5-1.1.0',
       observedAtMs: material.generatedAtMs,
       expiresAtMs: material.expiresAtMs,
       provenance: Object.freeze({
-        sourceRef: 'w04:accepted:audio.volume.set:dp5-bounded-step',
+        sourceRef: 'w04:accepted:dp5-bounded-device-actions-v2',
         contentSha256: sha256Hex(canonicalJson(registryProjection)),
       }),
-      entries: Object.freeze([
-        Object.freeze({
-          capabilityId: CAPABILITY_ID,
-          tenantId: material.tenantId,
-          supportedTargetKinds: Object.freeze(['DEVICE']),
-          currentAvailability: 'CURRENT_AVAILABLE',
-          // W04 accepted the target-neutral vocabulary; this DP5 projection narrows it to one
-          // reversible +1 local step with no arbitrary index/arguments. It is not a generic
-          // classification of every audio.volume.set implementation.
-          riskClass: 'LOW',
-          observedAtMs: material.generatedAtMs,
-          expiresAtMs: material.expiresAtMs,
-        }),
-      ]),
+      entries: Object.freeze([entry(CAPABILITY_ID), entry(APP_CAPABILITY_ID)]),
     }),
     vocabulary: Object.freeze({
-      vocabularyVersion: 'w15g-dp5-1.0.0',
+      vocabularyVersion: 'w15g-dp5-1.1.0',
       observedAtMs: material.generatedAtMs,
       expiresAtMs: material.expiresAtMs,
       provenance: Object.freeze({
-        sourceRef: 'w15g:dp5:bounded-volume-step-v1',
+        sourceRef: 'w15g:dp5:bounded-device-actions-v2',
         contentSha256: sha256Hex(canonicalJson(vocabularyProjection)),
       }),
-      bindings: Object.freeze([
-        Object.freeze({
-          commandId: material.commandId,
-          phrases: Object.freeze(vocabularyProjection.phrases),
-          capabilityId: CAPABILITY_ID,
-        }),
-      ]),
+      bindings: Object.freeze(
+        vocabularyProjection.map((item) =>
+          Object.freeze({ ...item, phrases: Object.freeze(item.phrases) }),
+        ),
+      ),
     }),
     nativeBindings: Object.freeze([
       Object.freeze({
@@ -329,6 +402,29 @@ function buildProjection(material) {
         requiredPermissions: Object.freeze([]),
         maxSnapshotAgeMs: 30_000,
       }),
+      Object.freeze({
+        capabilityId: APP_CAPABILITY_ID,
+        minApiLevel: 26,
+        requiredFeatures: Object.freeze([]),
+        requiredPermissions: Object.freeze([]),
+        maxSnapshotAgeMs: 30_000,
+      }),
+    ]),
+    appBindings: Object.freeze([
+      Object.freeze({
+        appId: material.appAction.appId,
+        packageName: material.appAction.packageName,
+        trustedSignerSha256: Object.freeze([material.appAction.trustedSignerSha256]),
+        routes: Object.freeze([
+          Object.freeze({
+            routeId: 'aurora-main',
+            kind: 'INTENT',
+            action: APP_ROUTE_ACTION,
+            supportsReadback: true,
+          }),
+        ]),
+        maxSnapshotAgeMs: 30_000,
+      }),
     ]),
     authorizesExecution: false,
     provesExecutionSuccess: false,
@@ -336,15 +432,16 @@ function buildProjection(material) {
   });
 }
 
-function buildExecutionStateSeed(material) {
+function buildExecutionStateSeed(material, kind) {
+  const source = kind === 'app' ? material.appAction : material;
   return Object.freeze({
     tenantId: material.tenantId,
-    actionIntentId: material.actionIntentId,
-    executionRef: material.executionId,
+    actionIntentId: source.actionIntentId,
+    executionRef: source.executionId,
     attemptNumber: 1,
     maxAttempts: 1,
     quota: Object.freeze({ limit: 1, used: 0 }),
-    circuitKey: material.circuitKey,
+    circuitKey: source.circuitKey,
     containment: Object.freeze({
       circuit: Object.freeze({
         state: 'CLOSED',
@@ -403,9 +500,12 @@ export async function createW15JLocalDp5OperatorInput({ databaseUrl, materialPat
   }
 
   const policySnapshot = buildPolicySnapshot(material);
-  const policyToken = buildPolicyToken(material);
-  const actionIntent = buildActionIntent(material);
-  const policyEvaluation = buildPolicyEvaluationSeed(material, policyToken);
+  const policyToken = buildPolicyToken(material, 'volume');
+  const actionIntent = buildActionIntent(material, 'volume');
+  const policyEvaluation = buildPolicyEvaluationSeed(material, policyToken, 'volume');
+  const appPolicyToken = buildPolicyToken(material, 'app');
+  const appActionIntent = buildActionIntent(material, 'app');
+  const appPolicyEvaluation = buildPolicyEvaluationSeed(material, appPolicyToken, 'app');
 
   const currentPolicy = Object.freeze({
     getCurrent(request) {
@@ -430,34 +530,53 @@ export async function createW15JLocalDp5OperatorInput({ databaseUrl, materialPat
         requireCorrelationMatch: true,
         authorizesExecution: false,
       }),
+      Object.freeze({
+        commandId: material.appAction.commandId,
+        capabilityId: APP_CAPABILITY_ID,
+        actionIntent: appActionIntent,
+        expectedPolicyReference: POLICY_REFERENCE,
+        policyEvaluation: appPolicyEvaluation,
+        requireCorrelationMatch: true,
+        authorizesExecution: false,
+      }),
     ],
     currentPolicy,
   );
 
-  const canonicalPayloadHash = `sha256:${sha256Hex(canonicalJson(actionIntent))}`;
-  const executionIdentity = Object.freeze({
-    commandId: material.commandId,
-    capabilityId: CAPABILITY_ID,
-    executionId: material.executionId,
-    causationId: material.causationId,
-    orderingKey: material.orderingKey,
-    orderingSequence: material.orderingSequence,
-    canonicalPayloadHash,
-    authorizesExecution: false,
-  });
+  const executionSpecs = Object.freeze([
+    Object.freeze({ source: material, capabilityId: CAPABILITY_ID, actionIntent }),
+    Object.freeze({
+      source: material.appAction,
+      capabilityId: APP_CAPABILITY_ID,
+      actionIntent: appActionIntent,
+    }),
+  ]);
+  const executionIdentities = Object.freeze(
+    executionSpecs.map(({ source, capabilityId, actionIntent: intent }) =>
+      Object.freeze({
+        commandId: source.commandId,
+        capabilityId,
+        executionId: source.executionId,
+        causationId: source.causationId,
+        orderingKey: source.orderingKey,
+        orderingSequence: source.orderingSequence,
+        canonicalPayloadHash: `sha256:${sha256Hex(canonicalJson(intent))}`,
+        authorizesExecution: false,
+      }),
+    ),
+  );
 
   const deviceExecutionSource = Object.freeze({
     resolve(lookup) {
-      if (
-        lookup?.commandId !== material.commandId ||
-        lookup?.executionId !== material.executionId
-      ) {
-        return null;
-      }
+      const spec = executionSpecs.find(
+        ({ source }) =>
+          lookup?.commandId === source.commandId && lookup?.executionId === source.executionId,
+      );
+      if (spec === undefined) return null;
       return Object.freeze({
-        commandId: material.commandId,
-        executionId: material.executionId,
-        actionIntent,
+        commandId: spec.source.commandId,
+        executionId: spec.source.executionId,
+        actionIntent: spec.actionIntent,
         executor: Object.freeze({
           executor: 'aurora-android-w15j',
           instanceReference: material.deviceId,
@@ -468,13 +587,13 @@ export async function createW15JLocalDp5OperatorInput({ databaseUrl, materialPat
       });
     },
   });
-
   const containmentCircuitKeys = Object.freeze({
     resolveCircuitKey(input) {
-      return input?.tenantId === material.tenantId &&
-        input?.actionIntent?.actionIntentId === material.actionIntentId
-        ? material.circuitKey
-        : null;
+      if (input?.tenantId !== material.tenantId) return null;
+      const spec = executionSpecs.find(
+        ({ source }) => input?.actionIntent?.actionIntentId === source.actionIntentId,
+      );
+      return spec?.source.circuitKey ?? null;
     },
   });
 
@@ -482,10 +601,9 @@ export async function createW15JLocalDp5OperatorInput({ databaseUrl, materialPat
     voiceAuthoritySource,
     validateCurrentAuthority: evaluateAuthority,
     deviceExecutionSource,
-    executionIdentities: Object.freeze([executionIdentity]),
+    executionIdentities,
     safeguardMaxAgeMs: SAFEGUARD_MAX_AGE_MS,
     containmentCircuitKeys,
-    // The positive DP5 ActionIntent has zero preconditions. Unknown future preconditions fail closed.
     evaluatePrecondition: () => false,
   });
 
@@ -523,6 +641,9 @@ export async function createW15JLocalDp5OperatorInput({ databaseUrl, materialPat
     databaseUrl,
     dependencies,
     principal: buildPrincipal(material),
-    executionStateSeed: buildExecutionStateSeed(material),
+    executionStateSeed: Object.freeze([
+      buildExecutionStateSeed(material, 'volume'),
+      buildExecutionStateSeed(material, 'app'),
+    ]),
   });
 }

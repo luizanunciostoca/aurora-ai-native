@@ -172,6 +172,46 @@ test('hands a governed device command plus bounded W07 authorization to W14 only
   assert.equal(result.retryAuthorized, false);
 });
 
+test('bounded resolved parameters are carried only inside the short-lived W07 authorization', () => {
+  const port = new CapturingW14Port();
+  const withAppId = {
+    ...command(),
+    actionIntent: { ...actionIntent(), resolvedParameters: { appId: 'aurora.local' } },
+  } as GovernedDeviceCommandMaterial;
+  const result = new W07GovernedDeviceDispatchAdapter(port, () => NOW).dispatch({
+    command: withAppId,
+    context: context(),
+    gates: gates(),
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(port.calls[0]?.command.executionAuthorization.arguments, {
+    appId: 'aurora.local',
+  });
+  assert.equal(port.calls[0]?.command.executionAuthorization.authorizesExecution, true);
+});
+
+test('authority-like resolved parameters fail closed before W14 transport', () => {
+  for (const resolvedParameters of [
+    { retryAuthorized: 'true' },
+    { policyTokenId: 'ptk_01ARZ3NDEKTSV4RRFFQ69G5FAV' },
+    { authorizesExecution: 'true' },
+  ]) {
+    const port = new CapturingW14Port();
+    const malformed = {
+      ...command(),
+      actionIntent: { ...actionIntent(), resolvedParameters },
+    } as GovernedDeviceCommandMaterial;
+    const result = new W07GovernedDeviceDispatchAdapter(port, () => NOW).dispatch({
+      command: malformed,
+      context: context(),
+      gates: gates(),
+    });
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.equal(result.code, 'MATERIAL_MISMATCH');
+    assert.equal(port.calls.length, 0);
+  }
+});
+
 test('authority target safeguards and containment failures each prevent any W14 call', () => {
   const mutations: Array<(value: GovernedDeviceDispatchGateBundle) => void> = [
     (value) => Object.assign(value.authority, { executionEligible: false }),

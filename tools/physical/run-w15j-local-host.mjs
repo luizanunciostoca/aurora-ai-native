@@ -22,6 +22,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const PROVIDER_ENV = 'AURORA_W15J_PROVIDER_MODULE';
 const READINESS_ENV = 'AURORA_W15J_HOST_READINESS_DIR';
 const TRUSTED_GIT = '/usr/bin/git';
+const TRUSTED_GIT_TIMEOUT_MS = 10_000;
 const GATEWAY_IDENTITY = 'aurora-w15j-local-host';
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const allowlistedStdoutWrite = process.stdout.write.bind(process.stdout);
@@ -276,7 +277,7 @@ function runTrustedGit(root, arguments_) {
     cwd: root,
     encoding: 'utf8',
     env: trustedGitEnvironment(),
-    timeout: 2_000,
+    timeout: TRUSTED_GIT_TIMEOUT_MS,
     maxBuffer: 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -148,6 +148,73 @@ test('validates owner-backed provider input and pins the real LOCAL runner ports
   assert.equal(handle.hostInstanceId, `whi_${'a'.repeat(64)}`);
 });
 
+test('preserves up to eight non-authoritative W03 execution seeds for the runner', async () => {
+  let captured: W15JLocalPhysicalHostRunnerInput | undefined;
+  const seed = (suffix: 'A' | 'B') => ({
+    tenantId: 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAV',
+    actionIntentId: `act_01ARZ3NDEKTSV4RRFFQ69G5FA${suffix}`,
+    executionRef: `exe_01ARZ3NDEKTSV4RRFFQ69G5FA${suffix}`,
+    attemptNumber: 1,
+    maxAttempts: 1,
+    quota: { limit: 1, used: 0 },
+    circuitKey: `w15j:test:${suffix}`,
+    containment: {
+      circuit: { state: 'CLOSED', consecutiveFailures: 0 },
+      killSwitch: { state: 'INACTIVE', changedAt: '2026-09-05T20:00:00.000Z' },
+      dependencyHealth: 'HEALTHY',
+      cancellationRequested: false,
+      currentInFlight: 0,
+      maxInFlight: 1,
+      retryDepth: 0,
+      maxRetryDepth: 0,
+    },
+    updatedAt: '2026-09-05T20:00:00.000Z',
+    authorizesExecution: false as const,
+  });
+  const seeds = [seed('A'), seed('B')];
+  await startW15JLocalPhysicalHostOperator(
+    provider({
+      databaseUrl: 'postgresql://runtime.invalid/aurora',
+      dependencies: dependencies(),
+      principal: principal(),
+      executionStateSeed: seeds,
+    }),
+    {
+      now: () => NOW,
+      startRunner: async (input) => {
+        captured = input;
+        return {
+          address: {
+            gateway: { protocol: 'http', host: '127.0.0.1', port: 8080 },
+            bootstrap: {
+              protocol: 'http',
+              host: '127.0.0.1',
+              port: 8081,
+              path: '/v1/gateway/bootstrap/exchange',
+            },
+            hostMode: 'LOOPBACK_ONLY',
+            physicalEvidenceStatus: 'NOT_RUN',
+            authorizesExecution: false,
+            hostInstanceId: `whi_${'b'.repeat(64)}`,
+          },
+          hostInstanceId: `whi_${'b'.repeat(64)}`,
+          bootstrapReference: `gbr_${'B'.repeat(43)}`,
+          bootstrapExpiresAtMs: NOW + 60_000,
+          physicalEvidenceStatus: 'NOT_RUN',
+          authorizesExecution: false,
+          stop: async () => undefined,
+        };
+      },
+    },
+  );
+  assert.deepEqual(captured?.executionStateSeed, seeds);
+  seeds[0] = { actionIntentId: 'act_mutated', authorizesExecution: false };
+  assert.notEqual(
+    (captured?.executionStateSeed as readonly Record<string, unknown>[])[0]?.actionIntentId,
+    'act_mutated',
+  );
+});
+
 test('rejects invalid modules, failed factories and malformed/non-owner-backed inputs', async () => {
   await rejectsWithCode(
     () => startW15JLocalPhysicalHostOperator(null, { now: () => NOW }),

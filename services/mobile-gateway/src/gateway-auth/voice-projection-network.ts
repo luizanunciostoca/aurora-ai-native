@@ -1,4 +1,5 @@
 const SHA256 = /^[a-f0-9]{64}$/u;
+const PACKAGE_NAME = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/u;
 const SAFE_TEXT = /^[A-Za-z0-9._:/+ -]+$/u;
 const MAX_TEXT = 512;
 const MAX_ENTRIES = 64;
@@ -55,6 +56,21 @@ export interface NativeCapabilityProjectionBinding {
   readonly maxSnapshotAgeMs: number;
 }
 
+export interface InstalledAppProjectionRoute {
+  readonly routeId: string;
+  readonly kind: 'INTENT';
+  readonly action: string;
+  readonly supportsReadback: boolean;
+}
+
+export interface InstalledAppProjectionBinding {
+  readonly appId: string;
+  readonly packageName: string;
+  readonly trustedSignerSha256: readonly string[];
+  readonly routes: readonly InstalledAppProjectionRoute[];
+  readonly maxSnapshotAgeMs: number;
+}
+
 export interface GovernedVoiceProjection {
   readonly kind: 'GOVERNED_VOICE_PROJECTION';
   readonly activeTenantId: string;
@@ -74,6 +90,7 @@ export interface GovernedVoiceProjection {
     readonly bindings: readonly VoiceCommandProjectionBinding[];
   }>;
   readonly nativeBindings: readonly NativeCapabilityProjectionBinding[];
+  readonly appBindings?: readonly InstalledAppProjectionBinding[];
   readonly authorizesExecution: false;
   readonly provesExecutionSuccess: false;
   readonly retryAuthorized: false;
@@ -153,6 +170,35 @@ function validCommand(binding: VoiceCommandProjectionBinding): boolean {
   );
 }
 
+function validInstalledAppRoute(route: InstalledAppProjectionRoute): boolean {
+  return (
+    boundedText(route.routeId, 128) &&
+    route.kind === 'INTENT' &&
+    boundedText(route.action, 256) &&
+    typeof route.supportsReadback === 'boolean'
+  );
+}
+
+function validInstalledAppBinding(binding: InstalledAppProjectionBinding): boolean {
+  return (
+    boundedText(binding.appId, 128) &&
+    typeof binding.packageName === 'string' &&
+    PACKAGE_NAME.test(binding.packageName) &&
+    Array.isArray(binding.trustedSignerSha256) &&
+    binding.trustedSignerSha256.length > 0 &&
+    binding.trustedSignerSha256.length <= 8 &&
+    unique(binding.trustedSignerSha256) &&
+    binding.trustedSignerSha256.every((value) => SHA256.test(value)) &&
+    Array.isArray(binding.routes) &&
+    binding.routes.length > 0 &&
+    binding.routes.length <= 16 &&
+    unique(binding.routes.map((route) => route.routeId)) &&
+    binding.routes.every(validInstalledAppRoute) &&
+    positiveInteger(binding.maxSnapshotAgeMs) &&
+    binding.maxSnapshotAgeMs <= 300_000
+  );
+}
+
 function validNativeBinding(binding: NativeCapabilityProjectionBinding): boolean {
   return (
     boundedText(binding.capabilityId, 256) &&
@@ -203,7 +249,9 @@ function validProjection(
     projection.vocabulary.bindings.length > MAX_ENTRIES ||
     !Array.isArray(projection.nativeBindings) ||
     projection.nativeBindings.length === 0 ||
-    projection.nativeBindings.length > MAX_ENTRIES
+    projection.nativeBindings.length > MAX_ENTRIES ||
+    (projection.appBindings !== undefined &&
+      (!Array.isArray(projection.appBindings) || projection.appBindings.length > MAX_ENTRIES))
   ) {
     return false;
   }
@@ -211,7 +259,15 @@ function validProjection(
   const capabilities = projection.registry.entries.map((entry) => entry.capabilityId);
   const commands = projection.vocabulary.bindings.map((binding) => binding.commandId);
   const nativeCapabilities = projection.nativeBindings.map((binding) => binding.capabilityId);
-  if (!unique(capabilities) || !unique(commands) || !unique(nativeCapabilities)) return false;
+  const appIds = (projection.appBindings ?? []).map((binding) => binding.appId);
+  if (
+    !unique(capabilities) ||
+    !unique(commands) ||
+    !unique(nativeCapabilities) ||
+    !unique(appIds)
+  ) {
+    return false;
+  }
   if (
     !projection.registry.entries.every((entry) => validCapability(entry, context.tenantId, nowMs))
   ) {
@@ -219,6 +275,12 @@ function validProjection(
   }
   if (!projection.vocabulary.bindings.every(validCommand)) return false;
   if (!projection.nativeBindings.every(validNativeBinding)) return false;
+  if (
+    projection.appBindings !== undefined &&
+    !projection.appBindings.every(validInstalledAppBinding)
+  ) {
+    return false;
+  }
   const capabilitySet = new Set(capabilities);
   if (projection.vocabulary.bindings.some((binding) => !capabilitySet.has(binding.capabilityId))) {
     return false;

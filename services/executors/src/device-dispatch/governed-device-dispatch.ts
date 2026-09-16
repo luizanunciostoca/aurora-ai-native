@@ -13,7 +13,15 @@ const COMMAND_ID = /^cmd_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const EXECUTION_ID = /^exe_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const CAUSATION_ID = /^cau_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const SAFE_REFERENCE = /^[A-Za-z0-9._:/+-]{1,512}$/u;
+const SAFE_ARGUMENT = /^[A-Za-z0-9._:/+-]+$/u;
 const SHA256 = /^sha256:[a-f0-9]{64}$/u;
+const FORBIDDEN_ARGUMENT_KEYS = new Set([
+  'authorizesExecution',
+  'canGrantPermission',
+  'decisionId',
+  'policyTokenId',
+  'retryAuthorized',
+]);
 
 export interface GovernedDeviceCommandMaterial {
   readonly commandId: CommandId;
@@ -179,6 +187,26 @@ function sameAuthenticatedContext(
   );
 }
 
+function executionArguments(actionIntent: ActionIntent): Readonly<Record<string, string>> | null {
+  const entries = Object.entries(actionIntent.resolvedParameters);
+  if (entries.length > 16) return null;
+  const output: Record<string, string> = {};
+  for (const [key, value] of entries) {
+    if (
+      key.length === 0 ||
+      key.length > 128 ||
+      !SAFE_ARGUMENT.test(key) ||
+      FORBIDDEN_ARGUMENT_KEYS.has(key) ||
+      typeof value !== 'string' ||
+      value.length > 256 ||
+      (value.length > 0 && !SAFE_ARGUMENT.test(value))
+    )
+      return null;
+    output[key] = value;
+  }
+  return Object.freeze(output);
+}
+
 function materialMatches(command: GovernedDeviceCommandMaterial): boolean {
   const intent = command.actionIntent;
   return (
@@ -197,7 +225,8 @@ function materialMatches(command: GovernedDeviceCommandMaterial): boolean {
     typeof intent.capability.capability === 'string' &&
     SAFE_REFERENCE.test(intent.capability.capability) &&
     typeof intent.capability.actionType === 'string' &&
-    SAFE_REFERENCE.test(intent.capability.actionType)
+    SAFE_REFERENCE.test(intent.capability.actionType) &&
+    executionArguments(intent) !== null
   );
 }
 
@@ -253,6 +282,8 @@ function buildExecutionAuthorization(
   if (deadlineAtMs === null || deadlineAtMs <= authorizedAtMs) return null;
   const expiresAtMs = Math.min(deadlineAtMs, authorizedAtMs + MAX_DEVICE_AUTHORIZATION_AGE_MS);
   if (expiresAtMs <= authorizedAtMs) return null;
+  const arguments_ = executionArguments(command.actionIntent);
+  if (arguments_ === null) return null;
   return Object.freeze({
     kind: 'W07_DEVICE_EXECUTION_AUTHORIZATION',
     executionId: command.executionId,
@@ -262,7 +293,7 @@ function buildExecutionAuthorization(
     targetKind: 'DEVICE',
     authoritySource: 'W07_CURRENT_EXECUTION_AUTHORITY',
     actionId: command.actionIntent.capability.actionType,
-    arguments: Object.freeze({}),
+    arguments: arguments_,
     authorizedAtMs,
     expiresAtMs,
     authorizesExecution: true,
