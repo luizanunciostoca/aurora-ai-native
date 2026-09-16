@@ -3,7 +3,7 @@ name: Prototype W15-J Tablet Loopback APK Artifact
 on:
   push:
     branches:
-      - prototype/w15j-physical-apk-artifact
+      - prototype/w15j-physical-apk-artifact-v017r8
     paths:
       - '.github/workflows/prototype-w15j-physical-apk-artifact.yml'
 
@@ -20,18 +20,18 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_EVENT_NAME" = "push"
-          test "$GITHUB_REF_NAME" = "prototype/w15j-physical-apk-artifact"
+          test "$GITHUB_REF_NAME" = "prototype/w15j-physical-apk-artifact-v017r8"
           test "$GITHUB_SHA" = "$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')"
       - name: Checkout exact W15-J candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: e156668c0b5214aac0a38ef5738dace65656b675
+          ref: cd93febc4866456cb3908ec2a913c2889d3a9cd0
           persist-credentials: false
       - name: Assert exact source candidate
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "e156668c0b5214aac0a38ef5738dace65656b675"
+          test "$(git rev-parse HEAD)" = "cd93febc4866456cb3908ec2a913c2889d3a9cd0"
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
@@ -84,24 +84,26 @@ jobs:
           grep -Fxq '/v1/device/offline/current' "$DEX_STRINGS"
           grep -Fxq 'OPEN_VALIDATED_APP' "$DEX_STRINGS"
           grep -Fxq 'http://127.0.0.1:8080' "$DEX_STRINGS"
+          grep -Fxq 'last_evaluation_latency_ms' "$DEX_STRINGS"
+          grep -Fxq 'wake telemetry never authorizes execution' "$DEX_STRINGS"
 
           ARTIFACT_DIR=/tmp/w15j-tablet-loopback-apk
           mkdir -p "$ARTIFACT_DIR"
-          cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-v017r7-TabletLoopback-localDebug-presign.apk"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-v017r8-TabletLoopback-localDebug-presign.apk"
           (
             cd "$ARTIFACT_DIR"
-            sha256sum Aurora-W15J-v017r7-TabletLoopback-localDebug-presign.apk > SHA256SUMS.txt
+            sha256sum Aurora-W15J-v017r8-TabletLoopback-localDebug-presign.apk > SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
 
           cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
           artifact_purpose=W15-J-DP5-physical-evidence-input
-          source_candidate_sha=e156668c0b5214aac0a38ef5738dace65656b675
-          source_branch=wave/15j-physical-device-integration-acceptance
+          source_candidate_sha=cd93febc4866456cb3908ec2a913c2889d3a9cd0
+          source_branch=wave/15j-wake-latency-observability-v017r8
           paired_local_host_candidate_sha=df17c9f27a8206f8296f55aa3830667f4742b062
           reconciled_main_parent_sha=77f0f8532197025ee913dd02fcb56878d9d667a9
           packaging_head_sha=${GITHUB_SHA}
-          packaging_branch=prototype/w15j-physical-apk-artifact
+          packaging_branch=prototype/w15j-physical-apk-artifact-v017r8
           packaging_run_id=${GITHUB_RUN_ID}
           gateway_environment=LOCAL
           device_gateway_port=8080
@@ -125,11 +127,11 @@ jobs:
           grep -Fxq 'gateway_transport_scope=LOCAL_TABLET_LOOPBACK' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           grep -Fxq 'gateway_origin=http://127.0.0.1:8080' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           test "$(find "$ARTIFACT_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
-          printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-v017r7-TabletLoopback-localDebug-presign.apk" | awk '{print $1}')"
+          printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-v017r8-TabletLoopback-localDebug-presign.apk" | awk '{print $1}')"
       - name: Upload exact W15-J tablet-loopback candidate APK
         uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-v017r7-presign-apk-e156668c-host-df17c9f2
+          name: aurora-w15j-v017r8-presign-apk-cd93febc-host-df17c9f2
           path: /tmp/w15j-tablet-loopback-apk
           if-no-files-found: error
           retention-days: 14
