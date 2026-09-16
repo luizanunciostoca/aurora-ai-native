@@ -54,6 +54,8 @@ test('tablet host remains fail closed until trusted provider is configured', () 
   assert.match(launcher, /AURORA_W15J_BOOTSTRAP_RECONNECT_FILE/);
   assert.match(launcher, /fixed LOCAL ports 8080\/8081 are unavailable/);
   assert.match(launcher, /socket\.SO_REUSEADDR/);
+  assert.match(launcher, /check-bootstrap-principal-age\.py/);
+  assert.match(launcher, /MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS=240/);
   assert.match(provider, /throw new Error/);
   assert.match(provider, /authorizesExecution: false/);
   assert.match(provider, /canGrantPermission: false/);
@@ -270,11 +272,22 @@ test('same-host bootstrap refresh is protected, current-instance-bound and non-a
   assert.match(source, /BOOTSTRAP_EXCHANGE/);
   assert.match(source, /W15J_LOCAL_BOOTSTRAP_REFRESH_READY/);
   assert.match(source, /REMAINING_MS > 30000/);
+  assert.match(source, /check-bootstrap-principal-age\.py/);
+  assert.match(source, /MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS=240/);
   assert.doesNotMatch(source, /REMAINING_MS > 30_000/);
   assert.match(source, /authorizes_execution=false/);
   assert.match(source, /proves_execution_success=false/);
   assert.match(source, /retry_authorized=false/);
   assert.match(source, /physical_acceptance=false/);
+});
+
+test('bootstrap principal age guard fails closed before the W14 five-minute stale boundary', () => {
+  const source = read('check-bootstrap-principal-age.py');
+  assert.match(source, /W15J_LOCAL_DP5_OPERATOR_MATERIAL/);
+  assert.match(source, /generatedAt/);
+  assert.match(source, /age >= maximum/);
+  assert.match(source, /W15J_BOOTSTRAP_PRINCIPAL_AGE=STALE/);
+  assert.match(source, /W15J_BOOTSTRAP_PRINCIPAL_AGE=PASS/);
 });
 
 test('dossier doctor requires finalized reviewer-bound evidence and remains non-accepting', () => {

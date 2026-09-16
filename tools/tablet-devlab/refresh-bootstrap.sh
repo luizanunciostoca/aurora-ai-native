@@ -24,16 +24,21 @@ exact_value() {
 }
 
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
-for cmd in curl jq kill stat grep sed date sleep; do
+for cmd in curl jq kill stat grep sed date sleep python; do
   command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"
 done
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 STATE_DIR="$DEVLAB_ROOT/state"
 READINESS_POINTER="$STATE_DIR/last-readiness-termux.txt"
 REFRESH_FILE="$STATE_DIR/w15j-bootstrap-refresh.json"
+MATERIAL="$DEVLAB_ROOT/config/w15j-dp5-material.json"
+MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS=240
 
 secure_regular_file "$READINESS_POINTER" || fail "secure host readiness pointer is missing; start the host with run-host.sh"
+secure_regular_file "$MATERIAL" || fail "secure DP5 material is missing; prepare fresh provider material"
+python "$SCRIPT_DIR/check-bootstrap-principal-age.py" "$MATERIAL" "$MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS" || fail "provider principal is too old for safe bootstrap refresh"
 READINESS_DIR="$(tr -d '\r\n' <"$READINESS_POINTER")"
 [[ "$READINESS_DIR" == "$DEVLAB_ROOT"/host-readiness/* ]] || fail "host readiness pointer escaped the DevLab root"
 [[ -d "$READINESS_DIR" && ! -L "$READINESS_DIR" ]] || fail "host readiness directory is missing or unsafe"

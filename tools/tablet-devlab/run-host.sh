@@ -20,6 +20,7 @@ command -v proot-distro >/dev/null 2>&1 || fail "proot-distro is missing"
 command -v git >/dev/null 2>&1 || fail "git is missing"
 command -v python >/dev/null 2>&1 || fail "python is missing"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 HOST_DIR="$DEVLAB_ROOT/worktrees/host"
 PROVIDER="$DEVLAB_ROOT/config/trusted-w15j-provider.mjs"
@@ -32,6 +33,7 @@ BOOTSTRAP_REFRESH_FILE="$STATE_DIR/w15j-bootstrap-refresh.json"
 BOOTSTRAP_RECONNECT_FILE="$STATE_DIR/w15j-bootstrap-reconnect.json"
 NODE_VERSION="22.16.0"
 NPM_VERSION="10.9.2"
+MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS=240
 
 [[ -d "$HOST_DIR/.git" || -f "$HOST_DIR/.git" ]] || fail "exact host worktree is missing; run worktrees.sh"
 secure_regular_file "$WORKTREE_STATE" || fail "trusted worktree state missing or insecure; run worktrees.sh"
@@ -49,6 +51,9 @@ EXPECTED_HOST_SHA="${AURORA_HOST_SHA:-$STATE_HOST_SHA}"
 
 grep -q 'TABLET_DEVLAB_PROVIDER_NOT_CONFIGURED' "$PROVIDER" && \
   fail "provider is still the fail-closed template; run prepare-dp5-provider.sh"
+
+python "$SCRIPT_DIR/check-bootstrap-principal-age.py" "$MATERIAL" "$MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS" || \
+  fail "DP5 material is too old for safe W14 bootstrap start; create fresh consent/provider material"
 
 mkdir -p "$READINESS_PARENT" "$STATE_DIR"
 chmod 700 "$READINESS_PARENT" "$STATE_DIR"
