@@ -61,7 +61,7 @@ class W15JGatewayDeviceCommandConsumerTest {
                 actionId = W15_OPEN_VALIDATED_APP_ACTION,
                 arguments = mapOf("appId" to APP_ID),
             )
-        val fixture = Fixture(authorization = appAuthorization)
+        val fixture = Fixture(authorizationView = appAuthorization)
         fixture.action.expectedActionId = W15_OPEN_VALIDATED_APP_ACTION
         fixture.action.expectedCapabilityId = APP_CAPABILITY_ID
         val result =
@@ -82,7 +82,7 @@ class W15JGatewayDeviceCommandConsumerTest {
                 actionId = W15_OPEN_VALIDATED_APP_ACTION,
                 arguments = mapOf("appId" to APP_ID),
             )
-        val fixture = Fixture(authorization = appAuthorization)
+        val fixture = Fixture(authorizationView = appAuthorization)
         fixture.action.expectedActionId = W15_OPEN_VALIDATED_APP_ACTION
         fixture.action.expectedCapabilityId = APP_CAPABILITY_ID
         val result =
@@ -96,7 +96,7 @@ class W15JGatewayDeviceCommandConsumerTest {
 
     @Test
     fun `stale W07 authorization produces zero effect and cannot authorize retry`() {
-        val fixture = Fixture(authorization = authorization(authorizedAtMs = 900, expiresAtMs = 999))
+        val fixture = Fixture(authorizationView = authorization(authorizedAtMs = 900, expiresAtMs = 999))
 
         val result = fixture.consumer().consume(COMMAND_ID) as W15JDeviceCommandConsumptionResult.NoEffect
 
@@ -194,7 +194,7 @@ class W15JGatewayDeviceCommandConsumerTest {
         val fixture =
             Fixture(
                 envelopeDeviceId = OTHER_DEVICE_ID,
-                authorization = otherAuthorization,
+                authorizationView = otherAuthorization,
             )
 
         val result = fixture.consumer().consume(COMMAND_ID) as W15JDeviceCommandConsumptionResult.NoEffect
@@ -207,13 +207,13 @@ class W15JGatewayDeviceCommandConsumerTest {
 
     private class Fixture(
         envelopeDeviceId: String = DEVICE_ID,
-        authorization: GatewayW07DeviceExecutionAuthorizationView = authorization(),
+        private val authorizationView: GatewayW07DeviceExecutionAuthorizationView = authorization(),
     ) {
         val action = RecordingActionPort()
         val gateway =
             FakeGatewayPort(
                 snapshot = snapshot(),
-                claim = delivery(envelopeDeviceId, authorization),
+                claim = delivery(envelopeDeviceId, authorizationView),
             )
 
         fun consumer(
@@ -225,8 +225,8 @@ class W15JGatewayDeviceCommandConsumerTest {
                 capabilityResolution =
                     CurrentNativeCapabilityResolution {
                         NativeCapabilityResolution.Ready(
-                            binding = NativeCapabilityBinding(authorization.capabilityId),
-                            observation = nativeObservation(authorization.capabilityId),
+                            binding = NativeCapabilityBinding(authorizationView.capabilityId),
+                            observation = nativeObservation(authorizationView.capabilityId),
                         )
                     },
                 capabilityObservation = CurrentNativeCapabilityObservation { capabilityId -> nativeObservation(capabilityId) },
