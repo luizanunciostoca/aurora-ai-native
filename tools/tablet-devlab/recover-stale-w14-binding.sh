@@ -25,7 +25,8 @@ RECOVERED="$STATE/.w14-key-only-$NOW.xml"
 [[ ! -e "$STATE/dp5-effect-consent.json" ]] || fail "unconsumed physical-effect consent must be absent"
 mkdir -p "$ARCHIVE"
 chmod 700 "$ARCHIVE"
-umask 077python - <<'PY'
+umask 077
+python - <<'PY'
 import socket
 for port in (8080, 8081):
     sock = socket.socket()
@@ -51,7 +52,8 @@ chmod 600 "$BEFORE"
 python - "$BEFORE" "$RECOVERED" <<'PY'
 import sys, xml.etree.ElementTree as ET
 before, recovered = sys.argv[1:]
-root = ET.parse(before).getroot()values = {}
+root = ET.parse(before).getroot()
+values = {}
 for element in root:
     name = element.attrib.get('name')
     if name:
@@ -77,7 +79,8 @@ chmod 600 "$RECOVERED"
 
 adb -s "$SERIAL" shell run-as "$PACKAGE_ID" sh -c \
   'cat > shared_prefs/aurora_device_session_metadata.xml && chmod 600 shared_prefs/aurora_device_session_metadata.xml' \
-  <"$RECOVERED" || fail "could not install key-only W14 metadata"adb -s "$SERIAL" exec-out run-as "$PACKAGE_ID" sh -c \
+  <"$RECOVERED" || fail "could not install key-only W14 metadata"
+adb -s "$SERIAL" exec-out run-as "$PACKAGE_ID" sh -c \
   'cat shared_prefs/aurora_device_session_metadata.xml' >"$AFTER" || fail "cannot verify recovered W14 metadata"
 chmod 600 "$AFTER"
 
