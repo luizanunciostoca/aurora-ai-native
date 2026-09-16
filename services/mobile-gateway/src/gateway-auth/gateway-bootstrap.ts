@@ -3,7 +3,12 @@ import { randomBytes } from 'node:crypto';
 
 import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids';
 
-import type { GatewayActorBinding, GatewayAuthClaims, GatewayAuthenticator } from './types.js';
+import type {
+  GatewayActorBinding,
+  GatewayAuthClaims,
+  GatewayAuthenticator,
+  GatewaySessionSnapshot,
+} from './types.js';
 
 const ACTOR_KINDS = new Set<GatewayActorBinding['kind']>(['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM']);
 const SAFE_TOKEN = /^[A-Za-z0-9._:/+-]+$/u;
@@ -55,7 +60,22 @@ export type GatewayBootstrapIssueErrorCode =
   | 'PRINCIPAL_EXPIRED'
   | 'PRINCIPAL_STALE'
   | 'CAPACITY_EXHAUSTED'
+  | 'RECONNECT_TARGET_UNAVAILABLE'
+  | 'RECONNECT_TARGET_AMBIGUOUS'
   | 'ENTROPY_FAILURE';
+
+export type GatewayBootstrapReconnectTargetResult =
+  | Readonly<{ ok: true; gatewaySessionId: string }>
+  | Readonly<{
+      ok: false;
+      error: Readonly<{
+        code: GatewayBootstrapIssueErrorCode;
+        retryable: false;
+      }>;
+      authorizesExecution: false;
+      provesExecutionSuccess: false;
+      retryAuthorized: false;
+    }>;
 
 export type GatewayBootstrapIssueResult =
   | Readonly<{
@@ -91,8 +111,25 @@ interface GrantRecord {
   readonly actorKind: GatewayActorBinding['kind'];
   readonly actorIdentityId: IdentityId;
   readonly correlationId: CorrelationId;
+  readonly deviceId: string;
+  readonly deviceSessionId: string;
+  readonly authenticationReference: string;
+  readonly authenticationExpiresAtMs: number;
   readonly issuedAtMs: number;
   readonly expiresAtMs: number;
+}
+
+interface VerifiedSessionBinding {
+  readonly gatewaySessionId: string;
+  readonly tenantId: TenantId;
+  readonly actorKind: GatewayActorBinding['kind'];
+  readonly actorIdentityId: IdentityId;
+  readonly correlationId: CorrelationId;
+  readonly deviceId: string;
+  readonly deviceSessionId: string;
+  readonly authenticationReference: string;
+  readonly authenticationExpiresAtMs: number;
+  readonly verifiedAtMs: number;
 }
 
 function defaultEntropy(): GatewayBootstrapEntropy {
@@ -189,6 +226,36 @@ function rejected(code: GatewayBootstrapIssueErrorCode): GatewayBootstrapIssueRe
   };
 }
 
+function reconnectTargetRejected(
+  code: GatewayBootstrapIssueErrorCode,
+): GatewayBootstrapReconnectTargetResult {
+  return {
+    ok: false,
+    error: { code, retryable: false },
+    authorizesExecution: false,
+    provesExecutionSuccess: false,
+    retryAuthorized: false,
+  };
+}
+
+function grantFromRecord(record: GrantRecord): GatewayBootstrapGrant {
+  return {
+    gatewaySessionId: record.gatewaySessionId,
+    credential: record.credential,
+    tenantId: record.tenantId,
+    actor: { kind: record.actorKind, identityId: record.actorIdentityId },
+    correlationId: record.correlationId,
+    deviceId: record.deviceId,
+    deviceSessionId: record.deviceSessionId,
+    issuedAtMs: record.issuedAtMs,
+    expiresAtMs: record.expiresAtMs,
+    authVersion: AUTH_VERSION,
+    authorizesExecution: false,
+    provesExecutionSuccess: false,
+    retryAuthorized: false,
+  };
+}
+
 /**
  * W14-owned, server-side bridge between an already-authenticated principal and the existing W14-A
  * gateway authenticator contract.
@@ -203,6 +270,8 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
   readonly #entropy: GatewayBootstrapEntropy;
   readonly #grants = new Map<string, GrantRecord>();
   readonly #credentialByGatewaySession = new Map<string, string>();
+  readonly #pendingEstablishment = new Map<string, GrantRecord>();
+  readonly #verifiedSessions = new Map<string, VerifiedSessionBinding>();
 
   constructor(
     config: Partial<GatewayBootstrapBrokerConfig> = {},
@@ -244,7 +313,7 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
     }
 
     this.#purgeExpired(nowMs);
-    if (this.#grants.size >= this.#config.maxActiveGrants) {
+    if (this.#grants.size + this.#pendingEstablishment.size >= this.#config.maxActiveGrants) {
       return rejected('CAPACITY_EXHAUSTED');
     }
 
@@ -262,6 +331,10 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
       actorKind: principal.actor.kind,
       actorIdentityId: principal.actor.identityId,
       correlationId: principal.correlationId,
+      deviceId: principal.deviceId,
+      deviceSessionId: principal.deviceSessionId,
+      authenticationReference: principal.authenticationReference,
+      authenticationExpiresAtMs: principal.authenticationExpiresAtMs,
       issuedAtMs: nowMs,
       expiresAtMs,
     };
@@ -270,22 +343,93 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
 
     return {
       ok: true,
-      value: {
-        gatewaySessionId: record.gatewaySessionId,
-        credential: record.credential,
-        tenantId: principal.tenantId,
-        actor: { ...principal.actor },
-        correlationId: principal.correlationId,
-        deviceId: principal.deviceId,
-        deviceSessionId: principal.deviceSessionId,
-        issuedAtMs: nowMs,
-        expiresAtMs,
-        authVersion: AUTH_VERSION,
-        authorizesExecution: false,
-        provesExecutionSuccess: false,
-        retryAuthorized: false,
-      },
+      value: grantFromRecord(record),
     };
+  }
+
+  resolveReconnectTarget(principal: unknown, nowMs: number): GatewayBootstrapReconnectTargetResult {
+    if (!validPrincipal(principal) || !nonNegativeInteger(nowMs)) {
+      return reconnectTargetRejected('PRINCIPAL_INVALID');
+    }
+    if (
+      principal.authenticatedAtMs > nowMs ||
+      principal.authenticationExpiresAtMs <= principal.authenticatedAtMs
+    ) {
+      return reconnectTargetRejected('PRINCIPAL_INVALID');
+    }
+    if (nowMs >= principal.authenticationExpiresAtMs) {
+      return reconnectTargetRejected('PRINCIPAL_EXPIRED');
+    }
+    if (nowMs - principal.authenticatedAtMs > this.#config.maxPrincipalAgeMs) {
+      return reconnectTargetRejected('PRINCIPAL_STALE');
+    }
+
+    this.#purgeExpired(nowMs);
+    const candidates = [...this.#verifiedSessions.values()].filter(
+      (binding) =>
+        binding.tenantId === principal.tenantId &&
+        binding.actorKind === principal.actor.kind &&
+        binding.actorIdentityId === principal.actor.identityId &&
+        binding.correlationId === principal.correlationId &&
+        binding.deviceId === principal.deviceId &&
+        binding.deviceSessionId === principal.deviceSessionId &&
+        binding.authenticationReference === principal.authenticationReference,
+    );
+    if (candidates.length === 0) {
+      return reconnectTargetRejected('RECONNECT_TARGET_UNAVAILABLE');
+    }
+    if (candidates.length !== 1) {
+      return reconnectTargetRejected('RECONNECT_TARGET_AMBIGUOUS');
+    }
+    const target = candidates[0];
+    if (target === undefined) return reconnectTargetRejected('RECONNECT_TARGET_UNAVAILABLE');
+    return { ok: true, gatewaySessionId: target.gatewaySessionId };
+  }
+
+  issueReconnect(
+    principal: unknown,
+    gatewaySessionId: unknown,
+    nowMs: number,
+  ): GatewayBootstrapIssueResult {
+    const resolved = this.resolveReconnectTarget(principal, nowMs);
+    if (!resolved.ok) return rejected(resolved.error.code);
+    if (gatewaySessionId !== resolved.gatewaySessionId) {
+      return rejected('RECONNECT_TARGET_UNAVAILABLE');
+    }
+    if (!validPrincipal(principal)) return rejected('PRINCIPAL_INVALID');
+    const target = this.#verifiedSessions.get(resolved.gatewaySessionId);
+    if (target === undefined) return rejected('RECONNECT_TARGET_UNAVAILABLE');
+    if (this.#credentialByGatewaySession.has(target.gatewaySessionId)) {
+      return rejected('CAPACITY_EXHAUSTED');
+    }
+    if (this.#grants.size + this.#pendingEstablishment.size >= this.#config.maxActiveGrants) {
+      return rejected('CAPACITY_EXHAUSTED');
+    }
+    const credential = this.#generateUniqueCredential();
+    if (credential === null) return rejected('ENTROPY_FAILURE');
+    const authenticationExpiresAtMs = Math.min(
+      target.authenticationExpiresAtMs,
+      principal.authenticationExpiresAtMs,
+    );
+    const expiresAtMs = Math.min(authenticationExpiresAtMs, nowMs + this.#config.credentialTtlMs);
+    if (expiresAtMs <= nowMs) return rejected('PRINCIPAL_EXPIRED');
+    const record: GrantRecord = {
+      credential,
+      gatewaySessionId: target.gatewaySessionId,
+      tenantId: target.tenantId,
+      actorKind: target.actorKind,
+      actorIdentityId: target.actorIdentityId,
+      correlationId: target.correlationId,
+      deviceId: target.deviceId,
+      deviceSessionId: target.deviceSessionId,
+      authenticationReference: target.authenticationReference,
+      authenticationExpiresAtMs,
+      issuedAtMs: nowMs,
+      expiresAtMs,
+    };
+    this.#grants.set(record.credential, record);
+    this.#credentialByGatewaySession.set(record.gatewaySessionId, record.credential);
+    return { ok: true, value: grantFromRecord(record) };
   }
 
   verify(credential: string, nowMs: number): GatewayAuthClaims | null {
@@ -297,6 +441,8 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
     this.#grants.delete(credential);
     this.#credentialByGatewaySession.delete(record.gatewaySessionId);
     if (nowMs < record.issuedAtMs || nowMs >= record.expiresAtMs) return null;
+
+    this.#pendingEstablishment.set(record.gatewaySessionId, record);
 
     return {
       tenantId: record.tenantId,
@@ -310,12 +456,44 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
     };
   }
 
+  noteSessionEstablished(snapshot: GatewaySessionSnapshot): void {
+    const record = this.#pendingEstablishment.get(snapshot.sessionId);
+    if (record === undefined) return;
+    this.#pendingEstablishment.delete(snapshot.sessionId);
+    if (
+      snapshot.tenantId !== record.tenantId ||
+      snapshot.actorKind !== record.actorKind ||
+      snapshot.actorIdentityId !== record.actorIdentityId ||
+      snapshot.correlationId !== record.correlationId ||
+      snapshot.authIssuedAtMs !== record.issuedAtMs ||
+      snapshot.authExpiresAtMs !== record.expiresAtMs
+    ) {
+      return;
+    }
+    this.#verifiedSessions.set(snapshot.sessionId, {
+      gatewaySessionId: snapshot.sessionId,
+      tenantId: record.tenantId,
+      actorKind: record.actorKind,
+      actorIdentityId: record.actorIdentityId,
+      correlationId: record.correlationId,
+      deviceId: record.deviceId,
+      deviceSessionId: record.deviceSessionId,
+      authenticationReference: record.authenticationReference,
+      authenticationExpiresAtMs: record.authenticationExpiresAtMs,
+      verifiedAtMs: snapshot.openedAtMs,
+    });
+  }
+
   revokeGatewaySession(gatewaySessionId: string): boolean {
     if (!GATEWAY_SESSION_ID.test(gatewaySessionId)) return false;
+    let revoked = this.#verifiedSessions.delete(gatewaySessionId);
+    revoked = this.#pendingEstablishment.delete(gatewaySessionId) || revoked;
     const credential = this.#credentialByGatewaySession.get(gatewaySessionId);
-    if (credential === undefined) return false;
-    this.#credentialByGatewaySession.delete(gatewaySessionId);
-    return this.#grants.delete(credential);
+    if (credential !== undefined) {
+      this.#credentialByGatewaySession.delete(gatewaySessionId);
+      revoked = this.#grants.delete(credential) || revoked;
+    }
+    return revoked;
   }
 
   #purgeExpired(nowMs: number): void {
@@ -323,6 +501,17 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
       if (nowMs < record.expiresAtMs) continue;
       this.#grants.delete(credential);
       this.#credentialByGatewaySession.delete(record.gatewaySessionId);
+    }
+    for (const [gatewaySessionId, record] of this.#pendingEstablishment) {
+      if (nowMs < record.expiresAtMs) continue;
+      this.#pendingEstablishment.delete(gatewaySessionId);
+    }
+    for (const [gatewaySessionId, binding] of this.#verifiedSessions) {
+      if (nowMs < binding.authenticationExpiresAtMs) continue;
+      this.#verifiedSessions.delete(gatewaySessionId);
+      const credential = this.#credentialByGatewaySession.get(gatewaySessionId);
+      if (credential !== undefined) this.#grants.delete(credential);
+      this.#credentialByGatewaySession.delete(gatewaySessionId);
     }
   }
 
@@ -337,6 +526,15 @@ export class TransientGatewayBootstrapBroker implements GatewayAuthenticator {
         continue;
       }
       return { credential, gatewaySessionId };
+    }
+    return null;
+  }
+
+  #generateUniqueCredential(): string | null {
+    for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
+      const credential = this.#entropy.credential();
+      if (!OPAQUE_CREDENTIAL.test(credential) || this.#grants.has(credential)) continue;
+      return credential;
     }
     return null;
   }

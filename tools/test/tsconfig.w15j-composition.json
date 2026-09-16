@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "baseUrl": "../..",
+    "paths": {
+      "@aurora/contracts": ["packages/contracts/src/index.ts"],
+      "@aurora/contracts/*": ["packages/contracts/src/*/index.ts"]
+    },
+    "rootDir": "../..",
+    "outDir": "./dist-w15j-composition",
+    "noEmit": false,
+    "noCheck": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": [
+    "w15j-real-w07-composition.test.ts",
+    "w15j-half-open-probe-composition.test.ts",
+    "w15j-full-chain-software-e2e.test.ts"
+  ],
+  "exclude": ["dist-w15j-composition", "node_modules"]
+}

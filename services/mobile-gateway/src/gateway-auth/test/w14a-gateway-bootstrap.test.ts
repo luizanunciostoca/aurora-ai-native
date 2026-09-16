@@ -200,3 +200,87 @@ test('bounds pending grants and rejects malformed or colliding entropy without w
   const invalid = invalidBroker.issue(principal(), now);
   assert.equal(invalid.ok ? '' : invalid.error.code, 'ENTROPY_FAILURE');
 });
+
+test('reconnect target exists only after a fully established gateway session', () => {
+  const broker = new TransientGatewayBootstrapBroker({}, entropy('R'));
+  const manager = new GatewaySessionManager(broker);
+  const staged = broker.issue(principal(), now);
+  assert.equal(staged.ok, true);
+  if (!staged.ok) throw new Error('bootstrap grant was unexpectedly rejected');
+
+  const beforeOpen = broker.resolveReconnectTarget(principal(), now + 1);
+  assert.equal(beforeOpen.ok ? '' : beforeOpen.error.code, 'RECONNECT_TARGET_UNAVAILABLE');
+
+  const opened = manager.openSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: staged.value.gatewaySessionId,
+    credential: staged.value.credential,
+    tenantId: staged.value.tenantId,
+    actor: staged.value.actor,
+    correlation: { correlationId: staged.value.correlationId },
+    nowMs: now + 2,
+  });
+  assert.equal(opened.ok, true);
+  if (!opened.ok) throw new Error('gateway session open failed');
+
+  const target = broker.resolveReconnectTarget(principal(), now + 3);
+  assert.equal(target.ok, true);
+  if (!target.ok) throw new Error('reconnect target missing after established open');
+  assert.equal(target.gatewaySessionId, opened.value.sessionId);
+
+  const closed = manager.closeSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: opened.value.sessionId,
+    connectionId: opened.value.connectionId,
+    tenantId: opened.value.tenantId,
+    actorIdentityId: opened.value.actorIdentityId,
+    correlationId: opened.value.correlationId,
+    nowMs: now + 4,
+  });
+  assert.equal(closed.ok, true);
+
+  const reconnectGrant = broker.issueReconnect(principal(), opened.value.sessionId, now + 5);
+  assert.equal(reconnectGrant.ok, true);
+  if (!reconnectGrant.ok) throw new Error('reconnect grant rejected');
+  assert.equal(reconnectGrant.value.gatewaySessionId, opened.value.sessionId);
+  assert.notEqual(reconnectGrant.value.credential, staged.value.credential);
+
+  const reconnected = manager.reconnectSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: reconnectGrant.value.gatewaySessionId,
+    credential: reconnectGrant.value.credential,
+    tenantId: reconnectGrant.value.tenantId,
+    actor: reconnectGrant.value.actor,
+    correlation: { correlationId: reconnectGrant.value.correlationId },
+    previousConnectionId: opened.value.connectionId,
+    nowMs: now + 6,
+  });
+  assert.equal(reconnected.ok, true);
+  if (!reconnected.ok) throw new Error('gateway reconnect failed');
+  assert.equal(reconnected.value.generation, 2);
+  assert.equal(reconnected.value.sessionId, opened.value.sessionId);
+  assert.equal(reconnected.value.tenantId, opened.value.tenantId);
+  assert.equal(reconnected.value.actorIdentityId, opened.value.actorIdentityId);
+  assert.equal(reconnected.value.correlationId, opened.value.correlationId);
+});
+
+test('rejected gateway open never creates a reconnect target', () => {
+  const broker = new TransientGatewayBootstrapBroker({}, entropy('X'));
+  const manager = new GatewaySessionManager(broker);
+  const staged = broker.issue(principal(), now);
+  assert.equal(staged.ok, true);
+  if (!staged.ok) throw new Error('bootstrap grant was unexpectedly rejected');
+
+  const rejectedOpen = manager.openSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: staged.value.gatewaySessionId,
+    credential: staged.value.credential,
+    tenantId: 'tenant:wrong' as TenantId,
+    actor: staged.value.actor,
+    correlation: { correlationId: staged.value.correlationId },
+    nowMs: now + 1,
+  });
+  assert.equal(rejectedOpen.ok, false);
+  const target = broker.resolveReconnectTarget(principal(), now + 2);
+  assert.equal(target.ok ? '' : target.error.code, 'RECONNECT_TARGET_UNAVAILABLE');
+});

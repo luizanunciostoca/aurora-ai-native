@@ -2,6 +2,11 @@
 import { createServer } from 'node:http';
 
 import type { GatewayBootstrapDeliveryBroker } from './gateway-bootstrap-delivery.js';
+import {
+  isLocalHostInstanceProbeResponse,
+  LOCAL_HOST_INSTANCE_PROBE_PATH,
+  type LocalHostInstanceProbePort,
+} from './local-host-instance-probe.js';
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
 const EXCHANGE_PATH = '/v1/gateway/bootstrap/exchange';
@@ -44,6 +49,8 @@ export interface GatewayBootstrapHttpExchangeConfig {
   readonly maxBodyBytes?: number;
   readonly requestTimeoutMs?: number;
   readonly clock?: () => number;
+  /** Optional LOCAL host ownership probe. It is non-authoritative and loopback-only. */
+  readonly localHostInstanceProbe?: LocalHostInstanceProbePort;
 }
 
 export interface GatewayBootstrapHttpExchangeAddress {
@@ -143,6 +150,7 @@ export class GatewayBootstrapHttpExchangeServer {
   readonly #host: string;
   readonly #maxBodyBytes: number;
   readonly #clock: () => number;
+  readonly #localHostInstanceProbe: LocalHostInstanceProbePort | undefined;
   readonly #server: ServerLike;
   #started = false;
 
@@ -163,6 +171,15 @@ export class GatewayBootstrapHttpExchangeServer {
     this.#host = host;
     this.#maxBodyBytes = maxBodyBytes;
     this.#clock = config.clock ?? Date.now;
+    try {
+      const probe = config.localHostInstanceProbe;
+      if (probe !== undefined && (probe === null || typeof probe.current !== 'function')) {
+        throw new Error('invalid probe');
+      }
+      this.#localHostInstanceProbe = probe;
+    } catch {
+      throw new Error('Gateway bootstrap LOCAL host instance probe is invalid.');
+    }
     this.#server = createServer((request: IncomingRequestLike, response: ServerResponseLike) => {
       void this.#handle(request, response);
     }) as ServerLike;
@@ -209,6 +226,24 @@ export class GatewayBootstrapHttpExchangeServer {
 
   async #handle(request: IncomingRequestLike, response: ServerResponseLike): Promise<void> {
     const path = new URL(request.url ?? '/', 'http://aurora-bootstrap.invalid').pathname;
+    if (path === LOCAL_HOST_INSTANCE_PROBE_PATH && this.#localHostInstanceProbe !== undefined) {
+      if (request.method !== 'GET') {
+        rejected(response, 405, 'METHOD_NOT_ALLOWED');
+        return;
+      }
+      let probeResponse: unknown;
+      try {
+        probeResponse = this.#localHostInstanceProbe.current('BOOTSTRAP_EXCHANGE');
+      } catch {
+        probeResponse = null;
+      }
+      if (!isLocalHostInstanceProbeResponse(probeResponse, 'BOOTSTRAP_EXCHANGE')) {
+        rejected(response, 503, 'HOST_INSTANCE_UNAVAILABLE');
+        return;
+      }
+      reply(response, 200, probeResponse);
+      return;
+    }
     if (path !== EXCHANGE_PATH) {
       rejected(response, 404, 'ROUTE_NOT_FOUND');
       return;

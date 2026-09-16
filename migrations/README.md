@@ -14,8 +14,15 @@ This directory holds the W03 Postgres migration baseline for durable event, inbo
 - Preserve canonical `EventEnvelope` identity/context needed for later transport and replay: event ID/type/version, occurrence time, producer identity/kind, source, tenant, correlation/causation, subject/classification, payload and metadata.
 - Keep retention and cleanup policy alongside DDL comments so operators can enforce bounded storage cost and audit retention.
 
-## Migrations
+## Baseline and generic durable-state migrations
 
 - `001_w03_postgres_baseline.sql` creates the durable schema primitives required for W03-A: canonical event store, outbox, inbox, idempotency ledger, timers and lease state.
 - `002_w03_durable_state.sql` adds a generic tenant-scoped JSON projection store with optimistic revision fencing. It stores opaque domain state only; the calling domain retains semantic ownership and the store never grants authority.
 - Runtime claim, retry, replay, transport and workflow behavior remains owned by W03-B through W03-E. W03 durable state may preserve a domain projection across restart but does not replace canonical EventEnvelope replay or source-domain validation.
+
+## Execution-attempt/quota migration
+
+- `002_w03_execution_attempt_quota.sql` is a coordinator-owned cross-wave remediation (tracks #469, #470, #474, #460, W15-J/DP5). It adds `w03_execution_attempt_quota`, the durable server-owned runtime state for the W07-C safeguard gate's `attemptNumber`/`maxAttempts`/optional tenant-scoped `quota` inputs.
+- The table is additive and reversible by deprecation (drop-only rollback; no destructive rewrite of `001`). It does not reuse `w03_event_outbox` transport counters or `w03_idempotency_key` operation-fence semantics.
+- Rows are keyed by `(tenant_id, action_intent_id, execution_ref)` and carry a `version`/`updated_at` pair so a W07-C-owned read port can reject stale reads; the schema never supplies default attempt/quota values.
+- W07-C owns the read-side consumption contract; W07 reconciliation/retry logic remains the sole owner of any write/mutation semantics built on top of this primitive.
