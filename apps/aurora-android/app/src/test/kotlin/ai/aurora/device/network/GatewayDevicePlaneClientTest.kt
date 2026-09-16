@@ -1,5 +1,10 @@
 package ai.aurora.device.network
 
+import ai.aurora.device.session.LocalDeviceKeyMetadata
+import ai.aurora.device.session.LocalDeviceRegistrationMetadata
+import ai.aurora.device.session.LocalDeviceSessionMetadata
+import ai.aurora.device.session.LocalDeviceSessionState
+import ai.aurora.device.session.W14DeviceLifecycleState
 import ai.aurora.device.session.W14DeviceRegistrationView
 import ai.aurora.device.session.W14DeviceSessionTrustView
 import ai.aurora.device.voice.GovernedVoiceCandidateSubmission
@@ -311,6 +316,44 @@ class GatewayDevicePlaneClientTest {
     }
 
     @Test
+    fun `reconnect rehydrates previous transport state after process loss`() {
+        val resumed = FakeChannel(
+            gatewayResponse("conn-2", generation = 2),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-2", generation = 2, version = 2),
+        )
+        var opens = 0
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory { opens += 1; resumed },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = RecordingAcceptance(),
+            nowMs = { 600 },
+        )
+        val result = client.reconnectFromPersisted(reconnectRequest(), persistedState()) as GatewayDevicePlaneResult.Success
+        assertEquals(1, opens)
+        assertEquals("conn-2", result.value.gateway.connectionId)
+        assertEquals(2, result.value.gateway.generation)
+        assertEquals("/v1/gateway/sessions/reconnect", resumed.requests[0].first)
+        assertTrue(resumed.requests[0].second.contains("\"previousConnectionId\":\"conn-1\""))
+        assertEquals("/v1/device/sessions/resume", resumed.requests[2].first)
+    }
+
+    @Test
+    fun `rehydrate rejects expired persisted session before opening transport`() {
+        var opens = 0
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory { opens += 1; FakeChannel() },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = RecordingAcceptance(),
+            nowMs = { 600 },
+        )
+        val result = client.reconnectFromPersisted(reconnectRequest(), persistedState(expiresAtMs = 500)) as GatewayDevicePlaneResult.Rejected
+        assertEquals(GatewayDevicePlaneClientError.LOCAL_SESSION_REJECTED, result.error)
+        assertFalse(result.retryAuthorized)
+        assertEquals(0, opens)
+    }
+
+    @Test
     fun `reconnect binding mismatch is rejected before current socket is closed`() {
         val initial = FakeChannel(
             gatewayResponse("conn-1", generation = 1),
@@ -453,6 +496,24 @@ class GatewayDevicePlaneClientTest {
             deviceSessionId = deviceSessionId,
             credentialProvider = GatewayCredentialProvider { "credential-2" },
             expectedRegistrationVersion = 2,
+        )
+
+    private fun persistedState(expiresAtMs: Long = 10_000L) =
+        LocalDeviceSessionState(
+            key = LocalDeviceKeyMetadata("key", 1, 2),
+            registration = LocalDeviceRegistrationMetadata(
+                deviceId = "dvc_01J00000000000000000000000",
+                tenantId = "ten_01J00000000000000000000000",
+                registrationVersion = 2,
+                state = W14DeviceLifecycleState.ACTIVE,
+            ),
+            session = LocalDeviceSessionMetadata(
+                deviceSessionId = "dvs_01J00000000000000000000000",
+                connectionId = "conn-1",
+                gatewayAuthExpiresAtMs = expiresAtMs,
+                lastEvaluatedAtMs = 500,
+                gatewayGeneration = 1,
+            ),
         )
 
     private fun voiceCandidate() =

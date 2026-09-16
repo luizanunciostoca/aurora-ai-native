@@ -256,7 +256,14 @@ class AuroraApplication : Application() {
         grant: GatewayBootstrapGrant,
         expectedRegistrationVersion: Int,
     ): Boolean {
-        val client = activeGatewayDevicePlaneClient ?: return false
+        val existingClient = activeGatewayDevicePlaneClient
+        val client = existingClient ?: runCatching {
+            GatewayDevicePlaneClient.forPhysicalAdbReverse(
+                config = environmentConfig,
+                sessionClient = secureDeviceSessionClient,
+                port = 8080,
+            )
+        }.getOrNull() ?: return false
         val credentialProvider = OneShotGatewayCredentialProvider(grant.credential)
         val request =
             GatewayDevicePlaneReconnectRequest(
@@ -273,13 +280,21 @@ class AuroraApplication : Application() {
 
         val result =
             try {
-                client.reconnect(request)
+                if (existingClient == null) {
+                    client.reconnectFromPersisted(request, deviceSessionMetadataStore.load())
+                } else {
+                    client.reconnect(request)
+                }
             } catch (_: Exception) {
                 null
             } finally {
                 credentialProvider.clear()
             }
-        if (result !is GatewayDevicePlaneResult.Success) return false
+        if (result !is GatewayDevicePlaneResult.Success) {
+            if (existingClient == null) runCatching { client.close() }
+            return false
+        }
+        activeGatewayDevicePlaneClient = client
 
         val projectionResult = runCatching { client.fetchVoiceProjection() }.getOrNull()
         if (projectionResult !is GatewayDevicePlaneResult.Success) return false

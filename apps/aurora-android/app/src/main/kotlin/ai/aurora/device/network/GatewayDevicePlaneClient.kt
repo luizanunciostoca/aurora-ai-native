@@ -7,9 +7,11 @@ import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.config.RuntimeEnvironmentConfig
 import ai.aurora.device.security.AndroidKeystoreSigningKeyStore
 import ai.aurora.device.session.DeviceSessionClientResult
+import ai.aurora.device.session.LocalDeviceSessionState
 import ai.aurora.device.session.SecureDeviceSessionClient
 import ai.aurora.device.session.W14DeviceLifecycleState
 import ai.aurora.device.session.W14DeviceRefView
+import ai.aurora.device.session.W14_DEVICE_KIND
 import ai.aurora.device.session.W14DeviceRegistrationView
 import ai.aurora.device.session.W14DeviceSessionTrustState
 import ai.aurora.device.session.W14DeviceSessionTrustView
@@ -208,6 +210,9 @@ internal interface DeviceSessionAcceptance {
 
     fun acceptSession(session: W14DeviceSessionTrustView, nowMs: Long): Boolean
 
+    fun acceptSession(session: W14DeviceSessionTrustView, gatewayGeneration: Int, nowMs: Long): Boolean =
+        acceptSession(session, nowMs)
+
     fun revokeSession(deviceSessionId: String): Boolean
 }
 
@@ -219,6 +224,9 @@ internal class W15BDeviceSessionAcceptance(
 
     override fun acceptSession(session: W14DeviceSessionTrustView, nowMs: Long): Boolean =
         client.acceptSession(session, nowMs) is DeviceSessionClientResult.Success
+
+    override fun acceptSession(session: W14DeviceSessionTrustView, gatewayGeneration: Int, nowMs: Long): Boolean =
+        client.acceptSession(session, nowMs, gatewayGeneration) is DeviceSessionClientResult.Success
 
     override fun revokeSession(deviceSessionId: String): Boolean = client.revokeSession(deviceSessionId)
 }
@@ -279,12 +287,69 @@ class GatewayDevicePlaneClient internal constructor(
             return sessionResult
         }
         val sessionView = (sessionResult as GatewayDevicePlaneResult.Success).value
-        if (!sessionAcceptance.acceptSession(sessionView, nowMs())) {
+        if (!sessionAcceptance.acceptSession(sessionView, gatewayView.generation, nowMs())) {
             close()
             return rejected(GatewayDevicePlaneClientError.LOCAL_SESSION_REJECTED)
         }
         deviceSession = sessionView
         return GatewayDevicePlaneResult.Success(snapshot())
+    }
+
+    @Synchronized
+    fun reconnectFromPersisted(
+        request: GatewayDevicePlaneReconnectRequest,
+        persistedState: LocalDeviceSessionState,
+    ): GatewayDevicePlaneResult<GatewayDevicePlaneSnapshot> {
+        if (context != null || gateway != null || registration != null || deviceSession != null) {
+            return rejected(GatewayDevicePlaneClientError.CONFIGURATION_REJECTED)
+        }
+        val localKey = persistedState.key ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        val localRegistration = persistedState.registration ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        val localSession = persistedState.session ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        if (
+            localRegistration.state != W14DeviceLifecycleState.ACTIVE ||
+            localRegistration.deviceId != request.deviceId ||
+            localRegistration.tenantId != request.tenantId ||
+            localRegistration.registrationVersion != request.expectedRegistrationVersion ||
+            localKey.boundRegistrationVersion != localRegistration.registrationVersion ||
+            localSession.deviceSessionId != request.deviceSessionId
+        ) {
+            return rejected(GatewayDevicePlaneClientError.CONFIGURATION_REJECTED)
+        }
+        val observedNowMs = nowMs()
+        if (localSession.lastEvaluatedAtMs > observedNowMs || observedNowMs >= localSession.gatewayAuthExpiresAtMs) {
+            return rejected(GatewayDevicePlaneClientError.LOCAL_SESSION_REJECTED)
+        }
+        val ref = W14DeviceRefView(
+            kind = W14_DEVICE_KIND,
+            deviceId = localRegistration.deviceId,
+            tenantId = localRegistration.tenantId,
+            registrationVersion = localRegistration.registrationVersion,
+        )
+        context = ConnectionContext.from(request)
+        gateway = GatewaySessionNetworkView(
+            protocolVersion = GATEWAY_PROTOCOL_VERSION,
+            sessionId = request.gatewaySessionId,
+            connectionId = localSession.connectionId,
+            generation = localSession.gatewayGeneration,
+            tenantId = request.tenantId,
+            actorKind = request.actorKind,
+            actorIdentityId = request.actorIdentityId,
+            correlationId = request.correlationId,
+            authExpiresAtMs = localSession.gatewayAuthExpiresAtMs,
+        )
+        registration = W14DeviceRegistrationView(ref = ref, state = W14DeviceLifecycleState.ACTIVE)
+        deviceSession = W14DeviceSessionTrustView(
+            deviceSessionId = localSession.deviceSessionId,
+            connectionId = localSession.connectionId,
+            tenantId = localRegistration.tenantId,
+            deviceRef = ref,
+            state = W14DeviceSessionTrustState.ACTIVE,
+            lastEvaluatedAtMs = localSession.lastEvaluatedAtMs,
+            gatewayAuthExpiresAtMs = localSession.gatewayAuthExpiresAtMs,
+            executionPreconditionSatisfied = true,
+        )
+        return reconnect(request)
     }
 
     @Synchronized
@@ -386,7 +451,7 @@ class GatewayDevicePlaneClient internal constructor(
             return resumeResult
         }
         val nextSession = (resumeResult as GatewayDevicePlaneResult.Success).value
-        if (!sessionAcceptance.acceptSession(nextSession, nowMs())) {
+        if (!sessionAcceptance.acceptSession(nextSession, nextGateway.generation, nowMs())) {
             close()
             return rejected(GatewayDevicePlaneClientError.LOCAL_SESSION_REJECTED)
         }
@@ -428,7 +493,7 @@ class GatewayDevicePlaneClient internal constructor(
         val opened = openDeviceSession(newDeviceSessionId, currentGateway, currentRegistration)
         if (opened is GatewayDevicePlaneResult.Rejected) return opened
         val next = (opened as GatewayDevicePlaneResult.Success).value
-        if (!sessionAcceptance.acceptSession(next, nowMs())) {
+        if (!sessionAcceptance.acceptSession(next, currentGateway.generation, nowMs())) {
             return rejected(GatewayDevicePlaneClientError.LOCAL_SESSION_REJECTED)
         }
         context = currentContext.copy(deviceSessionId = newDeviceSessionId)
@@ -1265,6 +1330,17 @@ class GatewayDevicePlaneClient internal constructor(
     ) {
         companion object {
             fun from(request: GatewayDevicePlaneConnectRequest): ConnectionContext =
+                ConnectionContext(
+                    gatewaySessionId = request.gatewaySessionId,
+                    tenantId = request.tenantId,
+                    actorKind = request.actorKind,
+                    actorIdentityId = request.actorIdentityId,
+                    correlationId = request.correlationId,
+                    deviceId = request.deviceId,
+                    deviceSessionId = request.deviceSessionId,
+                )
+
+            fun from(request: GatewayDevicePlaneReconnectRequest): ConnectionContext =
                 ConnectionContext(
                     gatewaySessionId = request.gatewaySessionId,
                     tenantId = request.tenantId,
