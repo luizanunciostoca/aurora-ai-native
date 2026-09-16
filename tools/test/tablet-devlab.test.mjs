@@ -344,3 +344,19 @@ test('tablet devlab documentation keeps independent reviewer and exact tuple req
   assert.match(source, /sign-current-artifact\.sh/);
   assert.match(source, /install-exact-apk\.sh/);
 });
+
+test('stale W14 recovery preserves the Android key while clearing only stale binding metadata', () => {
+  const source = read('recover-stale-w14-binding.sh');
+  assert.match(source, /AURORA_W14_STALE_BINDING_RECOVERY/);
+  assert.match(source, /unconsumed physical-effect consent must be absent/);
+  assert.match(source, /PORT|port/);
+  assert.match(source, /am force-stop/);
+  assert.match(source, /w14-stale-binding-recovery/);
+  assert.match(source, /key_alias/);
+  assert.match(source, /key_generation/);
+  assert.match(source, /set\(after\) == \{'key_alias', 'key_generation'\}/);
+  assert.match(source, /KEY_MATERIAL=NOT_DELETED/);
+  assert.match(source, /AUTHORIZES_EXECUTION=false/);
+  assert.match(source, /PHYSICAL_ACCEPTANCE=false/);
+  assert.doesNotMatch(source, /uninstall/);
+});
