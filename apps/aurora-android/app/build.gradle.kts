@@ -65,6 +65,7 @@ android {
         buildConfigField("String", "AURORA_HOST_SHA", buildConfigString(auroraHostSha))
         buildConfigField("String", "AURORA_RELEASE_TUPLE_ID", buildConfigString(auroraReleaseTupleId))
         buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"NON_PHYSICAL\"")
+        buildConfigField("boolean", "AURORA_PHYSICAL_ACCEPTANCE_CONTROLS", "false")
     }
 
     if (physicalDevSigningConfigured) {
@@ -108,6 +109,7 @@ android {
             // dedicated localPhysicalDev variant only when stable signing material is present.
             buildConfigField("String", "AURORA_GATEWAY_ORIGIN", buildConfigString(auroraLocalGatewayOrigin))
             buildConfigField("boolean", "AURORA_ALLOW_CLEARTEXT", "true")
+            buildConfigField("boolean", "AURORA_PHYSICAL_ACCEPTANCE_CONTROLS", "true")
             manifestPlaceholders["usesCleartextTraffic"] = "true"
         }
         create("staging") {

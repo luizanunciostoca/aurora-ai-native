@@ -11,6 +11,7 @@ import ai.aurora.device.config.RuntimeEnvironmentConfig
 import ai.aurora.device.executor.AndroidDeviceActionPorts
 import ai.aurora.device.executor.W15JDeviceCommandConsumptionResult
 import ai.aurora.device.executor.W15JGatewayDeviceCommandConsumer
+import ai.aurora.device.capability.PhysicalAcceptanceNativeRuntimeProbe
 import ai.aurora.device.lifecycle.AndroidPresenceCheckpointStore
 import ai.aurora.device.lifecycle.AndroidPresenceCoordinator
 import ai.aurora.device.lifecycle.PresenceEngine
@@ -205,6 +206,7 @@ class AuroraApplication : Application() {
                     context = this,
                     projection = projectionResult.value,
                     expectedTenantId = grant.tenantId,
+                    runtimeProbe = if (BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) PhysicalAcceptanceNativeRuntimeProbe(this) else null,
                 )
             }.getOrNull()
         if (installedProjection == null) {
@@ -275,6 +277,7 @@ class AuroraApplication : Application() {
                     context = this,
                     projection = projectionResult.value,
                     expectedTenantId = grant.tenantId,
+                    runtimeProbe = if (BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) PhysicalAcceptanceNativeRuntimeProbe(this) else null,
                 )
             }.getOrNull() ?: return false
         val consumer =
@@ -293,6 +296,21 @@ class AuroraApplication : Application() {
         activeGatewayCommandConsumer = consumer
         WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
         return true
+    }
+
+    internal fun dp5RevokeCurrentSession(): Boolean {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return false
+        val client = activeGatewayDevicePlaneClient ?: return false
+        return client.revokeCurrentSession("dp5:physical-session-revoke") is GatewayDevicePlaneResult.Success
+    }
+
+    internal fun dp5RotateCurrentSession(newDeviceSessionId: String): Boolean {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return false
+        val client = activeGatewayDevicePlaneClient ?: return false
+        return client.rotateCurrentSession(
+            newDeviceSessionId = newDeviceSessionId,
+            reasonReference = "dp5:physical-session-rotate",
+        ) is GatewayDevicePlaneResult.Success
     }
 
     private fun clearLocalGatewayVoiceRuntime() {

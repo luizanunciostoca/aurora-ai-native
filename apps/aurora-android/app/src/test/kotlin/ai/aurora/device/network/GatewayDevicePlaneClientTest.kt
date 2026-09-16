@@ -288,6 +288,71 @@ class GatewayDevicePlaneClientTest {
     }
 
     @Test
+    fun `current W14 session can be revoked without creating execution authority`() {
+        val channel = FakeChannel(
+            gatewayResponse("conn-1", generation = 1),
+            registrationResponse("REGISTERED", version = 1),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-1", generation = 1, version = 2),
+        )
+        val acceptance = RecordingAcceptance()
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory { channel },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = acceptance,
+            nowMs = { 600 },
+        )
+        assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
+        channel.enqueue(GatewayHttpResponse(200, sessionResponse("conn-1", 1, 2, state = "REVOKED")))
+
+        val result = client.revokeCurrentSession("dp5:session-revoke") as GatewayDevicePlaneResult.Success
+        assertEquals("REVOKED", result.value.state.name)
+        assertEquals(1, acceptance.revocationCount)
+        assertEquals("/v1/device/sessions/revoke", channel.requests.last().first)
+        assertTrue(channel.requests.last().second.contains("dp5:session-revoke"))
+        assertFalse(channel.requests.last().second.contains("authorizesExecution"))
+    }
+
+    @Test
+    fun `rotated W14 session becomes the reconnect binding for the next socket`() {
+        val nextSessionId = "dvs_01J00000000000000000000001"
+        val initial = FakeChannel(
+            gatewayResponse("conn-1", generation = 1),
+            registrationResponse("REGISTERED", version = 1),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-1", generation = 1, version = 2),
+        )
+        val resumed = FakeChannel(
+            gatewayResponse("conn-2", generation = 2),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-2", generation = 2, version = 2, deviceSessionId = nextSessionId),
+        )
+        val channels = ArrayDeque(listOf(initial, resumed))
+        val acceptance = RecordingAcceptance()
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory { channels.removeFirst() },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = acceptance,
+            nowMs = { 600 },
+        )
+        assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
+        initial.enqueue(GatewayHttpResponse(200, sessionResponse("conn-1", 1, 2, state = "REVOKED")))
+        initial.enqueue(GatewayHttpResponse(200, sessionResponse("conn-1", 1, 2, deviceSessionId = nextSessionId)))
+
+        val rotated = client.rotateCurrentSession(nextSessionId, "dp5:session-rotate") as GatewayDevicePlaneResult.Success
+        assertEquals(nextSessionId, rotated.value.deviceSession.deviceSessionId)
+        assertEquals(1, acceptance.revocationCount)
+        assertEquals(2, acceptance.sessionCount)
+        assertEquals("/v1/device/sessions/revoke", initial.requests[4].first)
+        assertEquals("/v1/device/sessions/open", initial.requests[5].first)
+
+        val reconnected = client.reconnect(reconnectRequest(deviceSessionId = nextSessionId)) as GatewayDevicePlaneResult.Success
+        assertEquals("conn-2", reconnected.value.gateway.connectionId)
+        assertEquals(nextSessionId, reconnected.value.deviceSession.deviceSessionId)
+        assertTrue(resumed.requests[2].second.contains(nextSessionId))
+    }
+
+    @Test
     fun `post-write transport loss is uncertain and never auto retries`() {
         val channel = FakeChannel(gatewayResponse("conn-1", generation = 1))
         channel.failureAtRequest = 1
@@ -319,6 +384,7 @@ class GatewayDevicePlaneClientTest {
 
     private fun reconnectRequest(
         gatewaySessionId: String = "gws_01J00000000000000000000000",
+        deviceSessionId: String = "dvs_01J00000000000000000000000",
     ) =
         GatewayDevicePlaneReconnectRequest(
             gatewaySessionId = gatewaySessionId,
@@ -327,7 +393,7 @@ class GatewayDevicePlaneClientTest {
             actorIdentityId = "idn_01J00000000000000000000000",
             correlationId = "cor_01J00000000000000000000000",
             deviceId = "dvc_01J00000000000000000000000",
-            deviceSessionId = "dvs_01J00000000000000000000000",
+            deviceSessionId = deviceSessionId,
             credentialProvider = GatewayCredentialProvider { "credential-2" },
             expectedRegistrationVersion = 2,
         )
@@ -377,6 +443,7 @@ class GatewayDevicePlaneClientTest {
     private class RecordingAcceptance : DeviceSessionAcceptance {
         var registrationCount = 0
         var sessionCount = 0
+        var revocationCount = 0
 
         override fun acceptRegistration(registration: W14DeviceRegistrationView): Boolean {
             registrationCount += 1
@@ -387,6 +454,11 @@ class GatewayDevicePlaneClientTest {
             sessionCount += 1
             return true
         }
+
+        override fun revokeSession(deviceSessionId: String): Boolean {
+            revocationCount += 1
+            return true
+        }
     }
 
     private fun gatewayResponse(connectionId: String, generation: Int): String =
@@ -395,8 +467,14 @@ class GatewayDevicePlaneClientTest {
     private fun registrationResponse(state: String, version: Int): String =
         """{"ok":true,"disposition":"REGISTERED","record":{"kind":"DeviceRegistrationRecord","schemaVersion":"1.0.0","ref":{"kind":"AURORA_DEVICE","deviceId":"dvc_01J00000000000000000000000","tenantId":"ten_01J00000000000000000000000","registrationVersion":$version},"state":"$state","registeredAt":"2026-09-05T00:00:00Z","updatedAt":"2026-09-05T00:00:00Z","provenance":{"source":"W14_DEVICE_REGISTRATION","reference":"device-key:sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","observedAt":"2026-09-05T00:00:00Z"},"authoritySemantics":"DEVICE_REGISTRATION_ONLY_NO_ACTION_AUTHORITY","authorizesExecution":false,"canGrantPermission":false},"authorizesExecution":false}"""
 
-    private fun sessionResponse(connectionId: String, generation: Int, version: Int): String =
-        """{"ok":true,"snapshot":{"kind":"DeviceSessionTrustSnapshot","schemaVersion":"1.0.0","deviceSessionId":"dvs_01J00000000000000000000000","gatewaySessionId":"gws_01J00000000000000000000000","connectionId":"$connectionId","gatewayGeneration":$generation,"tenantId":"ten_01J00000000000000000000000","actorIdentityId":"idn_01J00000000000000000000000","correlationId":"cor_01J00000000000000000000000","deviceRef":{"kind":"AURORA_DEVICE","deviceId":"dvc_01J00000000000000000000000","tenantId":"ten_01J00000000000000000000000","registrationVersion":$version},"attestation":{"kind":"DEVICE_ATTESTATION_REFERENCE","reference":"att:1","provider":"aurora-device-key-proof","version":"1","state":"VERIFIED","observedAtMs":500,"expiresAtMs":9000},"state":"ACTIVE","openedAtMs":500,"lastEvaluatedAtMs":500,"gatewayAuthExpiresAtMs":10000,"executionPreconditionSatisfied":true,"requiresCurrentAuthorityValidation":true,"authoritySemantics":"DEVICE_SESSION_TRUST_IS_PRECONDITION_METADATA_ONLY","authorizesExecution":false,"canGrantPermission":false},"authorizesExecution":false,"canGrantPermission":false}"""
+    private fun sessionResponse(
+        connectionId: String,
+        generation: Int,
+        version: Int,
+        deviceSessionId: String = "dvs_01J00000000000000000000000",
+        state: String = "ACTIVE",
+    ): String =
+        """{"ok":true,"snapshot":{"kind":"DeviceSessionTrustSnapshot","schemaVersion":"1.0.0","deviceSessionId":"$deviceSessionId","gatewaySessionId":"gws_01J00000000000000000000000","connectionId":"$connectionId","gatewayGeneration":$generation,"tenantId":"ten_01J00000000000000000000000","actorIdentityId":"idn_01J00000000000000000000000","correlationId":"cor_01J00000000000000000000000","deviceRef":{"kind":"AURORA_DEVICE","deviceId":"dvc_01J00000000000000000000000","tenantId":"ten_01J00000000000000000000000","registrationVersion":$version},"attestation":{"kind":"DEVICE_ATTESTATION_REFERENCE","reference":"att:1","provider":"aurora-device-key-proof","version":"1","state":"VERIFIED","observedAtMs":500,"expiresAtMs":9000},"state":"$state","openedAtMs":500,"lastEvaluatedAtMs":500,"gatewayAuthExpiresAtMs":10000,"executionPreconditionSatisfied":${state == "ACTIVE"},"requiresCurrentAuthorityValidation":true,"authoritySemantics":"DEVICE_SESSION_TRUST_IS_PRECONDITION_METADATA_ONLY","authorizesExecution":false,"canGrantPermission":false},"authorizesExecution":false,"canGrantPermission":false}"""
 
     private fun receiptResponse(classification: String, requiresReconciliation: Boolean): String =
         """{"ok":true,"value":{"classification":"$classification","durableReference":"durable:1","receiptReference":"receipt:1","requiresW07Reconciliation":$requiresReconciliation,"authoritySemantics":"EVIDENCE_INPUT_ONLY_W07_OWNS_OUTCOME_AND_RETRY","authorizesExecution":false,"canGrantPermission":false,"provesExecutionSuccess":false,"retryAuthorized":false},"authorizesExecution":false,"retryAuthorized":false}"""

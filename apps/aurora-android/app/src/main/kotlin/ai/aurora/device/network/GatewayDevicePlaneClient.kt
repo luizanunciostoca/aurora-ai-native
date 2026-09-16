@@ -207,6 +207,8 @@ internal interface DeviceSessionAcceptance {
     fun acceptRegistration(registration: W14DeviceRegistrationView): Boolean
 
     fun acceptSession(session: W14DeviceSessionTrustView, nowMs: Long): Boolean
+
+    fun revokeSession(deviceSessionId: String): Boolean
 }
 
 internal class W15BDeviceSessionAcceptance(
@@ -217,6 +219,8 @@ internal class W15BDeviceSessionAcceptance(
 
     override fun acceptSession(session: W14DeviceSessionTrustView, nowMs: Long): Boolean =
         client.acceptSession(session, nowMs) is DeviceSessionClientResult.Success
+
+    override fun revokeSession(deviceSessionId: String): Boolean = client.revokeSession(deviceSessionId)
 }
 
 /**
@@ -387,6 +391,48 @@ class GatewayDevicePlaneClient internal constructor(
             return rejected(GatewayDevicePlaneClientError.LOCAL_SESSION_REJECTED)
         }
         deviceSession = nextSession
+        return GatewayDevicePlaneResult.Success(snapshot())
+    }
+
+    @Synchronized
+    fun revokeCurrentSession(reasonReference: String): GatewayDevicePlaneResult<W14DeviceSessionTrustView> {
+        requireSafeToken(reasonReference, "reasonReference")
+        val current = deviceSession ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        val result = postDeviceSession(
+            "/v1/device/sessions/revoke",
+            StrictJson.encodeObject(listOf("reasonReference" to reasonReference)),
+        )
+        if (result is GatewayDevicePlaneResult.Rejected) return result
+        val revoked = (result as GatewayDevicePlaneResult.Success).value
+        if (revoked.deviceSessionId != current.deviceSessionId || revoked.state != W14DeviceSessionTrustState.REVOKED) {
+            return rejected(GatewayDevicePlaneClientError.PROTOCOL_MALFORMED)
+        }
+        if (!sessionAcceptance.revokeSession(current.deviceSessionId)) {
+            return rejected(GatewayDevicePlaneClientError.LOCAL_SESSION_REJECTED)
+        }
+        deviceSession = revoked
+        return GatewayDevicePlaneResult.Success(revoked)
+    }
+
+    @Synchronized
+    fun rotateCurrentSession(
+        newDeviceSessionId: String,
+        reasonReference: String,
+    ): GatewayDevicePlaneResult<GatewayDevicePlaneSnapshot> {
+        requireSafeToken(newDeviceSessionId, "newDeviceSessionId")
+        val currentContext = context ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        val currentGateway = gateway ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        val currentRegistration = registration ?: return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        val revoked = revokeCurrentSession(reasonReference)
+        if (revoked is GatewayDevicePlaneResult.Rejected) return revoked
+        val opened = openDeviceSession(newDeviceSessionId, currentGateway, currentRegistration)
+        if (opened is GatewayDevicePlaneResult.Rejected) return opened
+        val next = (opened as GatewayDevicePlaneResult.Success).value
+        if (!sessionAcceptance.acceptSession(next, nowMs())) {
+            return rejected(GatewayDevicePlaneClientError.LOCAL_SESSION_REJECTED)
+        }
+        context = currentContext.copy(deviceSessionId = newDeviceSessionId)
+        deviceSession = next
         return GatewayDevicePlaneResult.Success(snapshot())
     }
 
