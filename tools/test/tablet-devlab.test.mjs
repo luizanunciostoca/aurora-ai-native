@@ -8,16 +8,16 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', name), 'utf8');
 
 const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
-const ANDROID_SHA = '1b9abd6d75ec0a0eceb3884ee9f101a1885b7889';
+const ANDROID_SHA = 'e156668c0b5214aac0a38ef5738dace65656b675';
 const LEGACY_V017_ANDROID_SHA = '40246031b2e1b1ef8e232db4d4d2ea6687f8ecf7';
 const HOST_SHA = 'a7903e255c00b074fb6c3ba210a69c8296b315e5';
-const PACKAGING_SHA = '752a4f54425ae177cbb664bf731d761e475b2fd1';
-const PRESIGN_SHA = '952e9e4687bfd4e3ebadd5b1f2ab2f36779881c1549fe1eb7d68bd95012f8a87';
-const APK_SHA = '80b5baeccd6853d97af23d4cee3477a0828f35bc30ae418bed267c81dac352b6';
+const PACKAGING_SHA = '313309ff9a986cca9dfbbe58cbca1342f12aa504';
+const PRESIGN_SHA = '12a5d5c5941f29b44c5b452846fae533ad2ccc78d9e110200f65307b9d51b893';
+const APK_SHA = '4a9b7485045e94f5e1f729c7b0a876bbb0869b5bd0c5c6535a1ba436c56d11ca';
 const CERT_SHA = 'e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb';
-const ARTIFACT_ID = '10461800110';
-const RUN_ID = '35130207035';
-const ZIP_SHA = '65185fcb7a1e8a798929f3a272d9bcc4548ec3daf7f9d84b93e1583e2154a4de';
+const ARTIFACT_ID = '10463243788';
+const RUN_ID = '35137592809';
+const ZIP_SHA = 'e68d709a276fe98e5ab1c15640bf5046400030e0ab4de5445555885c609a5a47';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -397,6 +397,8 @@ test('stale W14 recovery preserves the Android key while clearing only stale bin
   assert.match(source, /w14-stale-binding-recovery/);
   assert.match(source, /key_alias/);
   assert.match(source, /key_generation/);
+  assert.match(source, /ACTIVE_REGISTRATION_ONLY/);
+  assert.match(source, /session metadata is partial/);
   assert.match(source, /set\(after\) == \{'key_alias', 'key_generation'\}/);
   assert.match(source, /KEY_MATERIAL=NOT_DELETED/);
   assert.match(source, /AUTHORIZES_EXECUTION=false/);

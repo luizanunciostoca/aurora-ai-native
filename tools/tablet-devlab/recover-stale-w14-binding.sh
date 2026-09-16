@@ -58,15 +58,24 @@ for element in root:
     name = element.attrib.get('name')
     if name:
         values[name] = element.text if element.tag == 'string' else element.attrib.get('value')
-required = ['key_alias', 'key_generation', 'device_id', 'tenant_id', 'registration_version',
-            'device_state', 'device_session_id', 'connection_id',
-            'gateway_auth_expires_at_ms', 'last_evaluated_at_ms']
-if any(not values.get(name) for name in required):
-    raise SystemExit('current Android W14 binding is incomplete')
+key_required = ['key_alias', 'key_generation']
+registration_required = ['device_id', 'tenant_id', 'registration_version', 'device_state']
+session_fields = ['device_session_id', 'connection_id', 'gateway_auth_expires_at_ms', 'last_evaluated_at_ms']
+if any(not values.get(name) for name in key_required):
+    raise SystemExit('current Android W14 key metadata is incomplete')
+if any(bool(values.get(name)) for name in registration_required) and any(not values.get(name) for name in registration_required):
+    raise SystemExit('current Android W14 registration metadata is partial')
+if any(not values.get(name) for name in registration_required):
+    raise SystemExit('current Android W14 stale binding has no complete registration to recover')
 if values['device_state'] != 'ACTIVE' or int(values['registration_version']) <= 0:
     raise SystemExit('current Android W14 registration is not ACTIVE')
+session_presence = [bool(values.get(name)) for name in session_fields]
+if any(session_presence) and not all(session_presence):
+    raise SystemExit('current Android W14 session metadata is partial')
+input_shape = 'ACTIVE_FULL_BINDING' if all(session_presence) else 'ACTIVE_REGISTRATION_ONLY'
 if int(values['key_generation']) <= 0:
     raise SystemExit('current Android W14 key generation is invalid')
+print(f'RECOVERY_INPUT_SHAPE={input_shape}')
 next_root = ET.Element('map')
 alias = ET.SubElement(next_root, 'string', {'name': 'key_alias'})
 alias.text = values['key_alias']
