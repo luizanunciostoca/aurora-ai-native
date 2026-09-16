@@ -10,14 +10,14 @@ const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', nam
 const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
 const ANDROID_SHA = '19a6327ae84f52aa911f81bf6cc70f057e7bb2a7';
 const LEGACY_V017_ANDROID_SHA = '40246031b2e1b1ef8e232db4d4d2ea6687f8ecf7';
-const HOST_SHA = '56255f74ae9a542ee017ca0f81047bc4d12f5580';
-const PACKAGING_SHA = '524f28baf3eea1e7f9884ac7597187fcd12e740f';
-const PRESIGN_SHA = '1220a987974c2ee393ee958db314e5a31678b2f5c4d8c94fbc11b41ec674d5b2';
+const HOST_SHA = 'a7903e255c00b074fb6c3ba210a69c8296b315e5';
+const PACKAGING_SHA = '899bdd70d8393cfb21082703bc04ac3acce14490';
+const PRESIGN_SHA = '8f625603948395e2076444d7e847d4b0e447b09ff67fd5dd10aa2ad1e7fdf1e6';
 const APK_SHA = 'd06881bc6a0af43876d1c05d5c82e03da30607a92373be4bee929846bce69ba3';
 const CERT_SHA = 'e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb';
-const ARTIFACT_ID = '10455040637';
-const RUN_ID = '35114761659';
-const ZIP_SHA = 'df68fdad6db37f0d114a555274f2abf3196b12b0a845a46f78a1c72b3a01bf33';
+const ARTIFACT_ID = '10457008737';
+const RUN_ID = '35119880795';
+const ZIP_SHA = 'd4c63603c7b36d90f6de7919d29a05b807ada402fea8cdfee3908899b921ff94';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

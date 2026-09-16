@@ -43,7 +43,7 @@ Current software candidate tuple (pre-packaging, not physically accepted):
 ```text
 main      77f0f8532197025ee913dd02fcb56878d9d667a9
 android   19a6327ae84f52aa911f81bf6cc70f057e7bb2a7
-host      56255f74ae9a542ee017ca0f81047bc4d12f5580
+host      a7903e255c00b074fb6c3ba210a69c8296b315e5
 DP5       NOT_ACCEPTED
 W15-J     NOT_ACCEPTED
 W16       BLOCKED
@@ -54,13 +54,13 @@ Last packaged physical tuple (v0.17 historical candidate; superseded for the nex
 ```text
 main      77f0f8532197025ee913dd02fcb56878d9d667a9
 android   19a6327ae84f52aa911f81bf6cc70f057e7bb2a7
-host      56255f74ae9a542ee017ca0f81047bc4d12f5580
-packaging 524f28baf3eea1e7f9884ac7597187fcd12e740f
-run       35114761659
-artifact  10455040637
-name      aurora-w15j-v017r2-presign-apk-19a6327a-host-56255f74
-zip       df68fdad6db37f0d114a555274f2abf3196b12b0a845a46f78a1c72b3a01bf33
-presign   1220a987974c2ee393ee958db314e5a31678b2f5c4d8c94fbc11b41ec674d5b2
+host      a7903e255c00b074fb6c3ba210a69c8296b315e5
+packaging 899bdd70d8393cfb21082703bc04ac3acce14490
+run       35119880795
+artifact  10457008737
+name      aurora-w15j-v017r3-presign-apk-19a6327a-host-a7903e25
+zip       d4c63603c7b36d90f6de7919d29a05b807ada402fea8cdfee3908899b921ff94
+presign   8f625603948395e2076444d7e847d4b0e447b09ff67fd5dd10aa2ad1e7fdf1e6
 apk       d06881bc6a0af43876d1c05d5c82e03da30607a92373be4bee929846bce69ba3
 signer    e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb
 transport LOCAL_TABLET_LOOPBACK
