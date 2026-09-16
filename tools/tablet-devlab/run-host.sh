@@ -31,6 +31,8 @@ WORKTREE_STATE="$STATE_DIR/worktrees.txt"
 DB_ENV="$STATE_DIR/postgres.env"
 BOOTSTRAP_REFRESH_FILE="$STATE_DIR/w15j-bootstrap-refresh.json"
 BOOTSTRAP_RECONNECT_FILE="$STATE_DIR/w15j-bootstrap-reconnect.json"
+PREBUILD_VERIFY="$SCRIPT_DIR/verify-host-prebuild.sh"
+USE_PREBUILT="${AURORA_W15J_USE_PREBUILT:-NO}"
 NODE_VERSION="22.16.0"
 NPM_VERSION="10.9.2"
 MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS=240
@@ -40,6 +42,11 @@ secure_regular_file "$WORKTREE_STATE" || fail "trusted worktree state missing or
 secure_regular_file "$DB_ENV" || fail "PostgreSQL state missing or insecure; run setup-postgres.sh"
 secure_regular_file "$PROVIDER" || fail "trusted provider missing or insecure; run prepare-dp5-provider.sh"
 secure_regular_file "$MATERIAL" || fail "DP5 material missing or insecure; run prepare-dp5-provider.sh"
+[[ "$USE_PREBUILT" == "NO" || "$USE_PREBUILT" == "YES" ]] || fail "AURORA_W15J_USE_PREBUILT must be YES or NO"
+if [[ "$USE_PREBUILT" == "YES" ]]; then
+  [[ -x "$PREBUILD_VERIFY" ]] || fail "host prebuild verifier is missing"
+  bash "$PREBUILD_VERIFY" || fail "verified host prebuild is unavailable or stale"
+fi
 
 HOST_SHA="$(git -C "$HOST_DIR" rev-parse HEAD)"
 STATE_HOST_SHA="$(awk -F= '$1 == "host" {print $2}' "$WORKTREE_STATE")"
@@ -131,13 +138,18 @@ export AURORA_W15J_HOST_READINESS_DIR=/aurora-devlab/host-readiness/$RUN_ID
 export AURORA_W15J_BOOTSTRAP_REFRESH_FILE=/aurora-devlab/state/w15j-bootstrap-refresh.json
 export AURORA_W15J_BOOTSTRAP_RECONNECT_FILE=/aurora-devlab/state/w15j-bootstrap-reconnect.json
 
-npm ci
-# The external provider imports only freshly compiled canonical owners from this exact host HEAD.
-# Do not rely on residual dist output from a previous run.
-npm run build --workspace @aurora/contracts
-npm run build --workspace @aurora/events
-npm run build --workspace @aurora/policy-core
-./node_modules/.bin/tsc --project services/executors/tsconfig.build.json --pretty false
-./node_modules/.bin/tsc --project services/mobile-gateway/tsconfig.runtime.json --pretty false
+if [[ '$USE_PREBUILT' == 'YES' ]]; then
+  echo W15J_HOST_BUILD_MODE=VERIFIED_PREBUILT
+else
+  npm ci
+  # The external provider imports only freshly compiled canonical owners from this exact host HEAD.
+  # Do not rely on residual dist output from a previous run.
+  npm run build --workspace @aurora/contracts
+  npm run build --workspace @aurora/events
+  npm run build --workspace @aurora/policy-core
+  ./node_modules/.bin/tsc --project services/executors/tsconfig.build.json --pretty false
+  ./node_modules/.bin/tsc --project services/mobile-gateway/tsconfig.runtime.json --pretty false
+fi
+python3 /aurora-devlab/worktrees/devlab/tools/tablet-devlab/check-bootstrap-principal-age.py /aurora-devlab/config/w15j-dp5-material.json $MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS
 node tools/physical/run-w15j-local-host.mjs
 "

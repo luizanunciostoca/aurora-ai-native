@@ -62,6 +62,27 @@ test('tablet host remains fail closed until trusted provider is configured', () 
   assert.doesNotMatch(provider, /postgres(?:ql)?:\/\/[^\s]*:[^\s]*@/i);
 });
 
+test('verified host prebuild is opt-in, byte-bound and non-authoritative', () => {
+  const launcher = read('run-host.sh');
+  const prebuild = read('prebuild-host.sh');
+  const verifier = read('verify-host-prebuild.sh');
+  const hasher = read('hash-host-prebuild.py');
+  assert.match(launcher, /AURORA_W15J_USE_PREBUILT/);
+  assert.match(launcher, /W15J_HOST_BUILD_MODE=VERIFIED_PREBUILT/);
+  assert.match(launcher, /verify-host-prebuild\.sh/);
+  assert.match(prebuild, /W15J_HOST_PREBUILD_V1/);
+  assert.match(prebuild, /host_tree_sha/);
+  assert.match(prebuild, /package_lock_sha256/);
+  assert.match(prebuild, /runtime_tree_sha256/);
+  assert.match(verifier, /runtime tree drift/);
+  assert.match(verifier, /prebuild manifest stale/);
+  assert.match(verifier, /authorizes_execution/);
+  assert.match(verifier, /physical_acceptance/);
+  assert.match(hasher, /services\/mobile-gateway\/dist/);
+  assert.match(hasher, /node_modules/);
+  assert.match(hasher, /SYMLINK:/);
+});
+
 test('artifact fetch binds the exact presign and final-signing tuple', () => {
   const source = read('fetch-current-artifact.sh');
   for (const key of [
@@ -343,6 +364,17 @@ test('tablet devlab documentation keeps independent reviewer and exact tuple req
   assert.match(source, /clean (?:uninstall|replacement)/i);
   assert.match(source, /sign-current-artifact\.sh/);
   assert.match(source, /install-exact-apk\.sh/);
+});
+
+test('v0.17 transport reconciliation freezes direct tablet loopback without moving Android candidate', () => {
+  const source = read('DP5_TRANSPORT_RECONCILIATION.md');
+  assert.match(source, /LOCAL_TABLET_LOOPBACK/);
+  assert.match(source, /adbReversePort=null/);
+  assert.match(source, /SELF_ADB_WIRELESS_DEBUGGING/);
+  assert.match(source, /no `adb reverse` mapping may exist/);
+  assert.match(source, new RegExp(escaped(ANDROID_SHA)));
+  assert.match(source, /does not authorize execution/i);
+  assert.match(source, /unblock W16/i);
 });
 
 test('stale W14 recovery preserves the Android key while clearing only stale binding metadata', () => {

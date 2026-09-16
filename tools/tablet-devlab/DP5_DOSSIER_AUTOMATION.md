@@ -6,6 +6,8 @@ This layer removes manual error-prone steps from the tablet-only DP5 workflow wh
 
 `INTELLIGENCE != AUTHORITY != EXECUTION`.
 
+Before opening the final v0.17 window, apply `DP5_TRANSPORT_RECONCILIATION.md`: the current frozen artifact uses `LOCAL_TABLET_LOOPBACK` with no ADB reverse on 8080/8081. Legacy dual-port reverse instructions in the frozen Android source are superseded for this exact tuple.
+
 ## 1. Capture the independent live Control Tower tuple
 
 After `fetch-current-artifact.sh` has downloaded and verified the exact artifact, run:
