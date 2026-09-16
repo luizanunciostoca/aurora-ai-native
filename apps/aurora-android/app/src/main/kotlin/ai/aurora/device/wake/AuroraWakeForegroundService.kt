@@ -79,6 +79,7 @@ class AuroraWakeForegroundService : Service() {
                     }
                 },
                 onConfirmed = { candidate -> onWakeConfirmed(candidate) },
+                onEvaluated = statusStore::recordEvaluation,
                 onRejectedOrIgnored = statusStore::incrementRejectedOrIgnored,
                 onError = { message ->
                     statusStore.update("WAKE_ENGINE_ERROR", model.modelVersion, message)

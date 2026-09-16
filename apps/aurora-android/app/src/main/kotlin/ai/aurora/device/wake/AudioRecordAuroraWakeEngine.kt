@@ -27,6 +27,7 @@ class AudioRecordAuroraWakeEngine(
     private val playbackState: () -> WakePlaybackSnapshot,
     private val onState: (WakeState) -> Unit,
     private val onConfirmed: (WakeCandidate) -> Unit,
+    private val onEvaluated: (WakeEvaluationTelemetry) -> Unit = {},
     private val onRejectedOrIgnored: () -> Unit = {},
     private val onError: (String) -> Unit,
 ) : AutoCloseable {
@@ -121,17 +122,34 @@ class AudioRecordAuroraWakeEngine(
                 if (read < 0) throw IllegalStateException("AudioRecord read failed: $read")
                 if (read != frame.size) continue
                 val candidatePcm = segmenter.accept(frame) ?: continue
+                val speechStartedAtNanos =
+                    checkNotNull(segmenter.consumeLastCompletedSpeechStartedAtNanos()) {
+                        "wake candidate missing monotonic speech onset"
+                    }
                 val features =
                     runCatching { AuroraWakeFeatureExtractor.extract(candidatePcm) }.getOrNull()
                 if (features == null) {
+                    val observedAtMs = System.currentTimeMillis()
+                    onEvaluated(
+                        WakeEvaluationTelemetry(
+                            id = "wake-eval-$observedAtMs-feature-rejected",
+                            observedAtMs = observedAtMs,
+                            latencyMs =
+                                ((System.nanoTime() - speechStartedAtNanos).coerceAtLeast(0L) /
+                                    1_000_000L),
+                            confidence = 0.0,
+                            result = WakeEvaluationResult.REJECTED,
+                        ),
+                    )
                     onRejectedOrIgnored()
                     continue
                 }
                 val confidence = model.confidence(features)
                 val playback = playbackState()
+                val observedAtMs = System.currentTimeMillis()
                 val observation =
                     WakeObservation(
-                        observedAtMs = System.currentTimeMillis(),
+                        observedAtMs = observedAtMs,
                         confidence = confidence,
                         featureFingerprint = fingerprint(features),
                         ttsActive = playback.ttsActive,
@@ -144,7 +162,28 @@ class AudioRecordAuroraWakeEngine(
                         microphonePermissionGranted = true,
                         privacyBlocked = false,
                     )
-                when (val evaluation = stateMachine.evaluate(observation)) {
+                val evaluation = stateMachine.evaluate(observation)
+                val latencyMs =
+                    ((System.nanoTime() - speechStartedAtNanos).coerceAtLeast(0L) / 1_000_000L)
+                val telemetry =
+                    WakeEvaluationTelemetry(
+                        id =
+                            when (evaluation) {
+                                is WakeEvaluation.Confirmed -> evaluation.candidate.candidateId
+                                is WakeEvaluation.Rejected ->
+                                    "wake-eval-$observedAtMs-${observation.featureFingerprint.take(12)}"
+                            },
+                        observedAtMs = observedAtMs,
+                        latencyMs = latencyMs,
+                        confidence = confidence,
+                        result =
+                            when (evaluation) {
+                                is WakeEvaluation.Confirmed -> WakeEvaluationResult.CONFIRMED
+                                is WakeEvaluation.Rejected -> WakeEvaluationResult.REJECTED
+                            },
+                    )
+                onEvaluated(telemetry)
+                when (evaluation) {
                     is WakeEvaluation.Confirmed -> {
                         running.set(false)
                         onState(WakeState.HOTWORD_CONFIRMED)
