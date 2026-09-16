@@ -113,6 +113,40 @@ data class GatewayW07DeviceExecutionAuthorizationView(
     }
 }
 
+enum class GatewayOfflineW03State { ACCEPTED, REJECTED, INFLIGHT, COMPLETED }
+
+data class GatewayOfflineW03Projection(
+    val tenantId: String,
+    val key: String,
+    val operationName: String,
+    val canonicalPayloadHash: String,
+    val state: GatewayOfflineW03State,
+    val authorizesExecution: Boolean = false,
+    val retryAuthorized: Boolean = false,
+) {
+    init {
+        require(tenantId.isNotBlank() && key.isNotBlank() && operationName.isNotBlank())
+        require(canonicalPayloadHash.matches(Regex("^sha256:[0-9a-f]{64}$")))
+        require(!authorizesExecution && !retryAuthorized)
+    }
+}
+
+data class GatewayOfflineCurrentView(
+    val commandId: String,
+    val executionId: String,
+    val w03: GatewayOfflineW03Projection,
+    val executionAuthorization: GatewayW07DeviceExecutionAuthorizationView?,
+    val authorizesExecution: Boolean = false,
+    val provesExecutionSuccess: Boolean = false,
+    val retryAuthorized: Boolean = false,
+) {
+    init {
+        require(commandId.isNotBlank() && executionId.isNotBlank())
+        require(executionAuthorization == null || executionAuthorization.executionId == executionId)
+        require(!authorizesExecution && !provesExecutionSuccess && !retryAuthorized)
+    }
+}
+
 data class GatewayCommandEnvelopeView(
     val deliveryReference: String,
     val commandId: String,

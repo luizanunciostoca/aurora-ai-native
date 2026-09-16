@@ -9,6 +9,7 @@ import ai.aurora.device.bootstrap.ProcessLocalGatewayBootstrapRuntime
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.config.RuntimeEnvironmentConfig
 import ai.aurora.device.executor.AndroidDeviceActionPorts
+import ai.aurora.device.executor.DeviceActionPort
 import ai.aurora.device.executor.W15JDeviceCommandConsumptionResult
 import ai.aurora.device.executor.W15JGatewayDeviceCommandConsumer
 import ai.aurora.device.capability.PhysicalAcceptanceNativeRuntimeProbe
@@ -20,6 +21,9 @@ import ai.aurora.device.network.GatewayDevicePlaneClient
 import ai.aurora.device.network.GatewayDevicePlaneConnectRequest
 import ai.aurora.device.network.GatewayDevicePlaneReconnectRequest
 import ai.aurora.device.network.GatewayDevicePlaneResult
+import ai.aurora.device.offline.GatewayOfflineExecutionRuntime
+import ai.aurora.device.offline.GatewayOfflinePrepareResult
+import ai.aurora.device.offline.OfflineEnqueueDecision
 import ai.aurora.device.security.AndroidKeystoreSigningKeyStore
 import ai.aurora.device.session.AndroidDeviceSessionMetadataStore
 import ai.aurora.device.session.SecureDeviceSessionClient
@@ -50,6 +54,7 @@ class AuroraApplication : Application() {
     private var activeGatewayDevicePlaneClient: GatewayDevicePlaneClient? = null
     private var activeGatewayVoiceProjection: InstalledGatewayVoiceProjection? = null
     private var activeGatewayCommandConsumer: W15JGatewayDeviceCommandConsumer? = null
+    private var activeGatewayOfflineRuntime: GatewayOfflineExecutionRuntime? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -214,17 +219,23 @@ class AuroraApplication : Application() {
             return false
         }
 
+        val actionPort = AndroidDeviceActionPorts.create(this)
         val consumer =
             runCatching {
                 W15JGatewayDeviceCommandConsumer.forAndroid(
                     client = client,
                     capabilityBridge = installedProjection.capabilityBridge,
                     permissionContext = this,
-                    actionPort = AndroidDeviceActionPorts.create(this),
+                    actionPort = actionPort,
                     appIntegrationResolver = installedProjection.appIntegrationResolver,
                 )
             }.getOrNull()
         if (consumer == null) {
+            runCatching { client.close() }
+            return false
+        }
+        val offlineRuntime = composeOfflineRuntime(client, installedProjection, actionPort)
+        if (offlineRuntime == null) {
             runCatching { client.close() }
             return false
         }
@@ -236,6 +247,7 @@ class AuroraApplication : Application() {
         activeGatewayDevicePlaneClient = client
         activeGatewayVoiceProjection = installedProjection
         activeGatewayCommandConsumer = consumer
+        activeGatewayOfflineRuntime = offlineRuntime
         WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
         return true
     }
@@ -280,22 +292,68 @@ class AuroraApplication : Application() {
                     runtimeProbe = if (BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) PhysicalAcceptanceNativeRuntimeProbe(this) else null,
                 )
             }.getOrNull() ?: return false
+        val actionPort = AndroidDeviceActionPorts.create(this)
         val consumer =
             runCatching {
                 W15JGatewayDeviceCommandConsumer.forAndroid(
                     client = client,
                     capabilityBridge = installedProjection.capabilityBridge,
                     permissionContext = this,
-                    actionPort = AndroidDeviceActionPorts.create(this),
+                    actionPort = actionPort,
                     appIntegrationResolver = installedProjection.appIntegrationResolver,
                 )
             }.getOrNull() ?: return false
+        val offlineRuntime = composeOfflineRuntime(client, installedProjection, actionPort) ?: return false
 
         WakeVoiceRuntimeRegistry.projectionStore.replace(installedProjection.bundle)
         activeGatewayVoiceProjection = installedProjection
         activeGatewayCommandConsumer = consumer
+        activeGatewayOfflineRuntime = offlineRuntime
         WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
         return true
+    }
+
+    private fun composeOfflineRuntime(
+        client: GatewayDevicePlaneClient,
+        projection: InstalledGatewayVoiceProjection,
+        actionPort: DeviceActionPort,
+    ): GatewayOfflineExecutionRuntime? =
+        runCatching {
+            GatewayOfflineExecutionRuntime.forAndroid(
+                client = client,
+                context = this,
+                capabilityBridge = projection.capabilityBridge,
+                actionPort = actionPort,
+                appIntegrationResolver = projection.appIntegrationResolver,
+            )
+        }.getOrNull()
+
+    internal fun dp5PrepareSafeDeferred(commandId: String): String {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return "OFFLINE_PREPARE_REJECTED"
+        val runtime = activeGatewayOfflineRuntime ?: return "OFFLINE_PREPARE_REJECTED"
+        return when (val result = runtime.prepareSafeDeferred(commandId)) {
+            is GatewayOfflinePrepareResult.Rejected -> "OFFLINE_PREPARE_REJECTED"
+            is GatewayOfflinePrepareResult.Prepared ->
+                when (result.decision) {
+                    is OfflineEnqueueDecision.Queued -> "OFFLINE_PREPARE_QUEUED_PASS"
+                    is OfflineEnqueueDecision.Duplicate -> "OFFLINE_PREPARE_DUPLICATE_PASS"
+                    is OfflineEnqueueDecision.Rejected -> "OFFLINE_PREPARE_REJECTED"
+                }
+        }
+    }
+
+    internal fun dp5DrainOffline(): String {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return "OFFLINE_DRAIN_REJECTED"
+        val runtime = activeGatewayOfflineRuntime ?: return "OFFLINE_DRAIN_REJECTED"
+        val dispositions = runtime.drain().map { it.disposition.name }
+        return "OFFLINE_DRAIN_${if (dispositions.isEmpty()) "EMPTY" else dispositions.joinToString("_")}_PASS"
+    }
+
+    internal fun dp5OfflineSnapshot(): String {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return "OFFLINE_SNAPSHOT_REJECTED"
+        val runtime = activeGatewayOfflineRuntime ?: return "OFFLINE_SNAPSHOT_REJECTED"
+        val states = runtime.snapshot().map { it.state.name }
+        return "OFFLINE_SNAPSHOT_${if (states.isEmpty()) "EMPTY" else states.joinToString("_")}_PASS"
     }
 
     internal fun dp5RevokeCurrentSession(): Boolean {
@@ -317,6 +375,7 @@ class AuroraApplication : Application() {
         WakeVoiceRuntimeRegistry.clearAuthorityIngress()
         WakeVoiceRuntimeRegistry.projectionStore.clear()
         activeGatewayCommandConsumer = null
+        activeGatewayOfflineRuntime = null
         activeGatewayVoiceProjection = null
         runCatching { activeGatewayDevicePlaneClient?.close() }
         activeGatewayDevicePlaneClient = null

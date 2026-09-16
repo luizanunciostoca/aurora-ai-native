@@ -562,6 +562,20 @@ class GatewayDevicePlaneClient internal constructor(
     }
 
     @Synchronized
+    fun fetchOfflineCurrent(idempotencyKey: String): GatewayDevicePlaneResult<GatewayOfflineCurrentView> {
+        requireSafeToken(idempotencyKey, "idempotencyKey", 256)
+        if (context == null || gateway == null || registration == null || deviceSession == null) {
+            return rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
+        }
+        val response = post(
+            "/v1/device/offline/current",
+            StrictJson.encodeObject(listOf("idempotencyKey" to idempotencyKey)),
+        ) ?: return transportRejected()
+        if (response.statusCode != 200) return protocolRejected(response)
+        return parseOfflineCurrent(response, idempotencyKey)
+    }
+
+    @Synchronized
     fun currentSnapshot(): GatewayDevicePlaneResult<GatewayDevicePlaneSnapshot> =
         if (context == null || gateway == null || registration == null || deviceSession == null) {
             rejected(GatewayDevicePlaneClientError.NOT_CONNECTED)
@@ -902,6 +916,46 @@ class GatewayDevicePlaneClient internal constructor(
             )
         }
     }
+
+    private fun parseOfflineCurrent(
+        response: GatewayHttpResponse,
+        expectedKey: String,
+    ): GatewayDevicePlaneResult<GatewayOfflineCurrentView> =
+        parseObjectResult(response) { root ->
+            require(root.fields.keys == setOf("ok", "value", "authorizesExecution", "provesExecutionSuccess", "retryAuthorized"))
+            requireNoAuthority(root)
+            require(root.jsonBoolean("provesExecutionSuccess") == false)
+            require(root.jsonBoolean("retryAuthorized") == false)
+            val value = root.jsonObject("value")
+            require(value.fields.keys == setOf("commandId", "executionId", "w03", "executionAuthorization", "authorizesExecution", "provesExecutionSuccess", "retryAuthorized"))
+            requireNoAuthority(value)
+            require(value.jsonBoolean("provesExecutionSuccess") == false)
+            require(value.jsonBoolean("retryAuthorized") == false)
+            val w03 = value.jsonObject("w03")
+            require(w03.jsonString("key") == expectedKey)
+            require(w03.jsonBoolean("authorizesExecution") == false)
+            require(w03.jsonBoolean("retryAuthorized") == false)
+            val rawAuthorization = value.fields["executionAuthorization"]
+            val authorization = when (rawAuthorization) {
+                JsonValue.NullValue -> null
+                is JsonValue.ObjectValue -> parseExecutionAuthorization(rawAuthorization)
+                else -> error("executionAuthorization must be object or null")
+            }
+            GatewayOfflineCurrentView(
+                commandId = value.jsonString("commandId"),
+                executionId = value.jsonString("executionId"),
+                w03 = GatewayOfflineW03Projection(
+                    tenantId = w03.jsonString("tenantId"),
+                    key = w03.jsonString("key"),
+                    operationName = w03.jsonString("operationName"),
+                    canonicalPayloadHash = w03.jsonString("canonicalPayloadHash"),
+                    state = GatewayOfflineW03State.valueOf(w03.jsonString("state")),
+                    authorizesExecution = w03.jsonBoolean("authorizesExecution"),
+                    retryAuthorized = w03.jsonBoolean("retryAuthorized"),
+                ),
+                executionAuthorization = authorization,
+            )
+        }
 
     private fun parseReceipt(
         response: GatewayHttpResponse,

@@ -36,6 +36,12 @@ class Dp5PhysicalAcceptanceReceiver : BroadcastReceiver() {
                 LocalPhysicalAcceptanceOverrides.setStaleCapability(context, null)
                 "CAPABILITY_CURRENT_PASS"
             }
+            "OFFLINE_PREPARE" -> {
+                val commandId = intent.getStringExtra("commandId") ?: return "OFFLINE_PREPARE_REJECTED"
+                app.dp5PrepareSafeDeferred(commandId)
+            }
+            "OFFLINE_DRAIN" -> app.dp5DrainOffline()
+            "OFFLINE_SNAPSHOT" -> app.dp5OfflineSnapshot()
             else -> "UNKNOWN_OPERATION_REJECTED"
         }
     }
