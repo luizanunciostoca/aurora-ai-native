@@ -184,6 +184,9 @@ test('exact APK installer binds the current APK and requires explicit destructiv
   assert.match(source, new RegExp(escaped(ANDROID_SHA)));
   assert.match(source, new RegExp(escaped(HOST_SHA)));
   assert.match(source, /LOCAL_TABLET_LOOPBACK/);
+  assert.match(source, /BUILD_IDENTITY must contain exactly 24 lines/);
+  assert.match(source, /embedded gateway origin must be physical loopback/);
+  assert.match(source, /127\.0\.0\.1:8080/);
   assert.match(source, /adb -s/);
   assert.match(source, /uninstall.*\$PACKAGE_ID/);
   assert.match(source, /installed APK differs byte-for-byte from exact artifact/);

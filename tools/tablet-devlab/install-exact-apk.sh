@@ -20,6 +20,7 @@ EXPECTED_ANDROID_SHA="${AURORA_ANDROID_SHA:-19a6327ae84f52aa911f81bf6cc70f057e7b
 EXPECTED_HOST_SHA="${AURORA_HOST_SHA:-a7903e255c00b074fb6c3ba210a69c8296b315e5}"
 EXPECTED_MAIN_SHA="${AURORA_MAIN_SHA:-77f0f8532197025ee913dd02fcb56878d9d667a9}"
 EXPECTED_TRANSPORT_SCOPE="LOCAL_TABLET_LOOPBACK"
+EXPECTED_GATEWAY_ORIGIN="http://127.0.0.1:8080"
 EXPECTED_CERT_SHA="${AURORA_PHYSICAL_SIGNER_CERT_SHA256:-e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb}"
 EVIDENCE_ROOT="$DEVLAB_ROOT/evidence"
 STATE_DIR="$DEVLAB_ROOT/state"
@@ -29,16 +30,18 @@ STATE_DIR="$DEVLAB_ROOT/state"
 [[ -f "$SIGNING_IDENTITY" && ! -L "$SIGNING_IDENTITY" ]] || fail "FINAL_SIGNING_IDENTITY is missing; run sign-current-artifact.sh"
 [[ "$EXPECTED_APK_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "expected APK SHA must be lowercase 64-hex"
 [[ "$(sha256sum "$APK" | awk '{print $1}')" == "$EXPECTED_APK_SHA" ]] || fail "artifact APK hash drift"
-[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "23" ]] || fail "BUILD_IDENTITY must contain exactly 23 lines"
+[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "24" ]] || fail "BUILD_IDENTITY must contain exactly 24 lines"
 
 embedded_android="$(sed -n 's/^source_candidate_sha=//p' "$BUILD_IDENTITY")"
 embedded_host="$(sed -n 's/^paired_local_host_candidate_sha=//p' "$BUILD_IDENTITY")"
 embedded_main="$(sed -n 's/^reconciled_main_parent_sha=//p' "$BUILD_IDENTITY")"
 embedded_scope="$(sed -n 's/^gateway_transport_scope=//p' "$BUILD_IDENTITY")"
+embedded_origin="$(sed -n 's/^gateway_origin=//p' "$BUILD_IDENTITY")"
 [[ "$embedded_android" == "$EXPECTED_ANDROID_SHA" ]] || fail "embedded Android SHA drift"
 [[ "$embedded_host" == "$EXPECTED_HOST_SHA" ]] || fail "embedded host SHA drift"
 [[ "$embedded_main" == "$EXPECTED_MAIN_SHA" ]] || fail "embedded main SHA drift"
 [[ "$embedded_scope" == "$EXPECTED_TRANSPORT_SCOPE" ]] || fail "embedded transport scope must be LOCAL_TABLET_LOOPBACK"
+[[ "$embedded_origin" == "$EXPECTED_GATEWAY_ORIGIN" ]] || fail "embedded gateway origin must be physical loopback"
 grep -Fxq 'canonical_acceptance=false' "$BUILD_IDENTITY" || fail "artifact cannot self-declare acceptance"
 grep -Fxq 'physical_evidence_required=true' "$BUILD_IDENTITY" || fail "physical evidence requirement missing"
 grep -Fxq 'dp5_status=INCOMPLETE' "$BUILD_IDENTITY" || fail "artifact must remain DP5 incomplete before physical evidence"
@@ -155,6 +158,7 @@ cat >"$EVIDENCE_DIR/install-evidence.json" <<EOF
   "hostCandidateSha": "$embedded_host",
   "reconciledMainSha": "$embedded_main",
   "transportScope": "$embedded_scope",
+  "gatewayOrigin": "$embedded_origin",
   "expectedApkSha256": "$EXPECTED_APK_SHA",
   "installedApkSha256": "$installed_sha",
   "priorPackagePresent": $prior_present,
