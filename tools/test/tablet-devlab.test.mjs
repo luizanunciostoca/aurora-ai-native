@@ -8,17 +8,16 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', name), 'utf8');
 
 const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
-const ANDROID_SHA = '40246031b2e1b1ef8e232db4d4d2ea6687f8ecf7';
-const HOST_SHA = '7d9c9bebb8d12b00b8e0629387edd483e14638b6';
-const CURRENT_ANDROID_SHA = '19a6327ae84f52aa911f81bf6cc70f057e7bb2a7';
-const CURRENT_HOST_SHA = '56255f74ae9a542ee017ca0f81047bc4d12f5580';
-const PACKAGING_SHA = '003f75c8b81ca0819fcc14e5f27191ef7979cbae';
-const PRESIGN_SHA = '5c80079a0f13b13a649df3492e0a1364eae5fa7f343f8bf2defef08920996e4d';
-const APK_SHA = 'f1d390cc6743b0d235fd62451caf39c0f8bf169281dfbe734e5bc6300d4d657d';
+const ANDROID_SHA = '19a6327ae84f52aa911f81bf6cc70f057e7bb2a7';
+const LEGACY_V017_ANDROID_SHA = '40246031b2e1b1ef8e232db4d4d2ea6687f8ecf7';
+const HOST_SHA = '56255f74ae9a542ee017ca0f81047bc4d12f5580';
+const PACKAGING_SHA = '524f28baf3eea1e7f9884ac7597187fcd12e740f';
+const PRESIGN_SHA = '1220a987974c2ee393ee958db314e5a31678b2f5c4d8c94fbc11b41ec674d5b2';
+const APK_SHA = 'd06881bc6a0af43876d1c05d5c82e03da30607a92373be4bee929846bce69ba3';
 const CERT_SHA = 'e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb';
-const ARTIFACT_ID = '10422099082';
-const RUN_ID = '35034459607';
-const ZIP_SHA = 'bd316bbc0e31297e898aafee0b8884e01fe852b3d54978ad7c1b85bb5f335e11';
+const ARTIFACT_ID = '10455040637';
+const RUN_ID = '35114761659';
+const ZIP_SHA = 'df68fdad6db37f0d114a555274f2abf3196b12b0a845a46f78a1c72b3a01bf33';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -144,8 +143,8 @@ test('physical signing tool is deterministic, local-only and certificate-bound',
 
 test('worktrees default to the exact current tablet-loopback tuple', () => {
   const source = read('worktrees.sh');
-  assert.match(source, new RegExp(escaped(CURRENT_ANDROID_SHA)));
-  assert.match(source, new RegExp(escaped(CURRENT_HOST_SHA)));
+  assert.match(source, new RegExp(escaped(ANDROID_SHA)));
+  assert.match(source, new RegExp(escaped(HOST_SHA)));
   assert.match(source, new RegExp(escaped(MAIN_SHA)));
 });
 
@@ -376,7 +375,7 @@ test('v0.17 transport reconciliation freezes direct tablet loopback without movi
   assert.match(source, /adbReversePort=null/);
   assert.match(source, /SELF_ADB_WIRELESS_DEBUGGING/);
   assert.match(source, /no `adb reverse` mapping may exist/);
-  assert.match(source, new RegExp(escaped(ANDROID_SHA)));
+  assert.match(source, new RegExp(escaped(LEGACY_V017_ANDROID_SHA)));
   assert.match(source, /does not authorize execution/i);
   assert.match(source, /unblock W16/i);
 });

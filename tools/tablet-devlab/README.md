@@ -53,15 +53,15 @@ Last packaged physical tuple (v0.17 historical candidate; superseded for the nex
 
 ```text
 main      77f0f8532197025ee913dd02fcb56878d9d667a9
-android   40246031b2e1b1ef8e232db4d4d2ea6687f8ecf7
-host      7d9c9bebb8d12b00b8e0629387edd483e14638b6
-packaging 003f75c8b81ca0819fcc14e5f27191ef7979cbae
-run       35034459607
-artifact  10422099082
-name      aurora-w15j-v017-presign-apk-40246031-host-7d9c9beb
-zip       bd316bbc0e31297e898aafee0b8884e01fe852b3d54978ad7c1b85bb5f335e11
-presign   5c80079a0f13b13a649df3492e0a1364eae5fa7f343f8bf2defef08920996e4d
-apk       f1d390cc6743b0d235fd62451caf39c0f8bf169281dfbe734e5bc6300d4d657d
+android   19a6327ae84f52aa911f81bf6cc70f057e7bb2a7
+host      56255f74ae9a542ee017ca0f81047bc4d12f5580
+packaging 524f28baf3eea1e7f9884ac7597187fcd12e740f
+run       35114761659
+artifact  10455040637
+name      aurora-w15j-v017r2-presign-apk-19a6327a-host-56255f74
+zip       df68fdad6db37f0d114a555274f2abf3196b12b0a845a46f78a1c72b3a01bf33
+presign   1220a987974c2ee393ee958db314e5a31678b2f5c4d8c94fbc11b41ec674d5b2
+apk       d06881bc6a0af43876d1c05d5c82e03da30607a92373be4bee929846bce69ba3
 signer    e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb
 transport LOCAL_TABLET_LOOPBACK
 ```
