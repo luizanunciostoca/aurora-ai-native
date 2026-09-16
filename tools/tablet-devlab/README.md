@@ -157,6 +157,8 @@ A PASS here means `PASS_SOFTWARE_ONLY`. It verifies current host identity, secur
 bash tools/tablet-devlab/run-host.sh
 ```
 
+Before any W03 execution-state seed can be staged, the launcher socket-probes fixed LOCAL ports `8080/8081` and fails closed if an older PRoot host still owns either port. This avoids contaminating durable W03 state when a stale host is the real startup blocker.
+
 ## Bootstrap refresh on the same live host
 
 The W14 bootstrap reference is deliberately one-shot and short-lived. Do not restart a healthy host merely because an earlier `gbr_...` reference expired or was already consumed. Once `run-host.sh` is still alive and both listeners remain on the same `hostInstanceId`, request a fresh reference with:

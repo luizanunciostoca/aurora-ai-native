@@ -52,6 +52,8 @@ test('tablet host remains fail closed until trusted provider is configured', () 
   assert.match(launcher, /AURORA_W15J_PROVIDER_MODULE/);
   assert.match(launcher, /AURORA_W15J_BOOTSTRAP_REFRESH_FILE/);
   assert.match(launcher, /AURORA_W15J_BOOTSTRAP_RECONNECT_FILE/);
+  assert.match(launcher, /fixed LOCAL ports 8080\/8081 are unavailable/);
+  assert.match(launcher, /socket\.SO_REUSEADDR/);
   assert.match(provider, /throw new Error/);
   assert.match(provider, /authorizesExecution: false/);
   assert.match(provider, /canGrantPermission: false/);

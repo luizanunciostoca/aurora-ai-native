@@ -18,6 +18,7 @@ secure_regular_file() {
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
 command -v proot-distro >/dev/null 2>&1 || fail "proot-distro is missing"
 command -v git >/dev/null 2>&1 || fail "git is missing"
+command -v python >/dev/null 2>&1 || fail "python is missing"
 
 DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 HOST_DIR="$DEVLAB_ROOT/worktrees/host"
@@ -57,6 +58,28 @@ for bootstrap_control_file in "$BOOTSTRAP_REFRESH_FILE" "$BOOTSTRAP_RECONNECT_FI
     rm -f -- "$bootstrap_control_file"
   fi
 done
+
+# Fail before the provider can stage W03 state when a stale LOCAL host already owns the fixed ports.
+# Socket bind is used instead of /proc/ss because Android may hide PRoot listener ownership.
+python - <<'PY_PORTS' || fail "fixed LOCAL ports 8080/8081 are unavailable; stop the stale host before retrying"
+import socket
+
+sockets = []
+try:
+    for port in (8080, 8081):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(('127.0.0.1', port))
+        except OSError as error:
+            print(f'AURORA_W15J_FIXED_PORT_PRECHECK=OCCUPIED port={port} errno={error.errno}')
+            sock.close()
+            raise SystemExit(41)
+        sockets.append(sock)
+finally:
+    for sock in sockets:
+        sock.close()
+PY_PORTS
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
 READINESS_DIR="$READINESS_PARENT/$RUN_ID"
 [[ ! -e "$READINESS_DIR" ]] || fail "readiness path unexpectedly exists: $READINESS_DIR"
