@@ -90,6 +90,9 @@ class GatewayOfflineExecutionRuntime internal constructor(
         if (
             current.commandId != commandId ||
             current.executionId != envelope.executionId ||
+            current.w14.tenantId != envelope.tenantId ||
+            current.w14.deviceId != envelope.deviceId ||
+            current.w14.deviceSessionId != envelope.deviceSessionId ||
             currentAuthorization == null ||
             currentAuthorization != authorization ||
             current.w03.state != GatewayOfflineW03State.ACCEPTED

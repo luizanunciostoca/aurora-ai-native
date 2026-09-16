@@ -5,6 +5,12 @@ import ai.aurora.device.capability.NativeCapabilityBinding
 
 private val SHA256_HEX = Regex("^[a-f0-9]{64}$")
 private const val MAX_W07_AUTHORIZATION_AGE_MS = 30_000L
+private val OFFLINE_TENANT_ID = Regex("^ten_[0-9A-HJKMNP-TV-Z]{26}$")
+private val OFFLINE_DEVICE_ID = Regex("^dvc_[0-9A-HJKMNP-TV-Z]{26}$")
+private val OFFLINE_COMMAND_ID = Regex("^cmd_[0-9A-HJKMNP-TV-Z]{26}$")
+private val OFFLINE_EXECUTION_ID = Regex("^exe_[0-9A-HJKMNP-TV-Z]{26}$")
+private val OFFLINE_IDEMPOTENCY_KEY = Regex("^w14f:cmd_[0-9A-HJKMNP-TV-Z]{26}$")
+private fun boundedOfflineToken(value: String) = value.isNotBlank() && value.length <= 256 && value == value.trim()
 
 data class GatewayProjectionProvenance(
     val sourceRef: String,
@@ -121,13 +127,42 @@ data class GatewayOfflineW03Projection(
     val operationName: String,
     val canonicalPayloadHash: String,
     val state: GatewayOfflineW03State,
+    val attemptNumber: Int,
+    val maxAttempts: Int,
+    val version: Int,
+    val updatedAt: String,
     val authorizesExecution: Boolean = false,
     val retryAuthorized: Boolean = false,
 ) {
     init {
-        require(tenantId.isNotBlank() && key.isNotBlank() && operationName.isNotBlank())
+        require(OFFLINE_TENANT_ID.matches(tenantId))
+        require(OFFLINE_IDEMPOTENCY_KEY.matches(key))
+        require(operationName == "W15J_DEVICE_EXECUTION_V1")
         require(canonicalPayloadHash.matches(Regex("^sha256:[0-9a-f]{64}$")))
+        require(attemptNumber > 0 && maxAttempts >= attemptNumber && version > 0)
+        require(runCatching { java.time.Instant.parse(updatedAt) }.isSuccess)
         require(!authorizesExecution && !retryAuthorized)
+    }
+}
+
+data class GatewayOfflineW14BindingView(
+    val tenantId: String,
+    val deviceId: String,
+    val deviceSessionId: String,
+    val gatewaySessionId: String,
+    val connectionId: String,
+    val gatewayGeneration: Int,
+    val registrationVersion: Int,
+    val authorizesExecution: Boolean = false,
+    val canGrantPermission: Boolean = false,
+    val retryAuthorized: Boolean = false,
+) {
+    init {
+        require(OFFLINE_TENANT_ID.matches(tenantId))
+        require(OFFLINE_DEVICE_ID.matches(deviceId))
+        require(listOf(deviceSessionId, gatewaySessionId, connectionId).all(::boundedOfflineToken))
+        require(gatewayGeneration > 0 && registrationVersion > 0)
+        require(!authorizesExecution && !canGrantPermission && !retryAuthorized)
     }
 }
 
@@ -135,14 +170,20 @@ data class GatewayOfflineCurrentView(
     val commandId: String,
     val executionId: String,
     val w03: GatewayOfflineW03Projection,
+    val w14: GatewayOfflineW14BindingView,
     val executionAuthorization: GatewayW07DeviceExecutionAuthorizationView?,
     val authorizesExecution: Boolean = false,
     val provesExecutionSuccess: Boolean = false,
     val retryAuthorized: Boolean = false,
 ) {
     init {
-        require(commandId.isNotBlank() && executionId.isNotBlank())
+        require(OFFLINE_COMMAND_ID.matches(commandId))
+        require(OFFLINE_EXECUTION_ID.matches(executionId))
+        require(w03.key == "w14f:$commandId")
+        require(w03.tenantId == w14.tenantId)
         require(executionAuthorization == null || executionAuthorization.executionId == executionId)
+        require(executionAuthorization == null || executionAuthorization.tenantId == w14.tenantId)
+        require(executionAuthorization == null || executionAuthorization.deviceId == w14.deviceId)
         require(!authorizesExecution && !provesExecutionSuccess && !retryAuthorized)
     }
 }

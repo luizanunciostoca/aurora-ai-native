@@ -212,6 +212,63 @@ class GatewayDevicePlaneClientTest {
     }
 
     @Test
+    fun `offline current parses exact W03 W07 W14 owner projection without authority`() {
+        val channel = FakeChannel(
+            gatewayResponse("conn-1", generation = 1),
+            registrationResponse("REGISTERED", version = 1),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-1", generation = 1, version = 2),
+        )
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory { channel },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = RecordingAcceptance(),
+            nowMs = { 500 },
+        )
+        assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
+        channel.enqueue(GatewayHttpResponse(200, offlineCurrentResponse()))
+
+        val key = "w14f:cmd_01J00000000000000000000000"
+        val result = client.fetchOfflineCurrent(key) as GatewayDevicePlaneResult.Success
+        assertEquals("ACCEPTED", result.value.w03.state.name)
+        assertEquals(1, result.value.w03.attemptNumber)
+        assertEquals(1, result.value.w03.version)
+        assertEquals("dvc_01J00000000000000000000000", result.value.w14.deviceId)
+        assertEquals(1, result.value.w14.gatewayGeneration)
+        assertFalse(result.value.authorizesExecution)
+        assertFalse(result.value.retryAuthorized)
+    }
+
+    @Test
+    fun `offline current rejects W03 schema drift and authority-bearing W14 binding`() {
+        fun parse(body: String): GatewayDevicePlaneResult<GatewayOfflineCurrentView> {
+            val channel = FakeChannel(
+                gatewayResponse("conn-1", generation = 1),
+                registrationResponse("REGISTERED", version = 1),
+                registrationResponse("ACTIVE", version = 2),
+                sessionResponse("conn-1", generation = 1, version = 2),
+            )
+            val client = GatewayDevicePlaneClient(
+                channelFactory = GatewayHttpChannelFactory { channel },
+                proofFactory = RecordingProofFactory(),
+                sessionAcceptance = RecordingAcceptance(),
+                nowMs = { 500 },
+            )
+            assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
+            channel.enqueue(GatewayHttpResponse(200, body))
+            return client.fetchOfflineCurrent("w14f:cmd_01J00000000000000000000000")
+        }
+
+        val invalidAttempt = parse(offlineCurrentResponse().replace("\"attemptNumber\":1", "\"attemptNumber\":0"))
+        val authorityBearing = parse(offlineCurrentResponse().replace("\"canGrantPermission\":false", "\"canGrantPermission\":true"))
+        for (result in listOf(invalidAttempt, authorityBearing)) {
+            result as GatewayDevicePlaneResult.Rejected
+            assertEquals(GatewayDevicePlaneClientError.PROTOCOL_MALFORMED, result.error)
+            assertFalse(result.retryAuthorized)
+        }
+    }
+
+    @Test
     fun `reconnect opens a fresh channel and resumes using previous connection evidence`() {
         val initial = FakeChannel(
             gatewayResponse("conn-1", generation = 1),
@@ -478,6 +535,9 @@ class GatewayDevicePlaneClientTest {
 
     private fun receiptResponse(classification: String, requiresReconciliation: Boolean): String =
         """{"ok":true,"value":{"classification":"$classification","durableReference":"durable:1","receiptReference":"receipt:1","requiresW07Reconciliation":$requiresReconciliation,"authoritySemantics":"EVIDENCE_INPUT_ONLY_W07_OWNS_OUTCOME_AND_RETRY","authorizesExecution":false,"canGrantPermission":false,"provesExecutionSuccess":false,"retryAuthorized":false},"authorizesExecution":false,"retryAuthorized":false}"""
+
+    private fun offlineCurrentResponse(): String =
+        """{"ok":true,"value":{"commandId":"cmd_01J00000000000000000000000","executionId":"exe_01J00000000000000000000000","w03":{"tenantId":"ten_01J00000000000000000000000","key":"w14f:cmd_01J00000000000000000000000","operationName":"W15J_DEVICE_EXECUTION_V1","canonicalPayloadHash":"sha256:${"a".repeat(64)}","state":"ACCEPTED","attemptNumber":1,"maxAttempts":1,"version":1,"updatedAt":"2026-09-16T14:00:00.000Z","authorizesExecution":false,"retryAuthorized":false},"w14":{"tenantId":"ten_01J00000000000000000000000","deviceId":"dvc_01J00000000000000000000000","deviceSessionId":"dvs_01J00000000000000000000000","gatewaySessionId":"gws_01J00000000000000000000000","connectionId":"conn-1","gatewayGeneration":1,"registrationVersion":2,"authorizesExecution":false,"canGrantPermission":false,"retryAuthorized":false},"executionAuthorization":null,"authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false},"authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false}"""
 
     private fun voiceProjectionWithAppBinding(): String =
         """{"ok":true,"value":{"kind":"GOVERNED_VOICE_PROJECTION","activeTenantId":"ten_01J00000000000000000000000","registry":{"registryKind":"AURORA_CANONICAL_CAPABILITY_REGISTRY","registryVersion":"1.0.0","observedAtMs":100,"expiresAtMs":1000,"provenance":{"sourceRef":"w04:dp5","contentSha256":"${"b".repeat(64)}"},"entries":[{"capabilityId":"app.open","tenantId":"ten_01J00000000000000000000000","supportedTargetKinds":["DEVICE"],"currentAvailability":"CURRENT_AVAILABLE","riskClass":"LOW","observedAtMs":100,"expiresAtMs":1000}]},"vocabulary":{"vocabularyVersion":"1.0.0","observedAtMs":100,"expiresAtMs":1000,"provenance":{"sourceRef":"w15g:dp5","contentSha256":"${"c".repeat(64)}"},"bindings":[{"commandId":"cmd_app_1","phrases":["abrir aurora"],"capabilityId":"app.open"}]},"nativeBindings":[{"capabilityId":"app.open","minApiLevel":26,"requiredFeatures":[],"requiredPermissions":[],"maxSnapshotAgeMs":30000}],"appBindings":[{"appId":"aurora.local","packageName":"ai.aurora.device.local","trustedSignerSha256":["${"a".repeat(64)}"],"routes":[{"routeId":"aurora-main","kind":"INTENT","action":"android.intent.action.MAIN","supportsReadback":true}],"maxSnapshotAgeMs":30000}],"authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false},"authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false}"""

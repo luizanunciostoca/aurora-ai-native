@@ -927,14 +927,37 @@ class GatewayDevicePlaneClient internal constructor(
             require(root.jsonBoolean("provesExecutionSuccess") == false)
             require(root.jsonBoolean("retryAuthorized") == false)
             val value = root.jsonObject("value")
-            require(value.fields.keys == setOf("commandId", "executionId", "w03", "executionAuthorization", "authorizesExecution", "provesExecutionSuccess", "retryAuthorized"))
+            require(value.fields.keys == setOf("commandId", "executionId", "w03", "w14", "executionAuthorization", "authorizesExecution", "provesExecutionSuccess", "retryAuthorized"))
             requireNoAuthority(value)
             require(value.jsonBoolean("provesExecutionSuccess") == false)
             require(value.jsonBoolean("retryAuthorized") == false)
+            val commandId = value.jsonString("commandId")
+            val executionId = value.jsonString("executionId")
+            require(commandId.matches(Regex("^cmd_[0-9A-HJKMNP-TV-Z]{26}$")))
+            require(executionId.matches(Regex("^exe_[0-9A-HJKMNP-TV-Z]{26}$")))
+            require(expectedKey == "w14f:$commandId")
             val w03 = value.jsonObject("w03")
+            require(w03.fields.keys == setOf("tenantId", "key", "operationName", "canonicalPayloadHash", "state", "attemptNumber", "maxAttempts", "version", "updatedAt", "authorizesExecution", "retryAuthorized"))
             require(w03.jsonString("key") == expectedKey)
             require(w03.jsonBoolean("authorizesExecution") == false)
             require(w03.jsonBoolean("retryAuthorized") == false)
+            val w14 = value.jsonObject("w14")
+            require(w14.fields.keys == setOf("tenantId", "deviceId", "deviceSessionId", "gatewaySessionId", "connectionId", "gatewayGeneration", "registrationVersion", "authorizesExecution", "canGrantPermission", "retryAuthorized"))
+            require(w14.jsonBoolean("authorizesExecution") == false)
+            require(w14.jsonBoolean("canGrantPermission") == false)
+            require(w14.jsonBoolean("retryAuthorized") == false)
+            val w14Binding = GatewayOfflineW14BindingView(
+                tenantId = w14.jsonString("tenantId"),
+                deviceId = w14.jsonString("deviceId"),
+                deviceSessionId = w14.jsonString("deviceSessionId"),
+                gatewaySessionId = w14.jsonString("gatewaySessionId"),
+                connectionId = w14.jsonString("connectionId"),
+                gatewayGeneration = w14.jsonInt("gatewayGeneration"),
+                registrationVersion = w14.jsonInt("registrationVersion"),
+                authorizesExecution = w14.jsonBoolean("authorizesExecution"),
+                canGrantPermission = w14.jsonBoolean("canGrantPermission"),
+                retryAuthorized = w14.jsonBoolean("retryAuthorized"),
+            )
             val rawAuthorization = value.fields["executionAuthorization"]
             val authorization = when (rawAuthorization) {
                 JsonValue.NullValue -> null
@@ -942,17 +965,22 @@ class GatewayDevicePlaneClient internal constructor(
                 else -> error("executionAuthorization must be object or null")
             }
             GatewayOfflineCurrentView(
-                commandId = value.jsonString("commandId"),
-                executionId = value.jsonString("executionId"),
+                commandId = commandId,
+                executionId = executionId,
                 w03 = GatewayOfflineW03Projection(
                     tenantId = w03.jsonString("tenantId"),
                     key = w03.jsonString("key"),
                     operationName = w03.jsonString("operationName"),
                     canonicalPayloadHash = w03.jsonString("canonicalPayloadHash"),
                     state = GatewayOfflineW03State.valueOf(w03.jsonString("state")),
+                    attemptNumber = w03.jsonInt("attemptNumber"),
+                    maxAttempts = w03.jsonInt("maxAttempts"),
+                    version = w03.jsonInt("version"),
+                    updatedAt = w03.jsonString("updatedAt"),
                     authorizesExecution = w03.jsonBoolean("authorizesExecution"),
                     retryAuthorized = w03.jsonBoolean("retryAuthorized"),
                 ),
+                w14 = w14Binding,
                 executionAuthorization = authorization,
             )
         }
