@@ -148,6 +148,53 @@ test('validates owner-backed provider input and pins the real LOCAL runner ports
   assert.equal(handle.hostInstanceId, `whi_${'a'.repeat(64)}`);
 });
 
+test('accepts the optional non-authoritative offline execution identity owner', async () => {
+  let captured: W15JLocalPhysicalHostRunnerInput | undefined;
+  const offlineExecutionIdentity = {
+    current: () => ({
+      actionIntentId: 'act_01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      canonicalPayloadHash: `sha256:${'a'.repeat(64)}`,
+      circuitKey: 'w15j:test:offline',
+      authorizesExecution: false as const,
+    }),
+  };
+  await startW15JLocalPhysicalHostOperator(
+    provider({
+      databaseUrl: 'postgresql://runtime.invalid/aurora',
+      dependencies: { ...dependencies(), offlineExecutionIdentity },
+      principal: principal(),
+    }),
+    {
+      now: () => NOW,
+      startRunner: async (input) => {
+        captured = input;
+        return {
+          address: {
+            gateway: { protocol: 'http', host: '127.0.0.1', port: 8080 },
+            bootstrap: {
+              protocol: 'http',
+              host: '127.0.0.1',
+              port: 8081,
+              path: '/v1/gateway/bootstrap/exchange',
+            },
+            hostMode: 'LOOPBACK_ONLY',
+            physicalEvidenceStatus: 'NOT_RUN',
+            authorizesExecution: false,
+            hostInstanceId: `whi_${'c'.repeat(64)}`,
+          },
+          hostInstanceId: `whi_${'c'.repeat(64)}`,
+          bootstrapReference: `gbr_${'C'.repeat(43)}`,
+          bootstrapExpiresAtMs: NOW + 60_000,
+          physicalEvidenceStatus: 'NOT_RUN',
+          authorizesExecution: false,
+          stop: async () => undefined,
+        };
+      },
+    },
+  );
+  assert.equal(captured?.dependencies.offlineExecutionIdentity, offlineExecutionIdentity);
+});
+
 test('preserves up to eight non-authoritative W03 execution seeds for the runner', async () => {
   let captured: W15JLocalPhysicalHostRunnerInput | undefined;
   const seed = (suffix: 'A' | 'B') => ({
@@ -259,6 +306,21 @@ test('rejects invalid modules, failed factories and malformed/non-owner-backed i
           dependencies: {
             receiptEvidenceIngress: { observe: () => ({ ok: false }) },
             voiceIntake: { evaluate: () => ({ ok: false }) },
+          },
+          principal: principal(),
+        }),
+        { now: () => NOW },
+      ),
+    'PROVIDER_INPUT_INVALID',
+  );
+  await rejectsWithCode(
+    () =>
+      startW15JLocalPhysicalHostOperator(
+        provider({
+          databaseUrl: 'postgresql://runtime.invalid/aurora',
+          dependencies: {
+            ...dependencies(),
+            offlineExecutionIdentity: { current: 'not-a-function' },
           },
           principal: principal(),
         }),

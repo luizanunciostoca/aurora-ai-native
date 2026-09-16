@@ -20,6 +20,10 @@ const DEPENDENCY_KEYS = new Set([
   'createContainmentLifecycle',
   'createAttemptLifecycle',
 ]);
+const DEPENDENCY_KEYS_WITH_OFFLINE_IDENTITY = new Set([
+  ...DEPENDENCY_KEYS,
+  'offlineExecutionIdentity',
+]);
 const PRINCIPAL_KEYS = new Set([
   'tenantId',
   'actor',
@@ -152,15 +156,26 @@ function validPrincipal(
 }
 
 function validDependencies(value: unknown): value is W15JLocalPhysicalHostDependencies {
-  if (!plainDataRecord(value) || !hasExactKeys(value, DEPENDENCY_KEYS)) return false;
+  if (
+    !plainDataRecord(value) ||
+    (!hasExactKeys(value, DEPENDENCY_KEYS) &&
+      !hasExactKeys(value, DEPENDENCY_KEYS_WITH_OFFLINE_IDENTITY))
+  ) {
+    return false;
+  }
   const receiptEvidenceIngress = value.receiptEvidenceIngress;
+  const offlineExecutionIdentity = value.offlineExecutionIdentity;
   return (
     receiptEvidenceIngress !== null &&
     typeof receiptEvidenceIngress === 'object' &&
     typeof (receiptEvidenceIngress as { observe?: unknown }).observe === 'function' &&
     typeof value.createVoiceIntake === 'function' &&
     typeof value.createContainmentLifecycle === 'function' &&
-    typeof value.createAttemptLifecycle === 'function'
+    typeof value.createAttemptLifecycle === 'function' &&
+    (offlineExecutionIdentity === undefined ||
+      (offlineExecutionIdentity !== null &&
+        typeof offlineExecutionIdentity === 'object' &&
+        typeof (offlineExecutionIdentity as { current?: unknown }).current === 'function'))
   );
 }
 
