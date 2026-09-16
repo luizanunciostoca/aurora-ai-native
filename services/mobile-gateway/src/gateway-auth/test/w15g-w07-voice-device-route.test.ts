@@ -7,6 +7,7 @@ import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids'
 
 import {
   GatewayVoiceDevicePlaneNetworkHandler,
+  OFFLINE_CURRENT_DEVICE_ROUTE,
   VOICE_CANDIDATE_DEVICE_ROUTE,
   VoiceCandidateNetworkBoundary,
   type GatewayDevicePlaneHandleInput,
@@ -308,4 +309,93 @@ test('adds only the governed voice route while preserving the accepted W14 route
   assert.equal(route.isRoute(VOICE_CANDIDATE_DEVICE_ROUTE), true);
   assert.equal(route.isRoute('/v1/device/commands/claim'), true);
   assert.equal(route.isRoute('/v1/not-allowlisted'), false);
+});
+
+test('offline current projects bound W03 and still-current W07 without minting authority', async () => {
+  const sessions = new FakeDeviceSessions();
+  const commandId = 'cmd_01ARZ3NDEKTSV4RRFFQ69G5FAV';
+  const executionId = 'exe_01ARZ3NDEKTSV4RRFFQ69G5FAV';
+  const idempotencyKey = `w14f:${commandId}`;
+  const boundary = new VoiceCandidateNetworkBoundary({
+    evaluate: () => null,
+    currentExecutionAuthorization: ({ nowMs }) => ({
+      kind: 'W07_DEVICE_EXECUTION_AUTHORIZATION',
+      executionId,
+      tenantId: TENANT,
+      deviceId: DEVICE_ID,
+      capabilityId: 'device.audio.volume',
+      targetKind: 'DEVICE',
+      authoritySource: 'W07_CURRENT_EXECUTION_AUTHORITY',
+      actionId: 'AUDIO_VOLUME_STEP_UP',
+      arguments: {},
+      authorizedAtMs: nowMs - 100,
+      expiresAtMs: nowMs + 1_000,
+      authorizesExecution: true,
+      cancelled: false,
+    }),
+  });
+  const route = new GatewayVoiceDevicePlaneNetworkHandler(
+    {
+      devices: {},
+      deviceSessions: sessions,
+      realtimeCommands: {},
+      deliveries: {},
+      receiptIngress: {},
+      deviceProofVerifier: {},
+    },
+    {
+      deviceSessions: sessions,
+      voiceCandidates: boundary,
+      deliveries: {
+        get: () => ({
+          ok: true,
+          value: {
+            idempotencyKey,
+            commandId,
+            executionId,
+            tenantId: TENANT,
+            deviceId: DEVICE_ID,
+            correlationId: CORRELATION,
+          },
+        }),
+      },
+      durableReservations: {
+        currentDelivery: () => ({
+          tenantId: TENANT,
+          idempotencyKey,
+          operationName: 'W14_DEVICE_DELIVERY_V1',
+          canonicalPayloadHash: `sha256:${'a'.repeat(64)}`,
+          state: 'INFLIGHT',
+          authorizesExecution: false,
+          retryAuthorized: false,
+        }),
+      },
+    },
+  );
+  const result = await route.handle({
+    ...requestInput({ idempotencyKey }),
+    path: OFFLINE_CURRENT_DEVICE_ROUTE,
+  });
+  assert.equal(result.statusCode, 200);
+  assert.equal(isRecord(result.body), true);
+  if (!isRecord(result.body) || !isRecord(result.body.value)) throw new Error('offline response');
+  assert.equal(result.body.authorizesExecution, false);
+  assert.equal(result.body.provesExecutionSuccess, false);
+  assert.equal(result.body.retryAuthorized, false);
+  assert.equal(result.body.value.authorizesExecution, false);
+  assert.equal(isRecord(result.body.value.executionAuthorization), true);
+});
+
+test('offline current fails closed for malformed or missing owner projections', async () => {
+  const sessions = new FakeDeviceSessions();
+  const route = handler(sessions, { evaluate: () => null });
+  const malformed = await route.handle({
+    ...requestInput({ idempotencyKey: 'forged' }),
+    path: OFFLINE_CURRENT_DEVICE_ROUTE,
+  });
+  assert.equal(malformed.statusCode, 409);
+  assert.equal(isRecord(malformed.body), true);
+  if (!isRecord(malformed.body)) throw new Error('offline response');
+  assert.equal(malformed.body.authorizesExecution, false);
+  assert.equal(malformed.body.retryAuthorized, false);
 });

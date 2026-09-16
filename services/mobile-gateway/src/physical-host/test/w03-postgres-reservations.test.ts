@@ -124,6 +124,31 @@ test('delivery compatible replay is ALREADY_RESERVED and binding drift conflicts
   });
 });
 
+test('delivery current projection is read-only and bound to the canonical W03 hash', () => {
+  let hash = '';
+  const sql = new ScriptedSql((request, index) => {
+    if (index === 0) {
+      hash = request.variables.payload_hash ?? '';
+      return `RESERVED\tW14_DEVICE_DELIVERY_V1\t${hash}\tinflight\n`;
+    }
+    assert.equal(request.variables.payload_hash, undefined);
+    return `W14_DEVICE_DELIVERY_V1\t${hash}\tinflight\n`;
+  });
+  const adapter = new W03PostgresDeviceReservationAdapter(sql);
+  const request = deliveryRequest();
+  assert.equal(deliveryReserve(adapter, request).ok, true);
+  assert.deepEqual(adapter.currentDelivery(request), {
+    tenantId: TENANT,
+    idempotencyKey: request.idempotencyKey,
+    operationName: 'W14_DEVICE_DELIVERY_V1',
+    canonicalPayloadHash: `sha256:${hash}`,
+    state: 'INFLIGHT',
+    authorizesExecution: false,
+    retryAuthorized: false,
+  });
+  assert.match(sql.requests[1]?.sql ?? '', /^SELECT operation_name/u);
+});
+
 test('receipt reservation and completion share one W03 durable identity', () => {
   const sql = new ScriptedSql((request, index) => {
     const hash = request.variables.payload_hash;

@@ -51,6 +51,13 @@ FROM w03_idempotency_key
 WHERE tenant_id = :'tenant_id' AND idempotency_key = :'idempotency_key';
 `.trim();
 
+const READ_DELIVERY_SQL = String.raw`
+SELECT operation_name, lower(canonical_payload_hash), status
+FROM w03_idempotency_key
+WHERE tenant_id = :'tenant_id' AND idempotency_key = :'idempotency_key'
+LIMIT 1;
+`.trim();
+
 const COMPLETE_SQL = String.raw`
 WITH updated AS (
   UPDATE w03_idempotency_key
@@ -93,6 +100,16 @@ type ExecFileSyncLike = (
     timeout: number;
   }>,
 ) => string;
+
+export interface W03DeliveryProjection {
+  readonly tenantId: string;
+  readonly idempotencyKey: string;
+  readonly operationName: typeof DELIVERY_OPERATION;
+  readonly canonicalPayloadHash: string;
+  readonly state: 'ACCEPTED' | 'REJECTED' | 'INFLIGHT' | 'COMPLETED';
+  readonly authorizesExecution: false;
+  readonly retryAuthorized: false;
+}
 
 export interface PsqlW03SyncExecutorConfig {
   readonly databaseUrl: string;
@@ -363,6 +380,45 @@ export class W03PostgresDeviceReservationAdapter
 
   constructor(sql: W03SyncSqlExecutor) {
     this.#sql = sql;
+  }
+
+  currentDelivery(request: W03DurableDeliveryReservationRequest): W03DeliveryProjection | null {
+    if (deliveryMalformed(request) !== null) return null;
+    const expectedHash = deliveryHash(request);
+    let row: CompletionRow | null;
+    try {
+      row = parseCompletionRow(
+        this.#sql.query({
+          sql: READ_DELIVERY_SQL,
+          variables: { tenant_id: request.tenantId, idempotency_key: request.idempotencyKey },
+        }),
+      );
+    } catch {
+      return null;
+    }
+    if (
+      row === null ||
+      row.operationName !== DELIVERY_OPERATION ||
+      row.payloadHash !== expectedHash
+    )
+      return null;
+    const states = {
+      accepted: 'ACCEPTED',
+      rejected: 'REJECTED',
+      inflight: 'INFLIGHT',
+      completed: 'COMPLETED',
+    } as const;
+    const state = states[row.status as keyof typeof states];
+    if (state === undefined) return null;
+    return Object.freeze({
+      tenantId: request.tenantId,
+      idempotencyKey: request.idempotencyKey,
+      operationName: DELIVERY_OPERATION,
+      canonicalPayloadHash: `sha256:${expectedHash}`,
+      state,
+      authorizesExecution: false,
+      retryAuthorized: false,
+    });
   }
 
   reserve(request: W03DurableDeliveryReservationRequest): W03DurableDeliveryReservationResult;

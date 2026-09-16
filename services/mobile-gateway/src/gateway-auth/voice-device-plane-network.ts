@@ -12,8 +12,13 @@ import { VOICE_PROJECTION_DEVICE_ROUTE } from './voice-projection-network.js';
 
 export const VOICE_CANDIDATE_DEVICE_ROUTE = '/v1/device/voice/candidates/evaluate' as const;
 const COMMAND_CLAIM_ROUTE = '/v1/device/commands/claim' as const;
+export const OFFLINE_CURRENT_DEVICE_ROUTE = '/v1/device/offline/current' as const;
+const OFFLINE_CURRENT_KEYS = new Set(['idempotencyKey']);
 
 const DEVICE_ID = /^dvc_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const COMMAND_ID = /^cmd_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const EXECUTION_ID = /^exe_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const OFFLINE_IDEMPOTENCY_KEY = /^w14f:(cmd_[0-9A-HJKMNP-TV-Z]{26})$/u;
 const MAX_DATE_MS = 8_640_000_000_000_000;
 
 export interface GatewayVoiceDeviceRouteDependencies {
@@ -21,6 +26,8 @@ export interface GatewayVoiceDeviceRouteDependencies {
   readonly deviceSessions: object;
   /** Accepted W15-G -> W07 candidate, provider projection and W07 authorization boundary. */
   readonly voiceCandidates: VoiceCandidateNetworkBoundary;
+  readonly deliveries?: object;
+  readonly durableReservations?: object;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -263,6 +270,97 @@ function attachExecutionAuthorization(
   };
 }
 
+function invokeMethod(target: object, method: string, ...args: unknown[]): unknown {
+  const candidate = (target as Record<string, unknown>)[method];
+  if (typeof candidate !== 'function') throw new Error(`${method} unavailable`);
+  return Reflect.apply(candidate, target, args);
+}
+
+function offlineCurrent(
+  input: GatewayDevicePlaneHandleInput,
+  dependencies: GatewayVoiceDeviceRouteDependencies,
+): GatewayDevicePlaneResponse {
+  if (
+    !isPlainRecord(input.body) ||
+    Object.keys(input.body).some((key) => !OFFLINE_CURRENT_KEYS.has(key))
+  ) {
+    return executionAuthorizationError('BODY_MALFORMED');
+  }
+  const idempotencyKey = input.body.idempotencyKey;
+  if (typeof idempotencyKey !== 'string') return executionAuthorizationError('BODY_MALFORMED');
+  const matched = OFFLINE_IDEMPOTENCY_KEY.exec(idempotencyKey);
+  const commandId = matched?.[1];
+  if (commandId === undefined || !COMMAND_ID.test(commandId))
+    return executionAuthorizationError('BODY_MALFORMED');
+  const context = currentContext(input, dependencies);
+  if (context === null) return executionAuthorizationError('AUTHENTICATED_CONTEXT_NOT_CURRENT');
+  if (dependencies.deliveries === undefined || dependencies.durableReservations === undefined)
+    return executionAuthorizationError('OFFLINE_PROJECTION_UNAVAILABLE');
+  let deliveryResult: unknown;
+  try {
+    deliveryResult = invokeMethod(dependencies.deliveries, 'get', commandId);
+  } catch {
+    return executionAuthorizationError('OFFLINE_PROJECTION_UNAVAILABLE');
+  }
+  if (
+    !isPlainRecord(deliveryResult) ||
+    deliveryResult.ok !== true ||
+    !isPlainRecord(deliveryResult.value)
+  )
+    return executionAuthorizationError('OFFLINE_PROJECTION_UNAVAILABLE');
+  const delivery = deliveryResult.value;
+  if (
+    delivery.idempotencyKey !== idempotencyKey ||
+    delivery.commandId !== commandId ||
+    delivery.tenantId !== context.tenantId ||
+    typeof delivery.executionId !== 'string' ||
+    !EXECUTION_ID.test(delivery.executionId) ||
+    delivery.deviceId !== context.deviceId ||
+    typeof delivery.correlationId !== 'string'
+  )
+    return executionAuthorizationError('OFFLINE_BINDING_MISMATCH');
+  const request = {
+    tenantId: context.tenantId,
+    correlationId: delivery.correlationId,
+    commandId,
+    executionId: delivery.executionId,
+    idempotencyKey,
+    nowMs: input.nowMs,
+  };
+  let w03: unknown;
+  try {
+    w03 = invokeMethod(dependencies.durableReservations, 'currentDelivery', request);
+  } catch {
+    return executionAuthorizationError('OFFLINE_PROJECTION_UNAVAILABLE');
+  }
+  if (!isPlainRecord(w03) || w03.authorizesExecution !== false || w03.retryAuthorized !== false)
+    return executionAuthorizationError('OFFLINE_W03_NOT_CURRENT');
+  const authorization = dependencies.voiceCandidates.currentExecutionAuthorization({
+    commandId,
+    executionId: delivery.executionId,
+    context,
+    nowMs: input.nowMs,
+  });
+  return {
+    statusCode: 200,
+    body: {
+      ok: true,
+      value: {
+        commandId,
+        executionId: delivery.executionId,
+        w03,
+        executionAuthorization: authorization,
+        authorizesExecution: false,
+        provesExecutionSuccess: false,
+        retryAuthorized: false,
+      },
+      authorizesExecution: false,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    },
+  };
+}
+
 /**
  * Narrow W15-G/W07 composition wrapper over the accepted W14 device-plane handler.
  *
@@ -285,11 +383,14 @@ export class GatewayVoiceDevicePlaneNetworkHandler extends GatewayDevicePlaneNet
     return (
       path === VOICE_CANDIDATE_DEVICE_ROUTE ||
       path === VOICE_PROJECTION_DEVICE_ROUTE ||
+      path === OFFLINE_CURRENT_DEVICE_ROUTE ||
       super.isRoute(path)
     );
   }
 
   override async handle(input: GatewayDevicePlaneHandleInput): Promise<GatewayDevicePlaneResponse> {
+    if (input.path === OFFLINE_CURRENT_DEVICE_ROUTE)
+      return offlineCurrent(input, this.#voiceDependencies);
     if (input.path === COMMAND_CLAIM_ROUTE) {
       const claimed = await super.handle(input);
       return attachExecutionAuthorization(claimed, input, this.#voiceDependencies);

@@ -467,7 +467,7 @@ export class W15JLocalPhysicalHost {
         receiptIngress,
         deviceProofVerifier,
       },
-      { deviceSessions, voiceCandidates },
+      { deviceSessions, voiceCandidates, deliveries, durableReservations },
     );
 
     this.#gatewayTransport = new GatewayHttpNetworkTransport(
