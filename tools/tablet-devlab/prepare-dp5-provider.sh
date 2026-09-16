@@ -28,12 +28,16 @@ CONFIG_DIR="$DEVLAB_ROOT/config"
 STATE_DIR="$DEVLAB_ROOT/state"
 MATERIAL="$CONFIG_DIR/w15j-dp5-material.json"
 PROVIDER="$CONFIG_DIR/trusted-w15j-provider.mjs"
+SIGNING_IDENTITY="$DEVLAB_ROOT/artifacts/FINAL_SIGNING_IDENTITY.txt"
 DB_ENV="$STATE_DIR/postgres.env"
 PROVIDER_STATE="$STATE_DIR/provider.txt"
 WORKTREE_STATE="$STATE_DIR/worktrees.txt"
 CONSENT="$STATE_DIR/dp5-effect-consent.json"
 PACKAGE_ID="${AURORA_PACKAGE_ID:-ai.aurora.device.local}"
 BINDING_XML="$STATE_DIR/.android-w14-binding-$$.xml"
+[[ -f "$SIGNING_IDENTITY" && ! -L "$SIGNING_IDENTITY" ]] || fail "final signing identity is missing"
+SIGNER_CERT_SHA="$(sed -n 's/^signer_cert_sha256=//p' "$SIGNING_IDENTITY")"
+[[ "$SIGNER_CERT_SHA" =~ ^[a-f0-9]{64}$ ]] || fail "final signer certificate digest is malformed"
 
 [[ -d "$HOST_DIR/.git" || -f "$HOST_DIR/.git" ]] || fail "host worktree missing; run worktrees.sh"
 [[ -f "$HOST_DIR/tools/physical/w15j-local-dp5-provider-runtime.mjs" ]] || \
@@ -65,7 +69,7 @@ QEMU="$(adb -s "$SERIAL" shell getprop ro.kernel.qemu | tr -d '\r\n')"
 adb -s "$SERIAL" exec-out run-as "$PACKAGE_ID" sh -c 'if [ -f shared_prefs/aurora_device_session_metadata.xml ]; then cat shared_prefs/aurora_device_session_metadata.xml; else printf "<map />\n"; fi' >"$BINDING_XML" || fail "could not read Android W14 binding state"
 chmod 600 "$BINDING_XML"
 
-python - "$MATERIAL" "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" "$BINDING_XML" <<'PY'
+python - "$MATERIAL" "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" "$BINDING_XML" "$SIGNER_CERT_SHA" <<'PY'
 import json
 import os
 import re
@@ -73,7 +77,9 @@ import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
-material_path, consent_path, main_sha, android_sha, host_sha, binding_path = sys.argv[1:]
+material_path, consent_path, main_sha, android_sha, host_sha, binding_path, signer_cert_sha = sys.argv[1:]
+if not re.fullmatch(r'[a-f0-9]{64}', signer_cert_sha):
+    raise SystemExit('final signer certificate digest is invalid')
 with open(consent_path, 'r', encoding='utf-8') as handle:
     consent = json.load(handle)
 
@@ -101,7 +107,7 @@ if (
     or consent['hostSha'] != host_sha
 ):
     raise SystemExit('DP5 effect consent tuple drifted')
-if consent['scope'] != 'ONE_BOUNDED_MEDIA_VOLUME_STEP_UP':
+if consent['scope'] != 'BOUNDED_VOLUME_STEP_AND_AURORA_SELF_LAUNCH':
     raise SystemExit('DP5 effect consent scope is invalid')
 if (
     consent['authorizesExecution'] is not False
@@ -211,6 +217,20 @@ material = {
     'orderingKey': 'device:audio:volume',
     'orderingSequence': 1,
     'circuitKey': 'w15j:device:audio:volume',
+    'appAction': {
+        'actionIntentId': f'act_{crockford26()}',
+        'commandId': f'cmd_{crockford26()}',
+        'executionId': f'exe_{crockford26()}',
+        'causationId': f'cau_{crockford26()}',
+        'policyTokenId': f'ptk_{crockford26()}',
+        'idempotencyKey': opaque('idem'),
+        'orderingKey': 'device:app:aurora',
+        'orderingSequence': 1,
+        'circuitKey': 'w15j:device:app:aurora',
+        'appId': 'aurora.local',
+        'packageName': 'ai.aurora.device.local',
+        'trustedSignerSha256': signer_cert_sha,
+    },
     'operatorApprovalReference': consent['approvalReference'],
     'authorizesExecution': False,
     'canGrantPermission': False,

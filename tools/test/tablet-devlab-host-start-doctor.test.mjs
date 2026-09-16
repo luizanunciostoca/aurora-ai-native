@@ -19,6 +19,8 @@ test('host start doctor reproduces synthetic-root prerequisites without physical
   assert.match(doctor, /w03_execution_containment/);
   assert.match(doctor, /PROVIDER_OR_OPERATOR_INPUT_REJECTED/);
   assert.match(doctor, /W03PostgresPhysicalExecutionStateStager/);
+  assert.match(doctor, /Array\.isArray\(captured\.executionStateSeed\)/);
+  assert.match(doctor, /seeds\.length > 8/);
   assert.match(doctor, /return 'STAGED\\tCONTAINMENT_INITIALIZED\\n'/);
   assert.match(doctor, /gatewayPort: 0, bootstrapPort: 0/);
   assert.match(doctor, /executionStateSeed: undefined/);

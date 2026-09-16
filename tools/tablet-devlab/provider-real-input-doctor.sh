@@ -154,7 +154,10 @@ try {
 
 if (captured === undefined) fail('OPERATOR_CAPTURE_MISSING', 35);
 if (captured.executionStateSeed === undefined) fail('EXECUTION_STATE_SEED_MISSING', 35);
-if (captured.executionStateSeed.authorizesExecution !== false) fail('EXECUTION_STATE_SEED_AUTHORITY_INVALID', 35);
+const seeds = Array.isArray(captured.executionStateSeed) ? captured.executionStateSeed : [captured.executionStateSeed];
+if (seeds.length < 1 || seeds.length > 8 || seeds.some((seed) => seed?.authorizesExecution !== false)) {
+  fail('EXECUTION_STATE_SEED_AUTHORITY_INVALID', 35);
+}
 if (captured.principal?.authorizesExecution !== false || captured.principal?.canGrantPermission !== false) {
   fail('PRINCIPAL_AUTHORITY_INVALID', 35);
 }

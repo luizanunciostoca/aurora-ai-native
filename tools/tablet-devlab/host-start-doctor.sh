@@ -152,9 +152,11 @@ const stager = new stagerModule.W03PostgresPhysicalExecutionStateStager({
     return 'STAGED\tCONTAINMENT_INITIALIZED\n';
   },
 });
-const seedShape = stager.stage(captured.executionStateSeed);
-if (!seedShape.ok || seedShape.disposition !== 'STAGED') {
-  fail('W03_SEED_SHAPE_REJECTED', 34);
+const seeds = Array.isArray(captured.executionStateSeed) ? captured.executionStateSeed : [captured.executionStateSeed];
+if (seeds.length < 1 || seeds.length > 8) fail('W03_SEED_COUNT_REJECTED', 34);
+for (const seed of seeds) {
+  const seedShape = stager.stage(seed);
+  if (!seedShape.ok || seedShape.disposition !== 'STAGED') fail('W03_SEED_SHAPE_REJECTED', 34);
 }
 
 let handle;

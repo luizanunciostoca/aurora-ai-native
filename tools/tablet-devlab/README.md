@@ -38,7 +38,18 @@ The canonical same-tablet transport is `LOCAL_TABLET_LOOPBACK`.
 
 Self-ADB is used only for external observation/control (`pm path`, `adb pull`, `am force-stop`, `dumpsys`, permission changes, process/lifecycle testing). It is not the application transport. `adb reverse` mappings for 8080/8081 are forbidden in this mode.
 
-Current exact tuple defaults:
+Current software candidate tuple (pre-packaging, not physically accepted):
+
+```text
+main      77f0f8532197025ee913dd02fcb56878d9d667a9
+android   19a6327ae84f52aa911f81bf6cc70f057e7bb2a7
+host      56255f74ae9a542ee017ca0f81047bc4d12f5580
+DP5       NOT_ACCEPTED
+W15-J     NOT_ACCEPTED
+W16       BLOCKED
+```
+
+Last packaged physical tuple (v0.17 historical candidate; superseded for the next physical window):
 
 ```text
 main      77f0f8532197025ee913dd02fcb56878d9d667a9

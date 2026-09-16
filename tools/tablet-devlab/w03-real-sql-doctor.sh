@@ -309,7 +309,10 @@ const rollbackSql = {
 };
 
 const stager = new stagerModule.W03PostgresPhysicalExecutionStateStager(rollbackSql);
-const seedDryRun = stager.stage(captured.executionStateSeed);
+const seeds = Array.isArray(captured.executionStateSeed) ? captured.executionStateSeed : [captured.executionStateSeed];
+if (seeds.length < 1 || seeds.length > 8) emitFailure('W03_SEED_COUNT_REJECTED', null, 34);
+for (const seed of seeds) {
+const seedDryRun = stager.stage(seed);
 if (!seedDryRun.ok) {
   process.stdout.write('w03_stager_code=' + seedDryRun.code + '\n');
   if (lastSqlFailure?.classification === 'OUTPUT_AMBIGUOUS') {
@@ -321,6 +324,7 @@ if (!seedDryRun.ok) {
   emitFailure('W03_SEED_REAL_DRY_RUN_REJECTED', null, 34);
 }
 if (seedDryRun.disposition !== 'STAGED') emitFailure('W03_SEED_UNEXPECTED_DISPOSITION', null, 34);
+}
 
 process.stdout.write('w03_seed_real_dry_run=PASS\n');
 process.stdout.write('W15J_W03_REAL_SQL_DOCTOR=PASS_SOFTWARE_ONLY\n');

@@ -10,6 +10,8 @@ const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', nam
 const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
 const ANDROID_SHA = '40246031b2e1b1ef8e232db4d4d2ea6687f8ecf7';
 const HOST_SHA = '7d9c9bebb8d12b00b8e0629387edd483e14638b6';
+const CURRENT_ANDROID_SHA = '19a6327ae84f52aa911f81bf6cc70f057e7bb2a7';
+const CURRENT_HOST_SHA = '56255f74ae9a542ee017ca0f81047bc4d12f5580';
 const PACKAGING_SHA = '003f75c8b81ca0819fcc14e5f27191ef7979cbae';
 const PRESIGN_SHA = '5c80079a0f13b13a649df3492e0a1364eae5fa7f343f8bf2defef08920996e4d';
 const APK_SHA = 'f1d390cc6743b0d235fd62451caf39c0f8bf169281dfbe734e5bc6300d4d657d';
@@ -142,8 +144,8 @@ test('physical signing tool is deterministic, local-only and certificate-bound',
 
 test('worktrees default to the exact current tablet-loopback tuple', () => {
   const source = read('worktrees.sh');
-  assert.match(source, new RegExp(escaped(ANDROID_SHA)));
-  assert.match(source, new RegExp(escaped(HOST_SHA)));
+  assert.match(source, new RegExp(escaped(CURRENT_ANDROID_SHA)));
+  assert.match(source, new RegExp(escaped(CURRENT_HOST_SHA)));
   assert.match(source, new RegExp(escaped(MAIN_SHA)));
 });
 
@@ -209,7 +211,7 @@ test('physical effect consent requires an interactive exact-tuple operator chall
   const source = read('authorize-dp5-effect.sh');
   assert.match(source, /\[\[ -t 0 && -t 1 \]\]/);
   assert.match(source, /APPROVE W15J DP5 \$CHALLENGE/);
-  assert.match(source, /ONE_BOUNDED_MEDIA_VOLUME_STEP_UP/);
+  assert.match(source, /BOUNDED_VOLUME_STEP_AND_AURORA_SELF_LAUNCH/);
   assert.match(source, /timedelta\(minutes=10\)/);
   assert.match(source, /'authorizesExecution': False/);
   assert.match(source, /'retryAuthorized': False/);
@@ -224,11 +226,13 @@ test('DP5 provider material requires both explicit opt-in and fresh interactive 
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED=YES/);
   assert.match(source, /dp5-effect-consent\.json/);
   assert.match(source, /W15J_DP5_PHYSICAL_EFFECT_CONSENT/);
-  assert.match(source, /ONE_BOUNDED_MEDIA_VOLUME_STEP_UP/);
+  assert.match(source, /BOUNDED_VOLUME_STEP_AND_AURORA_SELF_LAUNCH/);
   assert.match(source, /timedelta\(minutes=10\)/);
   assert.match(source, /consent\['approvalReference'\]/);
   assert.match(source, /'authorizesExecution': False/);
   assert.match(source, /'canGrantPermission': False/);
+  assert.match(source, /'appAction': \{/);
+  assert.match(source, /trustedSignerSha256/);
   assert.match(source, /effect_approval=INTERACTIVE_EXACT_TUPLE_OPERATOR_WINDOW/);
   assert.match(source, /dp5-effect-consent\.consumed-/);
   assert.match(source, /authorizes_execution=false/);

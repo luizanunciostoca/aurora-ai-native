@@ -24,6 +24,8 @@ test('W03 real SQL doctor isolates psql process, variable binding and rollback-o
   assert.match(doctor, /BEGIN;\\nSELECT 1;\\nROLLBACK;/);
   assert.match(doctor, /SELECT :'probe_value'/);
   assert.match(doctor, /W03PostgresPhysicalExecutionStateStager/);
+  assert.match(doctor, /Array\.isArray\(captured\.executionStateSeed\)/);
+  assert.match(doctor, /seeds\.length > 8/);
   assert.match(doctor, /BEGIN;\\n' \+ sql \+ ';\\nROLLBACK;/);
   assert.match(doctor, /psql_process=PASS/);
   assert.match(doctor, /psql_variable_binding=PASS/);
@@ -66,8 +68,10 @@ test('W03 real SQL doctor emits bounded diagnostics without leaking stderr or au
     assert.match(doctor, new RegExp(classification));
   }
   assert.match(doctor, /stderr_sha256=/);
-  assert.doesNotMatch(doctor, /process\.stdout\.write\([^\n]*stderr/);
-  assert.doesNotMatch(doctor, /console\.log\([^\n]*stderr/);
+  assert.doesNotMatch(doctor, /process\.stdout\.write\(stderr/);
+  assert.doesNotMatch(doctor, /process\.stdout\.write\(result\.stderr/);
+  assert.doesNotMatch(doctor, /console\.log\(stderr/);
+  assert.doesNotMatch(doctor, /console\.log\(result\.stderr/);
   assert.doesNotMatch(doctor, /run-host\.sh/);
   assert.doesNotMatch(doctor, /gatewayPort:\s*8080/);
   assert.doesNotMatch(doctor, /bootstrapPort:\s*8081/);

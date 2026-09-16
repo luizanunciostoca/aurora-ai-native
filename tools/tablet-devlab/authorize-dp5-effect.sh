@@ -57,7 +57,7 @@ Exact tuple:
   android $ANDROID_SHA
   host    $HOST_SHA
 
-Scope: exactly one governed media-volume step-up, only after current W02/W07 authority.
+Scope: one governed media-volume step-up plus one governed Aurora self-launch, only after current W02/W07 authority.
 This consent is not policy authority, not an execution authorization, not retry permission,
 and not physical acceptance. It only records a human operator's permission to open the
 short-lived positive-effect test window for this exact tuple.
@@ -93,7 +93,7 @@ record = {
     'mainSha': main_sha,
     'androidSha': android_sha,
     'hostSha': host_sha,
-    'scope': 'ONE_BOUNDED_MEDIA_VOLUME_STEP_UP',
+    'scope': 'BOUNDED_VOLUME_STEP_AND_AURORA_SELF_LAUNCH',
     'approvalReference': approval,
     'authorizesExecution': False,
     'retryAuthorized': False,

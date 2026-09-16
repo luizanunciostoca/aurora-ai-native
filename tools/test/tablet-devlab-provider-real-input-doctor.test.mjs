@@ -22,6 +22,8 @@ test('real provider input doctor isolates factory and operator validation withou
   assert.match(doctor, /OPERATOR_PROVIDER_INPUT_INVALID/);
   assert.match(doctor, /operator_provider_input=PASS/);
   assert.match(doctor, /execution_state_seed_present=PASS/);
+  assert.match(doctor, /Array\.isArray\(captured\.executionStateSeed\)/);
+  assert.match(doctor, /seeds\.length > 8/);
   assert.match(doctor, /startRunner: async \(input\) =>/);
   assert.match(doctor, /persists_w03_state=false/);
   assert.match(doctor, /executes_physical_effect=false/);

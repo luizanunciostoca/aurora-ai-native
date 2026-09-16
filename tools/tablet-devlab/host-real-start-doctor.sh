@@ -214,7 +214,10 @@ const rollbackSql = {
 };
 
 const stager = new stagerModule.W03PostgresPhysicalExecutionStateStager(rollbackSql);
-const seedDryRun = stager.stage(captured.executionStateSeed);
+const seeds = Array.isArray(captured.executionStateSeed) ? captured.executionStateSeed : [captured.executionStateSeed];
+if (seeds.length < 1 || seeds.length > 8) fail('W03_SEED_COUNT_REJECTED', 34);
+for (const seed of seeds) {
+const seedDryRun = stager.stage(seed);
 if (!seedDryRun.ok) {
   process.stdout.write(
     'w03_seed_real_dry_run=FAIL stager_code=' +
@@ -235,6 +238,7 @@ if (!seedDryRun.ok) {
 }
 if (seedDryRun.disposition !== 'STAGED') {
   fail('W03_SEED_UNEXPECTED_DISPOSITION', 34);
+}
 }
 
 if (await portOccupied(8080)) fail('FIXED_PORT_8080_OCCUPIED', 35);

@@ -17,6 +17,8 @@ test('real-start doctor isolates fixed-port and real-W03 startup without durable
   assert.match(doctor, /w03-postgres-reservations\.js/);
   assert.match(doctor, /new postgresModule\.PsqlW03SyncExecutor/);
   assert.match(doctor, /W03PostgresPhysicalExecutionStateStager/);
+  assert.match(doctor, /Array\.isArray\(captured\.executionStateSeed\)/);
+  assert.match(doctor, /seeds\.length > 8/);
   assert.match(doctor, /BEGIN;\\n/);
   assert.match(doctor, /ROLLBACK;/);
   assert.match(doctor, /ROLLBACK_COMMAND_TAGS/);

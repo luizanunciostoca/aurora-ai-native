@@ -75,7 +75,10 @@ if (!/^postgres(?:ql)?:\/\//u.test(input.databaseUrl)) process.exit(12);
 if (input.principal?.authorizesExecution !== false || input.principal?.canGrantPermission !== false) {
   process.exit(13);
 }
-if (input.executionStateSeed?.authorizesExecution !== false) process.exit(14);
+const seeds = Array.isArray(input.executionStateSeed) ? input.executionStateSeed : [input.executionStateSeed];
+if (seeds.length < 1 || seeds.length > 8 || seeds.some((seed) => seed?.authorizesExecution !== false)) {
+  process.exit(14);
+}
 if (input.dependencies?.receiptEvidenceIngress?.observe === undefined) process.exit(15);
 for (const name of ['createVoiceIntake', 'createContainmentLifecycle', 'createAttemptLifecycle']) {
   if (typeof input.dependencies?.[name] !== 'function') process.exit(16);
