@@ -8,7 +8,7 @@ fail() {
 
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
 [[ "${AURORA_W14_STALE_BINDING_RECOVERY:-}" == "YES" ]] || fail "explicit recovery opt-in required"
-for cmd in adb python sha256sum stat date; do
+for cmd in adb python sha256sum stat date timeout; do
   command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"
 done
 
@@ -77,9 +77,11 @@ with open(recovered, 'ab') as handle:
 PY
 chmod 600 "$RECOVERED"
 
-adb -s "$SERIAL" shell run-as "$PACKAGE_ID" sh -c \
-  'cat > shared_prefs/aurora_device_session_metadata.xml && chmod 600 shared_prefs/aurora_device_session_metadata.xml' \
-  <"$RECOVERED" || fail "could not install key-only W14 metadata"
+REMOTE_TMP="shared_prefs/.aurora_device_session_metadata.recovery.tmp"
+adb -s "$SERIAL" shell run-as "$PACKAGE_ID" rm -f "$REMOTE_TMP" >/dev/null || fail "could not clear stale recovery temp"
+timeout 5s adb -s "$SERIAL" shell run-as "$PACKAGE_ID" tee "$REMOTE_TMP" <"$RECOVERED" >/dev/null || fail "could not stage key-only W14 metadata"
+adb -s "$SERIAL" shell run-as "$PACKAGE_ID" chmod 600 "$REMOTE_TMP" >/dev/null || fail "could not secure recovery temp"
+adb -s "$SERIAL" shell run-as "$PACKAGE_ID" mv "$REMOTE_TMP" shared_prefs/aurora_device_session_metadata.xml >/dev/null || fail "could not atomically install key-only W14 metadata"
 adb -s "$SERIAL" exec-out run-as "$PACKAGE_ID" sh -c \
   'cat shared_prefs/aurora_device_session_metadata.xml' >"$AFTER" || fail "cannot verify recovered W14 metadata"
 chmod 600 "$AFTER"
