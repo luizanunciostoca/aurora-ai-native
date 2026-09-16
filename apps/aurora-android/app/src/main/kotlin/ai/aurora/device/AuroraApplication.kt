@@ -219,6 +219,7 @@ class AuroraApplication : Application() {
                     capabilityBridge = installedProjection.capabilityBridge,
                     permissionContext = this,
                     actionPort = AndroidDeviceActionPorts.create(this),
+                    appIntegrationResolver = installedProjection.appIntegrationResolver,
                 )
             }.getOrNull()
         if (consumer == null) {
@@ -283,6 +284,7 @@ class AuroraApplication : Application() {
                     capabilityBridge = installedProjection.capabilityBridge,
                     permissionContext = this,
                     actionPort = AndroidDeviceActionPorts.create(this),
+                    appIntegrationResolver = installedProjection.appIntegrationResolver,
                 )
             }.getOrNull() ?: return false
 

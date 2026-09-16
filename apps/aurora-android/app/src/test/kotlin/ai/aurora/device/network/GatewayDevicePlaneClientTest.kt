@@ -133,6 +133,35 @@ class GatewayDevicePlaneClientTest {
     }
 
     @Test
+    fun `voice projection parses non-authoritative installed app binding`() {
+        val channel =
+            FakeChannel(
+                gatewayResponse("conn-1", generation = 1),
+                registrationResponse("REGISTERED", version = 1),
+                registrationResponse("ACTIVE", version = 2),
+                sessionResponse("conn-1", generation = 1, version = 2),
+            )
+        val client =
+            GatewayDevicePlaneClient(
+                channelFactory = GatewayHttpChannelFactory { channel },
+                proofFactory = RecordingProofFactory(),
+                sessionAcceptance = RecordingAcceptance(),
+                nowMs = { 500 },
+            )
+        assertTrue(client.connect(connectRequest()) is GatewayDevicePlaneResult.Success)
+        channel.enqueue(GatewayHttpResponse(200, voiceProjectionWithAppBinding()))
+
+        val result = client.fetchVoiceProjection() as GatewayDevicePlaneResult.Success
+        val app = result.value.installedAppBindings.single()
+        assertEquals("aurora.local", app.appId)
+        assertEquals("ai.aurora.device.local", app.packageName)
+        assertEquals(setOf("a".repeat(64)), app.trustedSignerSha256)
+        assertEquals("aurora-main", app.routes.single().routeId)
+        assertFalse(result.value.authorizesExecution)
+        assertFalse(result.value.retryAuthorized)
+    }
+
+    @Test
     fun `voice candidate rejects authority-bearing acknowledgement`() {
         val channel = FakeChannel(
             gatewayResponse("conn-1", generation = 1),
@@ -371,6 +400,9 @@ class GatewayDevicePlaneClientTest {
 
     private fun receiptResponse(classification: String, requiresReconciliation: Boolean): String =
         """{"ok":true,"value":{"classification":"$classification","durableReference":"durable:1","receiptReference":"receipt:1","requiresW07Reconciliation":$requiresReconciliation,"authoritySemantics":"EVIDENCE_INPUT_ONLY_W07_OWNS_OUTCOME_AND_RETRY","authorizesExecution":false,"canGrantPermission":false,"provesExecutionSuccess":false,"retryAuthorized":false},"authorizesExecution":false,"retryAuthorized":false}"""
+
+    private fun voiceProjectionWithAppBinding(): String =
+        """{"ok":true,"value":{"kind":"GOVERNED_VOICE_PROJECTION","activeTenantId":"ten_01J00000000000000000000000","registry":{"registryKind":"AURORA_CANONICAL_CAPABILITY_REGISTRY","registryVersion":"1.0.0","observedAtMs":100,"expiresAtMs":1000,"provenance":{"sourceRef":"w04:dp5","contentSha256":"${"b".repeat(64)}"},"entries":[{"capabilityId":"app.open","tenantId":"ten_01J00000000000000000000000","supportedTargetKinds":["DEVICE"],"currentAvailability":"CURRENT_AVAILABLE","riskClass":"LOW","observedAtMs":100,"expiresAtMs":1000}]},"vocabulary":{"vocabularyVersion":"1.0.0","observedAtMs":100,"expiresAtMs":1000,"provenance":{"sourceRef":"w15g:dp5","contentSha256":"${"c".repeat(64)}"},"bindings":[{"commandId":"cmd_app_1","phrases":["abrir aurora"],"capabilityId":"app.open"}]},"nativeBindings":[{"capabilityId":"app.open","minApiLevel":26,"requiredFeatures":[],"requiredPermissions":[],"maxSnapshotAgeMs":30000}],"appBindings":[{"appId":"aurora.local","packageName":"ai.aurora.device.local","trustedSignerSha256":["${"a".repeat(64)}"],"routes":[{"routeId":"aurora-main","kind":"INTENT","action":"android.intent.action.MAIN","supportsReadback":true}],"maxSnapshotAgeMs":30000}],"authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false},"authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false}"""
 
     private fun voiceAcceptedResponse(): String =
         """{"ok":true,"acceptedForEvaluation":true,"authorizesExecution":false,"provesExecutionSuccess":false,"retryAuthorized":false}"""

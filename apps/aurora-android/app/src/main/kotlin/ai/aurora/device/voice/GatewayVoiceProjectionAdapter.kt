@@ -1,6 +1,8 @@
 package ai.aurora.device.voice
 
 import android.content.Context
+import ai.aurora.device.app.AndroidInstalledAppRuntimeProbe
+import ai.aurora.device.app.AppIntegrationResolver
 import ai.aurora.device.capability.AndroidRuntimeCapabilityProbe
 import ai.aurora.device.capability.NativeCapabilityBridge
 import ai.aurora.device.capability.NativeRuntimeProbe
@@ -9,6 +11,7 @@ import ai.aurora.device.network.GatewayGovernedVoiceProjection
 data class InstalledGatewayVoiceProjection(
     val bundle: GovernedVoiceProjectionBundle,
     val capabilityBridge: NativeCapabilityBridge,
+    val appIntegrationResolver: AppIntegrationResolver? = null,
 )
 
 /**
@@ -48,6 +51,16 @@ fun installableGatewayVoiceProjection(
             nowMs = nowMs,
         )
     val nativeObservations = capabilityBridge.discoverAll()
+    val appIntegrationResolver =
+        if (projection.installedAppBindings.isEmpty()) {
+            null
+        } else {
+            AppIntegrationResolver(
+                bindings = projection.installedAppBindings,
+                runtimeProbe = AndroidInstalledAppRuntimeProbe(requireNotNull(context)),
+                nowMs = nowMs,
+            )
+        }
 
     val bundle =
         GovernedVoiceProjectionBundle(
@@ -104,5 +117,5 @@ fun installableGatewayVoiceProjection(
 
     val catalog = GovernedVoiceCommandCatalog({ bundle }, nowMs).snapshot()
     require(catalog is GovernedVoiceCatalogResult.Ready) { "voice projection is not locally usable" }
-    return InstalledGatewayVoiceProjection(bundle, capabilityBridge)
+    return InstalledGatewayVoiceProjection(bundle, capabilityBridge, appIntegrationResolver)
 }

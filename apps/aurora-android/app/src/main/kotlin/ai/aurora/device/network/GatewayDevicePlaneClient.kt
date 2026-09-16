@@ -1,5 +1,7 @@
 package ai.aurora.device.network
 
+import ai.aurora.device.app.InstalledAppBinding
+import ai.aurora.device.app.IntentRouteBinding
 import ai.aurora.device.capability.NativeCapabilityBinding
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.config.RuntimeEnvironmentConfig
@@ -800,6 +802,7 @@ class GatewayDevicePlaneClient internal constructor(
                 maxSnapshotAgeMs = binding.jsonLong("maxSnapshotAgeMs"),
             )
         }
+        val installedAppBindings = parseInstalledAppBindings(value)
         return GatewayGovernedVoiceProjection(
             activeTenantId = value.jsonString("activeTenantId"),
             registryKind = registry.jsonString("registryKind"),
@@ -822,10 +825,36 @@ class GatewayDevicePlaneClient internal constructor(
                 ),
             bindings = bindings,
             nativeBindings = nativeBindings,
+            installedAppBindings = installedAppBindings,
             authorizesExecution = value.jsonBoolean("authorizesExecution"),
             provesExecutionSuccess = value.jsonBoolean("provesExecutionSuccess"),
             retryAuthorized = value.jsonBoolean("retryAuthorized"),
         )
+    }
+
+    private fun parseInstalledAppBindings(value: JsonValue.ObjectValue): List<InstalledAppBinding> {
+        val raw = value.fields["appBindings"] ?: return emptyList()
+        val array = raw as? JsonValue.ArrayValue ?: error("appBindings must be an array")
+        return array.values.map { item ->
+            val binding = item as? JsonValue.ObjectValue ?: error("app binding must be an object")
+            val signers = binding.jsonArray("trustedSignerSha256").map(::jsonStringValue).toSet()
+            val routes = binding.jsonArray("routes").map { routeValue ->
+                val route = routeValue as? JsonValue.ObjectValue ?: error("app route must be an object")
+                require(route.jsonString("kind") == "INTENT")
+                IntentRouteBinding(
+                    routeId = route.jsonString("routeId"),
+                    action = route.jsonString("action"),
+                    supportsReadback = route.jsonBoolean("supportsReadback"),
+                )
+            }
+            InstalledAppBinding(
+                appId = binding.jsonString("appId"),
+                packageName = binding.jsonString("packageName"),
+                trustedSignerSha256 = signers,
+                routes = routes,
+                maxSnapshotAgeMs = binding.jsonLong("maxSnapshotAgeMs"),
+            )
+        }
     }
 
     private fun parseReceipt(

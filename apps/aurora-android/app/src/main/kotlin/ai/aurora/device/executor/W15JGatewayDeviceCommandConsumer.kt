@@ -2,6 +2,8 @@ package ai.aurora.device.executor
 
 import android.content.Context
 import android.content.pm.PackageManager
+import ai.aurora.device.app.AppIntegrationResolution
+import ai.aurora.device.app.AppIntegrationResolver
 import ai.aurora.device.capability.NativeCapabilityBridge
 import ai.aurora.device.capability.NativeCapabilityResolution
 import ai.aurora.device.network.DeviceReceiptReportedState
@@ -78,6 +80,7 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
     private val capabilityObservation: CurrentNativeCapabilityObservation,
     private val permissionObservation: CurrentRuntimePermissionObservation,
     private val actionPort: DeviceActionPort,
+    private val appIntegrationResolver: AppIntegrationResolver? = null,
     private val idFactory: CanonicalLocalEvidenceIdFactory = CanonicalLocalEvidenceIdFactory(),
     private val control: DeviceExecutionControl = DeviceExecutionControl { DeviceExecutionControlSnapshot() },
     private val nowMs: () -> Long = { System.currentTimeMillis() },
@@ -177,7 +180,12 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
                 },
                 capabilityObservation = capabilityObservation,
                 permissionObservation = permissionObservation,
-                appIntegration = CurrentAppIntegrationDescriptor { null },
+                appIntegration = CurrentAppIntegrationDescriptor { appId ->
+                    when (val resolution = appIntegrationResolver?.resolve(appId)) {
+                        is AppIntegrationResolution.Ready -> resolution.descriptor
+                        else -> null
+                    }
+                },
                 control = control,
                 actionPort = actionPort,
                 nowMs = nowMs,
@@ -191,7 +199,7 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
                 deviceSessionId = envelope.deviceSessionId,
                 capabilityId = envelope.executionAuthorization.capabilityId,
                 permissionRequirements = permissionRequirements,
-                appId = null,
+                appId = envelope.appIdForAction(),
                 action =
                     DeviceActionCommand(
                         actionId = envelope.executionAuthorization.actionId,
@@ -304,6 +312,7 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
             capabilityBridge: NativeCapabilityBridge,
             permissionContext: Context,
             actionPort: DeviceActionPort,
+            appIntegrationResolver: AppIntegrationResolver? = null,
             idFactory: CanonicalLocalEvidenceIdFactory = CanonicalLocalEvidenceIdFactory(),
             control: DeviceExecutionControl =
                 DeviceExecutionControl { DeviceExecutionControlSnapshot() },
@@ -349,6 +358,7 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
                 capabilityObservation = CurrentNativeCapabilityObservation(capabilityBridge::discover),
                 permissionObservation = permissionObservation,
                 actionPort = actionPort,
+                appIntegrationResolver = appIntegrationResolver,
                 idFactory = idFactory,
                 control = control,
                 nowMs = nowMs,
@@ -389,6 +399,14 @@ private fun GatewayW07DeviceExecutionAuthorizationView.toExecutorView(): W07Auth
         authorizesExecution = authorizesExecution,
         cancelled = cancelled,
     )
+
+private fun GatewayCommandEnvelopeView.appIdForAction(): String? =
+    when (executionAuthorization.actionId) {
+        W15_OPEN_VALIDATED_APP_ACTION,
+        W15_OPEN_VALIDATED_APP_LINK_ACTION,
+        -> executionAuthorization.arguments["appId"]
+        else -> null
+    }
 
 private fun saturatingAdd(left: Long, right: Long): Long =
     if (left > Long.MAX_VALUE - right) Long.MAX_VALUE else left + right

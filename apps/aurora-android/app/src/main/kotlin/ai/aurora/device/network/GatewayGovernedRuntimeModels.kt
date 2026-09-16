@@ -1,5 +1,6 @@
 package ai.aurora.device.network
 
+import ai.aurora.device.app.InstalledAppBinding
 import ai.aurora.device.capability.NativeCapabilityBinding
 
 private val SHA256_HEX = Regex("^[a-f0-9]{64}$")
@@ -58,6 +59,7 @@ data class GatewayGovernedVoiceProjection(
     val vocabularyProvenance: GatewayProjectionProvenance,
     val bindings: List<GatewayVoiceCommandBinding>,
     val nativeBindings: List<NativeCapabilityBinding>,
+    val installedAppBindings: List<InstalledAppBinding> = emptyList(),
     val authorizesExecution: Boolean = false,
     val provesExecutionSuccess: Boolean = false,
     val retryAuthorized: Boolean = false,
@@ -72,6 +74,7 @@ data class GatewayGovernedVoiceProjection(
         require(entries.map { it.capabilityId }.toSet().size == entries.size)
         require(bindings.map { it.commandId }.toSet().size == bindings.size)
         require(nativeBindings.map { it.capabilityId }.toSet().size == nativeBindings.size)
+        require(installedAppBindings.map { it.appId }.toSet().size == installedAppBindings.size)
         require(!authorizesExecution)
         require(!provesExecutionSuccess)
         require(!retryAuthorized)

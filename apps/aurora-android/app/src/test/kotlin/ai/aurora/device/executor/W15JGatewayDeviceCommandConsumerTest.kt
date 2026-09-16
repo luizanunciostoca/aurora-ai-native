@@ -1,5 +1,12 @@
 package ai.aurora.device.executor
 
+import ai.aurora.device.app.AppInstallState
+import ai.aurora.device.app.AppIntegrationResolver
+import ai.aurora.device.app.AppRouteRuntimeObservation
+import ai.aurora.device.app.InstalledAppBinding
+import ai.aurora.device.app.InstalledAppRuntimeSnapshot
+import ai.aurora.device.app.InstalledAppRuntimeProbe
+import ai.aurora.device.app.IntentRouteBinding
 import ai.aurora.device.capability.NativeCapabilityAvailability
 import ai.aurora.device.capability.NativeCapabilityBinding
 import ai.aurora.device.capability.NativeCapabilityObservation
@@ -44,6 +51,47 @@ class W15JGatewayDeviceCommandConsumerTest {
         assertEquals(DeviceReceiptReportedState.COMPLETED, fixture.gateway.receipts.single().reportedState)
         assertTrue(fixture.gateway.receipts.single().receiptId.startsWith("rcp_"))
         assertTrue(fixture.gateway.receipts.single().evidenceId?.startsWith("evd_") == true)
+    }
+
+    @Test
+    fun `validated app descriptor reaches executor only through authorized appId`() {
+        val appAuthorization =
+            authorization(
+                capabilityId = APP_CAPABILITY_ID,
+                actionId = W15_OPEN_VALIDATED_APP_ACTION,
+                arguments = mapOf("appId" to APP_ID),
+            )
+        val fixture = Fixture(authorization = appAuthorization)
+        fixture.action.expectedActionId = W15_OPEN_VALIDATED_APP_ACTION
+        fixture.action.expectedCapabilityId = APP_CAPABILITY_ID
+        val result =
+            fixture.consumer(appIntegrationResolver = readyAppResolver())
+                .consume(COMMAND_ID) as W15JDeviceCommandConsumptionResult.Executed
+
+        assertEquals(DeviceExecutionOutcome.SUCCEEDED, result.outcome)
+        assertEquals(1, fixture.action.calls)
+        assertEquals(APP_ID, fixture.action.lastContext?.app?.appId)
+        assertEquals(APP_PACKAGE, fixture.action.lastContext?.app?.packageName)
+    }
+
+    @Test
+    fun `missing current app descriptor blocks before native app effect`() {
+        val appAuthorization =
+            authorization(
+                capabilityId = APP_CAPABILITY_ID,
+                actionId = W15_OPEN_VALIDATED_APP_ACTION,
+                arguments = mapOf("appId" to APP_ID),
+            )
+        val fixture = Fixture(authorization = appAuthorization)
+        fixture.action.expectedActionId = W15_OPEN_VALIDATED_APP_ACTION
+        fixture.action.expectedCapabilityId = APP_CAPABILITY_ID
+        val result =
+            fixture.consumer(appIntegrationResolver = null)
+                .consume(COMMAND_ID) as W15JDeviceCommandConsumptionResult.NoEffect
+
+        assertEquals(0, fixture.action.calls)
+        assertFalse(result.retryAuthorized)
+        assertEquals(DeviceReceiptReportedState.FAILED, fixture.gateway.receipts.single().reportedState)
     }
 
     @Test
@@ -170,20 +218,22 @@ class W15JGatewayDeviceCommandConsumerTest {
 
         fun consumer(
             control: DeviceExecutionControl = DeviceExecutionControl { DeviceExecutionControlSnapshot() },
+            appIntegrationResolver: AppIntegrationResolver? = null,
         ): W15JGatewayDeviceCommandConsumer =
             W15JGatewayDeviceCommandConsumer(
                 gateway = gateway,
                 capabilityResolution =
                     CurrentNativeCapabilityResolution {
                         NativeCapabilityResolution.Ready(
-                            binding = NativeCapabilityBinding(CAPABILITY_ID),
-                            observation = nativeObservation(),
+                            binding = NativeCapabilityBinding(authorization.capabilityId),
+                            observation = nativeObservation(authorization.capabilityId),
                         )
                     },
-                capabilityObservation = CurrentNativeCapabilityObservation { nativeObservation() },
+                capabilityObservation = CurrentNativeCapabilityObservation { capabilityId -> nativeObservation(capabilityId) },
                 permissionObservation =
                     CurrentRuntimePermissionObservation { requirement -> grantedPermission(requirement) },
                 actionPort = action,
+                appIntegrationResolver = appIntegrationResolver,
                 idFactory = CanonicalLocalEvidenceIdFactory(nowMs = { NOW }),
                 control = control,
                 nowMs = { NOW },
@@ -234,12 +284,16 @@ class W15JGatewayDeviceCommandConsumerTest {
 
     private class RecordingActionPort : DeviceActionPort {
         var calls = 0
-        var result: DeviceActionResult = DeviceActionResult.VerifiedSuccess("media-volume:3->4/15")
+        var result: DeviceActionResult = DeviceActionResult.VerifiedSuccess("verified-readback")
+        var expectedActionId: String = W15J_AUDIO_VOLUME_STEP_UP_ACTION
+        var expectedCapabilityId: String = CAPABILITY_ID
+        var lastContext: DeviceActionContext? = null
 
         override fun execute(command: DeviceActionCommand, context: DeviceActionContext): DeviceActionResult {
             calls += 1
-            assertEquals(W15J_AUDIO_VOLUME_STEP_UP_ACTION, command.actionId)
-            assertEquals(CAPABILITY_ID, context.capabilityId)
+            lastContext = context
+            assertEquals(expectedActionId, command.actionId)
+            assertEquals(expectedCapabilityId, context.capabilityId)
             return result
         }
     }
@@ -254,20 +308,26 @@ class W15JGatewayDeviceCommandConsumerTest {
         private const val COMMAND_ID = "cmd_01J00000000000000000000000"
         private const val CORRELATION_ID = "cor_01J00000000000000000000000"
         private const val CAPABILITY_ID = "audio.volume.set"
+        private const val APP_CAPABILITY_ID = "app.open"
+        private const val APP_ID = "aurora.local"
+        private const val APP_PACKAGE = "ai.aurora.device.local"
         private const val DELIVERY_REFERENCE = "delivery:w15j:1"
 
         private fun authorization(
             deviceId: String = DEVICE_ID,
             authorizedAtMs: Long = 900,
             expiresAtMs: Long = 1_100,
+            capabilityId: String = CAPABILITY_ID,
+            actionId: String = W15J_AUDIO_VOLUME_STEP_UP_ACTION,
+            arguments: Map<String, String> = emptyMap(),
         ) =
             GatewayW07DeviceExecutionAuthorizationView(
                 executionId = EXECUTION_ID,
                 tenantId = TENANT_ID,
                 deviceId = deviceId,
-                capabilityId = CAPABILITY_ID,
-                actionId = W15J_AUDIO_VOLUME_STEP_UP_ACTION,
-                arguments = emptyMap(),
+                capabilityId = capabilityId,
+                actionId = actionId,
+                arguments = arguments,
                 authorizedAtMs = authorizedAtMs,
                 expiresAtMs = expiresAtMs,
                 authorizesExecution = true,
@@ -359,12 +419,43 @@ class W15JGatewayDeviceCommandConsumerTest {
             )
         }
 
-        private fun nativeObservation() =
+        private fun nativeObservation(capabilityId: String = CAPABILITY_ID) =
             NativeCapabilityObservation(
-                capabilityId = CAPABILITY_ID,
+                capabilityId = capabilityId,
                 availability = NativeCapabilityAvailability.AVAILABLE,
                 observedAtMs = 950,
                 expiresAtMs = 2_000,
+            )
+
+        private fun readyAppResolver() =
+            AppIntegrationResolver(
+                bindings =
+                    listOf(
+                        InstalledAppBinding(
+                            appId = APP_ID,
+                            packageName = APP_PACKAGE,
+                            trustedSignerSha256 = setOf("a".repeat(64)),
+                            routes = listOf(IntentRouteBinding("aurora-main", "android.intent.action.MAIN", true)),
+                        ),
+                    ),
+                runtimeProbe =
+                    InstalledAppRuntimeProbe { binding ->
+                        InstalledAppRuntimeSnapshot(
+                            observedAtMs = 950,
+                            installState = AppInstallState.INSTALLED,
+                            packageName = binding.packageName,
+                            currentSignerSha256 = setOf("a".repeat(64)),
+                            routes = mapOf(
+                                "aurora-main" to
+                                    AppRouteRuntimeObservation(
+                                        routeId = "aurora-main",
+                                        available = true,
+                                        resolvedPackageName = binding.packageName,
+                                    ),
+                            ),
+                        )
+                    },
+                nowMs = { NOW },
             )
 
         private fun grantedPermission(
