@@ -25,13 +25,13 @@ jobs:
       - name: Checkout exact W15-J candidate source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          ref: 19a6327ae84f52aa911f81bf6cc70f057e7bb2a7
+          ref: 1b9abd6d75ec0a0eceb3884ee9f101a1885b7889
           persist-credentials: false
       - name: Assert exact source candidate
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "19a6327ae84f52aa911f81bf6cc70f057e7bb2a7"
+          test "$(git rev-parse HEAD)" = "1b9abd6d75ec0a0eceb3884ee9f101a1885b7889"
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
@@ -87,16 +87,16 @@ jobs:
 
           ARTIFACT_DIR=/tmp/w15j-tablet-loopback-apk
           mkdir -p "$ARTIFACT_DIR"
-          cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-v017r4-TabletLoopback-localDebug-presign.apk"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-v017r5-TabletLoopback-localDebug-presign.apk"
           (
             cd "$ARTIFACT_DIR"
-            sha256sum Aurora-W15J-v017r4-TabletLoopback-localDebug-presign.apk > SHA256SUMS.txt
+            sha256sum Aurora-W15J-v017r5-TabletLoopback-localDebug-presign.apk > SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
 
           cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
           artifact_purpose=W15-J-DP5-physical-evidence-input
-          source_candidate_sha=19a6327ae84f52aa911f81bf6cc70f057e7bb2a7
+          source_candidate_sha=1b9abd6d75ec0a0eceb3884ee9f101a1885b7889
           source_branch=wave/15j-physical-device-integration-acceptance
           paired_local_host_candidate_sha=a7903e255c00b074fb6c3ba210a69c8296b315e5
           reconciled_main_parent_sha=77f0f8532197025ee913dd02fcb56878d9d667a9
@@ -125,11 +125,11 @@ jobs:
           grep -Fxq 'gateway_transport_scope=LOCAL_TABLET_LOOPBACK' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           grep -Fxq 'gateway_origin=http://127.0.0.1:8080' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           test "$(find "$ARTIFACT_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
-          printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-v017r4-TabletLoopback-localDebug-presign.apk" | awk '{print $1}')"
+          printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-v017r5-TabletLoopback-localDebug-presign.apk" | awk '{print $1}')"
       - name: Upload exact W15-J tablet-loopback candidate APK
         uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-v017r4-presign-apk-19a6327a-host-a7903e25
+          name: aurora-w15j-v017r5-presign-apk-1b9abd6d-host-a7903e25
           path: /tmp/w15j-tablet-loopback-apk
           if-no-files-found: error
           retention-days: 14
