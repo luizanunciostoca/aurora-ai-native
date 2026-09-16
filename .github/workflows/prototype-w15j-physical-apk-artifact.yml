@@ -77,15 +77,23 @@ jobs:
           for dex in $(unzip -Z1 "$APK" | grep -E '^classes[0-9]*\.dex$'); do
             unzip -p "$APK" "$dex" | strings >> "$DEX_STRINGS"
           done
-          grep -Fxq 'aurora.wake.model.v2' "$DEX_STRINGS"
-          grep -Fxq 'aurora.wake.model.aead.v2' "$DEX_STRINGS"
-          grep -Fxq 'AES/GCM/NoPadding' "$DEX_STRINGS"
-          grep -Fxq 'audio.volume.set' "$DEX_STRINGS"
-          grep -Fxq '/v1/device/offline/current' "$DEX_STRINGS"
-          grep -Fxq 'OPEN_VALIDATED_APP' "$DEX_STRINGS"
-          grep -Fxq 'http://127.0.0.1:8080' "$DEX_STRINGS"
-          grep -Fxq 'last_evaluation_latency_ms' "$DEX_STRINGS"
-          grep -Fxq 'wake telemetry never authorizes execution' "$DEX_STRINGS"
+          for needle in \
+            'aurora.wake.model.v2' \
+            'aurora.wake.model.aead.v2' \
+            'AES/GCM/NoPadding' \
+            'audio.volume.set' \
+            '/v1/device/offline/current' \
+            'OPEN_VALIDATED_APP' \
+            'http://127.0.0.1:8080' \
+            'last_evaluation_latency_ms' \
+            'wake telemetry never authorizes execution'; do
+            if grep -Fq "$needle" "$DEX_STRINGS"; then
+              printf 'DEX_ASSERT_PASS=%s\n' "$needle"
+            else
+              printf 'DEX_ASSERT_FAIL=%s\n' "$needle" >&2
+              exit 1
+            fi
+          done
 
           ARTIFACT_DIR=/tmp/w15j-tablet-loopback-apk
           mkdir -p "$ARTIFACT_DIR"
