@@ -472,6 +472,18 @@ test('offline current projects current W03/W07/W14 state and ignores delivery IN
   assert.equal(value.w03.state, 'ACCEPTED');
   assert.equal(value.w03.authorizesExecution, false);
   assert.equal(value.w03.retryAuthorized, false);
+  assert.equal(isRecord(value.w14), true);
+  if (!isRecord(value.w14)) throw new Error('w14 projection');
+  assert.equal(value.w14.tenantId, TENANT);
+  assert.equal(value.w14.deviceId, DEVICE_ID);
+  assert.equal(value.w14.deviceSessionId, DEVICE_SESSION_ID);
+  assert.equal(value.w14.gatewaySessionId, GATEWAY_SESSION_ID);
+  assert.equal(value.w14.connectionId, CONNECTION_ID);
+  assert.equal(value.w14.gatewayGeneration, 2);
+  assert.equal(value.w14.registrationVersion, 3);
+  assert.equal(value.w14.authorizesExecution, false);
+  assert.equal(value.w14.canGrantPermission, false);
+  assert.equal(value.w14.retryAuthorized, false);
   assert.equal(isRecord(value.executionAuthorization), true);
 });
 
