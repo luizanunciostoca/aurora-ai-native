@@ -14,7 +14,7 @@ secure_regular_file() {
 }
 
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
-for cmd in python sha256sum stat git; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
+for cmd in python sha256sum stat git adb; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
 
 # The environment opt-in is intentionally necessary but no longer sufficient. The operator must
 # first create a short-lived, exact-tuple consent record through authorize-dp5-effect.sh, which
@@ -32,6 +32,8 @@ DB_ENV="$STATE_DIR/postgres.env"
 PROVIDER_STATE="$STATE_DIR/provider.txt"
 WORKTREE_STATE="$STATE_DIR/worktrees.txt"
 CONSENT="$STATE_DIR/dp5-effect-consent.json"
+PACKAGE_ID="${AURORA_PACKAGE_ID:-ai.aurora.device.local}"
+BINDING_XML="$STATE_DIR/.android-w14-binding-$$.xml"
 
 [[ -d "$HOST_DIR/.git" || -f "$HOST_DIR/.git" ]] || fail "host worktree missing; run worktrees.sh"
 [[ -f "$HOST_DIR/tools/physical/w15j-local-dp5-provider-runtime.mjs" ]] || \
@@ -53,14 +55,25 @@ mkdir -p "$CONFIG_DIR" "$STATE_DIR"
 chmod 700 "$CONFIG_DIR" "$STATE_DIR"
 umask 077
 
-python - "$MATERIAL" "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" <<'PY'
+cleanup_binding() { rm -f -- "$BINDING_XML"; }
+trap cleanup_binding EXIT
+mapfile -t DEVICES < <(adb devices | awk 'NR>1 && $2=="device" {print $1}')
+[[ "${#DEVICES[@]}" -eq 1 ]] || fail "exactly one authorized self-ADB device is required"
+SERIAL="${DEVICES[0]}"
+QEMU="$(adb -s "$SERIAL" shell getprop ro.kernel.qemu | tr -d '\r\n')"
+[[ "$QEMU" != "1" && "$SERIAL" != emulator-* ]] || fail "physical tablet required"
+adb -s "$SERIAL" exec-out run-as "$PACKAGE_ID" sh -c 'if [ -f shared_prefs/aurora_device_session_metadata.xml ]; then cat shared_prefs/aurora_device_session_metadata.xml; else printf "<map />\n"; fi' >"$BINDING_XML" || fail "could not read Android W14 binding state"
+chmod 600 "$BINDING_XML"
+
+python - "$MATERIAL" "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" "$BINDING_XML" <<'PY'
 import json
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
-material_path, consent_path, main_sha, android_sha, host_sha = sys.argv[1:]
+material_path, consent_path, main_sha, android_sha, host_sha, binding_path = sys.argv[1:]
 with open(consent_path, 'r', encoding='utf-8') as handle:
     consent = json.load(handle)
 
@@ -131,17 +144,64 @@ def opaque(prefix, n=18):
     return f'{prefix}_{raw}'
 
 iso = lambda value: value.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
+
+def android_binding(path):
+    try:
+        root = ET.parse(path).getroot()
+    except Exception as error:
+        raise SystemExit('Android W14 binding XML is invalid') from error
+    values = {}
+    for element in root:
+        name = element.attrib.get('name')
+        if not name:
+            continue
+        values[name] = element.text if element.tag == 'string' else element.attrib.get('value')
+    def text(name):
+        value = values.get(name)
+        return value if isinstance(value, str) and value else None
+    def integer(name, default):
+        try:
+            return int(values.get(name, default))
+        except (TypeError, ValueError):
+            return default
+    alias = text('key_alias')
+    generation = integer('key_generation', 0)
+    bound_version = integer('key_bound_registration_version', 0) if 'key_bound_registration_version' in values else None
+    key = alias is not None and generation > 0 and (bound_version is None or bound_version > 0)
+    device_id = text('device_id')
+    tenant_id = text('tenant_id')
+    registration_version = integer('registration_version', 0)
+    state = text('device_state')
+    registration = (device_id is not None and tenant_id is not None and registration_version > 0 and state in {'REGISTERED','ACTIVE','REVOKED','COMPROMISED','RETIRED'})
+    device_session_id = text('device_session_id')
+    connection_id = text('connection_id')
+    expires_ms = integer('gateway_auth_expires_at_ms', 0)
+    evaluated_ms = integer('last_evaluated_at_ms', -1)
+    session = key and registration and device_session_id is not None and connection_id is not None and expires_ms > 0 and evaluated_ms >= 0
+    if not registration and not session:
+        return {'mode': 'FRESH_INSTALL'}
+    if not registration or not session or state != 'ACTIVE':
+        raise SystemExit('Android W14 binding is incomplete or not ACTIVE; refusing DP5 provider material')
+    if not re.fullmatch(r'dvc_[0-9A-HJKMNP-TV-Z]{26}', device_id):
+        raise SystemExit('Android W14 device binding is malformed')
+    if not re.fullmatch(r'ten_[0-9A-HJKMNP-TV-Z]{26}', tenant_id):
+        raise SystemExit('Android W14 tenant binding is malformed')
+    if not re.fullmatch(r'[A-Za-z0-9._:/+-]{1,128}', device_session_id):
+        raise SystemExit('Android W14 session binding is malformed')
+    return {'mode': 'BOUND', 'tenantId': tenant_id, 'deviceId': device_id, 'deviceSessionId': device_session_id}
+
+binding = android_binding(binding_path)
 material = {
     'kind': 'W15J_LOCAL_DP5_OPERATOR_MATERIAL',
     'schemaVersion': '1.0.0',
     'generatedAt': iso(now),
     'expiresAt': iso(expires),
-    'tenantId': f'ten_{crockford26()}',
+    'tenantId': binding['tenantId'] if binding['mode'] == 'BOUND' else f'ten_{crockford26()}',
     'actorIdentityId': f'idn_{crockford26()}',
     'subjectIdentityId': f'idn_{crockford26()}',
     'correlationId': f'cor_{crockford26()}',
-    'deviceId': f'dvc_{crockford26()}',
-    'deviceSessionId': opaque('dss'),
+    'deviceId': binding['deviceId'] if binding['mode'] == 'BOUND' else f'dvc_{crockford26()}',
+    'deviceSessionId': binding['deviceSessionId'] if binding['mode'] == 'BOUND' else opaque('dss'),
     'actionIntentId': f'act_{crockford26()}',
     'commandId': f'cmd_{crockford26()}',
     'executionId': f'exe_{crockford26()}',

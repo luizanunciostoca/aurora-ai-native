@@ -214,6 +214,20 @@ test('DP5 provider material requires both explicit opt-in and fresh interactive 
   assert.match(source, /physical_acceptance=false/);
 });
 
+test('DP5 provider preserves an existing ACTIVE Android W14 binding', () => {
+  const source = read('prepare-dp5-provider.sh');
+  assert.match(source, /aurora_device_session_metadata\.xml/);
+  assert.match(source, /exactly one authorized self-ADB device is required/);
+  assert.match(source, /physical tablet required/);
+  assert.match(source, /state != 'ACTIVE'/);
+  assert.match(source, /Android W14 binding is incomplete or not ACTIVE/);
+  assert.match(source, /binding\['tenantId'\] if binding\['mode'\] == 'BOUND'/);
+  assert.match(source, /binding\['deviceId'\] if binding\['mode'\] == 'BOUND'/);
+  assert.match(source, /binding\['deviceSessionId'\] if binding\['mode'\] == 'BOUND'/);
+  assert.match(source, /return \{'mode': 'FRESH_INSTALL'\}/);
+  assert.match(source, /rm -f -- "\$BINDING_XML"/);
+});
+
 test('provider doctor validates owner-backed composition but remains software-only evidence', () => {
   const source = read('provider-doctor.sh');
   assert.match(source, /secure_regular_file/);
