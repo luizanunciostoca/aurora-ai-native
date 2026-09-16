@@ -62,9 +62,20 @@ const DEFAULT_GATEWAY_PORT = 8080;
 const DEFAULT_BOOTSTRAP_PORT = 8081;
 const MAX_DATE_MS = 8_640_000_000_000_000;
 
+export interface W15JOfflineExecutionIdentityPort {
+  current(input: Readonly<{ readonly commandId: string; readonly executionId: string }>): Readonly<{
+    readonly actionIntentId: ActionIntent['actionIntentId'];
+    readonly canonicalPayloadHash: string;
+    readonly circuitKey: string;
+    readonly authorizesExecution: false;
+  }> | null;
+}
+
 interface W15JLocalPhysicalHostDependencyBase {
   /** Concrete W07 Receipt/Evidence observer. W14 never decides outcome or retry. */
   readonly receiptEvidenceIngress: W07DeviceReceiptEvidenceIngressPort;
+  /** Provider-owned immutable identity binding; never authority or retry permission. */
+  readonly offlineExecutionIdentity?: W15JOfflineExecutionIdentityPort;
 }
 
 export interface W15JServerContainmentCircuitRequest {
@@ -467,7 +478,16 @@ export class W15JLocalPhysicalHost {
         receiptIngress,
         deviceProofVerifier,
       },
-      { deviceSessions, voiceCandidates, deliveries, durableReservations },
+      {
+        deviceSessions,
+        voiceCandidates,
+        deliveries,
+        currentAttemptQuota: executionAttemptQuota,
+        currentContainment,
+        ...(dependencies.offlineExecutionIdentity === undefined
+          ? {}
+          : { offlineExecutionIdentity: dependencies.offlineExecutionIdentity }),
+      },
     );
 
     this.#gatewayTransport = new GatewayHttpNetworkTransport(

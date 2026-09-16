@@ -566,6 +566,22 @@ export async function createW15JLocalDp5OperatorInput({ databaseUrl, materialPat
     ),
   );
 
+  const offlineExecutionIdentity = Object.freeze({
+    current(input) {
+      const spec = executionSpecs.find(
+        ({ source }) =>
+          input?.commandId === source.commandId && input?.executionId === source.executionId,
+      );
+      if (spec === undefined) return null;
+      return Object.freeze({
+        actionIntentId: spec.actionIntent.actionIntentId,
+        canonicalPayloadHash: `sha256:${sha256Hex(canonicalJson(spec.actionIntent))}`,
+        circuitKey: spec.source.circuitKey,
+        authorizesExecution: false,
+      });
+    },
+  });
+
   const deviceExecutionSource = Object.freeze({
     resolve(lookup) {
       const spec = executionSpecs.find(
@@ -635,6 +651,7 @@ export async function createW15JLocalDp5OperatorInput({ databaseUrl, materialPat
       ),
     createContainmentLifecycle: w07.createContainmentLifecycle,
     createAttemptLifecycle: w07.createAttemptLifecycle,
+    offlineExecutionIdentity,
   });
 
   return Object.freeze({

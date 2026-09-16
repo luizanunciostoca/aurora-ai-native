@@ -18,6 +18,9 @@ const OFFLINE_CURRENT_KEYS = new Set(['idempotencyKey']);
 const DEVICE_ID = /^dvc_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const COMMAND_ID = /^cmd_[0-9A-HJKMNP-TV-Z]{26}$/u;
 const EXECUTION_ID = /^exe_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const ACTION_INTENT_ID = /^act_[0-9A-HJKMNP-TV-Z]{26}$/u;
+const SHA256 = /^sha256:[0-9a-f]{64}$/u;
+const CIRCUIT_KEY = /^[A-Za-z0-9._:/+-]{1,180}$/u;
 const OFFLINE_IDEMPOTENCY_KEY = /^w14f:(cmd_[0-9A-HJKMNP-TV-Z]{26})$/u;
 const MAX_DATE_MS = 8_640_000_000_000_000;
 
@@ -27,7 +30,9 @@ export interface GatewayVoiceDeviceRouteDependencies {
   /** Accepted W15-G -> W07 candidate, provider projection and W07 authorization boundary. */
   readonly voiceCandidates: VoiceCandidateNetworkBoundary;
   readonly deliveries?: object;
-  readonly durableReservations?: object;
+  readonly currentAttemptQuota?: object;
+  readonly currentContainment?: object;
+  readonly offlineExecutionIdentity?: object;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -85,6 +90,7 @@ function executionAuthorizationError(code: string): GatewayDevicePlaneResponse {
       ok: false,
       devicePlaneError: { code },
       authorizesExecution: false,
+      provesExecutionSuccess: false,
       canGrantPermission: false,
       retryAuthorized: false,
     },
@@ -288,14 +294,20 @@ function offlineCurrent(
   }
   const idempotencyKey = input.body.idempotencyKey;
   if (typeof idempotencyKey !== 'string') return executionAuthorizationError('BODY_MALFORMED');
-  const matched = OFFLINE_IDEMPOTENCY_KEY.exec(idempotencyKey);
-  const commandId = matched?.[1];
-  if (commandId === undefined || !COMMAND_ID.test(commandId))
+  const commandId = OFFLINE_IDEMPOTENCY_KEY.exec(idempotencyKey)?.[1];
+  if (commandId === undefined || !COMMAND_ID.test(commandId)) {
     return executionAuthorizationError('BODY_MALFORMED');
+  }
   const context = currentContext(input, dependencies);
   if (context === null) return executionAuthorizationError('AUTHENTICATED_CONTEXT_NOT_CURRENT');
-  if (dependencies.deliveries === undefined || dependencies.durableReservations === undefined)
+  if (
+    dependencies.deliveries === undefined ||
+    dependencies.currentAttemptQuota === undefined ||
+    dependencies.currentContainment === undefined ||
+    dependencies.offlineExecutionIdentity === undefined
+  ) {
     return executionAuthorizationError('OFFLINE_PROJECTION_UNAVAILABLE');
+  }
   let deliveryResult: unknown;
   try {
     deliveryResult = invokeMethod(dependencies.deliveries, 'get', commandId);
@@ -306,35 +318,153 @@ function offlineCurrent(
     !isPlainRecord(deliveryResult) ||
     deliveryResult.ok !== true ||
     !isPlainRecord(deliveryResult.value)
-  )
+  ) {
     return executionAuthorizationError('OFFLINE_PROJECTION_UNAVAILABLE');
+  }
   const delivery = deliveryResult.value;
   if (
     delivery.idempotencyKey !== idempotencyKey ||
     delivery.commandId !== commandId ||
     delivery.tenantId !== context.tenantId ||
-    typeof delivery.executionId !== 'string' ||
-    !EXECUTION_ID.test(delivery.executionId) ||
     delivery.deviceId !== context.deviceId ||
-    typeof delivery.correlationId !== 'string'
-  )
+    typeof delivery.executionId !== 'string' ||
+    !EXECUTION_ID.test(delivery.executionId)
+  ) {
     return executionAuthorizationError('OFFLINE_BINDING_MISMATCH');
-  const request = {
-    tenantId: context.tenantId,
-    correlationId: delivery.correlationId,
-    commandId,
-    executionId: delivery.executionId,
-    idempotencyKey,
-    nowMs: input.nowMs,
-  };
-  let w03: unknown;
+  }
+  let identity: unknown;
   try {
-    w03 = invokeMethod(dependencies.durableReservations, 'currentDelivery', request);
+    identity = invokeMethod(dependencies.offlineExecutionIdentity, 'current', {
+      commandId,
+      executionId: delivery.executionId,
+    });
   } catch {
     return executionAuthorizationError('OFFLINE_PROJECTION_UNAVAILABLE');
   }
-  if (!isPlainRecord(w03) || w03.authorizesExecution !== false || w03.retryAuthorized !== false)
+  if (
+    !isPlainRecord(identity) ||
+    identity.authorizesExecution !== false ||
+    typeof identity.actionIntentId !== 'string' ||
+    !ACTION_INTENT_ID.test(identity.actionIntentId) ||
+    typeof identity.canonicalPayloadHash !== 'string' ||
+    !SHA256.test(identity.canonicalPayloadHash) ||
+    typeof identity.circuitKey !== 'string' ||
+    !CIRCUIT_KEY.test(identity.circuitKey)
+  ) {
+    return executionAuthorizationError('OFFLINE_IDENTITY_NOT_CURRENT');
+  }
+  let attempt: unknown;
+  try {
+    attempt = invokeMethod(dependencies.currentAttemptQuota, 'lookup', {
+      tenantId: context.tenantId,
+      actionIntentId: identity.actionIntentId,
+      executionRef: delivery.executionId,
+    });
+  } catch {
+    return executionAuthorizationError('OFFLINE_PROJECTION_UNAVAILABLE');
+  }
+  if (
+    !isPlainRecord(attempt) ||
+    attempt.tenantId !== context.tenantId ||
+    attempt.actionIntentId !== identity.actionIntentId ||
+    attempt.executionRef !== delivery.executionId ||
+    !positiveInteger(attempt.attemptNumber) ||
+    !positiveInteger(attempt.maxAttempts) ||
+    attempt.attemptNumber > attempt.maxAttempts ||
+    !positiveInteger(attempt.version)
+  ) {
     return executionAuthorizationError('OFFLINE_W03_NOT_CURRENT');
+  }
+  let containment: unknown;
+  try {
+    containment = invokeMethod(dependencies.currentContainment, 'resolveCurrent', {
+      tenantId: context.tenantId,
+      circuitKey: identity.circuitKey,
+      evaluatedAt: new Date(input.nowMs).toISOString(),
+    });
+  } catch {
+    return executionAuthorizationError('OFFLINE_PROJECTION_UNAVAILABLE');
+  }
+  if (
+    !isPlainRecord(containment) ||
+    containment.authorizesExecution !== false ||
+    containment.tenantId !== context.tenantId ||
+    containment.circuitKey !== identity.circuitKey ||
+    !positiveInteger(containment.version) ||
+    typeof containment.updatedAt !== 'string' ||
+    !isPlainRecord(containment.snapshot)
+  ) {
+    return executionAuthorizationError('OFFLINE_W03_NOT_CURRENT');
+  }
+  const attemptUpdatedAtMs =
+    typeof attempt.updatedAt === 'string' ? Date.parse(attempt.updatedAt) : Number.NaN;
+  const containmentUpdatedAtMs = Date.parse(containment.updatedAt);
+  if (
+    !Number.isFinite(attemptUpdatedAtMs) ||
+    attemptUpdatedAtMs > input.nowMs ||
+    !Number.isFinite(containmentUpdatedAtMs) ||
+    containmentUpdatedAtMs > input.nowMs
+  ) {
+    return executionAuthorizationError('OFFLINE_W03_NOT_CURRENT');
+  }
+  const quota = attempt.quota;
+  if (
+    quota !== undefined &&
+    (!isPlainRecord(quota) ||
+      !positiveInteger(quota.limit) ||
+      !nonNegativeInteger(quota.used) ||
+      quota.used > quota.limit)
+  ) {
+    return executionAuthorizationError('OFFLINE_W03_NOT_CURRENT');
+  }
+  const containmentSnapshot = containment.snapshot;
+  const circuit = containmentSnapshot.circuit;
+  const killSwitch = containmentSnapshot.killSwitch;
+  if (
+    !isPlainRecord(circuit) ||
+    (circuit.state !== 'CLOSED' && circuit.state !== 'OPEN' && circuit.state !== 'HALF_OPEN') ||
+    !isPlainRecord(killSwitch) ||
+    (killSwitch.state !== 'INACTIVE' && killSwitch.state !== 'ACTIVE') ||
+    (containmentSnapshot.dependencyHealth !== 'HEALTHY' &&
+      containmentSnapshot.dependencyHealth !== 'DEGRADED' &&
+      containmentSnapshot.dependencyHealth !== 'UNAVAILABLE') ||
+    typeof containmentSnapshot.cancellationRequested !== 'boolean' ||
+    !nonNegativeInteger(containmentSnapshot.currentInFlight) ||
+    !positiveInteger(containmentSnapshot.maxInFlight) ||
+    containmentSnapshot.currentInFlight > containmentSnapshot.maxInFlight ||
+    !nonNegativeInteger(containmentSnapshot.retryDepth) ||
+    !nonNegativeInteger(containmentSnapshot.maxRetryDepth) ||
+    containmentSnapshot.retryDepth > containmentSnapshot.maxRetryDepth
+  ) {
+    return executionAuthorizationError('OFFLINE_W03_NOT_CURRENT');
+  }
+  const quotaExhausted =
+    isPlainRecord(quota) &&
+    positiveInteger(quota.limit) &&
+    nonNegativeInteger(quota.used) &&
+    quota.used >= quota.limit;
+  const blocked =
+    containmentSnapshot.cancellationRequested === true ||
+    killSwitch.state === 'ACTIVE' ||
+    containmentSnapshot.dependencyHealth !== 'HEALTHY' ||
+    circuit.state !== 'CLOSED';
+  const inFlight =
+    nonNegativeInteger(containmentSnapshot.currentInFlight) &&
+    containmentSnapshot.currentInFlight > 0;
+  const w03State = quotaExhausted || blocked ? 'REJECTED' : inFlight ? 'INFLIGHT' : 'ACCEPTED';
+  const w03 = Object.freeze({
+    tenantId: context.tenantId,
+    key: idempotencyKey,
+    operationName: 'W15J_DEVICE_EXECUTION_V1',
+    canonicalPayloadHash: identity.canonicalPayloadHash,
+    state: w03State,
+    attemptNumber: attempt.attemptNumber,
+    maxAttempts: attempt.maxAttempts,
+    version: attempt.version,
+    updatedAt: attempt.updatedAt,
+    authorizesExecution: false,
+    retryAuthorized: false,
+  });
   const authorization = dependencies.voiceCandidates.currentExecutionAuthorization({
     commandId,
     executionId: delivery.executionId,
