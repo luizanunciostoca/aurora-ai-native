@@ -18,16 +18,17 @@ SIGNING_IDENTITY="$ARTIFACT_DIR/FINAL_SIGNING_IDENTITY.txt"
 STATE_DIR="$DEVLAB_ROOT/state"
 EVIDENCE_ROOT="$DEVLAB_ROOT/evidence"
 READINESS_FILE="$STATE_DIR/last-readiness-termux.txt"
-EXPECTED_APK_SHA="${AURORA_APK_SHA256:-d06881bc6a0af43876d1c05d5c82e03da30607a92373be4bee929846bce69ba3}"
+EXPECTED_APK_SHA="${AURORA_APK_SHA256:-80b5baeccd6853d97af23d4cee3477a0828f35bc30ae418bed267c81dac352b6}"
 EXPECTED_ANDROID_SHA="${AURORA_ANDROID_SHA:-19a6327ae84f52aa911f81bf6cc70f057e7bb2a7}"
 EXPECTED_HOST_SHA="${AURORA_HOST_SHA:-a7903e255c00b074fb6c3ba210a69c8296b315e5}"
 EXPECTED_MAIN_SHA="${AURORA_MAIN_SHA:-77f0f8532197025ee913dd02fcb56878d9d667a9}"
 EXPECTED_TRANSPORT_SCOPE="LOCAL_TABLET_LOOPBACK"
+EXPECTED_GATEWAY_ORIGIN="http://127.0.0.1:8080"
 EXPECTED_CERT_SHA="${AURORA_PHYSICAL_SIGNER_CERT_SHA256:-e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb}"
 
 [[ -f "$APK" && -f "$BUILD_IDENTITY" && -f "$SIGNING_IDENTITY" ]] || fail "signed artifact is missing; run fetch-current-artifact.sh then sign-current-artifact.sh"
 [[ "$(sha256sum "$APK" | awk '{print $1}')" == "$EXPECTED_APK_SHA" ]] || fail "artifact APK hash drift"
-[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "23" ]] || fail "BUILD_IDENTITY must contain exactly 23 lines"
+[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "24" ]] || fail "BUILD_IDENTITY must contain exactly 24 lines"
 
 grep -Fxq 'canonical_acceptance=false' "$BUILD_IDENTITY" || fail "artifact cannot self-declare acceptance"
 grep -Fxq 'physical_evidence_required=true' "$BUILD_IDENTITY" || fail "physical evidence requirement missing"
@@ -91,6 +92,7 @@ PRODUCT="$("${ADB[@]}" shell getprop ro.product.name | tr -d '\r\n')"
 API="$("${ADB[@]}" shell getprop ro.build.version.sdk | tr -d '\r\n')"
 FINGERPRINT="$("${ADB[@]}" shell getprop ro.build.fingerprint | tr -d '\r\n')"
 ARTIFACT_SCOPE="$(sed -n 's/^gateway_transport_scope=//p' "$BUILD_IDENTITY")"
+ARTIFACT_ORIGIN="$(sed -n 's/^gateway_origin=//p' "$BUILD_IDENTITY")"
 SOURCE_SHA="$(sed -n 's/^source_candidate_sha=//p' "$BUILD_IDENTITY")"
 HOST_SHA="$(sed -n 's/^paired_local_host_candidate_sha=//p' "$BUILD_IDENTITY")"
 MAIN_SHA="$(sed -n 's/^reconciled_main_parent_sha=//p' "$BUILD_IDENTITY")"
@@ -98,6 +100,7 @@ MAIN_SHA="$(sed -n 's/^reconciled_main_parent_sha=//p' "$BUILD_IDENTITY")"
 [[ "$HOST_SHA" == "$EXPECTED_HOST_SHA" ]] || fail "embedded host SHA drift"
 [[ "$MAIN_SHA" == "$EXPECTED_MAIN_SHA" ]] || fail "embedded main SHA drift"
 [[ "$ARTIFACT_SCOPE" == "$EXPECTED_TRANSPORT_SCOPE" ]] || fail "embedded transport scope must be LOCAL_TABLET_LOOPBACK"
+[[ "$ARTIFACT_ORIGIN" == "$EXPECTED_GATEWAY_ORIGIN" ]] || fail "embedded gateway origin must be physical loopback"
 
 "${ADB[@]}" shell dumpsys meminfo "$PACKAGE_ID" >"$EVIDENCE_DIR/meminfo.txt"
 "${ADB[@]}" shell dumpsys cpuinfo >"$EVIDENCE_DIR/cpuinfo.txt"
@@ -121,6 +124,7 @@ cat >"$EVIDENCE_DIR/tablet-loopback-preflight.json" <<EOF
   "signerCertSha256": "$EXPECTED_CERT_SHA",
   "signingProfile": "PHYSICAL_DEV_STABLE_LOCAL",
   "artifactTransportScope": "$ARTIFACT_SCOPE",
+  "artifactGatewayOrigin": "$ARTIFACT_ORIGIN",
   "actualTransportScope": "LOCAL_TABLET_LOOPBACK",
   "selfAdbControlPlane": true,
   "adbReverse8080Or8081Present": false,
@@ -156,6 +160,7 @@ evidence_dir=$EVIDENCE_DIR
 installed_apk_sha256=$INSTALLED_SHA
 host_instance_id=$ID_8080
 artifact_transport_scope=$ARTIFACT_SCOPE
+artifact_gateway_origin=$ARTIFACT_ORIGIN
 actual_transport_scope=LOCAL_TABLET_LOOPBACK
 
 This preflight proves exact tablet-loopback readiness only. It cannot close DP5 or grant execution authority.

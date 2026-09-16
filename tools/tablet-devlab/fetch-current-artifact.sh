@@ -16,18 +16,19 @@ mkdir -p "$DEST"
 chmod 700 "$DEST"
 
 REPO="${AURORA_REPOSITORY:-luizanunciostoca/aurora-ai-native}"
-PACKAGING_HEAD_SHA="${AURORA_PACKAGING_HEAD_SHA:-899bdd70d8393cfb21082703bc04ac3acce14490}"
-RUN_ID="${AURORA_PACKAGING_RUN_ID:-35119880795}"
-ARTIFACT_ID="${AURORA_ARTIFACT_ID:-10457008737}"
-ARTIFACT_NAME="${AURORA_ARTIFACT_NAME:-aurora-w15j-v017r3-presign-apk-19a6327a-host-a7903e25}"
-EXPECTED_ZIP_SHA="${AURORA_ARTIFACT_ZIP_SHA256:-d4c63603c7b36d90f6de7919d29a05b807ada402fea8cdfee3908899b921ff94}"
-EXPECTED_PRESIGN_APK_SHA="${AURORA_PRESIGN_APK_SHA256:-8f625603948395e2076444d7e847d4b0e447b09ff67fd5dd10aa2ad1e7fdf1e6}"
-EXPECTED_FINAL_APK_SHA="${AURORA_APK_SHA256:-d06881bc6a0af43876d1c05d5c82e03da30607a92373be4bee929846bce69ba3}"
+PACKAGING_HEAD_SHA="${AURORA_PACKAGING_HEAD_SHA:-144b7dda6ef921d22ba672e1371f5a420292c0b9}"
+RUN_ID="${AURORA_PACKAGING_RUN_ID:-35123085135}"
+ARTIFACT_ID="${AURORA_ARTIFACT_ID:-10457344432}"
+ARTIFACT_NAME="${AURORA_ARTIFACT_NAME:-aurora-w15j-v017r4-presign-apk-19a6327a-host-a7903e25}"
+EXPECTED_ZIP_SHA="${AURORA_ARTIFACT_ZIP_SHA256:-1100c262d4eb9336aea5ed2cb95161646b8b91a6f6f02d1ca0f09fc2925f7ddc}"
+EXPECTED_PRESIGN_APK_SHA="${AURORA_PRESIGN_APK_SHA256:-6aaf19c6ca64e7cfe777d4a2a3d32f8c232f96da334843ffee82449e3ae95204}"
+EXPECTED_FINAL_APK_SHA="${AURORA_APK_SHA256:-80b5baeccd6853d97af23d4cee3477a0828f35bc30ae418bed267c81dac352b6}"
 EXPECTED_CERT_SHA="${AURORA_PHYSICAL_SIGNER_CERT_SHA256:-e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb}"
 EXPECTED_ANDROID_SHA="${AURORA_ANDROID_SHA:-19a6327ae84f52aa911f81bf6cc70f057e7bb2a7}"
 EXPECTED_HOST_SHA="${AURORA_HOST_SHA:-a7903e255c00b074fb6c3ba210a69c8296b315e5}"
 EXPECTED_MAIN_SHA="${AURORA_MAIN_SHA:-77f0f8532197025ee913dd02fcb56878d9d667a9}"
 EXPECTED_TRANSPORT_SCOPE="LOCAL_TABLET_LOOPBACK"
+EXPECTED_GATEWAY_ORIGIN="http://127.0.0.1:8080"
 
 for sha in "$PACKAGING_HEAD_SHA" "$EXPECTED_ANDROID_SHA" "$EXPECTED_HOST_SHA" "$EXPECTED_MAIN_SHA"; do
   [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "candidate SHA must be lowercase 40-hex"
@@ -59,7 +60,7 @@ mapfile -t entries < <(unzip -Z1 "$ZIP")
 for e in "${entries[@]}"; do [[ "$e" =~ ^[A-Za-z0-9._-]+$ ]] || fail "unsafe artifact path: $e"; done
 unzip -q "$ZIP" -d "$TMP"
 [[ -f "$TMP/BUILD_IDENTITY.txt" && -f "$TMP/SHA256SUMS.txt" ]] || fail "artifact identity files missing"
-[[ "$(wc -l < "$TMP/BUILD_IDENTITY.txt" | tr -d ' ')" == "23" ]] || fail "BUILD_IDENTITY must contain exactly 23 lines"
+[[ "$(wc -l < "$TMP/BUILD_IDENTITY.txt" | tr -d ' ')" == "24" ]] || fail "BUILD_IDENTITY must contain exactly 24 lines"
 
 embedded_head="$(sed -n 's/^packaging_head_sha=//p' "$TMP/BUILD_IDENTITY.txt")"
 embedded_run="$(sed -n 's/^packaging_run_id=//p' "$TMP/BUILD_IDENTITY.txt")"
@@ -67,12 +68,14 @@ embedded_android="$(sed -n 's/^source_candidate_sha=//p' "$TMP/BUILD_IDENTITY.tx
 embedded_host="$(sed -n 's/^paired_local_host_candidate_sha=//p' "$TMP/BUILD_IDENTITY.txt")"
 embedded_main="$(sed -n 's/^reconciled_main_parent_sha=//p' "$TMP/BUILD_IDENTITY.txt")"
 embedded_scope="$(sed -n 's/^gateway_transport_scope=//p' "$TMP/BUILD_IDENTITY.txt")"
+embedded_origin="$(sed -n 's/^gateway_origin=//p' "$TMP/BUILD_IDENTITY.txt")"
 [[ "$embedded_head" == "$PACKAGING_HEAD_SHA" ]] || fail "embedded packaging head drift"
 [[ "$embedded_run" == "$RUN_ID" ]] || fail "embedded packaging run drift"
 [[ "$embedded_android" == "$EXPECTED_ANDROID_SHA" ]] || fail "embedded Android SHA drift"
 [[ "$embedded_host" == "$EXPECTED_HOST_SHA" ]] || fail "embedded host SHA drift"
 [[ "$embedded_main" == "$EXPECTED_MAIN_SHA" ]] || fail "embedded main SHA drift"
 [[ "$embedded_scope" == "$EXPECTED_TRANSPORT_SCOPE" ]] || fail "embedded transport scope drift: $embedded_scope"
+[[ "$embedded_origin" == "$EXPECTED_GATEWAY_ORIGIN" ]] || fail "embedded gateway origin drift: $embedded_origin"
 
 grep -Fxq 'canonical_acceptance=false' "$TMP/BUILD_IDENTITY.txt" || fail "artifact cannot self-declare acceptance"
 grep -Fxq 'physical_evidence_required=true' "$TMP/BUILD_IDENTITY.txt" || fail "artifact physical evidence requirement missing"
@@ -113,6 +116,7 @@ zip_sha256=$actual_zip_sha
 presign_apk_sha256=$actual_presign_sha
 expected_final_apk_sha256=$EXPECTED_FINAL_APK_SHA
 embedded_transport_scope=$embedded_scope
+embedded_gateway_origin=$embedded_origin
 path=$DEST/Aurora-W15J-Physical-presign.apk
 next=bash tools/tablet-devlab/sign-current-artifact.sh
 EOF

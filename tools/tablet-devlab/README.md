@@ -55,13 +55,13 @@ Last packaged physical tuple (v0.17 historical candidate; superseded for the nex
 main      77f0f8532197025ee913dd02fcb56878d9d667a9
 android   19a6327ae84f52aa911f81bf6cc70f057e7bb2a7
 host      a7903e255c00b074fb6c3ba210a69c8296b315e5
-packaging 899bdd70d8393cfb21082703bc04ac3acce14490
-run       35119880795
-artifact  10457008737
-name      aurora-w15j-v017r3-presign-apk-19a6327a-host-a7903e25
-zip       d4c63603c7b36d90f6de7919d29a05b807ada402fea8cdfee3908899b921ff94
-presign   8f625603948395e2076444d7e847d4b0e447b09ff67fd5dd10aa2ad1e7fdf1e6
-apk       d06881bc6a0af43876d1c05d5c82e03da30607a92373be4bee929846bce69ba3
+packaging 144b7dda6ef921d22ba672e1371f5a420292c0b9
+run       35123085135
+artifact  10457344432
+name      aurora-w15j-v017r4-presign-apk-19a6327a-host-a7903e25
+zip       1100c262d4eb9336aea5ed2cb95161646b8b91a6f6f02d1ca0f09fc2925f7ddc
+presign   6aaf19c6ca64e7cfe777d4a2a3d32f8c232f96da334843ffee82449e3ae95204
+apk       80b5baeccd6853d97af23d4cee3477a0828f35bc30ae418bed267c81dac352b6
 signer    e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb
 transport LOCAL_TABLET_LOOPBACK
 ```

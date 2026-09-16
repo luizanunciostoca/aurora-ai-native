@@ -11,13 +11,13 @@ const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
 const ANDROID_SHA = '19a6327ae84f52aa911f81bf6cc70f057e7bb2a7';
 const LEGACY_V017_ANDROID_SHA = '40246031b2e1b1ef8e232db4d4d2ea6687f8ecf7';
 const HOST_SHA = 'a7903e255c00b074fb6c3ba210a69c8296b315e5';
-const PACKAGING_SHA = '899bdd70d8393cfb21082703bc04ac3acce14490';
-const PRESIGN_SHA = '8f625603948395e2076444d7e847d4b0e447b09ff67fd5dd10aa2ad1e7fdf1e6';
-const APK_SHA = 'd06881bc6a0af43876d1c05d5c82e03da30607a92373be4bee929846bce69ba3';
+const PACKAGING_SHA = '144b7dda6ef921d22ba672e1371f5a420292c0b9';
+const PRESIGN_SHA = '6aaf19c6ca64e7cfe777d4a2a3d32f8c232f96da334843ffee82449e3ae95204';
+const APK_SHA = '80b5baeccd6853d97af23d4cee3477a0828f35bc30ae418bed267c81dac352b6';
 const CERT_SHA = 'e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb';
-const ARTIFACT_ID = '10457008737';
-const RUN_ID = '35119880795';
-const ZIP_SHA = 'd4c63603c7b36d90f6de7919d29a05b807ada402fea8cdfee3908899b921ff94';
+const ARTIFACT_ID = '10457344432';
+const RUN_ID = '35123085135';
+const ZIP_SHA = '1100c262d4eb9336aea5ed2cb95161646b8b91a6f6f02d1ca0f09fc2925f7ddc';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -119,6 +119,9 @@ test('artifact fetch binds the exact presign and final-signing tuple', () => {
   assert.match(source, /embedded host SHA drift/);
   assert.match(source, /embedded main SHA drift/);
   assert.match(source, /LOCAL_TABLET_LOOPBACK/);
+  assert.match(source, /gateway_origin/);
+  assert.match(source, /127\.0\.0\.1:8080/);
+  assert.match(source, /BUILD_IDENTITY must contain exactly 24 lines/);
   assert.match(source, /canonical_acceptance=false/);
   assert.match(source, /dp5_status=INCOMPLETE/);
   assert.match(source, /PHYSICAL_DEV_STABLE_LOCAL/);
@@ -155,6 +158,8 @@ test('tablet loopback preflight refuses reverse-port ambiguity and binds current
   assert.match(source, /TABLET_LOOPBACK_PREFLIGHT_READY_NOT_ACCEPTED/);
   assert.doesNotMatch(source, /PRE_ACCEPTANCE_ONLY_TRANSPORT_CONTRACT_RECONCILIATION_REQUIRED/);
   assert.match(source, /embedded transport scope must be LOCAL_TABLET_LOOPBACK/);
+  assert.match(source, /embedded gateway origin must be physical loopback/);
+  assert.match(source, /127\.0\.0\.1:8080/);
   assert.match(source, new RegExp(escaped(APK_SHA)));
   assert.match(source, new RegExp(escaped(ANDROID_SHA)));
   assert.match(source, new RegExp(escaped(HOST_SHA)));

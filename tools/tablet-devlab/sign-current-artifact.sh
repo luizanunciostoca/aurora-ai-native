@@ -22,8 +22,8 @@ SIGN_DIR="${AURORA_PHYSICAL_SIGNING_DIR:-$HOME/.aurora-signing/physical-dev-v017
 KEYSTORE="$SIGN_DIR/aurora-physical-dev.p12"
 PASSWORD_FILE="$SIGN_DIR/store.pass"
 ALIAS_FILE="$SIGN_DIR/alias.txt"
-EXPECTED_PRESIGN_SHA="${AURORA_PRESIGN_APK_SHA256:-8f625603948395e2076444d7e847d4b0e447b09ff67fd5dd10aa2ad1e7fdf1e6}"
-EXPECTED_FINAL_SHA="${AURORA_APK_SHA256:-d06881bc6a0af43876d1c05d5c82e03da30607a92373be4bee929846bce69ba3}"
+EXPECTED_PRESIGN_SHA="${AURORA_PRESIGN_APK_SHA256:-6aaf19c6ca64e7cfe777d4a2a3d32f8c232f96da334843ffee82449e3ae95204}"
+EXPECTED_FINAL_SHA="${AURORA_APK_SHA256:-80b5baeccd6853d97af23d4cee3477a0828f35bc30ae418bed267c81dac352b6}"
 EXPECTED_CERT_SHA="${AURORA_PHYSICAL_SIGNER_CERT_SHA256:-e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb}"
 
 for path in "$PRESIGN_APK" "$BUILD_IDENTITY" "$KEYSTORE" "$PASSWORD_FILE" "$ALIAS_FILE"; do
@@ -36,7 +36,7 @@ done
 [[ "$EXPECTED_FINAL_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "final SHA must be lowercase 64-hex"
 [[ "$EXPECTED_CERT_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "certificate SHA must be lowercase 64-hex"
 [[ "$(sha256sum "$PRESIGN_APK" | awk '{print $1}')" == "$EXPECTED_PRESIGN_SHA" ]] || fail "pre-sign APK hash drift"
-[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "23" ]] || fail "BUILD_IDENTITY must contain exactly 23 lines"
+[[ "$(wc -l < "$BUILD_IDENTITY" | tr -d ' ')" == "24" ]] || fail "BUILD_IDENTITY must contain exactly 24 lines"
 grep -Fxq 'input_signing_profile=DEBUG_FALLBACK' "$BUILD_IDENTITY" || fail "pre-sign input profile drift"
 grep -Fxq 'final_signing_profile=PHYSICAL_DEV_STABLE_LOCAL' "$BUILD_IDENTITY" || fail "final signing profile drift"
 grep -Fxq 'local_signing_required=true' "$BUILD_IDENTITY" || fail "local signing requirement missing"
