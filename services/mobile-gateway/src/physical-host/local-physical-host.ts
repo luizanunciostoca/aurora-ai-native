@@ -266,6 +266,8 @@ export interface W15JLocalPhysicalHostConfig {
   readonly psqlTimeoutMs?: number;
   readonly gatewayPort?: number;
   readonly bootstrapPort?: number;
+  readonly bootstrapCredentialTtlMs?: number;
+  readonly bootstrapMaxPrincipalAgeMs?: number;
   readonly clock?: () => number;
 }
 
@@ -381,7 +383,14 @@ export class W15JLocalPhysicalHost {
     this.#bootstrapPort = bootstrapPort;
     currentTime(this.#clock);
 
-    const bootstrapIssuer = new TransientGatewayBootstrapBroker();
+    const bootstrapIssuer = new TransientGatewayBootstrapBroker({
+      ...(config.bootstrapCredentialTtlMs === undefined
+        ? {}
+        : { credentialTtlMs: config.bootstrapCredentialTtlMs }),
+      ...(config.bootstrapMaxPrincipalAgeMs === undefined
+        ? {}
+        : { maxPrincipalAgeMs: config.bootstrapMaxPrincipalAgeMs }),
+    });
     this.#bootstrapDelivery = new GatewayBootstrapDeliveryBroker(bootstrapIssuer);
     const gatewaySessions = new GatewaySessionManager(bootstrapIssuer);
 

@@ -141,6 +141,8 @@ test('validates owner-backed provider input and pins the real LOCAL runner ports
 
   assert.equal(captured?.host.gatewayPort, 8080);
   assert.equal(captured?.host.bootstrapPort, 8081);
+  assert.equal(captured?.host.bootstrapCredentialTtlMs, 10 * 60_000);
+  assert.equal(captured?.host.bootstrapMaxPrincipalAgeMs, 10 * 60_000);
   assert.deepEqual(captured?.principal, principal());
   assert.equal(captured?.principal.authenticationReference, AUTH_REFERENCE);
   assert.equal(handle.physicalEvidenceStatus, 'NOT_RUN');

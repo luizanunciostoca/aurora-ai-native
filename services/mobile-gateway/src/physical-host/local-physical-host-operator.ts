@@ -39,6 +39,7 @@ const PRINCIPAL_KEYS = new Set([
 const ACTOR_KEYS = new Set(['kind', 'identityId']);
 const ACTOR_KINDS = new Set(['HUMAN', 'AGENT', 'SERVICE', 'SYSTEM']);
 const SAFE_TOKEN = /^[A-Za-z0-9._:/+-]+$/u;
+const PHYSICAL_ACCEPTANCE_AUTH_WINDOW_MS = 10 * 60_000;
 const DEVICE_ID = /^dvc_[0-9A-HJKMNP-TV-Z]{26}$/u;
 
 export type W15JLocalPhysicalHostOperatorErrorCode =
@@ -331,6 +332,8 @@ export async function startW15JLocalPhysicalHostOperator(
         databaseUrl: input.databaseUrl,
         gatewayPort: 8080,
         bootstrapPort: 8081,
+        bootstrapCredentialTtlMs: PHYSICAL_ACCEPTANCE_AUTH_WINDOW_MS,
+        bootstrapMaxPrincipalAgeMs: PHYSICAL_ACCEPTANCE_AUTH_WINDOW_MS,
       },
       dependencies: input.dependencies,
       principal: input.principal,

@@ -242,3 +242,27 @@ test('evaluation-only host keeps server containment mutation surface fail-closed
   assert.equal(attempt.provesExecutionSuccess, false);
   assert.equal(attempt.retryAuthorized, false);
 });
+
+test('LOCAL physical host forwards bounded bootstrap timing and rejects values above W14 limits', () => {
+  const base = {
+    databaseUrl: 'postgresql://unused.invalid/aurora_physical',
+    gatewayPort: 0,
+    bootstrapPort: 0,
+    clock: () => 1_788_670_000_000,
+  };
+  assert.doesNotThrow(
+    () =>
+      new W15JLocalPhysicalHost(
+        { ...base, bootstrapCredentialTtlMs: 10 * 60_000, bootstrapMaxPrincipalAgeMs: 10 * 60_000 },
+        { voiceIntake, receiptEvidenceIngress },
+      ),
+  );
+  assert.throws(
+    () =>
+      new W15JLocalPhysicalHost(
+        { ...base, bootstrapCredentialTtlMs: 15 * 60_000 + 1 },
+        { voiceIntake, receiptEvidenceIngress },
+      ),
+    /Gateway bootstrap limits are invalid/u,
+  );
+});
