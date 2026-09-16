@@ -24,6 +24,17 @@ for (const relative of [
   });
 }
 
+test('tablet-loopback collector binds the v017r4 physical gateway origin', () => {
+  const source = readFileSync(
+    resolve(root, 'apps/aurora-android/physical/collect-w15j-tablet-loopback-evidence.sh'),
+    'utf8',
+  );
+  assert.ok(source.includes('GATEWAY_ORIGIN="http://127.0.0.1:8080"'));
+  assert.ok(source.includes('-eq 24'));
+  assert.ok(source.includes('required_kv BUILD_META gateway_origin'));
+  assert.ok(source.includes('artifact gateway origin is not physical loopback'));
+});
+
 test('tablet-loopback collector separates pre-sign artifact from stable-signed physical APK', () => {
   const source = readFileSync(
     resolve(root, 'apps/aurora-android/physical/collect-w15j-tablet-loopback-evidence.sh'),

@@ -17,6 +17,7 @@ HOST_READINESS_DIR="${AURORA_W15J_HOST_READINESS_DIR:-}"
 DEVICE_GATEWAY_PORT=8080
 BOOTSTRAP_PORT=8081
 TRANSPORT_SCOPE="LOCAL_TABLET_LOOPBACK"
+GATEWAY_ORIGIN="http://127.0.0.1:8080"
 CONTROL_PLANE="SELF_ADB_WIRELESS_DEBUGGING"
 GATEWAY_IDENTITY="aurora-w15j-local-host"
 
@@ -232,7 +233,7 @@ for entry in "${ZIP_ENTRIES[@]}"; do [[ "$entry" =~ ^[A-Za-z0-9._-]+$ ]] || fail
 unzip -q "$ARTIFACT_ZIP" -d "$ARTIFACT_TMP"
 read_kv "$ARTIFACT_TMP/BUILD_IDENTITY.txt" BUILD_META
 if [[ "$STABLE_SIGNING" == "true" ]]; then
-  [[ "${#BUILD_META[@]}" -eq 23 ]] || fail "stable-signing BUILD_IDENTITY must contain exactly twenty-three keys"
+  [[ "${#BUILD_META[@]}" -eq 24 ]] || fail "stable-signing BUILD_IDENTITY must contain exactly twenty-four keys"
 else
   [[ "${#BUILD_META[@]}" -eq 19 ]] || fail "legacy BUILD_IDENTITY must contain exactly nineteen keys"
 fi
@@ -249,6 +250,7 @@ MAIN_SHA="$(required_kv BUILD_META reconciled_main_parent_sha)"
 [[ "$(required_kv BUILD_META device_gateway_port)" == "8080" ]] || fail "device gateway port drift"
 [[ "$(required_kv BUILD_META bootstrap_port)" == "8081" ]] || fail "bootstrap port drift"
 [[ "$(required_kv BUILD_META gateway_transport_scope)" == "$TRANSPORT_SCOPE" ]] || fail "artifact is not tablet-loopback bound"
+[[ "$(required_kv BUILD_META gateway_origin)" == "$GATEWAY_ORIGIN" ]] || fail "artifact gateway origin is not physical loopback"
 [[ "$(required_kv BUILD_META apk_variant)" == "$APK_VARIANT" ]] || fail "APK variant drift"
 [[ "$(required_kv BUILD_META package_id)" == "$PACKAGE_ID" ]] || fail "package id drift"
 [[ "$(required_kv BUILD_META canonical_acceptance)" == "false" ]] || fail "artifact cannot claim acceptance"
