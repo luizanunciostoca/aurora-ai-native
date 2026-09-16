@@ -51,6 +51,8 @@ jobs:
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
       - name: Test, assemble and self-bind exact tablet-loopback localDebug candidate
         shell: bash
+        env:
+          AURORA_LOCAL_GATEWAY_ORIGIN: http://127.0.0.1:8080
         run: |
           set -euo pipefail
           gradle --no-daemon --console=plain -p apps/aurora-android \
@@ -81,13 +83,14 @@ jobs:
           grep -Fxq 'audio.volume.set' "$DEX_STRINGS"
           grep -Fxq '/v1/device/offline/current' "$DEX_STRINGS"
           grep -Fxq 'OPEN_VALIDATED_APP' "$DEX_STRINGS"
+          grep -Fxq 'http://127.0.0.1:8080' "$DEX_STRINGS"
 
           ARTIFACT_DIR=/tmp/w15j-tablet-loopback-apk
           mkdir -p "$ARTIFACT_DIR"
-          cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-v017r3-TabletLoopback-localDebug-presign.apk"
+          cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-v017r4-TabletLoopback-localDebug-presign.apk"
           (
             cd "$ARTIFACT_DIR"
-            sha256sum Aurora-W15J-v017r3-TabletLoopback-localDebug-presign.apk > SHA256SUMS.txt
+            sha256sum Aurora-W15J-v017r4-TabletLoopback-localDebug-presign.apk > SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
 
@@ -104,6 +107,7 @@ jobs:
           device_gateway_port=8080
           bootstrap_port=8081
           gateway_transport_scope=LOCAL_TABLET_LOOPBACK
+          gateway_origin=http://127.0.0.1:8080
           apk_variant=localDebug
           package_id=${PACKAGE_ID}
           version_code=${VERSION_CODE}
@@ -117,14 +121,15 @@ jobs:
           expected_signer_cert_sha256=e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb
           EOF
 
-          test "$(wc -l < "$ARTIFACT_DIR/BUILD_IDENTITY.txt" | tr -d ' ')" = "23"
+          test "$(wc -l < "$ARTIFACT_DIR/BUILD_IDENTITY.txt" | tr -d ' ')" = "24"
           grep -Fxq 'gateway_transport_scope=LOCAL_TABLET_LOOPBACK' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
+          grep -Fxq 'gateway_origin=http://127.0.0.1:8080' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           test "$(find "$ARTIFACT_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
-          printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-v017r3-TabletLoopback-localDebug-presign.apk" | awk '{print $1}')"
+          printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-v017r4-TabletLoopback-localDebug-presign.apk" | awk '{print $1}')"
       - name: Upload exact W15-J tablet-loopback candidate APK
         uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-v017r3-presign-apk-19a6327a-host-a7903e25
+          name: aurora-w15j-v017r4-presign-apk-19a6327a-host-a7903e25
           path: /tmp/w15j-tablet-loopback-apk
           if-no-files-found: error
           retention-days: 14
