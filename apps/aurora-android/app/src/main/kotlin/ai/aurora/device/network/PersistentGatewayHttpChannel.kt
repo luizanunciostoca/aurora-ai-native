@@ -97,7 +97,7 @@ internal class PersistentGatewayHttpChannel private constructor(
             )
         }
 
-        var wroteRequest = false
+        var requestWriteStarted = false
         try {
             val requestHead = buildString {
                 append("POST ")
@@ -116,10 +116,14 @@ internal class PersistentGatewayHttpChannel private constructor(
                 append("\r\n")
             }.toByteArray(StandardCharsets.US_ASCII)
 
+            // Once the first socket write is attempted, an I/O failure is conservatively
+            // uncertain. BufferedOutputStream may flush while write() is still in progress, so
+            // waiting until flush() returns can incorrectly classify a partially delivered request
+            // as CONNECTION_UNAVAILABLE and invite unsafe retry behavior upstream.
+            requestWriteStarted = true
             output.write(requestHead)
             output.write(bodyBytes)
             output.flush()
-            wroteRequest = true
             requests += 1
 
             val statusLine = readAsciiLine(input, limits.maxHeaderBytes)
@@ -158,12 +162,12 @@ internal class PersistentGatewayHttpChannel private constructor(
         } catch (error: Exception) {
             close()
             throw GatewayTransportException(
-                if (wroteRequest) {
+                if (requestWriteStarted) {
                     GatewayTransportFailure.TRANSPORT_UNCERTAIN
                 } else {
                     GatewayTransportFailure.CONNECTION_UNAVAILABLE
                 },
-                requestMayHaveReachedPeer = wroteRequest,
+                requestMayHaveReachedPeer = requestWriteStarted,
                 cause = error,
             )
         }
