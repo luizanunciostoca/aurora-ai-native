@@ -95,10 +95,14 @@ class PersistentGatewayHttpChannelTest {
     fun `connection reset after request write begins is transport uncertain`() {
         ServerSocket(0).use { server ->
             val accepted = CountDownLatch(1)
+            val requestWriteObserved = CountDownLatch(1)
             val worker = Thread {
                 server.accept().use { socket ->
                     accepted.countDown()
                     socket.setSoLinger(true, 0)
+                    if (socket.getInputStream().read() >= 0) {
+                        requestWriteObserved.countDown()
+                    }
                 }
             }
             worker.start()
@@ -118,6 +122,7 @@ class PersistentGatewayHttpChannelTest {
                         "{\"request\":\"${"x".repeat(8_192)}\"}",
                     )
                 }.exceptionOrNull()
+            assertTrue(requestWriteObserved.await(2, TimeUnit.SECONDS))
             channel.close()
             worker.join(2_000)
 
