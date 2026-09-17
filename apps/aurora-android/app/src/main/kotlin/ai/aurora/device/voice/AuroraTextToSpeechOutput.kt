@@ -90,7 +90,7 @@ class AuroraTextToSpeechOutput(
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
     private val lifecycle = TtsLifecycleGate()
-    private val ttsLease = TtsResourceLeaseGate()
+    private val ttsLease = AudioResourceLeaseGate()
     private val playbackAnnounced = AtomicBoolean(false)
     private val audioFocusHeld = AtomicBoolean(false)
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
