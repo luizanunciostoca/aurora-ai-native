@@ -42,7 +42,7 @@ object WakeVoiceRuntimeRegistry {
         nowMs: Long = System.currentTimeMillis(),
     ): WakeVoiceRoute {
         var catalog = GovernedVoiceCommandCatalog(projectionStore::current, nowMs = { nowMs }).snapshot()
-        if (catalog.needsTransportRecovery() && Looper.myLooper() != Looper.getMainLooper()) {
+        if (shouldRecoverGovernedVoiceCatalog(catalog) && Looper.myLooper() != Looper.getMainLooper()) {
             // Process death intentionally clears process-local projection/ingress objects. A fresh
             // utterance may recompose that transport state once from persisted W14 metadata plus a
             // new authenticated bootstrap grant. This is transport recovery only: no command has
@@ -97,13 +97,4 @@ object WakeVoiceRuntimeRegistry {
             )
         return router.route(transcript, transcriptConfidence)
     }
-
-    private fun GovernedVoiceCatalogResult.needsTransportRecovery(): Boolean =
-        this is GovernedVoiceCatalogResult.Rejected &&
-            reason in
-                setOf(
-                    GovernedVoiceCatalogRejection.PROJECTION_UNAVAILABLE,
-                    GovernedVoiceCatalogRejection.REGISTRY_NOT_CURRENT,
-                    GovernedVoiceCatalogRejection.VOCABULARY_NOT_CURRENT,
-                )
 }
