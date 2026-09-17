@@ -90,7 +90,7 @@ class AuroraTextToSpeechOutput(
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
     private val lifecycle = TtsLifecycleGate()
-    private val ttsLeaseHeld = AtomicBoolean(false)
+    private val ttsLease = TtsResourceLeaseGate()
     private val playbackAnnounced = AtomicBoolean(false)
     private val audioFocusHeld = AtomicBoolean(false)
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
@@ -140,7 +140,14 @@ class AuroraTextToSpeechOutput(
             onFailure(AuroraSpeechOutputFailure.AUDIO_OWNERSHIP_UNAVAILABLE)
             return
         }
-        ttsLeaseHeld.set(true)
+        if (
+            !ttsLease.markHeldAndValidate(
+                isLifecycleActive = lifecycle::isActive,
+                release = { AuroraAudioRuntime.arbiter.release(AudioOwner.TTS) },
+            )
+        ) {
+            return
+        }
         pendingText = text
         pendingUtteranceId = "aurora-tts-${UUID.randomUUID()}"
         completion = onComplete
@@ -283,9 +290,7 @@ class AuroraTextToSpeechOutput(
         pendingUtteranceId = null
         completion = null
         failure = null
-        if (ttsLeaseHeld.compareAndSet(true, false)) {
-            AuroraAudioRuntime.arbiter.release(AudioOwner.TTS)
-        }
+        ttsLease.releaseIfHeld { AuroraAudioRuntime.arbiter.release(AudioOwner.TTS) }
         return true
     }
 
