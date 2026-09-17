@@ -2,6 +2,7 @@ package ai.aurora.device.voice
 
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -26,16 +27,24 @@ internal class SingleFlightWorkDispatcher(
         onFailure: (Throwable) -> Unit,
     ): Boolean {
         if (closed.get() || !inFlight.compareAndSet(false, true)) return false
-        executor.execute {
-            try {
-                onComplete(operation())
-            } catch (failure: Throwable) {
-                onFailure(failure)
-            } finally {
-                inFlight.set(false)
+        return try {
+            executor.execute {
+                try {
+                    onComplete(operation())
+                } catch (failure: Throwable) {
+                    onFailure(failure)
+                } finally {
+                    inFlight.set(false)
+                }
             }
+            true
+        } catch (_: RejectedExecutionException) {
+            // close() can race after the initial closed check and before ExecutorService accepts
+            // this task. No governed work started, so clear the reservation without synthesizing a
+            // failure callback or retry authority.
+            inFlight.set(false)
+            false
         }
-        return true
     }
 
     fun hasInFlightWork(): Boolean = inFlight.get()
