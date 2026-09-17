@@ -11,7 +11,7 @@ import ai.aurora.device.wake.AuroraAudioRuntime
 import ai.aurora.device.wake.WakePlaybackAwareness
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Local bounded TTS output. Speech playback is presentation only: a successful TTS callback cannot
@@ -40,13 +40,45 @@ enum class AuroraSpeechOutputFailure {
     TIMEOUT,
 }
 
+/**
+ * Atomic lifecycle fence for asynchronous TTS callbacks. close() is terminal for an output instance
+ * and competes atomically with onDone/onError, so a callback that loses to close cannot escape late.
+ */
+internal class TtsLifecycleGate {
+    private enum class State {
+        IDLE,
+        ACTIVE,
+        CLOSED,
+    }
+
+    private val state = AtomicReference(State.IDLE)
+
+    fun tryStart(): Boolean = state.compareAndSet(State.IDLE, State.ACTIVE)
+
+    fun isActive(): Boolean = state.get() == State.ACTIVE
+
+    fun tryFinish(): Boolean = state.compareAndSet(State.ACTIVE, State.IDLE)
+
+    /** Returns true only when close atomically claimed an active utterance. */
+    fun close(): Boolean {
+        while (true) {
+            when (val current = state.get()) {
+                State.CLOSED -> return false
+                State.IDLE,
+                State.ACTIVE,
+                -> if (state.compareAndSet(current, State.CLOSED)) return current == State.ACTIVE
+            }
+        }
+    }
+}
+
 class AuroraTextToSpeechOutput(
     context: Context,
     private val languageTag: String = "pt-BR",
 ) : AutoCloseable {
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
-    private val active = AtomicBoolean(false)
+    private val lifecycle = TtsLifecycleGate()
     private var engine: TextToSpeech? = null
     private var ready = false
     private var pendingText: String? = null
@@ -66,12 +98,12 @@ class AuroraTextToSpeechOutput(
     ) {
         require(text.isNotBlank()) { "TTS text must not be blank" }
         require(text.length <= MAX_TEXT_CHARS) { "TTS text exceeds bounded output limit" }
-        if (!active.compareAndSet(false, true)) {
+        if (!lifecycle.tryStart()) {
             onFailure(AuroraSpeechOutputFailure.ALREADY_ACTIVE)
             return
         }
         if (!AuroraAudioRuntime.arbiter.tryAcquire(AudioOwner.TTS)) {
-            active.set(false)
+            finishResources()
             onFailure(AuroraSpeechOutputFailure.AUDIO_OWNERSHIP_UNAVAILABLE)
             return
         }
@@ -88,7 +120,7 @@ class AuroraTextToSpeechOutput(
         }
         engine =
             TextToSpeech(appContext) { status ->
-                if (!active.get()) return@TextToSpeech
+                if (!lifecycle.isActive()) return@TextToSpeech
                 val local = engine
                 if (status != TextToSpeech.SUCCESS || local == null) {
                     fail(AuroraSpeechOutputFailure.ENGINE_UNAVAILABLE)
@@ -110,14 +142,12 @@ class AuroraTextToSpeechOutput(
     }
 
     override fun close() {
-        if (active.get()) {
-            runCatching { engine?.stop() }
-            fail(null)
-        }
+        val activeAtClose = lifecycle.close()
         val local = engine
         engine = null
         ready = false
         runCatching { local?.stop() }
+        if (activeAtClose) finishResources(transitionLifecycle = false)
         runCatching { local?.shutdown() }
     }
 
@@ -125,7 +155,7 @@ class AuroraTextToSpeechOutput(
         timeoutRunnable?.let(handler::removeCallbacks)
         val timeout =
             Runnable {
-                if (!active.get()) return@Runnable
+                if (!lifecycle.isActive()) return@Runnable
                 runCatching { engine?.stop() }
                 fail(AuroraSpeechOutputFailure.TIMEOUT)
             }
@@ -134,7 +164,7 @@ class AuroraTextToSpeechOutput(
     }
 
     private fun speakNow(local: TextToSpeech) {
-        if (!active.get()) return
+        if (!lifecycle.isActive()) return
         val text = pendingText ?: return fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
         val utteranceId = pendingUtteranceId ?: return fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
         WakePlaybackAwareness.onTtsStarted(text)
@@ -148,9 +178,9 @@ class AuroraTextToSpeechOutput(
 
             override fun onDone(utteranceId: String?) {
                 val expected = pendingUtteranceId
-                if (expected == null || utteranceId != expected || !active.get()) return
+                if (expected == null || utteranceId != expected || !lifecycle.isActive()) return
                 val callback = completion
-                finish()
+                if (!finishResources()) return
                 callback?.invoke(
                     AuroraSpeechOutputReceipt(
                         utteranceId = expected,
@@ -161,27 +191,28 @@ class AuroraTextToSpeechOutput(
 
             @Deprecated("Deprecated in Android")
             override fun onError(utteranceId: String?) {
-                if (utteranceId == pendingUtteranceId && active.get()) {
+                if (utteranceId == pendingUtteranceId && lifecycle.isActive()) {
                     fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
                 }
             }
 
             override fun onError(utteranceId: String?, errorCode: Int) {
-                if (utteranceId == pendingUtteranceId && active.get()) {
+                if (utteranceId == pendingUtteranceId && lifecycle.isActive()) {
                     fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
                 }
             }
         }
 
     private fun fail(reason: AuroraSpeechOutputFailure?) {
-        if (!active.get()) return
+        if (!lifecycle.isActive()) return
         val callback = failure
-        finish()
+        if (!finishResources()) return
         if (reason != null) callback?.invoke(reason)
     }
 
-    private fun finish() {
-        if (!active.compareAndSet(true, false)) return
+    /** Returns true only for the terminal callback that atomically wins this utterance. */
+    private fun finishResources(transitionLifecycle: Boolean = true): Boolean {
+        if (transitionLifecycle && !lifecycle.tryFinish()) return false
         timeoutRunnable?.let(handler::removeCallbacks)
         timeoutRunnable = null
         WakePlaybackAwareness.onTtsStopped()
@@ -190,6 +221,7 @@ class AuroraTextToSpeechOutput(
         completion = null
         failure = null
         AuroraAudioRuntime.arbiter.release(AudioOwner.TTS)
+        return true
     }
 
     companion object {
