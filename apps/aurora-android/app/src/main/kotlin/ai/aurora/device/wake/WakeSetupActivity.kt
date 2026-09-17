@@ -546,7 +546,13 @@ class WakeSetupActivity : Activity() {
                 appendLine("Assistente padrão: ${if (assistantSelected) "Aurora" else "não"}")
                 appendLine("Runtime: ${ui.runtimeLabel}")
                 appendLine("Wakes confirmados: ${runtime.confirmedWakeCount}")
-                append("Rejeitados/ignorados: ${runtime.rejectedOrIgnoredCount}")
+                appendLine("Rejeitados/ignorados: ${runtime.rejectedOrIgnoredCount}")
+                if (runtime.lastEvaluationResult != null && runtime.lastEvaluationLatencyMs != null) {
+                    append(
+                        "Última avaliação: ${runtime.lastEvaluationResult} • " +
+                            "${runtime.lastEvaluationLatencyMs} ms",
+                    )
+                }
                 ui.errorLabel?.let { append("\nAtenção: $it") }
             }
         guidanceView.text = assistantSelectionFeedback ?: ui.guidance

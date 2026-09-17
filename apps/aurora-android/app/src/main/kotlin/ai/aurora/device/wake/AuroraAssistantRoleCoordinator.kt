@@ -3,6 +3,7 @@ package ai.aurora.device.wake
 import android.app.Activity
 import android.app.role.RoleManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -21,6 +22,9 @@ data class AuroraAssistantRoleSnapshot(
 ) {
     val selected: Boolean
         get() = roleHeld || activeVoiceInteractionService
+
+    val wakeEligible: Boolean
+        get() = if (roleAvailable) roleHeld else activeVoiceInteractionService
 }
 
 enum class AuroraAssistantSelectionLaunch {
@@ -33,11 +37,11 @@ enum class AuroraAssistantSelectionLaunch {
 }
 
 object AuroraAssistantRoleCoordinator {
-    fun snapshot(activity: Activity): AuroraAssistantRoleSnapshot {
+    fun snapshot(context: Context): AuroraAssistantRoleSnapshot {
         val activeService =
             VoiceInteractionService.isActiveService(
-                activity,
-                ComponentName(activity, AuroraVoiceInteractionService::class.java),
+                context,
+                ComponentName(context, AuroraVoiceInteractionService::class.java),
             )
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             return AuroraAssistantRoleSnapshot(
@@ -47,7 +51,7 @@ object AuroraAssistantRoleCoordinator {
             )
         }
 
-        val roles = activity.getSystemService(RoleManager::class.java)
+        val roles = context.getSystemService(RoleManager::class.java)
         val roleAvailable = runCatching {
             roles?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true
         }.getOrDefault(false)

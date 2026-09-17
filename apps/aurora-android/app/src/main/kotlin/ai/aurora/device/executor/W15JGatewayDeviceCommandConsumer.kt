@@ -1,7 +1,9 @@
 package ai.aurora.device.executor
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import ai.aurora.device.app.AppIntegrationResolution
 import ai.aurora.device.app.AppIntegrationResolver
 import ai.aurora.device.capability.NativeCapabilityBridge
@@ -23,6 +25,16 @@ import ai.aurora.device.permission.RuntimePermissionState
 private const val RECEIPT_SOURCE_REFERENCE = "android:w15j:device-executor"
 private const val MAX_LOCAL_DELIVERY_FENCES = 128
 private const val PERMISSION_SNAPSHOT_AGE_MS = 30_000L
+
+private data class ReceiptTransportBinding(
+    val connectionId: String,
+    val gatewayGeneration: Int,
+) {
+    init {
+        require(connectionId.isNotBlank()) { "receipt connectionId must not be blank" }
+        require(gatewayGeneration > 0) { "receipt gatewayGeneration must be positive" }
+    }
+}
 
 sealed interface W15JDeviceCommandConsumptionResult {
     data class NoEffect(
@@ -98,6 +110,11 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
                         requiresReconciliation = current.requiresReconciliation,
                     )
             }
+        val receiptBinding =
+            ReceiptTransportBinding(
+                connectionId = snapshot.gateway.connectionId,
+                gatewayGeneration = snapshot.gateway.generation,
+            )
 
         val claimed =
             when (val result = runCatching { gateway.claimCommand(commandId) }.getOrNull()) {
@@ -154,11 +171,20 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
 
         val native = capabilityResolution.current(envelope.executionAuthorization.capabilityId)
         if (native !is NativeCapabilityResolution.Ready) {
-            return submitPreEffectFailure(envelope, "native capability is not current")
+            return submitPreEffectFailure(
+                envelope,
+                receiptBinding,
+                "native capability is not current",
+            )
         }
         val permissionRequirements =
             native.binding.requiredPermissions.sorted().map { permission ->
-                RuntimePermissionRequirement(permission = permission)
+                // W15-J delivery may execute while no Activity is interactive. Runtime permission
+                // therefore has to remain eligible under the current OS background restriction.
+                RuntimePermissionRequirement(
+                    permission = permission,
+                    requiresBackgroundAccess = true,
+                )
             }
 
         val executor =
@@ -210,8 +236,12 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
 
         return when (val decision = executor.execute(request)) {
             is DeviceExecutionDecision.Rejected ->
-                submitPreEffectFailure(envelope, "executor rejected: ${decision.reason.name}")
-            is DeviceExecutionDecision.Completed -> submitCompleted(envelope, decision)
+                submitPreEffectFailure(
+                    envelope,
+                    receiptBinding,
+                    "executor rejected: ${decision.reason.name}",
+                )
+            is DeviceExecutionDecision.Completed -> submitCompleted(envelope, receiptBinding, decision)
         }
     }
 
@@ -233,14 +263,16 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
 
     private fun submitPreEffectFailure(
         envelope: GatewayCommandEnvelopeView,
+        receiptBinding: ReceiptTransportBinding,
         reason: String,
     ): W15JDeviceCommandConsumptionResult {
-        val submitted = submitReceipt(envelope, DeviceReceiptReportedState.FAILED)
+        val submitted = submitReceipt(envelope, receiptBinding, DeviceReceiptReportedState.FAILED)
         return NoEffectResult.fromReceipt(reason, submitted)
     }
 
     private fun submitCompleted(
         envelope: GatewayCommandEnvelopeView,
+        receiptBinding: ReceiptTransportBinding,
         decision: DeviceExecutionDecision.Completed,
     ): W15JDeviceCommandConsumptionResult {
         val reportedState =
@@ -249,7 +281,7 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
                 DeviceExecutionOutcome.FAILED -> DeviceReceiptReportedState.FAILED
                 DeviceExecutionOutcome.EXECUTION_UNCERTAIN -> DeviceReceiptReportedState.UNCERTAIN
             }
-        val submitted = submitReceipt(envelope, reportedState)
+        val submitted = submitReceipt(envelope, receiptBinding, reportedState)
         val ingress = (submitted as? GatewayDevicePlaneResult.Success)?.value
         val transportRequiresReconciliation =
             (submitted as? GatewayDevicePlaneResult.Rejected)?.requiresReconciliation == true || ingress == null
@@ -265,6 +297,7 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
 
     private fun submitReceipt(
         envelope: GatewayCommandEnvelopeView,
+        receiptBinding: ReceiptTransportBinding,
         state: DeviceReceiptReportedState,
     ): GatewayDevicePlaneResult<GatewayReceiptIngressView> {
         val capturedAtMs = nowMs()
@@ -279,6 +312,8 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
                     reportedState = state,
                     sourceReference = RECEIPT_SOURCE_REFERENCE,
                     capturedAtMs = capturedAtMs,
+                    reportedConnectionId = receiptBinding.connectionId,
+                    reportedGatewayGeneration = receiptBinding.gatewayGeneration,
                 ),
             )
         }.getOrElse {
@@ -339,13 +374,21 @@ class W15JGatewayDeviceCommandConsumer internal constructor(
                     val granted =
                         permissionContext.checkSelfPermission(requirement.permission) ==
                             PackageManager.PERMISSION_GRANTED
+                    val backgroundRestricted =
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                            permissionContext.getSystemService(ActivityManager::class.java)
+                                ?.isBackgroundRestricted == true
+                        } else {
+                            false
+                        }
                     RuntimePermissionObservation(
                         requirement = requirement,
                         state =
-                            if (granted) {
-                                RuntimePermissionState.GRANTED
-                            } else {
-                                RuntimePermissionState.DENIED
+                            when {
+                                !granted -> RuntimePermissionState.DENIED
+                                requirement.requiresBackgroundAccess && backgroundRestricted ->
+                                    RuntimePermissionState.BACKGROUND_RESTRICTED
+                                else -> RuntimePermissionState.GRANTED
                             },
                         observedAtMs = observedAtMs,
                         expiresAtMs = saturatingAdd(observedAtMs, PERMISSION_SNAPSHOT_AGE_MS),

@@ -22,6 +22,16 @@ class AuroraWakeForegroundService : Service() {
     private lateinit var modelStore: AuroraWakeModelStore
     private var engine: AudioRecordAuroraWakeEngine? = null
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val assistantRoleGuard =
+        object : Runnable {
+            override fun run() {
+                if (!assistantRoleEligible()) {
+                    stopWithState("ASSISTANT_ROLE_REQUIRED")
+                    return
+                }
+                mainHandler.postDelayed(this, ASSISTANT_ROLE_GUARD_MS)
+            }
+        }
 
     override fun onCreate() {
         super.onCreate()
@@ -43,6 +53,7 @@ class AuroraWakeForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(assistantRoleGuard)
         engine?.close()
         engine = null
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -51,6 +62,7 @@ class AuroraWakeForegroundService : Service() {
     }
 
     private fun arm() {
+        mainHandler.removeCallbacks(assistantRoleGuard)
         engine?.close()
         engine = null
         if (!preferences.wakeEnabled()) return stopWithState("DISABLED")
@@ -58,6 +70,7 @@ class AuroraWakeForegroundService : Service() {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             return stopWithState("WAKE_PERMISSION_BLOCKED")
         }
+        if (!assistantRoleEligible()) return stopWithState("ASSISTANT_ROLE_REQUIRED")
         val model = modelStore.load() ?: return stopWithState("USER_SETUP_REQUIRED")
 
         startForeground(NOTIFICATION_ID, buildNotification("Aurora escutando localmente"))
@@ -79,6 +92,7 @@ class AuroraWakeForegroundService : Service() {
                     }
                 },
                 onConfirmed = { candidate -> onWakeConfirmed(candidate) },
+                onEvaluated = statusStore::recordEvaluation,
                 onRejectedOrIgnored = statusStore::incrementRejectedOrIgnored,
                 onError = { message ->
                     statusStore.update("WAKE_ENGINE_ERROR", model.modelVersion, message)
@@ -86,7 +100,11 @@ class AuroraWakeForegroundService : Service() {
                 },
             )
         engine = localEngine
-        if (!localEngine.start()) stopForegroundDetector()
+        if (!localEngine.start()) {
+            stopForegroundDetector()
+        } else {
+            mainHandler.postDelayed(assistantRoleGuard, ASSISTANT_ROLE_GUARD_MS)
+        }
     }
 
     private fun onWakeConfirmed(candidate: WakeCandidate) {
@@ -149,7 +167,11 @@ class AuroraWakeForegroundService : Service() {
         stopForegroundDetector()
     }
 
+    private fun assistantRoleEligible(): Boolean =
+        AuroraAssistantRoleCoordinator.snapshot(this).wakeEligible
+
     private fun stopForegroundDetector() {
+        mainHandler.removeCallbacks(assistantRoleGuard)
         engine?.close()
         engine = null
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -198,6 +220,7 @@ class AuroraWakeForegroundService : Service() {
         private const val NOTIFICATION_ID = 15001
         private const val NOTIFICATION_REQUEST_CODE = 15002
         private const val HANDOFF_RECOVERY_MS = 1_800L
+        private const val ASSISTANT_ROLE_GUARD_MS = 500L
         private val TERMINAL_ENGINE_STATES =
             setOf(
                 WakeState.PRIVACY_BLOCKED,
@@ -222,6 +245,7 @@ class AuroraWakeForegroundService : Service() {
                 return false
             }
             if (!AuroraWakeModelStore(appContext).hasValidModel()) return false
+            if (!AuroraAssistantRoleCoordinator.snapshot(appContext).wakeEligible) return false
             if (!PROCESS_REARM_GATE.tryBeginStart()) return true
             return runCatching {
                 appContext.startForegroundService(

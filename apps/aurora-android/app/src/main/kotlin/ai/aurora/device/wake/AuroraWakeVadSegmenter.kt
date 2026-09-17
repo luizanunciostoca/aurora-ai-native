@@ -22,6 +22,8 @@ class AuroraWakeVadSegmenter(
     private val minSpeechSamples = minSpeechMs * sampleRateHz / 1_000
     private val maxSpeechSamples = maxSpeechMs * sampleRateHz / 1_000
     private var speechStarted = false
+    private var speechStartedAtNanos: Long? = null
+    private var lastCompletedSpeechStartedAtNanos: Long? = null
     private var trailingFrames = 0
     private var voicedSamples = 0
 
@@ -35,8 +37,12 @@ class AuroraWakeVadSegmenter(
         require(preRollMs in 40..400)
     }
 
-    fun accept(frame: ShortArray): ShortArray? {
+    fun accept(
+        frame: ShortArray,
+        frameObservedAtNanos: Long = System.nanoTime(),
+    ): ShortArray? {
         require(frame.size == frameSamples) { "unexpected wake frame size ${frame.size}" }
+        require(frameObservedAtNanos >= 0)
         val voiced = rms(frame) >= activationRms
 
         if (!speechStarted) {
@@ -45,6 +51,8 @@ class AuroraWakeVadSegmenter(
                 return null
             }
             speechStarted = true
+            // Monotonic timestamp of the first VAD-positive frame; never persisted with PCM.
+            speechStartedAtNanos = frameObservedAtNanos
             preRollFrames.forEach { buffered -> buffered.forEach(activeSamples::add) }
             preRollFrames.clear()
         }
@@ -66,14 +74,28 @@ class AuroraWakeVadSegmenter(
         } else {
             null
         }
-        clear()
+        val completedSpeechStartedAtNanos = speechStartedAtNanos
+        resetActiveSegment()
+        lastCompletedSpeechStartedAtNanos = if (result == null) null else completedSpeechStartedAtNanos
         return result
     }
 
+    fun consumeLastCompletedSpeechStartedAtNanos(): Long? {
+        val value = lastCompletedSpeechStartedAtNanos
+        lastCompletedSpeechStartedAtNanos = null
+        return value
+    }
+
     fun clear() {
+        resetActiveSegment()
+        lastCompletedSpeechStartedAtNanos = null
+    }
+
+    private fun resetActiveSegment() {
         activeSamples.clear()
         preRollFrames.clear()
         speechStarted = false
+        speechStartedAtNanos = null
         trailingFrames = 0
         voicedSamples = 0
     }

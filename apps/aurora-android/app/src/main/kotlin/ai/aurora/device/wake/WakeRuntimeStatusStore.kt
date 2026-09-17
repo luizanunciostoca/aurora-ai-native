@@ -13,6 +13,11 @@ data class WakeRuntimeStatus(
     val lastError: String?,
     val confirmedWakeCount: Long,
     val rejectedOrIgnoredCount: Long,
+    val lastEvaluationId: String?,
+    val lastEvaluationObservedAtMs: Long?,
+    val lastEvaluationLatencyMs: Long?,
+    val lastEvaluationConfidence: Double?,
+    val lastEvaluationResult: String?,
 )
 
 class WakeRuntimeStatusStore(context: Context) {
@@ -27,6 +32,12 @@ class WakeRuntimeStatusStore(context: Context) {
             lastError = preferences.getString(KEY_LAST_ERROR, null),
             confirmedWakeCount = preferences.getLong(KEY_CONFIRMED, 0L),
             rejectedOrIgnoredCount = preferences.getLong(KEY_REJECTED, 0L),
+            lastEvaluationId = preferences.getString(KEY_LAST_EVALUATION_ID, null),
+            lastEvaluationObservedAtMs = preferences.longOrNull(KEY_LAST_EVALUATION_OBSERVED_AT),
+            lastEvaluationLatencyMs = preferences.longOrNull(KEY_LAST_EVALUATION_LATENCY),
+            lastEvaluationConfidence =
+                preferences.longOrNull(KEY_LAST_EVALUATION_CONFIDENCE_BITS)?.let { bits -> Double.fromBits(bits) },
+            lastEvaluationResult = preferences.getString(KEY_LAST_EVALUATION_RESULT, null),
         )
 
     fun update(
@@ -47,9 +58,25 @@ class WakeRuntimeStatusStore(context: Context) {
         check(editor.commit())
     }
 
+    fun recordEvaluation(telemetry: WakeEvaluationTelemetry) {
+        check(
+            preferences
+                .edit()
+                .putString(KEY_LAST_EVALUATION_ID, telemetry.id)
+                .putLong(KEY_LAST_EVALUATION_OBSERVED_AT, telemetry.observedAtMs)
+                .putLong(KEY_LAST_EVALUATION_LATENCY, telemetry.latencyMs)
+                .putLong(KEY_LAST_EVALUATION_CONFIDENCE_BITS, telemetry.confidence.toRawBits())
+                .putString(KEY_LAST_EVALUATION_RESULT, telemetry.result.name)
+                .commit(),
+        )
+    }
+
     fun incrementConfirmed() = increment(KEY_CONFIRMED)
 
     fun incrementRejectedOrIgnored() = increment(KEY_REJECTED)
+
+    private fun android.content.SharedPreferences.longOrNull(key: String): Long? =
+        if (contains(key)) getLong(key, 0L) else null
 
     private fun increment(key: String) {
         val next = (preferences.getLong(key, 0L) + 1L).coerceAtLeast(0L)
@@ -64,5 +91,10 @@ class WakeRuntimeStatusStore(context: Context) {
         private const val KEY_LAST_ERROR = "last_error"
         private const val KEY_CONFIRMED = "confirmed_wake_count"
         private const val KEY_REJECTED = "rejected_or_ignored_count"
+        private const val KEY_LAST_EVALUATION_ID = "last_evaluation_id"
+        private const val KEY_LAST_EVALUATION_OBSERVED_AT = "last_evaluation_observed_at_ms"
+        private const val KEY_LAST_EVALUATION_LATENCY = "last_evaluation_latency_ms"
+        private const val KEY_LAST_EVALUATION_CONFIDENCE_BITS = "last_evaluation_confidence_bits"
+        private const val KEY_LAST_EVALUATION_RESULT = "last_evaluation_result"
     }
 }
