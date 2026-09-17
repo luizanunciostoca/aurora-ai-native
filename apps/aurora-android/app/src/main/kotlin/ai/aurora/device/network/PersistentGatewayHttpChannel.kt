@@ -30,6 +30,20 @@ internal class GatewayTransportException(
     cause: Throwable? = null,
 ) : Exception(failure.name, cause)
 
+internal fun gatewayIoFailure(
+    requestWriteStarted: Boolean,
+    cause: Throwable,
+): GatewayTransportException =
+    GatewayTransportException(
+        if (requestWriteStarted) {
+            GatewayTransportFailure.TRANSPORT_UNCERTAIN
+        } else {
+            GatewayTransportFailure.CONNECTION_UNAVAILABLE
+        },
+        requestMayHaveReachedPeer = requestWriteStarted,
+        cause = cause,
+    )
+
 internal interface GatewayHttpChannel : AutoCloseable {
     @Throws(GatewayTransportException::class)
     fun post(path: String, body: String): GatewayHttpResponse
@@ -161,15 +175,7 @@ internal class PersistentGatewayHttpChannel private constructor(
             throw error
         } catch (error: Exception) {
             close()
-            throw GatewayTransportException(
-                if (requestWriteStarted) {
-                    GatewayTransportFailure.TRANSPORT_UNCERTAIN
-                } else {
-                    GatewayTransportFailure.CONNECTION_UNAVAILABLE
-                },
-                requestMayHaveReachedPeer = requestWriteStarted,
-                cause = error,
-            )
+            throw gatewayIoFailure(requestWriteStarted, error)
         }
     }
 
