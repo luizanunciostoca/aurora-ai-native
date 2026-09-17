@@ -97,7 +97,7 @@ jobs:
           cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
           artifact_purpose=W15-J-DP5-physical-evidence-input
           source_candidate_sha=fb05c7880667d6f179648043e6f1e7b966734134
-          source_branch=wave/15j-dp5-consolidated-hardening-rc
+          source_branch=wave/15j-physical-device-integration-acceptance
           paired_local_host_candidate_sha=df17c9f27a8206f8296f55aa3830667f4742b062
           reconciled_main_parent_sha=77f0f8532197025ee913dd02fcb56878d9d667a9
           packaging_head_sha=${GITHUB_SHA}
@@ -123,7 +123,7 @@ jobs:
 
           test "$(wc -l < "$ARTIFACT_DIR/BUILD_IDENTITY.txt" | tr -d ' ')" = "24"
           grep -Fxq 'source_candidate_sha=fb05c7880667d6f179648043e6f1e7b966734134' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
-          grep -Fxq 'source_branch=wave/15j-dp5-consolidated-hardening-rc' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
+          grep -Fxq 'source_branch=wave/15j-physical-device-integration-acceptance' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           grep -Fxq 'gateway_transport_scope=LOCAL_TABLET_LOOPBACK' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           grep -Fxq 'gateway_origin=http://127.0.0.1:8080' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           test "$(find "$ARTIFACT_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
