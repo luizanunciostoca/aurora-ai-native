@@ -25,3 +25,4 @@ class AuroraAssistantRoleSnapshotTest {
         )
         assertTrue(snapshot.wakeEligible)
     }
+}
