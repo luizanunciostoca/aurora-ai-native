@@ -9,11 +9,13 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
+import ai.aurora.device.concurrent.AudioResourceLeaseGate
 import ai.aurora.device.wake.AuroraAudioArbiter.AudioOwner
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Local microphone wake detector. It emits only a non-authoritative WakeCandidate and never stores
@@ -32,14 +34,14 @@ class AudioRecordAuroraWakeEngine(
 ) : AutoCloseable {
     private val appContext = context.applicationContext
     private val running = AtomicBoolean(false)
-    private val audioLeaseHeld = AtomicBoolean(false)
+    private val audioLease = AudioResourceLeaseGate()
     private val executor =
         Executors.newSingleThreadExecutor { runnable ->
             Thread(runnable, "AuroraWakeAudio").apply { priority = Thread.NORM_PRIORITY }
         }
-    private var recorder: AudioRecord? = null
-    private var echoCanceler: AcousticEchoCanceler? = null
-    private var noiseSuppressor: NoiseSuppressor? = null
+    private val recorder = AtomicReference<AudioRecord?>(null)
+    private val echoCanceler = AtomicReference<AcousticEchoCanceler?>(null)
+    private val noiseSuppressor = AtomicReference<NoiseSuppressor?>(null)
     private val segmenter = AuroraWakeVadSegmenter()
     private val stateMachine = WakeStateMachine(config, WakeProcessAcceptanceRuntime.history)
 
@@ -64,28 +66,55 @@ class AudioRecordAuroraWakeEngine(
             onError("wake audio ownership unavailable")
             return false
         }
-        audioLeaseHeld.set(true)
+        if (
+            !audioLease.markHeldAndValidate(
+                isLifecycleActive = running::get,
+                release = { AuroraAudioRuntime.arbiter.release(AudioOwner.HOTWORD_MONITOR) },
+            )
+        ) {
+            return false
+        }
         return runCatching {
+            if (!running.get()) {
+                releaseAudio()
+                return@runCatching false
+            }
             val audioRecord = createAudioRecord()
-            recorder = audioRecord
+            recorder.set(audioRecord)
+            if (!running.get()) {
+                releaseAudio()
+                return@runCatching false
+            }
             if (AcousticEchoCanceler.isAvailable()) {
-                echoCanceler =
-                    AcousticEchoCanceler.create(audioRecord.audioSessionId)?.apply { enabled = true }
+                echoCanceler.set(
+                    AcousticEchoCanceler.create(audioRecord.audioSessionId)?.apply { enabled = true },
+                )
             }
             if (NoiseSuppressor.isAvailable()) {
-                noiseSuppressor =
-                    NoiseSuppressor.create(audioRecord.audioSessionId)?.apply { enabled = true }
+                noiseSuppressor.set(
+                    NoiseSuppressor.create(audioRecord.audioSessionId)?.apply { enabled = true },
+                )
+            }
+            if (!running.get()) {
+                releaseAudio()
+                return@runCatching false
             }
             stateMachine.arm()
             onState(stateMachine.state)
             audioRecord.startRecording()
+            if (!running.get()) {
+                releaseAudio()
+                return@runCatching false
+            }
             executor.execute(::readLoop)
             true
         }.getOrElse { throwable ->
-            running.set(false)
+            val unexpectedWhileActive = running.getAndSet(false)
             releaseAudio()
-            onState(WakeState.ENGINE_UNAVAILABLE)
-            onError("wake audio engine unavailable: ${throwable.javaClass.simpleName}")
+            if (unexpectedWhileActive) {
+                onState(WakeState.ENGINE_UNAVAILABLE)
+                onError("wake audio engine unavailable: ${throwable.javaClass.simpleName}")
+            }
             false
         }
     }
@@ -94,7 +123,6 @@ class AudioRecordAuroraWakeEngine(
 
     override fun close() {
         running.set(false)
-        runCatching { recorder?.stop() }
         segmenter.clear()
         releaseAudio()
         executor.shutdownNow()
@@ -116,7 +144,7 @@ class AudioRecordAuroraWakeEngine(
                     break
                 }
                 val read =
-                    recorder?.read(frame, 0, frame.size, AudioRecord.READ_BLOCKING)
+                    recorder.get()?.read(frame, 0, frame.size, AudioRecord.READ_BLOCKING)
                         ?: AudioRecord.ERROR_INVALID_OPERATION
                 if (read < 0) throw IllegalStateException("AudioRecord read failed: $read")
                 if (read != frame.size) continue
@@ -148,6 +176,9 @@ class AudioRecordAuroraWakeEngine(
                     is WakeEvaluation.Confirmed -> {
                         running.set(false)
                         onState(WakeState.HOTWORD_CONFIRMED)
+                        // The successor STT must never race a still-live AudioRecord or logical
+                        // HOTWORD lease. Release both before handing the candidate to the platform.
+                        releaseAudio()
                         onConfirmed(evaluation.candidate)
                     }
                     is WakeEvaluation.Rejected -> onRejectedOrIgnored()
@@ -161,7 +192,6 @@ class AudioRecordAuroraWakeEngine(
         } finally {
             running.set(false)
             segmenter.clear()
-            runCatching { recorder?.stop() }
             releaseAudio()
         }
     }
@@ -192,16 +222,12 @@ class AudioRecordAuroraWakeEngine(
     }
 
     private fun releaseAudio() {
-        runCatching { echoCanceler?.release() }
-        runCatching { noiseSuppressor?.release() }
-        echoCanceler = null
-        noiseSuppressor = null
-        val current = recorder
-        recorder = null
+        runCatching { echoCanceler.getAndSet(null)?.release() }
+        runCatching { noiseSuppressor.getAndSet(null)?.release() }
+        val current = recorder.getAndSet(null)
+        runCatching { current?.stop() }
         runCatching { current?.release() }
-        if (audioLeaseHeld.compareAndSet(true, false)) {
-            AuroraAudioRuntime.arbiter.release(AudioOwner.HOTWORD_MONITOR)
-        }
+        audioLease.releaseIfHeld { AuroraAudioRuntime.arbiter.release(AudioOwner.HOTWORD_MONITOR) }
     }
 
     private fun fingerprint(vector: WakeFeatureVector): String {
