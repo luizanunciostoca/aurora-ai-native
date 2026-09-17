@@ -41,7 +41,7 @@ class AudioRecordAuroraWakeEngine(
     private var echoCanceler: AcousticEchoCanceler? = null
     private var noiseSuppressor: NoiseSuppressor? = null
     private val segmenter = AuroraWakeVadSegmenter()
-    private val stateMachine = WakeStateMachine(config)
+    private val stateMachine = WakeStateMachine(config, WakeProcessAcceptanceRuntime.history)
 
     fun start(): Boolean {
         if (!running.compareAndSet(false, true)) return true
