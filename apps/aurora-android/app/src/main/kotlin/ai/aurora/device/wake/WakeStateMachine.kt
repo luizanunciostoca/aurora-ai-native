@@ -3,7 +3,7 @@ package ai.aurora.device.wake
 import java.util.concurrent.atomic.AtomicLong
 
 /** Deterministic acoustic/presence state only; transitions never confer action authority. */
-class WakeStateMachine(
+class WakeStateMachine internal constructor(
     private val config: WakeConfig = WakeConfig(),
     private val acceptanceHistory: WakeAcceptanceHistory = WakeAcceptanceHistory(),
 ) {
