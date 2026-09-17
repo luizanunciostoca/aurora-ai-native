@@ -37,6 +37,7 @@ class AndroidDeviceSessionMetadataStore(context: Context) : DeviceSessionMetadat
             editor
                 .putString(KEY_DEVICE_SESSION_ID, session.deviceSessionId)
                 .putString(KEY_CONNECTION_ID, session.connectionId)
+                .putInt(KEY_GATEWAY_GENERATION, session.gatewayGeneration)
                 .putLong(KEY_GATEWAY_AUTH_EXPIRES_AT_MS, session.gatewayAuthExpiresAtMs)
                 .putLong(KEY_LAST_EVALUATED_AT_MS, session.lastEvaluatedAtMs)
         }
@@ -86,6 +87,7 @@ class AndroidDeviceSessionMetadataStore(context: Context) : DeviceSessionMetadat
         if (key == null || registration == null) return null
         val deviceSessionId = preferences.getString(KEY_DEVICE_SESSION_ID, null) ?: return null
         val connectionId = preferences.getString(KEY_CONNECTION_ID, null) ?: return null
+        val generation = preferences.getInt(KEY_GATEWAY_GENERATION, 0)
         val expiresAtMs = preferences.getLong(KEY_GATEWAY_AUTH_EXPIRES_AT_MS, 0)
         val evaluatedAtMs = preferences.getLong(KEY_LAST_EVALUATED_AT_MS, -1)
         return runCatching {
@@ -94,6 +96,7 @@ class AndroidDeviceSessionMetadataStore(context: Context) : DeviceSessionMetadat
                 connectionId = connectionId,
                 gatewayAuthExpiresAtMs = expiresAtMs,
                 lastEvaluatedAtMs = evaluatedAtMs,
+                gatewayGeneration = generation,
             )
         }.getOrNull()
     }
@@ -109,6 +112,7 @@ class AndroidDeviceSessionMetadataStore(context: Context) : DeviceSessionMetadat
         const val KEY_DEVICE_STATE = "device_state"
         const val KEY_DEVICE_SESSION_ID = "device_session_id"
         const val KEY_CONNECTION_ID = "connection_id"
+        const val KEY_GATEWAY_GENERATION = "gateway_generation"
         const val KEY_GATEWAY_AUTH_EXPIRES_AT_MS = "gateway_auth_expires_at_ms"
         const val KEY_LAST_EVALUATED_AT_MS = "last_evaluated_at_ms"
     }

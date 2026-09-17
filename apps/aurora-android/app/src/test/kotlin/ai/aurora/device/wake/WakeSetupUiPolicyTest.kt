@@ -52,6 +52,28 @@ class WakeSetupUiPolicyTest {
     }
 
     @Test
+    fun `assistant configuration remains actionable when role api is unavailable`() {
+        val presentation =
+            WakeSetupUiPolicy.present(
+                readyInput(
+                    assistantRoleAvailable = false,
+                    assistantSelected = false,
+                    wakeEnabled = true,
+                ),
+            )
+        assertTrue(presentation.canRequestAssistantRole)
+        assertTrue(presentation.assistantButtonLabel.contains("Abrir configuração"))
+        assertTrue(presentation.guidance.contains("Apps padrão"))
+    }
+
+    @Test
+    fun `selected assistant disables redundant selection action`() {
+        val presentation = WakeSetupUiPolicy.present(readyInput(assistantSelected = true))
+        assertFalse(presentation.canRequestAssistantRole)
+        assertTrue(presentation.assistantButtonLabel.contains("já é"))
+    }
+
+    @Test
     fun `unclear enrollment sample is recoverable and translated`() {
         val diagnostic = "wake enrollment sample was not clear enough"
         assertTrue(WakeSetupUiPolicy.isRecoverableEnrollmentError(diagnostic))
@@ -99,12 +121,14 @@ class WakeSetupUiPolicyTest {
         enrollmentRetryPending: Boolean = false,
         acceptedEnrollmentSamples: Int = 0,
         wakeEnabled: Boolean = false,
+        assistantRoleAvailable: Boolean = true,
+        assistantSelected: Boolean = true,
     ): WakeSetupUiInput =
         WakeSetupUiInput(
             microphoneGranted = microphoneGranted,
             modelReady = modelReady,
-            assistantRoleAvailable = true,
-            assistantSelected = true,
+            assistantRoleAvailable = assistantRoleAvailable,
+            assistantSelected = assistantSelected,
             wakeEnabled = wakeEnabled,
             privacyModeEnabled = false,
             runtimeState = runtimeState,

@@ -32,12 +32,14 @@ data class LocalDeviceSessionMetadata(
     val connectionId: String,
     val gatewayAuthExpiresAtMs: Long,
     val lastEvaluatedAtMs: Long,
+    val gatewayGeneration: Int = 1,
 ) {
     init {
         require(deviceSessionId.isNotBlank()) { "deviceSessionId must not be blank" }
         require(connectionId.isNotBlank()) { "connectionId must not be blank" }
         require(gatewayAuthExpiresAtMs > 0) { "gatewayAuthExpiresAtMs must be positive" }
         require(lastEvaluatedAtMs >= 0) { "lastEvaluatedAtMs must be non-negative" }
+        require(gatewayGeneration > 0) { "gatewayGeneration must be positive" }
     }
 }
 

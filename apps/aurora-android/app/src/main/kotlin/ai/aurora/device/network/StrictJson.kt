@@ -2,6 +2,7 @@ package ai.aurora.device.network
 
 internal sealed interface JsonValue {
     data class ObjectValue(val fields: Map<String, JsonValue>) : JsonValue
+    data class ArrayValue(val values: List<JsonValue>) : JsonValue
     data class StringValue(val value: String) : JsonValue
     data class NumberValue(val raw: String) : JsonValue
     data class BooleanValue(val value: Boolean) : JsonValue
@@ -11,6 +12,7 @@ internal sealed interface JsonValue {
 internal object StrictJson {
     private const val MAX_DEPTH = 16
     private const val MAX_FIELDS = 512
+    private const val MAX_ARRAY_VALUES = 512
 
     fun parseObject(text: String): JsonValue.ObjectValue {
         require(text.length <= 128 * 1024) { "JSON body exceeds parser bound" }
@@ -132,9 +134,13 @@ internal object StrictJson {
     internal fun JsonValue.ObjectValue.obj(name: String): JsonValue.ObjectValue =
         fields[name] as? JsonValue.ObjectValue ?: error("missing object field: $name")
 
+    internal fun JsonValue.ObjectValue.array(name: String): JsonValue.ArrayValue =
+        fields[name] as? JsonValue.ArrayValue ?: error("missing array field: $name")
+
     private class Parser(private val source: String) {
         private var index = 0
         private var parsedFields = 0
+        private var parsedArrayValues = 0
 
         fun isDone(): Boolean = index == source.length
 
@@ -148,6 +154,7 @@ internal object StrictJson {
             require(index < source.length) { "unexpected end of JSON" }
             return when (source[index]) {
                 '{' -> parseObject(depth + 1)
+                '[' -> parseArray(depth + 1)
                 '"' -> JsonValue.StringValue(parseString())
                 't' -> {
                     expectLiteral("true")
@@ -192,6 +199,30 @@ internal object StrictJson {
                         return JsonValue.ObjectValue(fields)
                     }
                     else -> error("JSON object separator is invalid")
+                }
+            }
+        }
+
+        private fun parseArray(depth: Int): JsonValue.ArrayValue {
+            expect('[')
+            skipWhitespace()
+            val values = mutableListOf<JsonValue>()
+            if (peek(']')) {
+                index += 1
+                return JsonValue.ArrayValue(values)
+            }
+            while (true) {
+                parsedArrayValues += 1
+                require(parsedArrayValues <= MAX_ARRAY_VALUES) { "JSON array value count exceeds parser bound" }
+                values += parseValue(depth)
+                skipWhitespace()
+                when {
+                    peek(',') -> index += 1
+                    peek(']') -> {
+                        index += 1
+                        return JsonValue.ArrayValue(values.toList())
+                    }
+                    else -> error("JSON array separator is invalid")
                 }
             }
         }
@@ -297,3 +328,6 @@ internal fun JsonValue.ObjectValue.jsonBoolean(name: String): Boolean =
 
 internal fun JsonValue.ObjectValue.jsonObject(name: String): JsonValue.ObjectValue =
     fields[name] as? JsonValue.ObjectValue ?: error("missing object field: $name")
+
+internal fun JsonValue.ObjectValue.jsonArray(name: String): List<JsonValue> =
+    (fields[name] as? JsonValue.ArrayValue)?.values ?: error("missing array field: $name")

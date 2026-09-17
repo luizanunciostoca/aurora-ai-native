@@ -40,6 +40,8 @@ class AuroraWakeSignalPipelineTest {
 
         assertTrue(candidate != null)
         assertTrue(candidate!!.size <= 6_400)
+        assertTrue(segmenter.consumeLastCompletedSpeechStartedAtNanos() != null)
+        assertNull(segmenter.consumeLastCompletedSpeechStartedAtNanos())
         assertEquals(0, segmenter.bufferedSampleCount())
     }
 
@@ -50,6 +52,33 @@ class AuroraWakeSignalPipelineTest {
         repeat(5) { assertNull(segmenter.accept(quiet)) }
         assertTrue(segmenter.bufferedSampleCount() > 0)
         segmenter.clear()
+        assertEquals(0, segmenter.bufferedSampleCount())
+    }
+
+    @Test
+    fun `vad records first voiced frame monotonic onset without persisting pcm`() {
+        val segmenter =
+            AuroraWakeVadSegmenter(
+                activationRms = 0.005,
+                minSpeechMs = 100,
+                maxSpeechMs = 400,
+                trailingSilenceMs = 60,
+                preRollMs = 40,
+            )
+        val voiced = ShortArray(320) { 8_000 }
+        val silent = ShortArray(320)
+        val onsetNanos = 5_000_000_000L
+        var candidate: ShortArray? = null
+
+        repeat(5) { index ->
+            if (candidate == null) candidate = segmenter.accept(voiced, onsetNanos + index * 20_000_000L)
+        }
+        repeat(4) { index ->
+            if (candidate == null) candidate = segmenter.accept(silent, onsetNanos + (5 + index) * 20_000_000L)
+        }
+
+        assertTrue(candidate != null)
+        assertEquals(onsetNanos, segmenter.consumeLastCompletedSpeechStartedAtNanos())
         assertEquals(0, segmenter.bufferedSampleCount())
     }
 
