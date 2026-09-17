@@ -11,6 +11,7 @@ import ai.aurora.device.wake.AuroraAudioRuntime
 import ai.aurora.device.wake.WakePlaybackAwareness
 import java.util.Locale
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -79,6 +80,8 @@ class AuroraTextToSpeechOutput(
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
     private val lifecycle = TtsLifecycleGate()
+    private val ttsLeaseHeld = AtomicBoolean(false)
+    private val playbackAnnounced = AtomicBoolean(false)
     private var engine: TextToSpeech? = null
     private var ready = false
     private var pendingText: String? = null
@@ -107,6 +110,7 @@ class AuroraTextToSpeechOutput(
             onFailure(AuroraSpeechOutputFailure.AUDIO_OWNERSHIP_UNAVAILABLE)
             return
         }
+        ttsLeaseHeld.set(true)
         pendingText = text
         pendingUtteranceId = "aurora-tts-${UUID.randomUUID()}"
         completion = onComplete
@@ -167,7 +171,14 @@ class AuroraTextToSpeechOutput(
         if (!lifecycle.isActive()) return
         val text = pendingText ?: return fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
         val utteranceId = pendingUtteranceId ?: return fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
+        playbackAnnounced.set(true)
         WakePlaybackAwareness.onTtsStarted(text)
+        // close() may win immediately after playback awareness was announced. Recheck before
+        // entering the platform engine and undo only this instance's announcement if it lost.
+        if (!lifecycle.isActive()) {
+            stopPlaybackAwarenessIfOwned()
+            return
+        }
         val status = local.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), utteranceId)
         if (status != TextToSpeech.SUCCESS) fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
     }
@@ -215,13 +226,21 @@ class AuroraTextToSpeechOutput(
         if (transitionLifecycle && !lifecycle.tryFinish()) return false
         timeoutRunnable?.let(handler::removeCallbacks)
         timeoutRunnable = null
-        WakePlaybackAwareness.onTtsStopped()
+        stopPlaybackAwarenessIfOwned()
         pendingText = null
         pendingUtteranceId = null
         completion = null
         failure = null
-        AuroraAudioRuntime.arbiter.release(AudioOwner.TTS)
+        if (ttsLeaseHeld.compareAndSet(true, false)) {
+            AuroraAudioRuntime.arbiter.release(AudioOwner.TTS)
+        }
         return true
+    }
+
+    private fun stopPlaybackAwarenessIfOwned() {
+        if (playbackAnnounced.compareAndSet(true, false)) {
+            WakePlaybackAwareness.onTtsStopped()
+        }
     }
 
     companion object {
