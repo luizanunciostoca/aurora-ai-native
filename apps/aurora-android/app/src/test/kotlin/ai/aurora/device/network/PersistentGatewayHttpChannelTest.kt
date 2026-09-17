@@ -2,9 +2,6 @@ package ai.aurora.device.network
 
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.config.RuntimeEnvironmentConfig
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.net.ServerSocket
@@ -12,6 +9,9 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class PersistentGatewayHttpChannelTest {
     @Test
@@ -71,6 +71,43 @@ class PersistentGatewayHttpChannelTest {
                 listOf("/v1/gateway/sessions/open", "/v1/device/registrations/register"),
                 paths,
             )
+        }
+    }
+
+    @Test
+    fun `connection reset after request write begins is transport uncertain`() {
+        ServerSocket(0).use { server ->
+            val accepted = CountDownLatch(1)
+            val worker = Thread {
+                server.accept().use { socket ->
+                    accepted.countDown()
+                    socket.setSoLinger(true, 0)
+                }
+            }
+            worker.start()
+
+            val config = RuntimeEnvironmentConfig(
+                environment = AuroraEnvironment.LOCAL,
+                gatewayOrigin = "http://127.0.0.1:${server.localPort}",
+                allowCleartextTraffic = true,
+            )
+            val channel = PersistentGatewayHttpChannel.factory(config).open()
+            assertTrue(accepted.await(2, TimeUnit.SECONDS))
+
+            val failure =
+                runCatching {
+                    channel.post(
+                        "/v1/gateway/sessions/open",
+                        "{\"request\":\"${"x".repeat(8_192)}\"}",
+                    )
+                }.exceptionOrNull()
+            channel.close()
+            worker.join(2_000)
+
+            assertTrue(failure is GatewayTransportException)
+            failure as GatewayTransportException
+            assertEquals(GatewayTransportFailure.TRANSPORT_UNCERTAIN, failure.failure)
+            assertTrue(failure.requestMayHaveReachedPeer)
         }
     }
 
