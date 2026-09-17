@@ -174,7 +174,13 @@ class AudioRecordAuroraWakeEngine(
                     )
                 when (val evaluation = stateMachine.evaluate(observation)) {
                     is WakeEvaluation.Confirmed -> {
-                        running.set(false)
+                        // close()/privacy/disable may race the acoustic decision. Only the path that
+                        // atomically claims the live detector may emit the confirmed wake callback.
+                        if (!running.compareAndSet(true, false)) break
+                        if (privacyBlocked()) {
+                            onState(WakeState.PRIVACY_BLOCKED)
+                            break
+                        }
                         onState(WakeState.HOTWORD_CONFIRMED)
                         // The successor STT must never race a still-live AudioRecord or logical
                         // HOTWORD lease. Release both before handing the candidate to the platform.
