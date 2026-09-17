@@ -10,6 +10,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -72,6 +73,22 @@ class PersistentGatewayHttpChannelTest {
                 paths,
             )
         }
+    }
+
+    @Test
+    fun `io failure before request write is safe connection unavailable`() {
+        val failure = gatewayIoFailure(requestWriteStarted = false, cause = IllegalStateException("pre-write"))
+
+        assertEquals(GatewayTransportFailure.CONNECTION_UNAVAILABLE, failure.failure)
+        assertFalse(failure.requestMayHaveReachedPeer)
+    }
+
+    @Test
+    fun `io failure once request write starts is transport uncertain`() {
+        val failure = gatewayIoFailure(requestWriteStarted = true, cause = IllegalStateException("post-write"))
+
+        assertEquals(GatewayTransportFailure.TRANSPORT_UNCERTAIN, failure.failure)
+        assertTrue(failure.requestMayHaveReachedPeer)
     }
 
     @Test
