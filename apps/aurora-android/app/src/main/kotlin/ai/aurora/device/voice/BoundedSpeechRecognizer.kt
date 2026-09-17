@@ -61,7 +61,7 @@ class BoundedSpeechRecognizer(
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
     private val active = AtomicBoolean(false)
-    private val sttLeaseHeld = AtomicBoolean(false)
+    private val sttLease = AudioResourceLeaseGate()
     private var recognizer: SpeechRecognizer? = null
     private var timeoutRunnable: Runnable? = null
     private var audioAcquireAttempts = 0
@@ -88,7 +88,11 @@ class BoundedSpeechRecognizer(
     }
 
     override fun close() {
-        handler.post { release(invokeFailure = null) }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            release(invokeFailure = null)
+        } else {
+            handler.post { release(invokeFailure = null) }
+        }
     }
 
     private fun startOnMainThread() {
@@ -126,7 +130,14 @@ class BoundedSpeechRecognizer(
             return
         }
         if (AuroraAudioRuntime.arbiter.handoffToStt()) {
-            sttLeaseHeld.set(true)
+            if (
+                !sttLease.markHeldAndValidate(
+                    isLifecycleActive = active::get,
+                    release = { AuroraAudioRuntime.arbiter.release(AudioOwner.STT) },
+                )
+            ) {
+                return
+            }
             startRecognizerWithLease()
             return
         }
@@ -140,7 +151,7 @@ class BoundedSpeechRecognizer(
 
     private fun startRecognizerWithLease() {
         if (!active.get()) {
-            release(invokeFailure = null)
+            sttLease.releaseIfHeld { AuroraAudioRuntime.arbiter.release(AudioOwner.STT) }
             return
         }
         val localRecognizer =
@@ -228,7 +239,10 @@ class BoundedSpeechRecognizer(
         }
 
     private fun release(invokeFailure: BoundedSpeechRecognitionFailure?) {
-        if (!active.compareAndSet(true, false)) return
+        if (!active.compareAndSet(true, false)) {
+            sttLease.releaseIfHeld { AuroraAudioRuntime.arbiter.release(AudioOwner.STT) }
+            return
+        }
         handler.removeCallbacks(audioAcquireRunnable)
         audioAcquireAttempts = 0
         timeoutRunnable?.let(handler::removeCallbacks)
@@ -237,9 +251,7 @@ class BoundedSpeechRecognizer(
         recognizer = null
         runCatching { localRecognizer?.cancel() }
         runCatching { localRecognizer?.destroy() }
-        if (sttLeaseHeld.compareAndSet(true, false)) {
-            AuroraAudioRuntime.arbiter.release(AudioOwner.STT)
-        }
+        sttLease.releaseIfHeld { AuroraAudioRuntime.arbiter.release(AudioOwner.STT) }
         val failure = failureCallback
         resultCallback = null
         failureCallback = null
