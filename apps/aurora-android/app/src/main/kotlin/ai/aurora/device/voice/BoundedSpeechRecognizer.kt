@@ -13,7 +13,6 @@ import android.speech.SpeechRecognizer
 import ai.aurora.device.wake.AuroraAudioArbiter.AudioOwner
 import ai.aurora.device.wake.AuroraAudioRuntime
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Bounded Android STT capture used after a wake candidate. Transcript/confidence are intelligence
@@ -60,7 +59,7 @@ class BoundedSpeechRecognizer(
 ) : AutoCloseable {
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
-    private val active = AtomicBoolean(false)
+    private val lifecycle = CloseableOperationGate()
     private val sttLease = AudioResourceLeaseGate()
     private var recognizer: SpeechRecognizer? = null
     private var timeoutRunnable: Runnable? = null
@@ -78,7 +77,7 @@ class BoundedSpeechRecognizer(
         onResult: (BoundedSpeechRecognitionResult) -> Unit,
         onFailure: (BoundedSpeechRecognitionFailure) -> Unit,
     ) {
-        if (!active.compareAndSet(false, true)) {
+        if (!lifecycle.tryStart()) {
             onFailure(BoundedSpeechRecognitionFailure.ALREADY_ACTIVE)
             return
         }
@@ -88,28 +87,37 @@ class BoundedSpeechRecognizer(
     }
 
     override fun close() {
+        val activeAtClose = lifecycle.close()
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            release(invokeFailure = null)
+            cleanupAfterClose(activeAtClose)
         } else {
-            handler.post { release(invokeFailure = null) }
+            handler.post { cleanupAfterClose(activeAtClose) }
+        }
+    }
+
+    private fun cleanupAfterClose(activeAtClose: Boolean) {
+        if (activeAtClose) {
+            finishResources(invokeFailure = null, transitionLifecycle = false)
+        } else {
+            sttLease.releaseIfHeld { AuroraAudioRuntime.arbiter.release(AudioOwner.STT) }
         }
     }
 
     private fun startOnMainThread() {
-        if (!active.get()) return
+        if (!lifecycle.isActive()) return
         if (privacyBlocked()) {
-            release(BoundedSpeechRecognitionFailure.PRIVACY_BLOCKED)
+            finishResources(BoundedSpeechRecognitionFailure.PRIVACY_BLOCKED)
             return
         }
         if (
             appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
                 PackageManager.PERMISSION_GRANTED
         ) {
-            release(BoundedSpeechRecognitionFailure.MICROPHONE_PERMISSION_REQUIRED)
+            finishResources(BoundedSpeechRecognitionFailure.MICROPHONE_PERMISSION_REQUIRED)
             return
         }
         if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
-            release(BoundedSpeechRecognitionFailure.RECOGNIZER_UNAVAILABLE)
+            finishResources(BoundedSpeechRecognitionFailure.RECOGNIZER_UNAVAILABLE)
             return
         }
         audioAcquireAttempts = 0
@@ -117,22 +125,22 @@ class BoundedSpeechRecognizer(
     }
 
     private fun attemptAcquireSttAudio() {
-        if (!active.get()) return
+        if (!lifecycle.isActive()) return
         if (privacyBlocked()) {
-            release(BoundedSpeechRecognitionFailure.PRIVACY_BLOCKED)
+            finishResources(BoundedSpeechRecognitionFailure.PRIVACY_BLOCKED)
             return
         }
         if (
             appContext.checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
                 PackageManager.PERMISSION_GRANTED
         ) {
-            release(BoundedSpeechRecognitionFailure.MICROPHONE_PERMISSION_REQUIRED)
+            finishResources(BoundedSpeechRecognitionFailure.MICROPHONE_PERMISSION_REQUIRED)
             return
         }
         if (AuroraAudioRuntime.arbiter.handoffToStt()) {
             if (
                 !sttLease.markHeldAndValidate(
-                    isLifecycleActive = active::get,
+                    isLifecycleActive = lifecycle::isActive,
                     release = { AuroraAudioRuntime.arbiter.release(AudioOwner.STT) },
                 )
             ) {
@@ -142,7 +150,7 @@ class BoundedSpeechRecognizer(
             return
         }
         if (audioAcquireAttempts >= MAX_AUDIO_ACQUIRE_ATTEMPTS) {
-            release(BoundedSpeechRecognitionFailure.AUDIO_OWNERSHIP_UNAVAILABLE)
+            finishResources(BoundedSpeechRecognitionFailure.AUDIO_OWNERSHIP_UNAVAILABLE)
             return
         }
         audioAcquireAttempts += 1
@@ -150,22 +158,22 @@ class BoundedSpeechRecognizer(
     }
 
     private fun startRecognizerWithLease() {
-        if (!active.get()) {
+        if (!lifecycle.isActive()) {
             sttLease.releaseIfHeld { AuroraAudioRuntime.arbiter.release(AudioOwner.STT) }
             return
         }
         val localRecognizer =
             runCatching { SpeechRecognizer.createSpeechRecognizer(appContext) }.getOrElse {
-                release(BoundedSpeechRecognitionFailure.RECOGNIZER_ERROR)
+                finishResources(BoundedSpeechRecognitionFailure.RECOGNIZER_ERROR)
                 return
             }
         recognizer = localRecognizer
         localRecognizer.setRecognitionListener(listener)
         val timeout =
             Runnable {
-                if (active.get()) {
+                if (lifecycle.isActive()) {
                     runCatching { recognizer?.cancel() }
-                    release(BoundedSpeechRecognitionFailure.TIMEOUT)
+                    finishResources(BoundedSpeechRecognitionFailure.TIMEOUT)
                 }
             }
         timeoutRunnable = timeout
@@ -184,7 +192,7 @@ class BoundedSpeechRecognizer(
                 },
             )
         }.onFailure {
-            release(BoundedSpeechRecognitionFailure.RECOGNIZER_ERROR)
+            finishResources(BoundedSpeechRecognitionFailure.RECOGNIZER_ERROR)
         }
     }
 
@@ -208,7 +216,7 @@ class BoundedSpeechRecognizer(
                             BoundedSpeechRecognitionFailure.MICROPHONE_PERMISSION_REQUIRED
                         else -> BoundedSpeechRecognitionFailure.RECOGNIZER_ERROR
                     }
-                release(reason)
+                finishResources(reason)
             }
 
             override fun onResults(results: Bundle?) {
@@ -216,7 +224,7 @@ class BoundedSpeechRecognizer(
                     results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION).orEmpty()
                 val transcript = transcripts.firstOrNull()?.trim().orEmpty()
                 if (transcript.isBlank()) {
-                    release(BoundedSpeechRecognitionFailure.NO_MATCH)
+                    finishResources(BoundedSpeechRecognitionFailure.NO_MATCH)
                     return
                 }
                 val confidence =
@@ -227,7 +235,7 @@ class BoundedSpeechRecognizer(
                 val boundedTranscript =
                     transcript.take(BoundedSpeechRecognitionResult.MAX_TRANSCRIPT_CHARS)
                 val callback = resultCallback
-                release(invokeFailure = null)
+                if (!finishResources(invokeFailure = null)) return
                 callback?.invoke(
                     BoundedSpeechRecognitionResult(
                         transcript = boundedTranscript,
@@ -238,10 +246,14 @@ class BoundedSpeechRecognizer(
             }
         }
 
-    private fun release(invokeFailure: BoundedSpeechRecognitionFailure?) {
-        if (!active.compareAndSet(true, false)) {
+    /** Returns true only for the terminal path that owns this recognition operation. */
+    private fun finishResources(
+        invokeFailure: BoundedSpeechRecognitionFailure?,
+        transitionLifecycle: Boolean = true,
+    ): Boolean {
+        if (transitionLifecycle && !lifecycle.tryFinish()) {
             sttLease.releaseIfHeld { AuroraAudioRuntime.arbiter.release(AudioOwner.STT) }
-            return
+            return false
         }
         handler.removeCallbacks(audioAcquireRunnable)
         audioAcquireAttempts = 0
@@ -256,6 +268,7 @@ class BoundedSpeechRecognizer(
         resultCallback = null
         failureCallback = null
         if (invokeFailure != null) failure?.invoke(invokeFailure)
+        return true
     }
 
     companion object {
