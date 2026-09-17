@@ -9,11 +9,12 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  build-exact-w15j-candidate:
+  rebind-exact-w15j-candidate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
       - name: Assert canonical packaging invocation
         shell: bash
@@ -22,79 +23,46 @@ jobs:
           test "$GITHUB_EVENT_NAME" = "push"
           test "$GITHUB_REF_NAME" = "prototype/w15j-physical-apk-artifact"
           test "$GITHUB_SHA" = "$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')"
-      - name: Checkout exact W15-J candidate source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: fb05c7880667d6f179648043e6f1e7b966734134
-          persist-credentials: false
-      - name: Assert exact source candidate
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "fb05c7880667d6f179648043e6f1e7b966734134"
-      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
-        with:
-          gradle-version: '9.4.1'
-          cache-read-only: true
-      - name: Install stable Android SDK
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
-          test -n "$SDK_ROOT"
-          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
-          test -n "$SDKMANAGER"
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-      - name: Test, assemble and self-bind exact tablet-loopback localDebug candidate
+
+      - name: Fetch and verify previously certified r11 presign artifact
         shell: bash
         env:
-          AURORA_LOCAL_GATEWAY_ORIGIN: http://127.0.0.1:8080
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gradle --no-daemon --console=plain -p apps/aurora-android \
-            :app:testLocalDebugUnitTest \
-            :app:assembleLocalDebug
+          SOURCE_ARTIFACT_ID=10520682075
+          SOURCE_ZIP_SHA=c5cbe5e10f4c78ff7aa7dc8c5d6635c151256122343330f120114d4ffcb97fc2
+          PRESIGN_SHA=a813d5eb389b171a28a944bf93c65c98031cd6945685c942900ef856d7c6d88d
+          curl --fail --location --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${SOURCE_ARTIFACT_ID}/zip" \
+            -o /tmp/source-r11.zip
+          printf '%s  %s\n' "$SOURCE_ZIP_SHA" /tmp/source-r11.zip | sha256sum -c -
+          mkdir -p /tmp/source-r11
+          unzip -q /tmp/source-r11.zip -d /tmp/source-r11
+          test "$(find /tmp/source-r11 -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
+          test "$(wc -l < /tmp/source-r11/BUILD_IDENTITY.txt | tr -d ' ')" = "24"
+          grep -Fxq 'source_candidate_sha=fb05c7880667d6f179648043e6f1e7b966734134' /tmp/source-r11/BUILD_IDENTITY.txt
+          grep -Fxq 'source_branch=wave/15j-dp5-consolidated-hardening-rc' /tmp/source-r11/BUILD_IDENTITY.txt
+          grep -Fxq 'paired_local_host_candidate_sha=df17c9f27a8206f8296f55aa3830667f4742b062' /tmp/source-r11/BUILD_IDENTITY.txt
+          read -r OBSERVED_SHA APK_NAME </tmp/source-r11/SHA256SUMS.txt
+          test "$OBSERVED_SHA" = "$PRESIGN_SHA"
+          test "$(sha256sum "/tmp/source-r11/$APK_NAME" | awk '{print $1}')" = "$PRESIGN_SHA"
 
-          APK="$(find apps/aurora-android/app/build/outputs/apk/local/debug -type f -name '*.apk' -print -quit)"
-          test -n "$APK"
-
-          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
-          AAPT="$SDK_ROOT/build-tools/36.0.0/aapt"
-          test -x "$AAPT"
-          BADGING="$($AAPT dump badging "$APK" | sed -n '1p')"
-          PACKAGE_ID="$(printf '%s\n' "$BADGING" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"
-          VERSION_CODE="$(printf '%s\n' "$BADGING" | sed -n "s/.* versionCode='\([^']*\)'.*/\1/p")"
-          VERSION_NAME="$(printf '%s\n' "$BADGING" | sed -n "s/.* versionName='\([^']*\)'.*/\1/p")"
-          test "$PACKAGE_ID" = "ai.aurora.device.local"
-          test "$VERSION_CODE" = "4"
-          test "$VERSION_NAME" = "0.17.0-dev.1-local"
-
-          DEX_STRINGS="$(mktemp)"
-          for dex in $(unzip -Z1 "$APK" | grep -E '^classes[0-9]*\.dex$'); do
-            unzip -p "$APK" "$dex" | strings >> "$DEX_STRINGS"
-          done
-          grep -Fxq 'aurora.wake.model.v2' "$DEX_STRINGS"
-          grep -Fxq 'aurora.wake.model.aead.v2' "$DEX_STRINGS"
-          grep -Fxq 'AES/GCM/NoPadding' "$DEX_STRINGS"
-          grep -Fxq 'audio.volume.set' "$DEX_STRINGS"
-          grep -Fxq '/v1/device/offline/current' "$DEX_STRINGS"
-          grep -Fxq 'OPEN_VALIDATED_APP' "$DEX_STRINGS"
-          grep -Fxq 'http://127.0.0.1:8080' "$DEX_STRINGS"
-
+      - name: Rebind provenance without rebuilding APK bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          PRESIGN_SHA=a813d5eb389b171a28a944bf93c65c98031cd6945685c942900ef856d7c6d88d
           ARTIFACT_DIR=/tmp/w15j-tablet-loopback-apk
           mkdir -p "$ARTIFACT_DIR"
-          cp "$APK" "$ARTIFACT_DIR/Aurora-W15J-v017r11-TabletLoopback-localDebug-presign.apk"
-          (
-            cd "$ARTIFACT_DIR"
-            sha256sum Aurora-W15J-v017r11-TabletLoopback-localDebug-presign.apk > SHA256SUMS.txt
-            sha256sum -c SHA256SUMS.txt
-          )
-
-          cat > "$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
+          read -r OBSERVED_SHA APK_NAME </tmp/source-r11/SHA256SUMS.txt
+          test "$OBSERVED_SHA" = "$PRESIGN_SHA"
+          cp "/tmp/source-r11/$APK_NAME" "$ARTIFACT_DIR/Aurora-W15J-v017r11-TabletLoopback-localDebug-presign.apk"
+          printf '%s  %s\n' "$PRESIGN_SHA" Aurora-W15J-v017r11-TabletLoopback-localDebug-presign.apk >"$ARTIFACT_DIR/SHA256SUMS.txt"
+          cat >"$ARTIFACT_DIR/BUILD_IDENTITY.txt" <<EOF
           artifact_purpose=W15-J-DP5-physical-evidence-input
           source_candidate_sha=fb05c7880667d6f179648043e6f1e7b966734134
           source_branch=wave/15j-physical-device-integration-acceptance
@@ -109,9 +77,9 @@ jobs:
           gateway_transport_scope=LOCAL_TABLET_LOOPBACK
           gateway_origin=http://127.0.0.1:8080
           apk_variant=localDebug
-          package_id=${PACKAGE_ID}
-          version_code=${VERSION_CODE}
-          version_name=${VERSION_NAME}
+          package_id=ai.aurora.device.local
+          version_code=4
+          version_name=0.17.0-dev.1-local
           canonical_acceptance=false
           physical_evidence_required=true
           dp5_status=INCOMPLETE
@@ -120,15 +88,14 @@ jobs:
           local_signing_required=true
           expected_signer_cert_sha256=e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb
           EOF
-
-          test "$(wc -l < "$ARTIFACT_DIR/BUILD_IDENTITY.txt" | tr -d ' ')" = "24"
-          grep -Fxq 'source_candidate_sha=fb05c7880667d6f179648043e6f1e7b966734134' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
+          test "$(wc -l <"$ARTIFACT_DIR/BUILD_IDENTITY.txt" | tr -d ' ')" = "24"
           grep -Fxq 'source_branch=wave/15j-physical-device-integration-acceptance' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
-          grep -Fxq 'gateway_transport_scope=LOCAL_TABLET_LOOPBACK' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
-          grep -Fxq 'gateway_origin=http://127.0.0.1:8080' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
+          test "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-v017r11-TabletLoopback-localDebug-presign.apk" | awk '{print $1}')" = "$PRESIGN_SHA"
           test "$(find "$ARTIFACT_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
-          printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-v017r11-TabletLoopback-localDebug-presign.apk" | awk '{print $1}')"
-      - name: Upload exact W15-J tablet-loopback candidate APK
+          printf 'PRESIGN_APK_SHA256=%s\n' "$PRESIGN_SHA"
+          printf 'PROVENANCE_REBIND_ONLY=true\nSOURCE_ARTIFACT_ID=10520682075\n'
+
+      - name: Upload provenance-rebound exact r11 artifact
         uses: actions/upload-artifact@v7
         with:
           name: aurora-w15j-v017r11-presign-apk-fb05c788-host-df17c9f2
