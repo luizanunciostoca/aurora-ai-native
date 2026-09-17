@@ -1,6 +1,7 @@
 package ai.aurora.device.voice
 
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -101,5 +102,22 @@ class SingleFlightWorkDispatcherTest {
         release.countDown()
         assertTrue(completed.await(2, TimeUnit.SECONDS))
         assertFalse(interrupted)
+    }
+
+    @Test
+    fun `executor rejection clears reservation when close wins submit race`() {
+        val executor = Executors.newSingleThreadExecutor()
+        executor.shutdown()
+        val dispatcher = SingleFlightWorkDispatcher(executor)
+
+        assertFalse(
+            dispatcher.submit(
+                operation = { Unit },
+                onComplete = {},
+                onFailure = {},
+            ),
+        )
+        assertFalse(dispatcher.hasInFlightWork())
+        dispatcher.close()
     }
 }
