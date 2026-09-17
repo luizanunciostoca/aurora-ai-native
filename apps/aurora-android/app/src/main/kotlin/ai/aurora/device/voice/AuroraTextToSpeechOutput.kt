@@ -1,6 +1,9 @@
 package ai.aurora.device.voice
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -36,10 +39,17 @@ data class AuroraSpeechOutputReceipt(
 enum class AuroraSpeechOutputFailure {
     ALREADY_ACTIVE,
     AUDIO_OWNERSHIP_UNAVAILABLE,
+    AUDIO_FOCUS_UNAVAILABLE,
+    AUDIO_FOCUS_LOST,
     ENGINE_UNAVAILABLE,
     SPEAK_FAILED,
     TIMEOUT,
 }
+
+internal fun isTtsAudioFocusLoss(focusChange: Int): Boolean =
+    focusChange == AudioManager.AUDIOFOCUS_LOSS ||
+        focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT ||
+        focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK
 
 /**
  * Atomic lifecycle fence for asynchronous TTS callbacks. close() is terminal for an output instance
@@ -82,6 +92,13 @@ class AuroraTextToSpeechOutput(
     private val lifecycle = TtsLifecycleGate()
     private val ttsLeaseHeld = AtomicBoolean(false)
     private val playbackAnnounced = AtomicBoolean(false)
+    private val audioFocusHeld = AtomicBoolean(false)
+    private val audioManager = appContext.getSystemService(AudioManager::class.java)
+    private val speechAudioAttributes =
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANT)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
     private var engine: TextToSpeech? = null
     private var ready = false
     private var pendingText: String? = null
@@ -89,6 +106,19 @@ class AuroraTextToSpeechOutput(
     private var timeoutRunnable: Runnable? = null
     private var completion: ((AuroraSpeechOutputReceipt) -> Unit)? = null
     private var failure: ((AuroraSpeechOutputFailure) -> Unit)? = null
+    private val audioFocusListener =
+        AudioManager.OnAudioFocusChangeListener { focusChange ->
+            if (isTtsAudioFocusLoss(focusChange) && lifecycle.isActive()) {
+                runCatching { engine?.stop() }
+                fail(AuroraSpeechOutputFailure.AUDIO_FOCUS_LOST)
+            }
+        }
+    private val audioFocusRequest =
+        AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            .setAudioAttributes(speechAudioAttributes)
+            .setWillPauseWhenDucked(true)
+            .setOnAudioFocusChangeListener(audioFocusListener, handler)
+            .build()
 
     init {
         require(languageTag == "pt-BR")
@@ -139,6 +169,7 @@ class AuroraTextToSpeechOutput(
                     fail(AuroraSpeechOutputFailure.ENGINE_UNAVAILABLE)
                     return@TextToSpeech
                 }
+                local.setAudioAttributes(speechAudioAttributes)
                 ready = true
                 local.setOnUtteranceProgressListener(listener)
                 speakNow(local)
@@ -152,6 +183,7 @@ class AuroraTextToSpeechOutput(
         ready = false
         runCatching { local?.stop() }
         if (activeAtClose) finishResources(transitionLifecycle = false)
+        releaseAudioFocusIfOwned()
         runCatching { local?.shutdown() }
     }
 
@@ -171,16 +203,35 @@ class AuroraTextToSpeechOutput(
         if (!lifecycle.isActive()) return
         val text = pendingText ?: return fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
         val utteranceId = pendingUtteranceId ?: return fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
+        if (!acquireAudioFocus()) {
+            fail(AuroraSpeechOutputFailure.AUDIO_FOCUS_UNAVAILABLE)
+            return
+        }
         playbackAnnounced.set(true)
         WakePlaybackAwareness.onTtsStarted(text)
         // close() may win immediately after playback awareness was announced. Recheck before
         // entering the platform engine and undo only this instance's announcement if it lost.
         if (!lifecycle.isActive()) {
             stopPlaybackAwarenessIfOwned()
+            releaseAudioFocusIfOwned()
             return
         }
         val status = local.speak(text, TextToSpeech.QUEUE_FLUSH, Bundle(), utteranceId)
         if (status != TextToSpeech.SUCCESS) fail(AuroraSpeechOutputFailure.SPEAK_FAILED)
+    }
+
+    private fun acquireAudioFocus(): Boolean {
+        if (audioFocusHeld.get()) return true
+        val result =
+            runCatching { audioManager.requestAudioFocus(audioFocusRequest) }
+                .getOrDefault(AudioManager.AUDIOFOCUS_REQUEST_FAILED)
+        if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) return false
+        audioFocusHeld.set(true)
+        if (!lifecycle.isActive()) {
+            releaseAudioFocusIfOwned()
+            return false
+        }
+        return true
     }
 
     private val listener =
@@ -227,6 +278,7 @@ class AuroraTextToSpeechOutput(
         timeoutRunnable?.let(handler::removeCallbacks)
         timeoutRunnable = null
         stopPlaybackAwarenessIfOwned()
+        releaseAudioFocusIfOwned()
         pendingText = null
         pendingUtteranceId = null
         completion = null
@@ -240,6 +292,12 @@ class AuroraTextToSpeechOutput(
     private fun stopPlaybackAwarenessIfOwned() {
         if (playbackAnnounced.compareAndSet(true, false)) {
             WakePlaybackAwareness.onTtsStopped()
+        }
+    }
+
+    private fun releaseAudioFocusIfOwned() {
+        if (audioFocusHeld.compareAndSet(true, false)) {
+            runCatching { audioManager.abandonAudioFocusRequest(audioFocusRequest) }
         }
     }
 
