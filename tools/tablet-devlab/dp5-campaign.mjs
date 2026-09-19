@@ -90,6 +90,8 @@ function capture(path, command, args, filter) {
   const result = spawnSync(command, args, {
     encoding: 'utf8',
     maxBuffer: 8_000_000,
+    timeout: 15_000,
+    killSignal: 'SIGKILL',
   });
   let output = String(result.stdout || '');
   if (result.stderr) output += '\n[stderr]\n' + result.stderr;
@@ -105,6 +107,8 @@ function screenshot(path, serial) {
   const result = spawnSync(ADB, ['-s', serial, 'exec-out', 'screencap', '-p'], {
     encoding: null,
     maxBuffer: 20_000_000,
+    timeout: 15_000,
+    killSignal: 'SIGKILL',
   });
   writeFileSync(path, result.stdout || Buffer.alloc(0));
   secureWrite(path + '.exit-code', String(result.status ?? 127) + '\n');
