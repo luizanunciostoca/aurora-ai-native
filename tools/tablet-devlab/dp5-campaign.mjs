@@ -87,20 +87,31 @@ function commandAvailable(command) {
 }
 
 function capture(path, command, args, filter) {
-  const result = spawnSync(command, args, {
+  const options = {
     encoding: 'utf8',
     maxBuffer: 8_000_000,
-    timeout: 15_000,
+    timeout: 8_000,
     killSignal: 'SIGKILL',
-  });
+  };
+  let result = spawnSync(command, args, options);
+  if (result.status === null && command === ADB && args[0] === '-s' && args[1]) {
+    spawnSync(ADB, ['-s', args[1], 'get-state'], {
+      encoding: 'utf8',
+      timeout: 3_000,
+      killSignal: 'SIGKILL',
+    });
+    result = spawnSync(command, args, options);
+  }
+  const exitCode = result.status ?? (result.error?.code === 'ETIMEDOUT' ? 124 : 127);
   let output = String(result.stdout || '');
   if (result.stderr) output += '\n[stderr]\n' + result.stderr;
+  if (result.error) output += '\n[capture-error]\n' + String(result.error.code || result.error.message);
   if (filter) output = filter(output);
   output = redact(output);
   if (Buffer.byteLength(output) > 2_000_000) output = output.slice(-2_000_000);
   secureWrite(path, output);
-  secureWrite(path + '.exit-code', String(result.status ?? 127) + '\n');
-  return result.status ?? 127;
+  secureWrite(path + '.exit-code', String(exitCode) + '\n');
+  return exitCode;
 }
 
 function screenshot(path, serial) {
@@ -212,18 +223,20 @@ function snapshot(attemptDir, phase, scenario, correlationId) {
       " 2>&1 | grep -A2 -B2 -E 'RECORD_AUDIO|granted=true|granted=false' | head -n 300",
   );
   shell('memory.txt', 'dumpsys meminfo ' + PACKAGE_ID + ' 2>&1 | head -n 500');
-  shell('cpu.txt', "dumpsys cpuinfo 2>&1 | grep -i -E '" + PACKAGE_ID + "|TOTAL' | tail -n 120");
+  shell('cpu.txt', "top -b -n 1 2>&1 | head -n 40");
   shell('battery.txt', 'dumpsys battery 2>&1');
   shell('thermal.txt', 'dumpsys thermalservice 2>&1 | head -n 500');
   shell(
     'network.txt',
-    "dumpsys connectivity 2>&1 | grep -i -E 'NetworkAgent|NetworkRequest|WIFI|TRANSPORT|validated|internet' | tail -n 500",
+    "echo airplane_mode=$(settings get global airplane_mode_on 2>/dev/null || true); " +
+      "ip -brief addr show wlan0 2>/dev/null || ip addr show wlan0 2>/dev/null || true; " +
+      "ip route 2>/dev/null | head -n 40; getprop dhcp.wlan0.ipaddress",
   );
 
   const logPath = join(dir, 'logcat.txt');
   captures.push({
     reference: relative(attemptDir, logPath).replaceAll('\\', '/'),
-    exitCode: capture(logPath, ADB, ['-s', serial, 'logcat', '-d', '-v', 'threadtime'], (text) =>
+    exitCode: capture(logPath, ADB, ['-s', serial, 'logcat', '-d', '-t', '1200', '-v', 'threadtime'], (text) =>
       logFilter(text, correlationId),
     ),
   });
