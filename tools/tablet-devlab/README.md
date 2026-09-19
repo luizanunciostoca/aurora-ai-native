@@ -210,6 +210,21 @@ The preflight requires the exact `LOCAL_TABLET_LOOPBACK` artifact, exact install
 
 This proves environment/readiness only. It does not close DP5, prove execution success, or authorize retry.
 
+## Guided DP5 48-scenario harness
+
+The r11 physical campaign can be executed through the non-authoritative guided harness after collector preflight and dossier preparation:
+
+```bash
+node tools/tablet-devlab/dp5-campaign.mjs init --operator "$USER"
+node tools/tablet-devlab/dp5-campaign.mjs next
+node tools/tablet-devlab/dp5-campaign.mjs start DP5-LIFE-001
+# perform the printed physical action
+node tools/tablet-devlab/dp5-campaign.mjs finish DP5-LIFE-001 --status PASS --observed
+node tools/tablet-devlab/dp5-campaign.mjs report
+```
+
+The harness captures redacted logcat, lifecycle/service/package state, host-instance readback, network and resource snapshots, monotonic timing, optional screenshots, per-attempt receipts and SHA-256 manifests. It cannot infer `PASS`: PASS requires explicit operator `--observed`; FAIL/BLOCKED require a cause. Full architecture, evidence contract, manual boundaries and known risks are documented in `DP5_TEST_HARNESS.md`.
+
 ## Governed physical dossier and semantic binding
 
 After capturing a fresh Control Tower tuple and collector preflight, create the operator dossier with:
