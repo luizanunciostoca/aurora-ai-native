@@ -115,6 +115,16 @@ test('new campaign starts 48/48 NOT_RUN and cannot self-accept', () => {
     campaign.scenarios.every((scenario) => scenario.status === 'NOT_RUN'),
     true,
   );
+  assert.equal(campaign.scenarios[0].apkVersion, '0.17.0-dev.1-local');
+  assert.equal(campaign.scenarios[0].commitSha, 'a'.repeat(40));
+  assert.deepEqual(campaign.scenarios[0].deviceIdentity, {
+    serialSha256: 'c'.repeat(64),
+    manufacturer: 'Samsung',
+    model: 'SM-X820',
+    product: 'gts10u',
+    apiLevel: '36',
+    buildFingerprint: 'example/fingerprint',
+  });
   assert.equal(campaign.physicalAcceptance, false);
   assert.equal(campaign.w15jAccepted, false);
   assert.equal(campaign.w16BuildUnblocked, false);
