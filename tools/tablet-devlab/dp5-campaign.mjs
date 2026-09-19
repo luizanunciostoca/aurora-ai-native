@@ -327,6 +327,16 @@ export function createCampaign({ dossier, controlTower, operator }) {
     },
     scenarios: DP5_SCENARIOS.map((scenario) => ({
       ...scenario,
+      apkVersion: dossier.apk.versionName,
+      commitSha: dossier.candidateSha,
+      deviceIdentity: {
+        serialSha256: dossier.device.serialSha256,
+        manufacturer: dossier.device.manufacturer,
+        model: dossier.device.model,
+        product: dossier.device.product,
+        apiLevel: dossier.device.apiLevel,
+        buildFingerprint: dossier.device.buildFingerprint,
+      },
       status: 'NOT_RUN',
       attempts: [],
       observedAtUtc: null,
