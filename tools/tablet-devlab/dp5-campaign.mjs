@@ -183,7 +183,7 @@ function snapshot(attemptDir, phase, scenario, correlationId) {
   const captures = [];
   const shell = (name, command) => {
     const path = join(dir, name);
-    const exitCode = capture(path, ADB, ['-s', serial, 'shell', 'sh', '-c', command]);
+    const exitCode = capture(path, ADB, ['-s', serial, 'shell', command]);
     captures.push({ reference: relative(attemptDir, path).replaceAll('\\', '/'), exitCode });
   };
 
