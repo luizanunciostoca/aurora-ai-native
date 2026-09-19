@@ -9,6 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
+import { Buffer } from 'node:buffer';
 import { spawnSync } from 'node:child_process';
 import { DP5_SCENARIOS, DP5_SCENARIO_BY_ID } from './dp5-scenario-catalog.mjs';
 
