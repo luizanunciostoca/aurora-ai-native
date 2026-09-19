@@ -1,0 +1,40 @@
+name: DP5 one-shot canonical formatter
+
+on:
+  push:
+    branches:
+      - tooling/tablet-only-devlab
+
+permissions:
+  contents: write
+
+jobs:
+  format-once:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: tooling/tablet-only-devlab
+          fetch-depth: 1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - name: Format only DP5 harness files with locked Prettier
+        run: |
+          set -euo pipefail
+          test "$(node -p "require('./node_modules/prettier/package.json').version")" = "3.9.6"
+          npx prettier --write             tools/tablet-devlab/dp5-campaign.mjs             tools/tablet-devlab/dp5-evidence-schema.json             tools/tablet-devlab/dp5-scenario-catalog.mjs             tools/test/tablet-devlab-dp5-campaign.test.mjs
+          git diff --check
+      - name: Commit canonical formatting and remove this one-shot workflow
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/dp5-format-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add             tools/tablet-devlab/dp5-campaign.mjs             tools/tablet-devlab/dp5-evidence-schema.json             tools/tablet-devlab/dp5-scenario-catalog.mjs             tools/test/tablet-devlab-dp5-campaign.test.mjs
+          git commit -m "style(dp5): apply canonical Prettier formatting"
+          git push origin HEAD:tooling/tablet-only-devlab
