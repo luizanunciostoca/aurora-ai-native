@@ -62,6 +62,44 @@ const DEFAULT_GATEWAY_PORT = 8080;
 const DEFAULT_BOOTSTRAP_PORT = 8081;
 const MAX_DATE_MS = 8_640_000_000_000_000;
 
+const W14_CONTINUITY_BRAND: unique symbol = Symbol('W15JLocalPhysicalHostW14Continuity');
+
+export interface W15JLocalPhysicalHostW14Continuity {
+  readonly [W14_CONTINUITY_BRAND]: true;
+}
+
+const W14_CONTINUITY_DEVICE_REGISTRIES = new WeakMap<
+  W15JLocalPhysicalHostW14Continuity,
+  InMemoryDeviceRegistry
+>();
+
+/**
+ * Creates one process-local W14 continuity holder for controlled physical-host refreshes.
+ *
+ * The opaque holder has no serialization/import API and carries no bootstrap credential,
+ * PolicyToken, outcome, retry permission or private key material. Reusing it only preserves the
+ * canonical W14 device-registration owner while a refreshed Host composes new gateway/session
+ * owners.
+ */
+export function createW15JLocalPhysicalHostW14Continuity(): W15JLocalPhysicalHostW14Continuity {
+  const continuity = Object.freeze({
+    [W14_CONTINUITY_BRAND]: true as const,
+  });
+  W14_CONTINUITY_DEVICE_REGISTRIES.set(continuity, new InMemoryDeviceRegistry());
+  return continuity;
+}
+
+function deviceRegistryFor(
+  continuity: W15JLocalPhysicalHostW14Continuity | undefined,
+): InMemoryDeviceRegistry {
+  if (continuity === undefined) return new InMemoryDeviceRegistry();
+  const devices = W14_CONTINUITY_DEVICE_REGISTRIES.get(continuity);
+  if (devices === undefined) {
+    throw new Error('W15-J LOCAL W14 continuity holder is invalid.');
+  }
+  return devices;
+}
+
 export interface W15JOfflineExecutionIdentityPort {
   current(input: Readonly<{ readonly commandId: string; readonly executionId: string }>): Readonly<{
     readonly actionIntentId: ActionIntent['actionIntentId'];
@@ -269,6 +307,8 @@ export interface W15JLocalPhysicalHostConfig {
   readonly bootstrapCredentialTtlMs?: number;
   readonly bootstrapMaxPrincipalAgeMs?: number;
   readonly clock?: () => number;
+  /** Optional process-local W14 registry continuity across controlled Host refreshes. */
+  readonly w14Continuity?: W15JLocalPhysicalHostW14Continuity;
 }
 
 export interface W15JLocalPhysicalHostAddress {
@@ -394,7 +434,7 @@ export class W15JLocalPhysicalHost {
     this.#bootstrapDelivery = new GatewayBootstrapDeliveryBroker(bootstrapIssuer);
     const gatewaySessions = new GatewaySessionManager(bootstrapIssuer);
 
-    const devices = new InMemoryDeviceRegistry();
+    const devices = deviceRegistryFor(config.w14Continuity);
     const deviceSessions = new DeviceSessionTrustManager();
     const realtimeCommands = new RealtimeCommandSessionManager(gatewaySessions, devices);
     const deviceProofVerifier = new DeviceKeyProofVerifier(devices);

@@ -14,7 +14,10 @@ import type { CorrelationId, IdentityId, TenantId } from '@aurora/contracts/ids'
 import type { W07DeviceReceiptEvidenceIngressPort } from '../../device-receipt-ingress/types.js';
 import type { AuthenticatedGatewayBootstrapPrincipal } from '../../gateway-auth/gateway-bootstrap.js';
 import type { VoiceCandidateIntakePort } from '../../gateway-auth/voice-candidate-network.js';
-import { W15JLocalPhysicalHost } from '../local-physical-host.js';
+import {
+  createW15JLocalPhysicalHostW14Continuity,
+  W15JLocalPhysicalHost,
+} from '../local-physical-host.js';
 
 const NOW = 1_788_631_000_000;
 const TENANT = 'ten_01ARZ3NDEKTSV4RRFFQ69G5FAV' as TenantId;
@@ -182,6 +185,91 @@ const receiptEvidenceIngress: W07DeviceReceiptEvidenceIngressPort = {
   }),
 };
 
+async function openAuthenticatedGateway(
+  host: W15JLocalPhysicalHost,
+  bootstrapAgent: object,
+  gatewayAgent: object,
+): Promise<{
+  readonly gatewayPort: number;
+  readonly gatewaySessionId: string;
+  readonly connectionId: string;
+  readonly generation: number;
+}> {
+  const staged = host.stageBootstrap(principal);
+  assert.equal(staged.ok, true);
+  if (!staged.ok) throw new Error('bootstrap stage failed');
+  const address = await host.start();
+  const exchange = await postJson(
+    address.bootstrap.port,
+    address.bootstrap.path,
+    { bootstrapReference: staged.value.bootstrapReference },
+    bootstrapAgent,
+  );
+  const grant = successfulValue(exchange);
+  const gatewaySessionId = String(grant.gatewaySessionId);
+  const opened = await postJson(
+    address.gateway.port,
+    '/v1/gateway/sessions/open',
+    {
+      protocolVersion: '1.0',
+      sessionId: gatewaySessionId,
+      credential: grant.credential,
+      tenantId: grant.tenantId,
+      actor: grant.actor,
+      correlation: { correlationId: grant.correlationId },
+    },
+    gatewayAgent,
+  );
+  const gateway = successfulValue(opened);
+  return {
+    gatewayPort: address.gateway.port,
+    gatewaySessionId,
+    connectionId: String(gateway.connectionId),
+    generation: Number(gateway.generation),
+  };
+}
+
+async function registerAndActivate(
+  gatewayPort: number,
+  gatewayAgent: object,
+  signProof: (message: string) => string,
+  gateway: Readonly<{
+    gatewaySessionId: string;
+    connectionId: string;
+    generation: number;
+  }>,
+  expectedVersion?: number,
+): Promise<number> {
+  const registered = await postJson(
+    gatewayPort,
+    '/v1/device/registrations/register',
+    {
+      deviceId: DEVICE_ID,
+      proof: signProof(registrationMessage(gateway)),
+      ...(expectedVersion === undefined ? {} : { expectedVersion }),
+    },
+    gatewayAgent,
+  );
+  const registeredResult = successfulRecord(registered);
+  assert.equal(isRecord(registeredResult.record), true);
+  if (!isRecord(registeredResult.record) || !isRecord(registeredResult.record.ref)) {
+    throw new Error('registration response missing canonical DeviceRef');
+  }
+  const activated = await postJson(
+    gatewayPort,
+    '/v1/device/registrations/activate',
+    {},
+    gatewayAgent,
+  );
+  const activeResult = successfulRecord(activated);
+  assert.equal(isRecord(activeResult.record), true);
+  if (!isRecord(activeResult.record) || !isRecord(activeResult.record.ref)) {
+    throw new Error('activation response missing canonical DeviceRef');
+  }
+  assert.equal(activeResult.record.state, 'ACTIVE');
+  return Number(activeResult.record.ref.registrationVersion);
+}
+
 test('real bootstrap gateway crypto registration trust and voice route share one authenticated W14 socket', async () => {
   let observedVoice: unknown = null;
   const voiceIntake: VoiceCandidateIntakePort = {
@@ -348,5 +436,140 @@ test('real bootstrap gateway crypto registration trust and voice route share one
     bootstrapAgent.destroy();
     gatewayAgent.destroy();
     await host.stop();
+  }
+});
+
+test('process-local W14 continuity preserves registration version across controlled Host refresh', async () => {
+  const voiceIntake: VoiceCandidateIntakePort = {
+    evaluate: () => ({
+      ok: false,
+      acceptedForEvaluation: false,
+      authorizesExecution: false,
+      provesExecutionSuccess: false,
+      retryAuthorized: false,
+    }),
+  };
+  const dependencies = { voiceIntake, receiptEvidenceIngress };
+  const continuity = createW15JLocalPhysicalHostW14Continuity();
+  assert.equal(Object.isFrozen(continuity), true);
+  assert.deepEqual(Object.keys(continuity), []);
+  assert.equal(JSON.stringify(continuity), '{}');
+  const signProof = proofFactory();
+
+  const first = new W15JLocalPhysicalHost(
+    {
+      databaseUrl: 'postgresql://unused.invalid/aurora_w14_continuity_first',
+      gatewayPort: 0,
+      bootstrapPort: 0,
+      clock: () => NOW,
+      w14Continuity: continuity,
+    },
+    dependencies,
+  );
+  const firstBootstrapAgent = new Agent({ keepAlive: false }) as AgentLike;
+  const firstGatewayAgent = new Agent({ keepAlive: true, maxSockets: 1 }) as AgentLike;
+  try {
+    const gateway = await openAuthenticatedGateway(first, firstBootstrapAgent, firstGatewayAgent);
+    assert.equal(
+      await registerAndActivate(gateway.gatewayPort, firstGatewayAgent, signProof, gateway),
+      2,
+    );
+  } finally {
+    firstBootstrapAgent.destroy();
+    firstGatewayAgent.destroy();
+    await first.stop();
+  }
+
+  const second = new W15JLocalPhysicalHost(
+    {
+      databaseUrl: 'postgresql://unused.invalid/aurora_w14_continuity_second',
+      gatewayPort: 0,
+      bootstrapPort: 0,
+      clock: () => NOW,
+      w14Continuity: continuity,
+    },
+    dependencies,
+  );
+  const secondBootstrapAgent = new Agent({ keepAlive: false }) as AgentLike;
+  const secondGatewayAgent = new Agent({ keepAlive: true, maxSockets: 1 }) as AgentLike;
+  try {
+    const gateway = await openAuthenticatedGateway(
+      second,
+      secondBootstrapAgent,
+      secondGatewayAgent,
+    );
+    const registrationVersion = await registerAndActivate(
+      gateway.gatewayPort,
+      secondGatewayAgent,
+      signProof,
+      gateway,
+      2,
+    );
+    assert.equal(registrationVersion, 2);
+
+    const trusted = await postJson(
+      gateway.gatewayPort,
+      '/v1/device/sessions/open',
+      {
+        deviceSessionId: DEVICE_SESSION_ID,
+        proof: signProof(
+          attestationMessage({
+            gatewaySessionId: gateway.gatewaySessionId,
+            connectionId: gateway.connectionId,
+            generation: gateway.generation,
+            registrationVersion,
+          }),
+        ),
+      },
+      secondGatewayAgent,
+    );
+    const trustResult = successfulRecord(trusted);
+    assert.equal(isRecord(trustResult.snapshot), true);
+    if (!isRecord(trustResult.snapshot)) throw new Error('device trust snapshot missing');
+    assert.equal(trustResult.snapshot.state, 'ACTIVE');
+    assert.equal(trustResult.snapshot.authorizesExecution, false);
+  } finally {
+    secondBootstrapAgent.destroy();
+    secondGatewayAgent.destroy();
+    await second.stop();
+  }
+
+  const isolated = new W15JLocalPhysicalHost(
+    {
+      databaseUrl: 'postgresql://unused.invalid/aurora_w14_continuity_isolated',
+      gatewayPort: 0,
+      bootstrapPort: 0,
+      clock: () => NOW,
+    },
+    dependencies,
+  );
+  const isolatedBootstrapAgent = new Agent({ keepAlive: false }) as AgentLike;
+  const isolatedGatewayAgent = new Agent({ keepAlive: true, maxSockets: 1 }) as AgentLike;
+  try {
+    const gateway = await openAuthenticatedGateway(
+      isolated,
+      isolatedBootstrapAgent,
+      isolatedGatewayAgent,
+    );
+    const rejected = await postJson(
+      gateway.gatewayPort,
+      '/v1/device/registrations/register',
+      {
+        deviceId: DEVICE_ID,
+        proof: signProof(registrationMessage(gateway)),
+        expectedVersion: 2,
+      },
+      isolatedGatewayAgent,
+    );
+    assert.equal(rejected.statusCode, 200);
+    assert.equal(isRecord(rejected.body), true);
+    if (!isRecord(rejected.body)) throw new Error('isolated registration response missing body');
+    assert.equal(rejected.body.ok, false);
+    assert.equal(JSON.stringify(rejected.body).includes('STALE_VERSION'), true);
+    assert.equal(rejected.body.authorizesExecution, false);
+  } finally {
+    isolatedBootstrapAgent.destroy();
+    isolatedGatewayAgent.destroy();
+    await isolated.stop();
   }
 });
