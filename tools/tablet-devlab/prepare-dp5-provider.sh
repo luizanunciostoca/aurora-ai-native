@@ -46,6 +46,9 @@ SIGNER_CERT_SHA="$(sed -n 's/^signer_cert_sha256=//p' "$SIGNING_IDENTITY")"
 for path in "$DB_ENV" "$WORKTREE_STATE" "$CONSENT"; do
   secure_regular_file "$path" || fail "required local state is missing or insecure: $path"
 done
+if [[ -e "$MATERIAL" ]]; then
+  secure_regular_file "$MATERIAL" || fail "existing DP5 material is insecure"
+fi
 
 MAIN_SHA="$(awk -F= '$1 == "main" {print $2}' "$WORKTREE_STATE")"
 ANDROID_SHA="$(awk -F= '$1 == "android" {print $2}' "$WORKTREE_STATE")"
@@ -213,13 +216,50 @@ def android_binding(path):
     return {'mode': 'BOUND', 'tenantId': tenant_id, 'deviceId': device_id, 'deviceSessionId': device_session_id}
 
 binding = android_binding(binding_path)
+
+def prior_bound_actor(path, current_binding):
+    if current_binding['mode'] != 'BOUND':
+        return None
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            previous = json.load(handle)
+    except FileNotFoundError as error:
+        raise SystemExit(
+            'Bound Android W14 identity has no prior DP5 actor continuity record; refusing identity drift'
+        ) from error
+    except Exception as error:
+        raise SystemExit('Existing DP5 actor continuity record is invalid') from error
+    if (
+        not isinstance(previous, dict)
+        or previous.get('kind') != 'W15J_LOCAL_DP5_OPERATOR_MATERIAL'
+        or previous.get('schemaVersion') != '1.0.0'
+        or previous.get('tenantId') != current_binding['tenantId']
+        or previous.get('deviceId') != current_binding['deviceId']
+        or previous.get('deviceSessionId') != current_binding['deviceSessionId']
+        or previous.get('authorizesExecution') is not False
+        or previous.get('canGrantPermission') is not False
+    ):
+        raise SystemExit(
+            'Existing DP5 material does not match the bound Android W14 identity; refusing identity drift'
+        )
+    actor_identity_id = previous.get('actorIdentityId')
+    if not isinstance(actor_identity_id, str) or not re.fullmatch(
+        r'idn_[0-9A-HJKMNP-TV-Z]{26}', actor_identity_id
+    ):
+        raise SystemExit('Existing DP5 W14 actor identity is malformed')
+    return actor_identity_id
+
+actor_identity_id = prior_bound_actor(material_path, binding)
+if actor_identity_id is None:
+    actor_identity_id = f'idn_{crockford26()}'
+
 material = {
     'kind': 'W15J_LOCAL_DP5_OPERATOR_MATERIAL',
     'schemaVersion': '1.0.0',
     'generatedAt': iso(now),
     'expiresAt': iso(expires),
     'tenantId': binding['tenantId'] if binding['mode'] == 'BOUND' else f'ten_{crockford26()}',
-    'actorIdentityId': f'idn_{crockford26()}',
+    'actorIdentityId': actor_identity_id,
     'subjectIdentityId': f'idn_{crockford26()}',
     'correlationId': f'cor_{crockford26()}',
     'deviceId': binding['deviceId'] if binding['mode'] == 'BOUND' else f'dvc_{crockford26()}',
