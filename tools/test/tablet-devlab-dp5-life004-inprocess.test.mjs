@@ -40,16 +40,24 @@ test('parses current Android session metadata', () => {
 <string name="tenant_id">${material.tenantId}</string>
 <string name="device_session_id">${material.deviceSessionId}</string>
 <string name="device_id">${material.deviceId}</string>
+<string name="device_state">ACTIVE</string>
 <string name="connection_id">conn:gws_fixture:2</string>
 <int name="registration_version" value="3" />
+<int name="gateway_generation" value="2" />
+<long name="last_evaluated_at_ms" value="1234567" />
+<long name="gateway_auth_expires_at_ms" value="2234567" />
 </map>`;
   assert.deepEqual(parseSessionPrefs(xml), {
     tenantId: material.tenantId,
     deviceSessionId: material.deviceSessionId,
     deviceId: material.deviceId,
+    deviceState: 'ACTIVE',
     connectionId: 'conn:gws_fixture:2',
     gatewaySessionId: 'gws_fixture',
     registrationVersion: 3,
+    gatewayGeneration: 2,
+    lastEvaluatedAtMs: 1234567,
+    gatewayAuthExpiresAtMs: 2234567,
   });
 });
 
@@ -172,14 +180,22 @@ test('LIFE-004 enforces canonical bootstrap freshness and persistent phase telem
   assert.equal(source.includes('await delay(1200)'), true);
   assert.equal(source.includes('/enabled="true"/u.test(tag)'), true);
   assert.equal(
-    source.includes('await bootstrapAndroid(serial, bootstrap.value.bootstrapReference)'),
+    source.includes('await bootstrapAndroid(serial, refresh.value.bootstrapReference)'),
     true,
   );
   assert.equal(
-    source.includes('await waitForSessionRebind(serial, material, previousSession.connectionId)'),
+    source.includes('await waitForFreshSession(serial, material, bootstrapStartedAtMs)'),
     true,
   );
-  assert.equal(source.includes('session.connectionId !== previousConnectionId'), true);
-  assert.equal(source.includes('Android W14 session did not rebind to the fresh Host'), true);
-  assert.equal(source.includes('Android bootstrap rejected after connect timeout'), false);
+  assert.equal(source.includes('session.lastEvaluatedAtMs >= bootstrapStartedAtMs'), true);
+  assert.equal(source.includes("session.deviceState === 'ACTIVE'"), true);
+  assert.equal(source.includes('session.connectionId !== previousConnectionId'), false);
+  assert.equal(source.includes("supervisorRequest({ op: 'REFRESH' })"), true);
+  assert.equal(
+    source.includes("supervisorRequest({ op: 'DISPATCH', request: dispatchRequest })"),
+    true,
+  );
+  assert.equal(source.includes('new W15JLocalPhysicalHost'), false);
+  assert.equal(source.includes('host.stop()'), false);
+  assert.equal(source.includes('Android W14 session did not become fresh after bootstrap'), true);
 });

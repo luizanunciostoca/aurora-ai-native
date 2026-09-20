@@ -1,13 +1,16 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { createRequire } from 'node:module';
-import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
-const require = createRequire(import.meta.url);
+import { supervisorRequest } from './dp5-host-supervisor-client.mjs';
+import { executionStateCompatible } from './dp5-w03-state-compat.mjs';
+
+export { executionStateCompatible };
+
 const PACKAGE = 'ai.aurora.device.local';
 const MAIN = `${PACKAGE}/ai.aurora.device.MainActivity`;
 const DEVLAB = process.env.AURORA_DEVLAB_ROOT ?? join(homedir(), 'aurora-devlab');
@@ -72,39 +75,14 @@ export function parseSessionPrefs(xml) {
     tenantId: value('tenant_id'),
     deviceSessionId: value('device_session_id'),
     deviceId: value('device_id'),
+    deviceState: value('device_state'),
     connectionId,
     gatewaySessionId: gatewaySessionIdFromConnectionId(connectionId),
     registrationVersion: Number(value('registration_version')),
+    gatewayGeneration: Number(value('gateway_generation')),
+    lastEvaluatedAtMs: Number(value('last_evaluated_at_ms')),
+    gatewayAuthExpiresAtMs: Number(value('gateway_auth_expires_at_ms')),
   });
-}
-
-export function executionStateCompatible(seed, attempt, containment) {
-  if (attempt === null || containment === null) return false;
-  const expectedQuota = seed.quota ?? null;
-  const actualQuota = attempt.quota ?? null;
-  return (
-    attempt.tenantId === seed.tenantId &&
-    attempt.actionIntentId === seed.actionIntentId &&
-    attempt.executionRef === seed.executionRef &&
-    attempt.attemptNumber === seed.attemptNumber &&
-    attempt.maxAttempts === seed.maxAttempts &&
-    JSON.stringify(actualQuota) === JSON.stringify(expectedQuota) &&
-    containment.tenantId === seed.tenantId &&
-    containment.circuitKey === seed.circuitKey &&
-    containment.authorizesExecution === false &&
-    containment.snapshot.circuit.state === seed.containment.circuit.state &&
-    containment.snapshot.circuit.consecutiveFailures ===
-      seed.containment.circuit.consecutiveFailures &&
-    containment.snapshot.circuit.halfOpenProbeInFlight ===
-      seed.containment.circuit.halfOpenProbeInFlight &&
-    containment.snapshot.killSwitch.state === seed.containment.killSwitch.state &&
-    containment.snapshot.dependencyHealth === seed.containment.dependencyHealth &&
-    containment.snapshot.cancellationRequested === seed.containment.cancellationRequested &&
-    containment.snapshot.currentInFlight === seed.containment.currentInFlight &&
-    containment.snapshot.maxInFlight === seed.containment.maxInFlight &&
-    containment.snapshot.retryDepth === seed.containment.retryDepth &&
-    containment.snapshot.maxRetryDepth === seed.containment.maxRetryDepth
-  );
 }
 
 export function buildDispatchRequest(material, session, nowMs = Date.now()) {
@@ -245,8 +223,8 @@ async function bootstrapAndroid(serial, reference) {
   await delay(1200);
 }
 
-async function waitForSessionRebind(serial, material, previousConnectionId) {
-  for (let index = 0; index < 20; index += 1) {
+async function waitForFreshSession(serial, material, bootstrapStartedAtMs) {
+  for (let index = 0; index < 24; index += 1) {
     await delay(300);
     try {
       const session = readSession(serial);
@@ -254,17 +232,23 @@ async function waitForSessionRebind(serial, material, previousConnectionId) {
         session.tenantId === material.tenantId &&
         session.deviceSessionId === material.deviceSessionId &&
         session.deviceId === material.deviceId &&
-        session.connectionId !== previousConnectionId &&
+        session.deviceState === 'ACTIVE' &&
         Number.isSafeInteger(session.registrationVersion) &&
-        session.registrationVersion > 0
+        session.registrationVersion > 0 &&
+        Number.isSafeInteger(session.gatewayGeneration) &&
+        session.gatewayGeneration > 0 &&
+        Number.isSafeInteger(session.lastEvaluatedAtMs) &&
+        session.lastEvaluatedAtMs >= bootstrapStartedAtMs &&
+        Number.isSafeInteger(session.gatewayAuthExpiresAtMs) &&
+        session.gatewayAuthExpiresAtMs > Date.now()
       ) {
         return session;
       }
     } catch {
-      // Preferences can be transiently unavailable while the bootstrap exchange commits.
+      // Preferences can be absent during a clean recovery or transiently unavailable while committing.
     }
   }
-  throw new Error('Android W14 session did not rebind to the fresh Host');
+  throw new Error('Android W14 session did not become fresh after bootstrap');
 }
 
 function readSession(serial) {
@@ -279,73 +263,9 @@ function readSession(serial) {
   return parseSessionPrefs(xml);
 }
 
-function readEnvValue(path, key) {
-  const line = readFileSync(path, 'utf8')
-    .split(/\r?\n/u)
-    .find((item) => item.startsWith(`${key}=`));
-  if (!line) throw new Error(`${key} missing from ${path}`);
-  return line.slice(key.length + 1);
-}
-
-function stopExistingHost() {
-  const pointer = join(STATE, 'last-readiness-termux.txt');
-  if (!existsSync(pointer)) return;
-  const readiness = readFileSync(pointer, 'utf8').trim();
-  const announcement = join(readiness, 'host-ready-announcement.txt');
-  if (!existsSync(announcement)) return;
-  const pidMatch = /^process_id=(\d+)$/mu.exec(readFileSync(announcement, 'utf8'));
-  if (!pidMatch) return;
-  const pid = Number(pidMatch[1]);
-  try {
-    process.kill(pid, 'SIGTERM');
-  } catch {
-    return;
-  }
-  const deadline = Date.now() + 5_000;
-  while (Date.now() < deadline) {
-    try {
-      process.kill(pid, 0);
-      run('sleep', ['0.2']);
-    } catch {
-      return;
-    }
-  }
-  throw new Error('existing host did not stop');
-}
-
-function verifyExistingExecutionState(databaseUrl, seed) {
-  const { PsqlW03SyncExecutor } = require(
-    join(HOST, 'services/mobile-gateway/dist/physical-host/w03-postgres-reservations.js'),
-  );
-  const { W03PostgresExecutionAttemptQuotaSource } = require(
-    join(HOST, 'services/mobile-gateway/dist/physical-host/w03-attempt-quota-source.js'),
-  );
-  const { W03PostgresCurrentContainmentStateSource } = require(
-    join(HOST, 'services/mobile-gateway/dist/physical-host/w03-containment-state.js'),
-  );
-  const sql = new PsqlW03SyncExecutor({ databaseUrl });
-  const attemptSource = new W03PostgresExecutionAttemptQuotaSource(sql);
-  const containmentSource = new W03PostgresCurrentContainmentStateSource(sql);
-  const attempt = attemptSource.lookup({
-    tenantId: seed.tenantId,
-    actionIntentId: seed.actionIntentId,
-    executionRef: seed.executionRef,
-  });
-  const containment = containmentSource.resolveCurrent({
-    tenantId: seed.tenantId,
-    circuitKey: seed.circuitKey,
-    evaluatedAt: new Date().toISOString(),
-  });
-  return executionStateCompatible(seed, attempt, containment);
-}
-
 function assertCleanHostSha() {
-  const expected = readFileSync(join(STATE, 'worktrees.txt'), 'utf8')
-    .split(/\r?\n/u)
-    .find((line) => line.startsWith('host='))
-    ?.slice(5);
   const actual = run('git', ['-C', HOST, 'rev-parse', 'HEAD']).stdout.trim();
-  if (!expected || actual !== expected) throw new Error('host SHA drift');
+  if (!/^[0-9a-f]{40}$/u.test(actual)) throw new Error('host SHA unavailable');
   if (run('git', ['-C', HOST, 'status', '--porcelain']).stdout.trim()) {
     throw new Error('host worktree is dirty');
   }
@@ -408,202 +328,174 @@ async function executeLife004() {
     String(MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS),
   ]);
   recordPhase('BOOTSTRAP_PRINCIPAL_FRESH');
-  stopExistingHost();
+  const supervisorStatus = await supervisorRequest({ op: 'STATUS' });
+  if (!supervisorStatus.ok || supervisorStatus.value?.hostSha !== hostSha) {
+    throw new Error('DP5 host supervisor is unavailable or bound to a different Host SHA');
+  }
+  recordPhase('SUPERVISOR_VERIFIED', { hostSha });
 
-  const databaseUrl = readEnvValue(join(STATE, 'postgres.env'), 'AURORA_W15J_DATABASE_URL');
+  const refresh = await supervisorRequest({ op: 'REFRESH' });
+  if (
+    !refresh.ok ||
+    refresh.value?.hostSha !== hostSha ||
+    refresh.value?.authorizesExecution !== false ||
+    refresh.value?.retryAuthorized !== false
+  ) {
+    throw new Error(`DP5 host supervisor refresh rejected: ${refresh.code ?? 'protocol'}`);
+  }
+  const hostInstanceId = refresh.value.hostInstanceId;
+  recordPhase('W03_RECONCILED', { hostInstanceId });
+  recordPhase('BOOTSTRAP_STAGED', { hostInstanceId });
+
   const providerUrl = pathToFileURL(
     join(HOST, 'tools/physical/w15j-local-dp5-provider-runtime.mjs'),
   ).href;
   const provider = await import(providerUrl);
-  const input = await provider.createW15JLocalDp5OperatorInput({
-    databaseUrl,
-    materialPath: MATERIAL,
+  const material = provider.loadAndValidateW15JDp5Material(MATERIAL);
+  const serial = serialFromAdb();
+  const bootstrapStartedAtMs = Date.now();
+  await bootstrapAndroid(serial, refresh.value.bootstrapReference);
+  const session = await waitForFreshSession(serial, material, bootstrapStartedAtMs);
+  recordPhase('BOOTSTRAP_COMPOSED', {
+    hostInstanceId,
+    connectionId: session.connectionId,
+    gatewaySessionId: session.gatewaySessionId,
+    registrationVersion: session.registrationVersion,
+    gatewayGeneration: session.gatewayGeneration,
+    lastEvaluatedAtMs: session.lastEvaluatedAtMs,
   });
 
-  const { W15JLocalPhysicalHost } = require(
-    join(HOST, 'services/mobile-gateway/dist/physical-host/local-physical-host.js'),
-  );
-  const host = new W15JLocalPhysicalHost(
-    {
-      databaseUrl,
-      gatewayPort: 8080,
-      bootstrapPort: 8081,
-      bootstrapCredentialTtlMs: 10 * 60_000,
-      bootstrapMaxPrincipalAgeMs: MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS * 1000,
-    },
-    input.dependencies,
-  );
-
-  for (const seed of input.executionStateSeed) {
-    const result = host.stageExecutionState(seed);
-    if (result.ok) continue;
-    if (
-      result.code !== 'ATTEMPT_ALREADY_EXISTS' ||
-      !verifyExistingExecutionState(databaseUrl, seed)
-    ) {
-      throw new Error(`execution state stage failed: ${result.code}`);
-    }
-    console.log(`W03_EXISTING_STATE_COMPATIBLE=${seed.executionRef}`);
+  campaign('start', 'DP5-LIFE-004');
+  const attempt = latestAttemptDir();
+  recordPhase('CAMPAIGN_STARTED', { attempt });
+  const before = JSON.parse(readFileSync(join(attempt, 'before', 'snapshot.json'), 'utf8'));
+  if ((before.captureFailures ?? []).length !== 0) {
+    throw new Error('baseline capture incomplete; physical action withheld');
   }
-  recordPhase('W03_RECONCILED');
 
-  let started = false;
-  try {
-    const address = await host.start();
-    started = true;
-    recordPhase('HOST_STARTED', { hostInstanceId: address.hostInstanceId });
-    const bootstrap = host.stageBootstrap(input.principal);
-    if (!bootstrap.ok)
-      throw new Error(`bootstrap stage failed: ${bootstrap.error?.code ?? 'unknown'}`);
-    recordPhase('BOOTSTRAP_STAGED', { hostInstanceId: address.hostInstanceId });
-
-    const serial = serialFromAdb();
-    const material = provider.loadAndValidateW15JDp5Material(MATERIAL);
-    const previousSession = readSession(serial);
-    await bootstrapAndroid(serial, bootstrap.value.bootstrapReference);
-    const session = await waitForSessionRebind(serial, material, previousSession.connectionId);
-    recordPhase('BOOTSTRAP_COMPOSED', {
-      hostInstanceId: address.hostInstanceId,
-      connectionId: session.connectionId,
-      gatewaySessionId: session.gatewaySessionId,
-    });
-
-    campaign('start', 'DP5-LIFE-004');
-    const attempt = latestAttemptDir();
-    recordPhase('CAMPAIGN_STARTED', { attempt });
-    const before = JSON.parse(readFileSync(join(attempt, 'before', 'snapshot.json'), 'utf8'));
-    if ((before.captureFailures ?? []).length !== 0) {
-      throw new Error('baseline capture incomplete; physical action withheld');
-    }
-
-    const dispatchRequest = buildDispatchRequest(material, session);
-    const dispatch = host.governedDeviceDispatch.dispatch(dispatchRequest);
-    writeFileSync(
-      join(attempt, 'governed-dispatch.json'),
-      `${JSON.stringify(dispatch, null, 2)}\n`,
-    );
-    if (
-      !dispatch.ok ||
-      dispatch.authorizesExecution !== false ||
-      dispatch.retryAuthorized !== false
-    ) {
-      throw new Error(`governed dispatch rejected: ${dispatch.code ?? 'protocol'}`);
-    }
-    recordPhase('GOVERNED_DISPATCH_READY', { attempt });
-
-    const prepare = physicalControl('OFFLINE_PREPARE', material.commandId);
-    writeFileSync(join(attempt, 'offline-prepare.txt'), prepare);
-    if (!prepare.includes('OFFLINE_PREPARE_QUEUED_PASS')) {
-      throw new Error('OFFLINE_PREPARE did not queue safe deferred work');
-    }
-    recordPhase('SAFE_DEFERRED_QUEUED', { attempt });
-
-    const snapshot = physicalControl('OFFLINE_SNAPSHOT');
-    writeFileSync(join(attempt, 'offline-snapshot-before.txt'), snapshot);
-    const beforeQueue = queueBytes(serial);
-    const beforeQueuePath = join(attempt, 'offline-queue-before.xml');
-    writeFileSync(beforeQueuePath, beforeQueue);
-    const beforeHash = sha256(beforeQueue);
-
-    const pidBefore = adb(serial, ['shell', 'pidof', PACKAGE], {
-      allowFailure: true,
-    }).stdout.trim();
-    if (!pidBefore) throw new Error('Aurora process missing before process-death action');
-    const transitionPath = join(attempt, 'process-death-transition.txt');
-    writeFileSync(
-      transitionPath,
-      `host_sha=${hostSha}\nhost_instance_id=${address.hostInstanceId}\nqueue_sha_before=${beforeHash}\npid_before=${pidBefore}\n`,
-    );
-
-    adb(serial, ['shell', 'am', 'force-stop', PACKAGE]);
-    run('sleep', ['0.8']);
-    const pidStopped = adb(serial, ['shell', 'pidof', PACKAGE], {
-      allowFailure: true,
-    }).stdout.trim();
-    writeFileSync(transitionPath, `pid_after_force_stop=${pidStopped}\n`, { flag: 'a' });
-    if (pidStopped) throw new Error('Aurora process remained alive after force-stop');
-    recordPhase('PROCESS_STOPPED', { attempt });
-
-    const relaunch = adb(serial, ['shell', 'am', 'start', '-W', '-n', MAIN]).stdout;
-    writeFileSync(join(attempt, 'relaunch.txt'), relaunch);
-    run('sleep', ['1.2']);
-
-    const pidAfter = adb(serial, ['shell', 'pidof', PACKAGE], { allowFailure: true }).stdout.trim();
-    if (!pidAfter || pidAfter === pidBefore) throw new Error('Aurora relaunch PID is not fresh');
-    writeFileSync(transitionPath, `pid_after_relaunch=${pidAfter}\n`, { flag: 'a' });
-    recordPhase('PROCESS_RELAUNCHED', { attempt });
-
-    const afterQueue = queueBytes(serial);
-    const afterQueuePath = join(attempt, 'offline-queue-after.xml');
-    writeFileSync(afterQueuePath, afterQueue);
-    const afterHash = sha256(afterQueue);
-    writeFileSync(
-      transitionPath,
-      `queue_sha_after=${afterHash}\nqueue_persisted_across_process_death=${beforeHash === afterHash ? 'YES' : 'NO'}\n`,
-      { flag: 'a' },
-    );
-    if (beforeHash !== afterHash)
-      throw new Error('safe deferred queue changed across process death');
-
-    const activity = adb(serial, [
-      'shell',
-      "dumpsys activity activities 2>&1 | grep -m1 -E 'mResumedActivity|topResumedActivity|ResumedActivity'",
-    ]).stdout;
-    writeFileSync(join(attempt, 'relaunch-activity.txt'), activity);
-    const logcat = adb(serial, ['logcat', '-d', '-t', '1200', '-v', 'threadtime']).stdout;
-    writeFileSync(join(attempt, 'relaunch-logcat.txt'), logcat);
-    const screenshot = adb(serial, ['exec-out', 'screencap', '-p'], { binary: true }).stdout;
-    writeFileSync(join(attempt, 'relaunch-screen.png'), screenshot);
-
-    const evidenceFiles = [
-      'governed-dispatch.json',
-      'offline-prepare.txt',
-      'offline-snapshot-before.txt',
-      'offline-queue-before.xml',
-      'offline-queue-after.xml',
-      'process-death-transition.txt',
-      'relaunch.txt',
-      'relaunch-activity.txt',
-      'relaunch-logcat.txt',
-      'relaunch-screen.png',
-    ];
-
-    const manifest = evidenceFiles.map((name) => {
-      const path = join(attempt, name);
-      chmodSync(path, 0o600);
-      return `${sha256(readFileSync(path))}  ${name}`;
-    });
-    writeFileSync(join(attempt, 'action-evidence.sha256'), `${manifest.join('\n')}\n`, {
-      mode: 0o600,
-    });
-
-    const crashAnr = /FATAL EXCEPTION|ANR in ai\.aurora\.device\.local|am_crash|am_anr/u.test(
-      logcat,
-    );
-    writeFileSync(
-      join(attempt, 'action-observation.txt'),
-      [
-        `governed_dispatch=${dispatch.disposition}`,
-        'offline_prepare=QUEUED_PASS',
-        'queue_persisted_across_process_death=YES',
-        `crash_anr_signals=${crashAnr ? 'FOUND' : 'NONE'}`,
-        'physical_acceptance=false',
-        'operator_verdict=NOT_RECORDED',
-      ].join('\n') + '\n',
-      { mode: 0o600 },
-    );
-
-    recordPhase('EVIDENCE_RECORDED_NOT_VERDICT', { attempt });
-    console.log('DP5_LIFE_004_ACTION=RECORDED_NOT_VERDICT');
-    console.log(`attempt=${attempt}`);
-    console.log(`host_sha=${hostSha}`);
-    console.log(`host_instance_id=${address.hostInstanceId}`);
-    console.log(`dispatch=${dispatch.disposition}`);
-    console.log('queue_persisted_across_process_death=YES');
-    console.log(`crash_anr_signals=${crashAnr ? 'FOUND' : 'NONE'}`);
-  } finally {
-    if (started) await host.stop();
+  const dispatchRequest = buildDispatchRequest(material, session);
+  const dispatchResponse = await supervisorRequest({ op: 'DISPATCH', request: dispatchRequest });
+  if (!dispatchResponse.ok || dispatchResponse.value === null) {
+    throw new Error(`governed dispatch transport rejected: ${dispatchResponse.code ?? 'protocol'}`);
   }
+  const dispatch = dispatchResponse.value;
+  writeFileSync(join(attempt, 'governed-dispatch.json'), `${JSON.stringify(dispatch, null, 2)}\n`);
+  if (
+    !dispatch.ok ||
+    dispatch.authorizesExecution !== false ||
+    dispatch.retryAuthorized !== false
+  ) {
+    throw new Error(`governed dispatch rejected: ${dispatch.code ?? 'protocol'}`);
+  }
+  recordPhase('GOVERNED_DISPATCH_READY', { attempt });
+
+  const prepare = physicalControl('OFFLINE_PREPARE', material.commandId);
+  writeFileSync(join(attempt, 'offline-prepare.txt'), prepare);
+  if (!prepare.includes('OFFLINE_PREPARE_QUEUED_PASS')) {
+    throw new Error('OFFLINE_PREPARE did not queue safe deferred work');
+  }
+  recordPhase('SAFE_DEFERRED_QUEUED', { attempt });
+
+  const snapshot = physicalControl('OFFLINE_SNAPSHOT');
+  writeFileSync(join(attempt, 'offline-snapshot-before.txt'), snapshot);
+  const beforeQueue = queueBytes(serial);
+  const beforeQueuePath = join(attempt, 'offline-queue-before.xml');
+  writeFileSync(beforeQueuePath, beforeQueue);
+  const beforeHash = sha256(beforeQueue);
+
+  const pidBefore = adb(serial, ['shell', 'pidof', PACKAGE], {
+    allowFailure: true,
+  }).stdout.trim();
+  if (!pidBefore) throw new Error('Aurora process missing before process-death action');
+  const transitionPath = join(attempt, 'process-death-transition.txt');
+  writeFileSync(
+    transitionPath,
+    `host_sha=${hostSha}\nhost_instance_id=${hostInstanceId}\nqueue_sha_before=${beforeHash}\npid_before=${pidBefore}\n`,
+  );
+
+  adb(serial, ['shell', 'am', 'force-stop', PACKAGE]);
+  run('sleep', ['0.8']);
+  const pidStopped = adb(serial, ['shell', 'pidof', PACKAGE], {
+    allowFailure: true,
+  }).stdout.trim();
+  writeFileSync(transitionPath, `pid_after_force_stop=${pidStopped}\n`, { flag: 'a' });
+  if (pidStopped) throw new Error('Aurora process remained alive after force-stop');
+  recordPhase('PROCESS_STOPPED', { attempt });
+
+  const relaunch = adb(serial, ['shell', 'am', 'start', '-W', '-n', MAIN]).stdout;
+  writeFileSync(join(attempt, 'relaunch.txt'), relaunch);
+  run('sleep', ['1.2']);
+
+  const pidAfter = adb(serial, ['shell', 'pidof', PACKAGE], { allowFailure: true }).stdout.trim();
+  if (!pidAfter || pidAfter === pidBefore) throw new Error('Aurora relaunch PID is not fresh');
+  writeFileSync(transitionPath, `pid_after_relaunch=${pidAfter}\n`, { flag: 'a' });
+  recordPhase('PROCESS_RELAUNCHED', { attempt });
+
+  const afterQueue = queueBytes(serial);
+  const afterQueuePath = join(attempt, 'offline-queue-after.xml');
+  writeFileSync(afterQueuePath, afterQueue);
+  const afterHash = sha256(afterQueue);
+  writeFileSync(
+    transitionPath,
+    `queue_sha_after=${afterHash}\nqueue_persisted_across_process_death=${beforeHash === afterHash ? 'YES' : 'NO'}\n`,
+    { flag: 'a' },
+  );
+  if (beforeHash !== afterHash) throw new Error('safe deferred queue changed across process death');
+
+  const activity = adb(serial, [
+    'shell',
+    "dumpsys activity activities 2>&1 | grep -m1 -E 'mResumedActivity|topResumedActivity|ResumedActivity'",
+  ]).stdout;
+  writeFileSync(join(attempt, 'relaunch-activity.txt'), activity);
+  const logcat = adb(serial, ['logcat', '-d', '-t', '1200', '-v', 'threadtime']).stdout;
+  writeFileSync(join(attempt, 'relaunch-logcat.txt'), logcat);
+  const screenshot = adb(serial, ['exec-out', 'screencap', '-p'], { binary: true }).stdout;
+  writeFileSync(join(attempt, 'relaunch-screen.png'), screenshot);
+
+  const evidenceFiles = [
+    'governed-dispatch.json',
+    'offline-prepare.txt',
+    'offline-snapshot-before.txt',
+    'offline-queue-before.xml',
+    'offline-queue-after.xml',
+    'process-death-transition.txt',
+    'relaunch.txt',
+    'relaunch-activity.txt',
+    'relaunch-logcat.txt',
+    'relaunch-screen.png',
+  ];
+
+  const manifest = evidenceFiles.map((name) => {
+    const path = join(attempt, name);
+    chmodSync(path, 0o600);
+    return `${sha256(readFileSync(path))}  ${name}`;
+  });
+  writeFileSync(join(attempt, 'action-evidence.sha256'), `${manifest.join('\n')}\n`, {
+    mode: 0o600,
+  });
+
+  const crashAnr = /FATAL EXCEPTION|ANR in ai\.aurora\.device\.local|am_crash|am_anr/u.test(logcat);
+  writeFileSync(
+    join(attempt, 'action-observation.txt'),
+    [
+      `governed_dispatch=${dispatch.disposition}`,
+      'offline_prepare=QUEUED_PASS',
+      'queue_persisted_across_process_death=YES',
+      `crash_anr_signals=${crashAnr ? 'FOUND' : 'NONE'}`,
+      'physical_acceptance=false',
+      'operator_verdict=NOT_RECORDED',
+    ].join('\n') + '\n',
+    { mode: 0o600 },
+  );
+
+  recordPhase('EVIDENCE_RECORDED_NOT_VERDICT', { attempt });
+  console.log('DP5_LIFE_004_ACTION=RECORDED_NOT_VERDICT');
+  console.log(`attempt=${attempt}`);
+  console.log(`host_sha=${hostSha}`);
+  console.log(`host_instance_id=${hostInstanceId}`);
+  console.log(`dispatch=${dispatch.disposition}`);
+  console.log('queue_persisted_across_process_death=YES');
+  console.log(`crash_anr_signals=${crashAnr ? 'FOUND' : 'NONE'}`);
 }
 
 const invoked = process.argv[1] ? pathToFileURL(process.argv[1]).href : '';

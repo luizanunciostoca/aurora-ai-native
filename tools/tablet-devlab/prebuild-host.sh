@@ -16,13 +16,36 @@ ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 HOST="$ROOT/worktrees/host"
 STATE="$ROOT/state"
 WORKTREES="$STATE/worktrees.txt"
+RUNTIME_CANDIDATE="$STATE/w15j-runtime-host-candidate.txt"
 MANIFEST="$STATE/w15j-host-prebuild.txt"
 NODE_VERSION=22.16.0
 NPM_VERSION=10.9.2
 
 [[ -f "$WORKTREES" && ! -L "$WORKTREES" ]] || fail "trusted worktree state is missing"
+
+resolve_expected_sha() {
+  if [[ -n "${AURORA_W15J_HOST_CANDIDATE_SHA:-}" ]]; then
+    [[ "$AURORA_W15J_HOST_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "invalid Host candidate override"
+    printf '%s' "$AURORA_W15J_HOST_CANDIDATE_SHA"
+    return
+  fi
+  if [[ -f "$RUNTIME_CANDIDATE" && ! -L "$RUNTIME_CANDIDATE" ]]; then
+    [[ "$(stat -c '%a' "$RUNTIME_CANDIDATE")" == "600" ]] || fail "runtime Host candidate mode must be 600"
+    [[ "$(stat -c '%u' "$RUNTIME_CANDIDATE")" == "$(id -u)" ]] || fail "runtime Host candidate owner mismatch"
+    [[ "$(awk -F= '$1=="kind" {print $2}' "$RUNTIME_CANDIDATE")" == "W15J_RUNTIME_HOST_CANDIDATE_V1" ]] || fail "runtime Host candidate kind mismatch"
+    [[ "$(awk -F= '$1=="authorizes_execution" {print $2}' "$RUNTIME_CANDIDATE")" == "false" ]] || fail "runtime Host candidate cannot authorize execution"
+    [[ "$(awk -F= '$1=="physical_acceptance" {print $2}' "$RUNTIME_CANDIDATE")" == "false" ]] || fail "runtime Host candidate cannot claim physical acceptance"
+    local candidate
+    candidate="$(awk -F= '$1=="host_sha" {print $2}' "$RUNTIME_CANDIDATE")"
+    [[ "$candidate" =~ ^[0-9a-f]{40}$ ]] || fail "runtime Host candidate SHA invalid"
+    printf '%s' "$candidate"
+    return
+  fi
+  awk -F= '$1=="host" {print $2}' "$WORKTREES"
+}
+
 HOST_SHA="$(git -C "$HOST" rev-parse HEAD)"
-EXPECTED_SHA="$(awk -F= '$1=="host" {print $2}' "$WORKTREES")"
+EXPECTED_SHA="$(resolve_expected_sha)"
 [[ "$HOST_SHA" == "$EXPECTED_SHA" ]] || fail "host worktree SHA drift"
 [[ -z "$(git -C "$HOST" status --porcelain)" ]] || fail "host worktree must be clean"
 TREE_SHA="$(git -C "$HOST" rev-parse HEAD^{tree})"
