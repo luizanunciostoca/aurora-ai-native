@@ -169,7 +169,13 @@ test('LIFE-004 enforces canonical bootstrap freshness and persistent phase telem
   assert.equal(source.includes("recordPhase('ERROR'"), true);
   assert.equal(source.includes('bootstrap reference/button did not become ready'), true);
   assert.equal(source.includes('for (let index = 0; index < 20; index += 1)'), true);
-  assert.equal(source.includes('for (let index = 0; index < 40; index += 1)'), true);
+  assert.equal(source.includes('for (let index = 0; index < 16; index += 1)'), true);
+  assert.equal(source.includes('await delay(1200)'), true);
+  assert.equal(source.includes('await delay(250)'), true);
+  assert.equal(
+    source.includes('await bootstrapAndroid(serial, bootstrap.value.bootstrapReference)'),
+    true,
+  );
   assert.equal(source.includes('/enabled="true"/u.test(tag)'), true);
   assert.equal(source.includes('Android bootstrap rejected after connect timeout'), true);
   assert.equal(source.includes("throw new Error('Android bootstrap rejected');"), false);

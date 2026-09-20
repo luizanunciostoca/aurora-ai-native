@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -195,7 +196,7 @@ function uiXml(serial, name) {
   return adb(serial, ['exec-out', 'cat', remote]).stdout;
 }
 
-function bootstrapAndroid(serial, reference) {
+async function bootstrapAndroid(serial, reference) {
   adb(serial, ['shell', 'am', 'start', '-W', '-n', MAIN]);
   let xml = uiXml(serial, 'dp5-life004-inprocess-nav');
   if (!xml.includes('Bootstrap LOCAL')) {
@@ -237,7 +238,11 @@ function bootstrapAndroid(serial, reference) {
   }
 
   adb(serial, ['shell', 'input', 'tap', String(button.x), String(button.y)]);
-  for (let index = 0; index < 40; index += 1) {
+
+  // The Host HTTP server runs in this same Node process. Yield the event loop after
+  // the tap so Android can complete the bootstrap exchange before any sync ADB polling.
+  await delay(1200);
+  for (let index = 0; index < 16; index += 1) {
     xml = uiXml(serial, 'dp5-life004-inprocess-result');
     if (
       xml.includes(
@@ -246,7 +251,7 @@ function bootstrapAndroid(serial, reference) {
     ) {
       return;
     }
-    run('sleep', ['0.2']);
+    await delay(250);
   }
   if (/Bootstrap rejeitado|composição bloqueada|indisponível/u.test(xml)) {
     throw new Error('Android bootstrap rejected after connect timeout');
@@ -445,7 +450,7 @@ async function executeLife004() {
     recordPhase('BOOTSTRAP_STAGED', { hostInstanceId: address.hostInstanceId });
 
     const serial = serialFromAdb();
-    bootstrapAndroid(serial, bootstrap.value.bootstrapReference);
+    await bootstrapAndroid(serial, bootstrap.value.bootstrapReference);
     recordPhase('BOOTSTRAP_COMPOSED', { hostInstanceId: address.hostInstanceId });
     const session = readSession(serial);
     const material = provider.loadAndValidateW15JDp5Material(MATERIAL);
