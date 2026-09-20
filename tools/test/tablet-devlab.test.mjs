@@ -219,6 +219,12 @@ test('physical effect consent requires an interactive exact-tuple operator chall
   assert.match(source, /\[\[ -t 0 && -t 1 \]\]/);
   assert.match(source, /APPROVE W15J DP5 \$CHALLENGE/);
   assert.match(source, /BOUNDED_VOLUME_STEP_AND_AURORA_SELF_LAUNCH/);
+  assert.match(source, /w15j-runtime-host-candidate\.txt/);
+  assert.match(source, /W15J_RUNTIME_HOST_CANDIDATE_V1/);
+  assert.match(source, /runtimeHostSha/);
+  assert.match(source, /'schemaVersion': '1\.1\.0'/);
+  assert.match(source, /runtime Host candidate cannot authorize execution/);
+  assert.match(source, /runtime Host candidate cannot claim physical acceptance/);
   assert.match(source, /timedelta\(minutes=10\)/);
   assert.match(source, /'authorizesExecution': False/);
   assert.match(source, /'retryAuthorized': False/);
@@ -233,6 +239,11 @@ test('DP5 provider material requires both explicit opt-in and fresh interactive 
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED=YES/);
   assert.match(source, /dp5-effect-consent\.json/);
   assert.match(source, /W15J_DP5_PHYSICAL_EFFECT_CONSENT/);
+  assert.match(source, /schemaVersion'\] != '1\.1\.0'/);
+  assert.match(source, /runtimeHostSha/);
+  assert.match(source, /w15j-runtime-host-candidate\.txt/);
+  assert.match(source, /host_candidate_sha=\{runtime_host_sha\}/);
+  assert.match(source, /legacy_host_tuple_sha=\{legacy_host_sha\}/);
   assert.match(source, /BOUNDED_VOLUME_STEP_AND_AURORA_SELF_LAUNCH/);
   assert.match(source, /timedelta\(minutes=10\)/);
   assert.match(source, /consent\['approvalReference'\]/);

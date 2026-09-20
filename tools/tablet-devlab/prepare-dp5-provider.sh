@@ -32,6 +32,7 @@ SIGNING_IDENTITY="$DEVLAB_ROOT/artifacts/FINAL_SIGNING_IDENTITY.txt"
 DB_ENV="$STATE_DIR/postgres.env"
 PROVIDER_STATE="$STATE_DIR/provider.txt"
 WORKTREE_STATE="$STATE_DIR/worktrees.txt"
+RUNTIME_CANDIDATE="$STATE_DIR/w15j-runtime-host-candidate.txt"
 CONSENT="$STATE_DIR/dp5-effect-consent.json"
 PACKAGE_ID="${AURORA_PACKAGE_ID:-ai.aurora.device.local}"
 BINDING_XML="$STATE_DIR/.android-w14-binding-$$.xml"
@@ -52,7 +53,20 @@ HOST_SHA="$(awk -F= '$1 == "host" {print $2}' "$WORKTREE_STATE")"
 for sha in "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA"; do
   [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "worktree tuple contains malformed SHA"
 done
-[[ "$(git -C "$HOST_DIR" rev-parse HEAD)" == "$HOST_SHA" ]] || fail "host worktree drifted"
+
+RUNTIME_HOST_SHA="$HOST_SHA"
+if [[ -e "$RUNTIME_CANDIDATE" ]]; then
+  secure_regular_file "$RUNTIME_CANDIDATE" || fail "runtime Host candidate is insecure"
+  [[ "$(awk -F= '$1=="kind" {print $2}' "$RUNTIME_CANDIDATE")" == "W15J_RUNTIME_HOST_CANDIDATE_V1" ]] ||
+    fail "runtime Host candidate kind mismatch"
+  [[ "$(awk -F= '$1=="authorizes_execution" {print $2}' "$RUNTIME_CANDIDATE")" == "false" ]] ||
+    fail "runtime Host candidate cannot authorize execution"
+  [[ "$(awk -F= '$1=="physical_acceptance" {print $2}' "$RUNTIME_CANDIDATE")" == "false" ]] ||
+    fail "runtime Host candidate cannot claim physical acceptance"
+  RUNTIME_HOST_SHA="$(awk -F= '$1=="host_sha" {print $2}' "$RUNTIME_CANDIDATE")"
+fi
+[[ "$RUNTIME_HOST_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "runtime Host candidate SHA is malformed"
+[[ "$(git -C "$HOST_DIR" rev-parse HEAD)" == "$RUNTIME_HOST_SHA" ]] || fail "host worktree drifted"
 [[ -z "$(git -C "$HOST_DIR" status --porcelain)" ]] || fail "host worktree is dirty"
 
 mkdir -p "$CONFIG_DIR" "$STATE_DIR"
@@ -69,7 +83,7 @@ QEMU="$(adb -s "$SERIAL" shell getprop ro.kernel.qemu | tr -d '\r\n')"
 adb -s "$SERIAL" exec-out run-as "$PACKAGE_ID" sh -c 'if [ -f shared_prefs/aurora_device_session_metadata.xml ]; then cat shared_prefs/aurora_device_session_metadata.xml; else printf "<map />\n"; fi' >"$BINDING_XML" || fail "could not read Android W14 binding state"
 chmod 600 "$BINDING_XML"
 
-python - "$MATERIAL" "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" "$BINDING_XML" "$SIGNER_CERT_SHA" <<'PY'
+python - "$MATERIAL" "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" "$RUNTIME_HOST_SHA" "$BINDING_XML" "$SIGNER_CERT_SHA" <<'PY'
 import json
 import os
 import re
@@ -77,7 +91,7 @@ import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
-material_path, consent_path, main_sha, android_sha, host_sha, binding_path, signer_cert_sha = sys.argv[1:]
+material_path, consent_path, main_sha, android_sha, host_sha, runtime_host_sha, binding_path, signer_cert_sha = sys.argv[1:]
 if not re.fullmatch(r'[a-f0-9]{64}', signer_cert_sha):
     raise SystemExit('final signer certificate digest is invalid')
 with open(consent_path, 'r', encoding='utf-8') as handle:
@@ -91,6 +105,7 @@ expected_keys = {
     'mainSha',
     'androidSha',
     'hostSha',
+    'runtimeHostSha',
     'scope',
     'approvalReference',
     'authorizesExecution',
@@ -99,12 +114,13 @@ expected_keys = {
 }
 if set(consent) != expected_keys:
     raise SystemExit('DP5 effect consent schema is invalid')
-if consent['kind'] != 'W15J_DP5_PHYSICAL_EFFECT_CONSENT' or consent['schemaVersion'] != '1.0.0':
+if consent['kind'] != 'W15J_DP5_PHYSICAL_EFFECT_CONSENT' or consent['schemaVersion'] != '1.1.0':
     raise SystemExit('DP5 effect consent identity is invalid')
 if (
     consent['mainSha'] != main_sha
     or consent['androidSha'] != android_sha
     or consent['hostSha'] != host_sha
+    or consent['runtimeHostSha'] != runtime_host_sha
 ):
     raise SystemExit('DP5 effect consent tuple drifted')
 if consent['scope'] != 'BOUNDED_VOLUME_STEP_AND_AURORA_SELF_LAUNCH':
@@ -274,20 +290,21 @@ CONSUMED_CONSENT="$STATE_DIR/dp5-effect-consent.consumed-$WINDOW.json"
 mv "$CONSENT" "$CONSUMED_CONSENT"
 chmod 600 "$CONSUMED_CONSENT"
 
-python - "$MATERIAL" "$PROVIDER_STATE" "$HOST_SHA" "$CONSENT_SHA" "$CONSUMED_CONSENT" <<'PY'
+python - "$MATERIAL" "$PROVIDER_STATE" "$HOST_SHA" "$RUNTIME_HOST_SHA" "$CONSENT_SHA" "$CONSUMED_CONSENT" <<'PY'
 import hashlib
 import json
 import os
 import sys
 
-material_path, state_path, host_sha, consent_sha, consumed_consent_path = sys.argv[1:]
+material_path, state_path, legacy_host_sha, runtime_host_sha, consent_sha, consumed_consent_path = sys.argv[1:]
 with open(material_path, 'rb') as handle:
     digest = hashlib.sha256(handle.read()).hexdigest()
 with open(material_path, 'r', encoding='utf-8') as handle:
     material = json.load(handle)
 state = '\n'.join([
     'status=READY_NOT_ACCEPTED',
-    f'host_candidate_sha={host_sha}',
+    f'host_candidate_sha={runtime_host_sha}',
+    f'legacy_host_tuple_sha={legacy_host_sha}',
     f'material_sha256={digest}',
     f'material_expires_at={material["expiresAt"]}',
     f'device_id={material["deviceId"]}',
