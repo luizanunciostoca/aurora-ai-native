@@ -1,0 +1,95 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  buildActionIntent,
+  buildDispatchRequest,
+  gatewaySessionIdFromConnectionId,
+  parseSessionPrefs,
+} from '../tablet-devlab/dp5-life004-inprocess.mjs';
+
+const material = Object.freeze({
+  tenantId: 'ten_4EXKXWCW5MV3YT04GR12RN96D5',
+  actorIdentityId: 'idn_53G0CPK25EGYVRSYTT6T48860V',
+  correlationId: 'cor_3FZW5XYZ5K039XW5QDRYTRKCXF',
+  deviceId: 'dvc_7VFJA4C3V6YP4NZMT4VTQZR3P1',
+  deviceSessionId: 'dss_fixture',
+  actionIntentId: 'act_3BFVBHKYX8P592V1GFSKJA310B',
+  commandId: 'cmd_5FPDM395T50YGPAMWASNQ39FXZ',
+  executionId: 'exe_2EFWQHQJCMJ55HN5Z2ESSASQTZ',
+  causationId: 'cau_7ER3PXQJVHZ41V1EW92HS4QSR3',
+  policyTokenId: 'ptk_12345678901234567890123456',
+  idempotencyKey: 'idem_fixture',
+  orderingKey: 'device:audio:volume',
+  orderingSequence: 1,
+  expiresAt: '2026-09-20T08:00:00.000Z',
+});
+
+test('derives gateway session id from Android connection id', () => {
+  assert.equal(
+    gatewaySessionIdFromConnectionId('conn:gws_hLus5CYn8svitfjjZDTRAw:1'),
+    'gws_hLus5CYn8svitfjjZDTRAw',
+  );
+  assert.throws(() => gatewaySessionIdFromConnectionId('bad'));
+});
+
+test('parses current Android session metadata', () => {
+  const xml = `<map>
+<string name="tenant_id">${material.tenantId}</string>
+<string name="device_session_id">${material.deviceSessionId}</string>
+<string name="device_id">${material.deviceId}</string>
+<string name="connection_id">conn:gws_fixture:2</string>
+<int name="registration_version" value="3" />
+</map>`;
+  assert.deepEqual(parseSessionPrefs(xml), {
+    tenantId: material.tenantId,
+    deviceSessionId: material.deviceSessionId,
+    deviceId: material.deviceId,
+    connectionId: 'conn:gws_fixture:2',
+    gatewaySessionId: 'gws_fixture',
+    registrationVersion: 3,
+  });
+});
+
+test('builds a bounded non-authoritative dispatch request', () => {
+  const session = {
+    tenantId: material.tenantId,
+    deviceSessionId: material.deviceSessionId,
+    deviceId: material.deviceId,
+    connectionId: 'conn:gws_fixture:2',
+    gatewaySessionId: 'gws_fixture',
+    registrationVersion: 3,
+  };
+  const request = buildDispatchRequest(material, session, 123456);
+  assert.equal(request.command.commandId, material.commandId);
+  assert.equal(request.command.executionId, material.executionId);
+  assert.equal(request.command.authorizesExecution, false);
+  assert.equal(request.command.actionIntent.capability.capability, 'audio.volume.set');
+  assert.equal(request.command.actionIntent.executionTarget.bindingReference, material.deviceId);
+  assert.equal(request.command.canonicalPayloadHash.startsWith('sha256:'), true);
+  assert.equal(request.context.gatewaySessionId, 'gws_fixture');
+  assert.equal(request.context.connectionId, 'conn:gws_fixture:2');
+  assert.equal(request.context.registrationVersion, 3);
+  assert.equal(request.dispatchedAtMs, 123456);
+});
+
+test('action intent preserves required idempotency and policy token', () => {
+  const intent = buildActionIntent(material);
+  assert.deepEqual(intent.idempotency, { mode: 'REQUIRED', key: material.idempotencyKey });
+  assert.deepEqual(intent.authority, {
+    kind: 'POLICY_TOKEN',
+    policyTokenId: material.policyTokenId,
+  });
+  assert.equal(intent.dataClassification, 'INTERNAL');
+});
+
+test('LIFE-004 helper cannot drain work or synthesize a verdict', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(
+    new URL('../tablet-devlab/dp5-life004-inprocess.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.equal(source.includes('OFFLINE_DRAIN'), false);
+  assert.equal(source.includes("campaign('finish'"), false);
+  assert.equal(source.includes('DP5_LIFE_004_ACTION=RECORDED_NOT_VERDICT'), true);
+});

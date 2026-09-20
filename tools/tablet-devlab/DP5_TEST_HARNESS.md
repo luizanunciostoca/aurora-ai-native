@@ -114,6 +114,12 @@ $AURORA_EVIDENCE_DIR/harness/DP5_FINAL_PHYSICAL_ACCEPTANCE_DOSSIER.md
 $AURORA_EVIDENCE_DIR/harness/<SCENARIO_ID>/attempt-XX/
 ```
 
+## LIFE-004 in-process governed-dispatch helper
+
+`dp5-life004-inprocess.mjs` exists only in the DevLab harness. It imports the exact prebuilt Host candidate, creates the canonical `W15JLocalPhysicalHost`, uses its real `governedDeviceDispatch` port to materialize the W14 delivery, and only then asks the LOCAL APK control surface to queue safe deferred work.
+
+It must fail closed on stale material, Host SHA drift, dirty Host worktree, incomplete baseline capture, rejected governed dispatch, failed `OFFLINE_PREPARE`, process-death mismatch, or queue-hash drift. It never calls `OFFLINE_DRAIN`, never executes the bounded volume effect, never changes W02/W07 authority, and never records PASS/FAIL/BLOCKED by itself.
+
 ## Evidence contract and retry policy
 
 Every scenario carries ID, canonical path/name/category, APK/commit/device bindings, preconditions, setup, actions, expected result, expected/forbidden signals, timeout, telemetry/log requirements, screenshot policy, receipt requirement, UTC/monotonic timing, initial status, failure cause, evidence links, cleanup, retry policy, manual physical actions, automated collectors and `humanVerdictRequired=true`. The JSON contract is `dp5-evidence-schema.json`.
