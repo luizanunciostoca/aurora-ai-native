@@ -8,16 +8,17 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (name) => readFileSync(resolve(repoRoot, 'tools/tablet-devlab', name), 'utf8');
 
 const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
-const ANDROID_SHA = 'fb05c7880667d6f179648043e6f1e7b966734134';
+const ANDROID_SHA = 'e42ea0650a5056dd0d26e6ac69021691b5625332';
 const LEGACY_V017_ANDROID_SHA = '40246031b2e1b1ef8e232db4d4d2ea6687f8ecf7';
-const HOST_SHA = 'df17c9f27a8206f8296f55aa3830667f4742b062';
-const PACKAGING_SHA = 'f81b1d767bb4baa9eca5251cc2d689b8fd27ae65';
-const PRESIGN_SHA = 'a813d5eb389b171a28a944bf93c65c98031cd6945685c942900ef856d7c6d88d';
-const APK_SHA = '656cf37367e74fcfa38a7af587dc9d1b0cdc0097d18f5bdbeb83d7e9fce85dc4';
+const HOST_SHA = '790049ae133035db3ed1517b31d9110d7f20d9a4';
+const PACKAGING_SHA = 'fdeec9b16cccdb39ade1bf3e83755763072b9709';
+const PACKAGING_BRANCH = 'prototype/w15j-physical-apk-artifact-v017r12';
+const PRESIGN_SHA = '04d84c63692a165b5e4ad480a5308779679b45cec41cf0d0fa69f83d67d84097';
+const APK_SHA = 'b72bae6efda9a1f85c2d0f08e108091c37f7648911bc25d242d05b4de4f62a0f';
 const CERT_SHA = 'e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb';
-const ARTIFACT_ID = '10522415704';
-const RUN_ID = '35279807640';
-const ZIP_SHA = '4acfb419457ca0f392b41a59583d3110600e63449d089b3b17ead1b2d8c15afe';
+const ARTIFACT_ID = '10609684076';
+const RUN_ID = '35527423987';
+const ZIP_SHA = 'adada77c3b779a8de6f82da1eddc82a90037f82695509938ed4657c5a0c417d2';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -112,6 +113,8 @@ test('artifact fetch binds the exact presign and final-signing tuple', () => {
   ]) {
     assert.match(source, new RegExp(escaped(value)));
   }
+  assert.match(source, new RegExp(escaped(PACKAGING_BRANCH)));
+  assert.match(source, /embedded packaging branch drift/);
   assert.doesNotMatch(source, /^apk_sha256=.*>.*ARTIFACT_METADATA/m);
   assert.match(source, /embedded packaging head drift/);
   assert.match(source, /embedded packaging run drift/);
@@ -300,6 +303,8 @@ test('live control-tower tuple capture retries transient GitHub reads and cannot
   assert.match(source, /GitHub API unavailable after bounded retries/);
   assert.match(source, /sha256:\$ZIP_SHA/);
   assert.match(source, /open\/draft\/unmerged/);
+  assert.match(source, /AURORA_PACKAGING_BRANCH/);
+  assert.match(source, new RegExp(escaped(PACKAGING_BRANCH)));
   for (const value of [
     MAIN_SHA,
     ANDROID_SHA,

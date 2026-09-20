@@ -38,32 +38,44 @@ The canonical same-tablet transport is `LOCAL_TABLET_LOOPBACK`.
 
 Self-ADB is used only for external observation/control (`pm path`, `adb pull`, `am force-stop`, `dumpsys`, permission changes, process/lifecycle testing). It is not the application transport. `adb reverse` mappings for 8080/8081 are forbidden in this mode.
 
-Current software candidate tuple (pre-packaging, not physically accepted):
+Current software candidate tuple (v0.17r12; not physically accepted):
 
 ```text
 main      77f0f8532197025ee913dd02fcb56878d9d667a9
-android   fb05c7880667d6f179648043e6f1e7b966734134
-host      df17c9f27a8206f8296f55aa3830667f4742b062
+android   e42ea0650a5056dd0d26e6ac69021691b5625332
+host      790049ae133035db3ed1517b31d9110d7f20d9a4
 DP5       NOT_ACCEPTED
 W15-J     NOT_ACCEPTED
 W16       BLOCKED
 ```
 
-Current packaged physical tuple (v0.17r11; readiness only, not physically accepted):
+Current packaged physical tuple (v0.17r12; readiness only, not physically accepted):
 
 ```text
 main      77f0f8532197025ee913dd02fcb56878d9d667a9
+android   e42ea0650a5056dd0d26e6ac69021691b5625332
+host      790049ae133035db3ed1517b31d9110d7f20d9a4
+packaging fdeec9b16cccdb39ade1bf3e83755763072b9709
+branch    prototype/w15j-physical-apk-artifact-v017r12
+run       35527423987
+artifact  10609684076
+name      aurora-w15j-v017r12-presign-apk-e42ea065-host-790049ae
+zip       adada77c3b779a8de6f82da1eddc82a90037f82695509938ed4657c5a0c417d2
+presign   04d84c63692a165b5e4ad480a5308779679b45cec41cf0d0fa69f83d67d84097
+apk       b72bae6efda9a1f85c2d0f08e108091c37f7648911bc25d242d05b4de4f62a0f
+signer    e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb
+transport LOCAL_TABLET_LOOPBACK
+```
+
+Historical v0.17r11 tuple remains historical evidence only and must not be rewritten into the current runtime candidate:
+
+```text
 android   fb05c7880667d6f179648043e6f1e7b966734134
 host      df17c9f27a8206f8296f55aa3830667f4742b062
 packaging f81b1d767bb4baa9eca5251cc2d689b8fd27ae65
 run       35279807640
 artifact  10522415704
-name      aurora-w15j-v017r11-presign-apk-fb05c788-host-df17c9f2
-zip       4acfb419457ca0f392b41a59583d3110600e63449d089b3b17ead1b2d8c15afe
-presign   a813d5eb389b171a28a944bf93c65c98031cd6945685c942900ef856d7c6d88d
 apk       656cf37367e74fcfa38a7af587dc9d1b0cdc0097d18f5bdbeb83d7e9fce85dc4
-signer    e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb
-transport LOCAL_TABLET_LOOPBACK
 ```
 
 GitHub Actions produces the exact pre-sign APK bound to the source/host tuple. The tablet then signs it locally with the persistent `PHYSICAL_DEV_STABLE_LOCAL` identity. The private key never leaves the tablet. Future APKs signed by the same identity can use Android in-place update and preserve wake enrollment/preferences; clean uninstall remains an explicit fallback only when Android rejects the stable update.
