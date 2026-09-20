@@ -11,6 +11,7 @@ import {
 test('supervisor protocol accepts only bounded local operations', () => {
   assert.equal(validateSupervisorRequest({ op: 'STATUS' }), true);
   assert.equal(validateSupervisorRequest({ op: 'REFRESH' }), true);
+  assert.equal(validateSupervisorRequest({ op: 'REAUTHORIZE' }), true);
   assert.equal(validateSupervisorRequest({ op: 'STOP' }), true);
   assert.equal(validateSupervisorRequest({ op: 'DISPATCH', request: {} }), true);
   assert.equal(validateSupervisorRequest({ op: 'STATUS', extra: true }), false);
@@ -71,6 +72,40 @@ test('supervisor preserves W14 continuity without becoming an authority surface'
   assert.equal(source.includes("campaign('finish'"), false);
   assert.equal(source.includes('physicalAcceptance: true'), false);
   assert.equal(source.includes('authorizesExecution: true'), false);
+});
+
+test('in-place reauthorization preserves the active Host instance and remains non-authoritative', async () => {
+  const source = await readFile(
+    new URL('../tablet-devlab/dp5-host-supervisor.mjs', import.meta.url),
+    'utf8',
+  );
+  const start = source.indexOf("if (input.op === 'REAUTHORIZE')");
+  const end = source.indexOf("if (input.op === 'REFRESH')", start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const block = source.slice(start, end);
+  assert.equal(block.includes('const hostInstanceId = active.hostInstanceId'), true);
+  assert.equal(block.includes('active.host.stageBootstrap'), true);
+  assert.equal(block.includes('stagePreparedExecutionState(active.host'), true);
+  assert.equal(block.includes('active.hostInstanceId !== hostInstanceId'), true);
+  assert.equal(block.includes('stopActive(active)'), false);
+  assert.equal(block.includes('authorizesExecution: false'), true);
+  assert.equal(block.includes('retryAuthorized: false'), true);
+});
+
+test('supervisor readiness exporter binds the live host without leaking bootstrap secrets', async () => {
+  const source = await readFile(
+    new URL('../tablet-devlab/export-dp5-supervisor-readiness.sh', import.meta.url),
+    'utf8',
+  );
+  assert.equal(source.includes('hostInstanceId'), true);
+  assert.equal(source.includes('host-ready-announcement.txt'), true);
+  assert.equal(source.includes('last-readiness-termux.txt'), true);
+  assert.equal(source.includes('host-listener-8080.txt'), true);
+  assert.equal(source.includes('host-health-8081.txt'), true);
+  assert.equal(source.includes('gbr_'), false);
+  assert.equal(source.includes('authorizes_execution=false'), true);
+  assert.equal(source.includes('physical_acceptance=false'), true);
 });
 
 test('refresh validates candidate input before stopping the active Host', async () => {

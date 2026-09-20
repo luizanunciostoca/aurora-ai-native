@@ -71,7 +71,12 @@ export function validateDispatchMaterial(request, material) {
 export function validateSupervisorRequest(value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const keys = Object.keys(value);
-  if (value.op === 'STATUS' || value.op === 'REFRESH' || value.op === 'STOP') {
+  if (
+    value.op === 'STATUS' ||
+    value.op === 'REFRESH' ||
+    value.op === 'REAUTHORIZE' ||
+    value.op === 'STOP'
+  ) {
     return keys.length === 1;
   }
   if (value.op === 'DISPATCH') {
@@ -92,12 +97,7 @@ async function prepareRuntimeInput(databaseUrl) {
   return { input, material };
 }
 
-async function buildRuntime(continuity, databaseUrl, preparedInput = null) {
-  const { input, material } = preparedInput ?? (await prepareRuntimeInput(databaseUrl));
-
-  const { W15JLocalPhysicalHost } = require(
-    join(HOST, 'services/mobile-gateway/dist/physical-host/local-physical-host.js'),
-  );
+function stagePreparedExecutionState(host, input, databaseUrl) {
   const { PsqlW03SyncExecutor } = require(
     join(HOST, 'services/mobile-gateway/dist/physical-host/w03-postgres-reservations.js'),
   );
@@ -107,23 +107,9 @@ async function buildRuntime(continuity, databaseUrl, preparedInput = null) {
   const { W03PostgresCurrentContainmentStateSource } = require(
     join(HOST, 'services/mobile-gateway/dist/physical-host/w03-containment-state.js'),
   );
-
   const sql = new PsqlW03SyncExecutor({ databaseUrl });
   const attemptSource = new W03PostgresExecutionAttemptQuotaSource(sql);
   const containmentSource = new W03PostgresCurrentContainmentStateSource(sql);
-
-  const host = new W15JLocalPhysicalHost(
-    {
-      databaseUrl,
-      gatewayPort: 8080,
-      bootstrapPort: 8081,
-      bootstrapCredentialTtlMs: 10 * 60_000,
-      bootstrapMaxPrincipalAgeMs: 10 * 60_000,
-      w14Continuity: continuity,
-    },
-    input.dependencies,
-  );
-
   for (const seed of input.executionStateSeed) {
     const staged = host.stageExecutionState(seed);
     if (staged.ok) continue;
@@ -144,6 +130,28 @@ async function buildRuntime(continuity, databaseUrl, preparedInput = null) {
       throw new Error('existing W03 state is incompatible');
     }
   }
+}
+
+async function buildRuntime(continuity, databaseUrl, preparedInput = null) {
+  const { input, material } = preparedInput ?? (await prepareRuntimeInput(databaseUrl));
+
+  const { W15JLocalPhysicalHost } = require(
+    join(HOST, 'services/mobile-gateway/dist/physical-host/local-physical-host.js'),
+  );
+
+  const host = new W15JLocalPhysicalHost(
+    {
+      databaseUrl,
+      gatewayPort: 8080,
+      bootstrapPort: 8081,
+      bootstrapCredentialTtlMs: 10 * 60_000,
+      bootstrapMaxPrincipalAgeMs: 10 * 60_000,
+      w14Continuity: continuity,
+    },
+    input.dependencies,
+  );
+
+  stagePreparedExecutionState(host, input, databaseUrl);
 
   const address = await host.start();
   const bootstrap = host.stageBootstrap(input.principal);
@@ -186,6 +194,39 @@ export async function startSupervisor(socketPath = DEFAULT_SOCKET) {
       return { ok: false, code: 'REQUEST_REJECTED', authorizesExecution: false };
     }
     if (input.op === 'STATUS') return { ok: true, value: safeStatus(active, hostSha) };
+    if (input.op === 'REAUTHORIZE') {
+      if (active === null) {
+        return { ok: false, code: 'HOST_NOT_ACTIVE', authorizesExecution: false };
+      }
+      const preparedInput = await prepareRuntimeInput(databaseUrl);
+      const hostInstanceId = active.hostInstanceId;
+      stagePreparedExecutionState(active.host, preparedInput.input, databaseUrl);
+      const bootstrap = active.host.stageBootstrap(preparedInput.input.principal);
+      if (!bootstrap.ok) {
+        throw new Error(`bootstrap restage failed: ${bootstrap.error?.code ?? 'unknown'}`);
+      }
+      active = {
+        ...active,
+        bootstrapReference: bootstrap.value.bootstrapReference,
+        material: preparedInput.material,
+      };
+      if (active.hostInstanceId !== hostInstanceId) {
+        throw new Error('host instance changed during in-place reauthorization');
+      }
+      writeStatus(active, hostSha);
+      return {
+        ok: true,
+        value: {
+          kind: 'DP5_HOST_REAUTHORIZED_READY',
+          hostSha,
+          hostInstanceId,
+          bootstrapReference: active.bootstrapReference,
+          materialGeneratedAt: active.material.generatedAt,
+          authorizesExecution: false,
+          retryAuthorized: false,
+        },
+      };
+    }
     if (input.op === 'REFRESH') {
       // Validate provider/material bindings before disrupting the currently active Host.
       // A stale or malformed candidate must fail closed while preserving the known-good runtime.

@@ -354,19 +354,26 @@ async function executeLife004() {
   ]);
   recordPhase('BOOTSTRAP_PRINCIPAL_FRESH');
   const supervisorStatus = await supervisorRequest({ op: 'STATUS' });
-  if (!supervisorStatus.ok || supervisorStatus.value?.hostSha !== hostSha) {
-    throw new Error('DP5 host supervisor is unavailable or bound to a different Host SHA');
+  if (
+    !supervisorStatus.ok ||
+    supervisorStatus.value?.hostSha !== hostSha ||
+    supervisorStatus.value?.active !== true ||
+    typeof supervisorStatus.value?.hostInstanceId !== 'string'
+  ) {
+    throw new Error('DP5 host supervisor is unavailable, inactive or bound to a different Host SHA');
   }
-  recordPhase('SUPERVISOR_VERIFIED', { hostSha });
+  const existingHostInstanceId = supervisorStatus.value.hostInstanceId;
+  recordPhase('SUPERVISOR_VERIFIED', { hostSha, hostInstanceId: existingHostInstanceId });
 
-  const refresh = await supervisorRequest({ op: 'REFRESH' });
+  const refresh = await supervisorRequest({ op: 'REAUTHORIZE' });
   if (
     !refresh.ok ||
     refresh.value?.hostSha !== hostSha ||
+    refresh.value?.hostInstanceId !== existingHostInstanceId ||
     refresh.value?.authorizesExecution !== false ||
     refresh.value?.retryAuthorized !== false
   ) {
-    throw new Error(`DP5 host supervisor refresh rejected: ${refresh.code ?? 'protocol'}`);
+    throw new Error(`DP5 host supervisor in-place reauthorization rejected: ${refresh.code ?? 'protocol'}`);
   }
   const hostInstanceId = refresh.value.hostInstanceId;
   recordPhase('W03_RECONCILED', { hostInstanceId });

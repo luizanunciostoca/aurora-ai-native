@@ -36,11 +36,13 @@ if (op) {
       ? { op: 'STATUS' }
       : op === 'refresh'
         ? { op: 'REFRESH' }
-        : op === 'stop'
-          ? { op: 'STOP' }
-          : null;
+        : op === 'reauthorize'
+          ? { op: 'REAUTHORIZE' }
+          : op === 'stop'
+            ? { op: 'STOP' }
+            : null;
   if (request === null) {
-    console.error('usage: dp5-host-supervisor-client.mjs status|refresh|stop');
+    console.error('usage: dp5-host-supervisor-client.mjs status|refresh|reauthorize|stop');
     process.exitCode = 2;
   } else {
     supervisorRequest(request)
