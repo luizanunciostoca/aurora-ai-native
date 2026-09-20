@@ -11,14 +11,14 @@ const MAIN_SHA = '77f0f8532197025ee913dd02fcb56878d9d667a9';
 const ANDROID_SHA = 'e42ea0650a5056dd0d26e6ac69021691b5625332';
 const LEGACY_V017_ANDROID_SHA = '40246031b2e1b1ef8e232db4d4d2ea6687f8ecf7';
 const HOST_SHA = '790049ae133035db3ed1517b31d9110d7f20d9a4';
-const PACKAGING_SHA = 'fdeec9b16cccdb39ade1bf3e83755763072b9709';
-const PACKAGING_BRANCH = 'prototype/w15j-physical-apk-artifact-v017r12';
-const PRESIGN_SHA = '04d84c63692a165b5e4ad480a5308779679b45cec41cf0d0fa69f83d67d84097';
+const PACKAGING_SHA = 'f6094d91433952f0b3093319404259bd66c55326';
+const PACKAGING_BRANCH = 'prototype/w15j-physical-apk-artifact';
+const PRESIGN_SHA = '27e4e18cb79b8bb90b77a64ea3a2c995417eb359bb02f789b0da68dc48285ed6';
 const APK_SHA = 'b72bae6efda9a1f85c2d0f08e108091c37f7648911bc25d242d05b4de4f62a0f';
 const CERT_SHA = 'e1745e3d3940fc6b03aef0b609d43aa8c436901965966087c2366108ffe263fb';
-const ARTIFACT_ID = '10609684076';
-const RUN_ID = '35527423987';
-const ZIP_SHA = 'adada77c3b779a8de6f82da1eddc82a90037f82695509938ed4657c5a0c417d2';
+const ARTIFACT_ID = '10611026314';
+const RUN_ID = '35529091939';
+const ZIP_SHA = '30c83362b15a066a6eb94c5876380506392e3ab29ff91ea9eae35399dcb03eb0';
 
 const escaped = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
