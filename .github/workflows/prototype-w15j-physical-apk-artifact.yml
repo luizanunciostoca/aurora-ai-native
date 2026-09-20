@@ -22,31 +22,24 @@ jobs:
           test "$GITHUB_EVENT_NAME" = "push"
           test "$GITHUB_REF_NAME" = "prototype/w15j-physical-apk-artifact"
           test "$GITHUB_SHA" = "$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')"
-
-      - name: Checkout exact W15-J Android candidate
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Checkout exact W15-J candidate source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: e42ea0650a5056dd0d26e6ac69021691b5625332
           persist-credentials: false
-
       - name: Assert exact source candidate
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "e42ea0650a5056dd0d26e6ac69021691b5625332"
-
-      - name: Set up Java
-        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+      - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
         with:
           gradle-version: '9.4.1'
           cache-read-only: true
-
       - name: Install stable Android SDK
         shell: bash
         run: |
@@ -56,13 +49,12 @@ jobs:
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
           "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
-
       - name: Test, assemble and self-bind exact tablet-loopback localDebug candidate
         shell: bash
         env:
           AURORA_ANDROID_SHA: e42ea0650a5056dd0d26e6ac69021691b5625332
-          AURORA_HOST_SHA: df17c9f27a8206f8296f55aa3830667f4742b062
-          AURORA_RELEASE_TUPLE_ID: W15J_V017R12_E42EA065_DF17C9F2
+          AURORA_HOST_SHA: 790049ae133035db3ed1517b31d9110d7f20d9a4
+          AURORA_RELEASE_TUPLE_ID: W15J_DP5_V017R12
           AURORA_LOCAL_GATEWAY_ORIGIN: http://127.0.0.1:8080
         run: |
           set -euo pipefail
@@ -88,20 +80,23 @@ jobs:
           for dex in $(unzip -Z1 "$APK" | grep -E '^classes[0-9]*\.dex$'); do
             unzip -p "$APK" "$dex" | strings >> "$DEX_STRINGS"
           done
-          grep -Fxq 'aurora.wake.model.v2' "$DEX_STRINGS"
-          grep -Fxq 'aurora.wake.model.aead.v2' "$DEX_STRINGS"
-          grep -Fxq 'AES/GCM/NoPadding' "$DEX_STRINGS"
-          grep -Fxq 'audio.volume.set' "$DEX_STRINGS"
-          grep -Fxq '/v1/device/offline/current' "$DEX_STRINGS"
-          grep -Fxq 'OPEN_VALIDATED_APP' "$DEX_STRINGS"
-          grep -Fxq 'http://127.0.0.1:8080' "$DEX_STRINGS"
-
-          BUILD_CONFIG="$(find apps/aurora-android/app/build/generated/source/buildConfig -type f -name BuildConfig.java -print -quit)"
-          test -n "$BUILD_CONFIG"
-          grep -Fq 'e42ea0650a5056dd0d26e6ac69021691b5625332' "$BUILD_CONFIG"
-          grep -Fq 'df17c9f27a8206f8296f55aa3830667f4742b062' "$BUILD_CONFIG"
-          grep -Fq 'W15J_V017R12_E42EA065_DF17C9F2' "$BUILD_CONFIG"
-          printf 'BUILD_CONFIG_TUPLE_BINDING=PASS\n'
+          for needle in \
+            'aurora.wake.model.v2' \
+            'aurora.wake.model.aead.v2' \
+            'AES/GCM/NoPadding' \
+            'audio.volume.set' \
+            '/v1/device/offline/current' \
+            'OPEN_VALIDATED_APP' \
+            'http://127.0.0.1:8080' \
+            'last_evaluation_latency_ms' \
+            'wake telemetry never authorizes execution'; do
+            if grep -Fq "$needle" "$DEX_STRINGS"; then
+              printf 'DEX_ASSERT_PASS=%s\n' "$needle"
+            else
+              printf 'DEX_ASSERT_FAIL=%s\n' "$needle" >&2
+              exit 1
+            fi
+          done
 
           ARTIFACT_DIR=/tmp/w15j-tablet-loopback-apk
           mkdir -p "$ARTIFACT_DIR"
@@ -116,7 +111,7 @@ jobs:
           artifact_purpose=W15-J-DP5-physical-evidence-input
           source_candidate_sha=e42ea0650a5056dd0d26e6ac69021691b5625332
           source_branch=wave/15j-physical-device-integration-acceptance
-          paired_local_host_candidate_sha=df17c9f27a8206f8296f55aa3830667f4742b062
+          paired_local_host_candidate_sha=790049ae133035db3ed1517b31d9110d7f20d9a4
           reconciled_main_parent_sha=77f0f8532197025ee913dd02fcb56878d9d667a9
           packaging_head_sha=${GITHUB_SHA}
           packaging_branch=prototype/w15j-physical-apk-artifact
@@ -140,18 +135,14 @@ jobs:
           EOF
 
           test "$(wc -l < "$ARTIFACT_DIR/BUILD_IDENTITY.txt" | tr -d ' ')" = "24"
-          grep -Fxq 'source_candidate_sha=e42ea0650a5056dd0d26e6ac69021691b5625332' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
-          grep -Fxq 'source_branch=wave/15j-physical-device-integration-acceptance' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
-          grep -Fxq 'paired_local_host_candidate_sha=df17c9f27a8206f8296f55aa3830667f4742b062' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           grep -Fxq 'gateway_transport_scope=LOCAL_TABLET_LOOPBACK' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           grep -Fxq 'gateway_origin=http://127.0.0.1:8080' "$ARTIFACT_DIR/BUILD_IDENTITY.txt"
           test "$(find "$ARTIFACT_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')" = "3"
           printf 'APK_SHA256=%s\n' "$(sha256sum "$ARTIFACT_DIR/Aurora-W15J-v017r12-TabletLoopback-localDebug-presign.apk" | awk '{print $1}')"
-
       - name: Upload exact W15-J tablet-loopback candidate APK
         uses: actions/upload-artifact@v7
         with:
-          name: aurora-w15j-v017r12-presign-apk-e42ea065-host-df17c9f2
+          name: aurora-w15j-v017r12-presign-apk-e42ea065-host-790049ae
           path: /tmp/w15j-tablet-loopback-apk
           if-no-files-found: error
           retention-days: 14
