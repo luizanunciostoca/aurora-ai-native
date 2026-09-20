@@ -472,7 +472,13 @@ export class GatewaySessionManager {
       requests,
     };
     this.#sessions.set(input.sessionId, record);
-    return success(sessionSnapshot(record));
+    const snapshot = sessionSnapshot(record);
+    try {
+      this.#authenticator.noteSessionEstablished?.(snapshot);
+    } catch {
+      // Reconnect bookkeeping is observational only; failure cannot widen authority.
+    }
+    return success(snapshot);
   }
 
   #parseOpenInput(input: unknown, reconnect: false): GatewayProtocolResult<OpenGatewaySessionInput>;
