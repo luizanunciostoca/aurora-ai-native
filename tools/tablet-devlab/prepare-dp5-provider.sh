@@ -232,7 +232,9 @@ def android_binding(path):
     expires_ms = integer('gateway_auth_expires_at_ms', 0)
     evaluated_ms = integer('last_evaluated_at_ms', -1)
     session = key and registration and device_session_id is not None and connection_id is not None and expires_ms > 0 and evaluated_ms >= 0
-    if not registration and not session:
+    if key and not registration and not session:
+        raise SystemExit('Android W14 binding is key-only; explicit recovery is required before DP5 provider material')
+    if not key and not registration and not session:
         return {'mode': 'FRESH_INSTALL'}
     if not registration or not session or state != 'ACTIVE':
         raise SystemExit('Android W14 binding is incomplete or not ACTIVE; refusing DP5 provider material')

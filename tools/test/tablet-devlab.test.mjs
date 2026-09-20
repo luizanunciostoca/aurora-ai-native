@@ -284,6 +284,8 @@ test('DP5 provider preserves an existing ACTIVE Android W14 binding', () => {
   assert.match(source, /binding\['tenantId'\] if binding\['mode'\] == 'BOUND'/);
   assert.match(source, /binding\['deviceId'\] if binding\['mode'\] == 'BOUND'/);
   assert.match(source, /binding\['deviceSessionId'\] if binding\['mode'\] == 'BOUND'/);
+  assert.match(source, /Android W14 binding is key-only; explicit recovery is required/);
+  assert.match(source, /if not key and not registration and not session/);
   assert.match(source, /return \{'mode': 'FRESH_INSTALL'\}/);
   assert.match(source, /rm -f -- "\$BINDING_XML"/);
 });
