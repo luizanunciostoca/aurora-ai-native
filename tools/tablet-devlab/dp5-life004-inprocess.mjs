@@ -215,15 +215,29 @@ function bootstrapAndroid(serial, reference) {
   adb(serial, ['shell', 'input', 'tap', String(field.x), String(field.y)]);
   adb(serial, ['shell', 'for i in $(seq 1 180); do input keyevent KEYCODE_DEL; done']);
   adb(serial, ['shell', 'input', 'text', reference]);
-  run('sleep', ['0.25']);
-  xml = uiXml(serial, 'dp5-life004-inprocess-filled');
-  if (!xml.includes(reference)) throw new Error('bootstrap reference was not entered');
-  const button = nodeBounds(
-    xml,
-    (tag) => /text="Conectar runtime governado"/u.test(tag) && /enabled="true"/u.test(tag),
-  );
+
+  let button = null;
+  for (let index = 0; index < 20; index += 1) {
+    xml = uiXml(serial, 'dp5-life004-inprocess-filled');
+    if (xml.includes(reference)) {
+      try {
+        button = nodeBounds(
+          xml,
+          (tag) => /text="Conectar runtime governado"/u.test(tag) && /enabled="true"/u.test(tag),
+        );
+        break;
+      } catch {
+        // Compose can lag the text field update; keep polling within the bounded window.
+      }
+    }
+    run('sleep', ['0.15']);
+  }
+  if (button === null) {
+    throw new Error('bootstrap reference/button did not become ready');
+  }
+
   adb(serial, ['shell', 'input', 'tap', String(button.x), String(button.y)]);
-  for (let index = 0; index < 30; index += 1) {
+  for (let index = 0; index < 40; index += 1) {
     xml = uiXml(serial, 'dp5-life004-inprocess-result');
     if (
       xml.includes(
@@ -232,10 +246,10 @@ function bootstrapAndroid(serial, reference) {
     ) {
       return;
     }
-    if (/Bootstrap rejeitado|composição bloqueada|indisponível/u.test(xml)) {
-      throw new Error('Android bootstrap rejected');
-    }
     run('sleep', ['0.2']);
+  }
+  if (/Bootstrap rejeitado|composição bloqueada|indisponível/u.test(xml)) {
+    throw new Error('Android bootstrap rejected after connect timeout');
   }
   throw new Error('Android bootstrap did not become ready');
 }
