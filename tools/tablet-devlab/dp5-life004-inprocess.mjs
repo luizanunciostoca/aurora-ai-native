@@ -360,7 +360,9 @@ async function executeLife004() {
     supervisorStatus.value?.active !== true ||
     typeof supervisorStatus.value?.hostInstanceId !== 'string'
   ) {
-    throw new Error('DP5 host supervisor is unavailable, inactive or bound to a different Host SHA');
+    throw new Error(
+      'DP5 host supervisor is unavailable, inactive or bound to a different Host SHA',
+    );
   }
   const existingHostInstanceId = supervisorStatus.value.hostInstanceId;
   recordPhase('SUPERVISOR_VERIFIED', { hostSha, hostInstanceId: existingHostInstanceId });
@@ -373,7 +375,9 @@ async function executeLife004() {
     refresh.value?.authorizesExecution !== false ||
     refresh.value?.retryAuthorized !== false
   ) {
-    throw new Error(`DP5 host supervisor in-place reauthorization rejected: ${refresh.code ?? 'protocol'}`);
+    throw new Error(
+      `DP5 host supervisor in-place reauthorization rejected: ${refresh.code ?? 'protocol'}`,
+    );
   }
   const hostInstanceId = refresh.value.hostInstanceId;
   recordPhase('W03_RECONCILED', { hostInstanceId });
