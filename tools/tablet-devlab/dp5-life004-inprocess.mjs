@@ -9,7 +9,6 @@ import { pathToFileURL } from 'node:url';
 const require = createRequire(import.meta.url);
 const PACKAGE = 'ai.aurora.device.local';
 const MAIN = `${PACKAGE}/ai.aurora.device.MainActivity`;
-const BOOTSTRAP = `${PACKAGE}/ai.aurora.device.bootstrap.GatewayBootstrapSetupActivity`;
 const DEVLAB = process.env.AURORA_DEVLAB_ROOT ?? join(homedir(), 'aurora-devlab');
 const HOST = join(DEVLAB, 'worktrees', 'host');
 const STATE = join(DEVLAB, 'state');
@@ -185,12 +184,25 @@ function uiXml(serial, name) {
 }
 
 function bootstrapAndroid(serial, reference) {
-  adb(serial, ['shell', 'am', 'start', '-W', '-n', BOOTSTRAP]);
-  let xml = uiXml(serial, 'dp5-life004-inprocess-bootstrap');
+  adb(serial, ['shell', 'am', 'start', '-W', '-n', MAIN]);
+  let xml = uiXml(serial, 'dp5-life004-inprocess-nav');
+  if (!xml.includes('Bootstrap LOCAL')) {
+    if (!xml.includes('Conectar runtime LOCAL')) {
+      const developer = nodeBounds(xml, (tag) => /text="Modo desenvolvedor"/u.test(tag));
+      adb(serial, ['shell', 'input', 'tap', String(developer.x), String(developer.y)]);
+      run('sleep', ['0.3']);
+      xml = uiXml(serial, 'dp5-life004-inprocess-developer');
+    }
+    const connectLocal = nodeBounds(xml, (tag) => /text="Conectar runtime LOCAL"/u.test(tag));
+    adb(serial, ['shell', 'input', 'tap', String(connectLocal.x), String(connectLocal.y)]);
+    run('sleep', ['0.4']);
+    xml = uiXml(serial, 'dp5-life004-inprocess-bootstrap');
+  }
+  if (!xml.includes('Bootstrap LOCAL')) throw new Error('Bootstrap LOCAL screen unavailable');
   const field = nodeBounds(xml, (tag) => /class="android\.widget\.EditText"/u.test(tag));
   const button = nodeBounds(xml, (tag) => /text="Conectar runtime governado"/u.test(tag));
   adb(serial, ['shell', 'input', 'tap', String(field.x), String(field.y)]);
-  adb(serial, ['shell', 'sh', '-c', 'for i in $(seq 1 180); do input keyevent KEYCODE_DEL; done']);
+  adb(serial, ['shell', 'for i in $(seq 1 180); do input keyevent KEYCODE_DEL; done']);
   adb(serial, ['shell', 'input', 'text', reference]);
   adb(serial, ['shell', 'input', 'tap', String(button.x), String(button.y)]);
   for (let index = 0; index < 30; index += 1) {

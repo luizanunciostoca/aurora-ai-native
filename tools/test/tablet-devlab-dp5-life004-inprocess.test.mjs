@@ -140,3 +140,19 @@ test('compatible existing W03 state is accepted read-only', () => {
   changed.snapshot.killSwitch.state = 'ACTIVE';
   assert.equal(executionStateCompatible(seed, attempt, changed), false);
 });
+
+test('LIFE-004 bootstrap enters through exported MainActivity', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(
+    new URL('../tablet-devlab/dp5-life004-inprocess.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.equal(source.includes('GatewayBootstrapSetupActivity'), false);
+  assert.equal(source.includes('Modo desenvolvedor'), true);
+  assert.equal(source.includes('Conectar runtime LOCAL'), true);
+  assert.equal(source.includes("['shell', 'am', 'start', '-W', '-n', MAIN]"), true);
+  assert.equal(
+    source.includes("['shell', 'for i in $(seq 1 180); do input keyevent KEYCODE_DEL; done']"),
+    true,
+  );
+});
