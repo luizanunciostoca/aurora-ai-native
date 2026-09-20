@@ -20,6 +20,8 @@ const MATERIAL = join(DEVLAB, 'config', 'w15j-dp5-material.json');
 const EVIDENCE = join(DEVLAB, 'evidence', 'w15j-dp5');
 const PHASE_FILE = join(STATE, 'dp5-life004-phase.json');
 const MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS = 240;
+const MAX_REALTIME_COMMAND_HORIZON_MS = 4 * 60 * 1000;
+const DEADLINE_SAFETY_MARGIN_MS = 1000;
 
 export function canonicalJson(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -30,7 +32,29 @@ export function canonicalJson(value) {
     .join(',')}}`;
 }
 
-export function buildActionIntent(material) {
+export function boundedCommandDeadlineAt(material, session, nowMs = Date.now()) {
+  if (!Number.isSafeInteger(nowMs) || nowMs < 0) throw new Error('dispatch time is malformed');
+  const materialExpiresAtMs = Date.parse(material.expiresAt ?? '');
+  const gatewayAuthExpiresAtMs = Number(session.gatewayAuthExpiresAtMs);
+  if (!Number.isSafeInteger(materialExpiresAtMs) || materialExpiresAtMs < 0) {
+    throw new Error('material expiry is malformed');
+  }
+  if (!Number.isSafeInteger(gatewayAuthExpiresAtMs) || gatewayAuthExpiresAtMs < 0) {
+    throw new Error('gateway auth expiry is malformed');
+  }
+  const upperBoundMs = Math.min(
+    materialExpiresAtMs,
+    gatewayAuthExpiresAtMs,
+    nowMs + MAX_REALTIME_COMMAND_HORIZON_MS,
+  );
+  const deadlineMs = upperBoundMs - DEADLINE_SAFETY_MARGIN_MS;
+  if (!Number.isSafeInteger(deadlineMs) || deadlineMs <= nowMs) {
+    throw new Error('dispatch deadline has no safe remaining horizon');
+  }
+  return new Date(deadlineMs).toISOString();
+}
+
+export function buildActionIntent(material, deadlineAt = material.expiresAt) {
   return Object.freeze({
     kind: 'ACTION_INTENT',
     schemaVersion: '1.0.0',
@@ -51,7 +75,7 @@ export function buildActionIntent(material) {
     resolvedParameters: Object.freeze({}),
     idempotency: Object.freeze({ mode: 'REQUIRED', key: material.idempotencyKey }),
     preconditions: Object.freeze([]),
-    deadlineAt: material.expiresAt,
+    deadlineAt,
     authority: Object.freeze({ kind: 'POLICY_TOKEN', policyTokenId: material.policyTokenId }),
     dataClassification: 'INTERNAL',
   });
@@ -86,7 +110,8 @@ export function parseSessionPrefs(xml) {
 }
 
 export function buildDispatchRequest(material, session, nowMs = Date.now()) {
-  const actionIntent = buildActionIntent(material);
+  const deadlineAt = boundedCommandDeadlineAt(material, session, nowMs);
+  const actionIntent = buildActionIntent(material, deadlineAt);
   const canonicalPayloadHash = `sha256:${createHash('sha256').update(canonicalJson(actionIntent), 'utf8').digest('hex')}`;
   return Object.freeze({
     command: Object.freeze({

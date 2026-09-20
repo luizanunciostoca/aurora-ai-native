@@ -3,6 +3,7 @@ import test from 'node:test';
 import { URL } from 'node:url';
 
 import {
+  boundedCommandDeadlineAt,
   buildActionIntent,
   buildDispatchRequest,
   executionStateCompatible,
@@ -69,6 +70,7 @@ test('builds a bounded non-authoritative dispatch request', () => {
     connectionId: 'conn:gws_fixture:2',
     gatewaySessionId: 'gws_fixture',
     registrationVersion: 3,
+    gatewayAuthExpiresAtMs: 123456 + 10 * 60 * 1000,
   };
   const request = buildDispatchRequest(material, session, 123456);
   assert.equal(request.command.commandId, material.commandId);
@@ -81,6 +83,29 @@ test('builds a bounded non-authoritative dispatch request', () => {
   assert.equal(request.context.connectionId, 'conn:gws_fixture:2');
   assert.equal(request.context.registrationVersion, 3);
   assert.equal(request.dispatchedAtMs, 123456);
+  const deadlineMs = Date.parse(request.command.actionIntent.deadlineAt);
+  assert.equal(deadlineMs, 123456 + 4 * 60 * 1000 - 1000);
+  assert.equal(deadlineMs - request.dispatchedAtMs < 5 * 60 * 1000, true);
+});
+
+test('bounds command deadline below W14 realtime and gateway/material expiry', () => {
+  const nowMs = Date.parse('2026-09-20T07:55:00.000Z');
+  const session = {
+    gatewayAuthExpiresAtMs: nowMs + 90_000,
+  };
+  const shortMaterial = {
+    ...material,
+    expiresAt: new Date(nowMs + 120_000).toISOString(),
+  };
+  const deadlineAt = boundedCommandDeadlineAt(shortMaterial, session, nowMs);
+  assert.equal(Date.parse(deadlineAt), nowMs + 89_000);
+  assert.equal(Date.parse(deadlineAt) < session.gatewayAuthExpiresAtMs, true);
+  assert.equal(Date.parse(deadlineAt) < Date.parse(shortMaterial.expiresAt), true);
+  assert.equal(Date.parse(deadlineAt) - nowMs < 5 * 60 * 1000, true);
+  assert.throws(
+    () => boundedCommandDeadlineAt(shortMaterial, { gatewayAuthExpiresAtMs: nowMs + 500 }, nowMs),
+    /no safe remaining horizon/u,
+  );
 });
 
 test('action intent preserves required idempotency and policy token', () => {
