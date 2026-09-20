@@ -274,6 +274,21 @@ test('DP5 provider material requires both explicit opt-in and fresh interactive 
   assert.match(source, /physical_acceptance=false/);
 });
 
+test('W14 expired binding recovery is exact, key-preserving and non-authoritative', () => {
+  const source = read('recover-dp5-w14-binding.sh');
+  assert.match(source, /AURORA_W14_RECOVERY_SOURCE is required/);
+  assert.match(source, /current W14 state is not exact key-only recovery state/);
+  assert.match(source, /recovery source key binding does not match current Keystore metadata/);
+  assert.match(source, /recovery source session must already be expired/);
+  assert.match(source, /am force-stop/);
+  assert.match(source, /Aurora unexpectedly launched during metadata recovery/);
+  assert.match(source, /cmp -s "\$SOURCE" "\$AFTER"/);
+  assert.match(source, /W14_EXPIRED_BINDING_RECOVERY_EVIDENCE_V1/);
+  assert.match(source, /'authorizesExecution': False/);
+  assert.match(source, /'physicalAcceptance': False/);
+  assert.doesNotMatch(source, /pm clear|uninstall/);
+});
+
 test('DP5 provider preserves an existing ACTIVE Android W14 binding', () => {
   const source = read('prepare-dp5-provider.sh');
   assert.match(source, /aurora_device_session_metadata\.xml/);
