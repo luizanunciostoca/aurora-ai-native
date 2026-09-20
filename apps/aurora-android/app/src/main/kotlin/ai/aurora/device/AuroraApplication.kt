@@ -2,17 +2,44 @@ package ai.aurora.device
 
 import android.app.Application
 import ai.aurora.device.bootstrap.GatewayBootstrapClient
+import ai.aurora.device.bootstrap.GatewayBootstrapClientError
+import ai.aurora.device.bootstrap.GatewayBootstrapClientResult
+import ai.aurora.device.bootstrap.GatewayBootstrapGrant
 import ai.aurora.device.bootstrap.ProcessLocalGatewayBootstrapRuntime
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.config.RuntimeEnvironmentConfig
+import ai.aurora.device.executor.AndroidDeviceActionPorts
+import ai.aurora.device.executor.DeviceActionPort
+import ai.aurora.device.executor.W15JDeviceCommandConsumptionResult
+import ai.aurora.device.executor.W15JGatewayDeviceCommandConsumer
+import ai.aurora.device.capability.PhysicalAcceptanceNativeRuntimeProbe
 import ai.aurora.device.lifecycle.AndroidPresenceCheckpointStore
 import ai.aurora.device.lifecycle.AndroidPresenceCoordinator
 import ai.aurora.device.lifecycle.PresenceEngine
 import ai.aurora.device.lifecycle.PresenceSnapshot
+import ai.aurora.device.network.GatewayDevicePlaneClient
+import ai.aurora.device.network.GatewayDevicePlaneConnectRequest
+import ai.aurora.device.network.GatewayDevicePlaneReconnectRequest
+import ai.aurora.device.network.GatewayDevicePlaneResult
+import ai.aurora.device.offline.GatewayOfflineExecutionRuntime
+import ai.aurora.device.offline.GatewayOfflinePrepareResult
+import ai.aurora.device.offline.OfflineEnqueueDecision
 import ai.aurora.device.security.AndroidKeystoreSigningKeyStore
 import ai.aurora.device.session.AndroidDeviceSessionMetadataStore
 import ai.aurora.device.session.SecureDeviceSessionClient
 import ai.aurora.device.session.SessionLifecycleHooks
+import ai.aurora.device.voice.GatewayBootstrapGrantSource
+import ai.aurora.device.voice.GatewayVoiceRuntimeComposition
+import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionError
+import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionResult
+import ai.aurora.device.voice.GatewayVoiceRuntimeConnector
+import ai.aurora.device.voice.GatewayVoiceRuntimeReconnector
+import ai.aurora.device.voice.GovernedW07VoiceAuthorityIngress
+import ai.aurora.device.voice.InstalledGatewayVoiceProjection
+import ai.aurora.device.voice.OneShotGatewayCredentialProvider
+import ai.aurora.device.voice.WakeVoiceRuntimeRegistry
+import ai.aurora.device.voice.installableGatewayVoiceProjection
+import ai.aurora.device.voice.localGatewayBindingFrom
 
 class AuroraApplication : Application() {
     lateinit var environmentConfig: RuntimeEnvironmentConfig
@@ -20,8 +47,14 @@ class AuroraApplication : Application() {
 
     private lateinit var presenceEngine: PresenceEngine
     private lateinit var presenceCoordinator: AndroidPresenceCoordinator
+    private lateinit var deviceSessionMetadataStore: AndroidDeviceSessionMetadataStore
     private lateinit var secureDeviceSessionClient: SecureDeviceSessionClient
     private var localGatewayBootstrapRuntime: ProcessLocalGatewayBootstrapRuntime? = null
+    private var localGatewayVoiceRuntimeComposition: GatewayVoiceRuntimeComposition? = null
+    private var activeGatewayDevicePlaneClient: GatewayDevicePlaneClient? = null
+    private var activeGatewayVoiceProjection: InstalledGatewayVoiceProjection? = null
+    private var activeGatewayCommandConsumer: W15JGatewayDeviceCommandConsumer? = null
+    private var activeGatewayOfflineRuntime: GatewayOfflineExecutionRuntime? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -32,9 +65,10 @@ class AuroraApplication : Application() {
                 allowCleartextTraffic = BuildConfig.AURORA_ALLOW_CLEARTEXT,
             )
 
+        deviceSessionMetadataStore = AndroidDeviceSessionMetadataStore(this)
         secureDeviceSessionClient =
             SecureDeviceSessionClient(
-                metadataStore = AndroidDeviceSessionMetadataStore(this),
+                metadataStore = deviceSessionMetadataStore,
                 keyStore = AndroidKeystoreSigningKeyStore(),
             )
 
@@ -44,8 +78,46 @@ class AuroraApplication : Application() {
         ) {
             // Port 8081 is a pre-session LOCAL/ADB-reverse bootstrap exchange only. Voice and
             // device-plane traffic continue on the authenticated W14 session channel (8080).
-            localGatewayBootstrapRuntime =
+            val bootstrapRuntime =
                 ProcessLocalGatewayBootstrapRuntime(GatewayBootstrapClient.physicalAdbReverse())
+            localGatewayBootstrapRuntime = bootstrapRuntime
+            localGatewayVoiceRuntimeComposition =
+                GatewayVoiceRuntimeComposition(
+                    grantSource =
+                        GatewayBootstrapGrantSource { expectedDeviceId, expectedDeviceSessionId ->
+                            when (
+                                val exchange =
+                                    bootstrapRuntime.exchangeAndHold(
+                                        expectedDeviceId,
+                                        expectedDeviceSessionId,
+                                    )
+                            ) {
+                                is GatewayBootstrapClientResult.Success -> {
+                                    val grant = bootstrapRuntime.consumeGrant()
+                                    if (grant == null) {
+                                        GatewayBootstrapClientResult.Rejected(
+                                            GatewayBootstrapClientError.PROTOCOL_MALFORMED,
+                                        )
+                                    } else {
+                                        GatewayBootstrapClientResult.Success(grant)
+                                    }
+                                }
+                                is GatewayBootstrapClientResult.Rejected -> exchange
+                            }
+                        },
+                    bindingProvider = {
+                        localGatewayBindingFrom(deviceSessionMetadataStore.load())
+                    },
+                    connector =
+                        GatewayVoiceRuntimeConnector { grant, expectedRegistrationVersion ->
+                            connectLocalGatewayVoiceIngress(grant, expectedRegistrationVersion)
+                        },
+                    reconnector =
+                        GatewayVoiceRuntimeReconnector { grant, expectedRegistrationVersion ->
+                            reconnectLocalGatewayVoiceIngress(grant, expectedRegistrationVersion)
+                        },
+                    clearRuntime = ::clearLocalGatewayVoiceRuntime,
+                )
         }
 
         presenceEngine =
@@ -67,4 +139,260 @@ class AuroraApplication : Application() {
         requireNotNull(localGatewayBootstrapRuntime) {
             "LOCAL gateway bootstrap runtime is unavailable in this environment"
         }
+
+    internal fun composeLocalVoiceIngressFromPendingBootstrap(): GatewayVoiceRuntimeCompositionResult =
+        localGatewayVoiceRuntimeComposition?.compose()
+            ?: GatewayVoiceRuntimeCompositionResult.Rejected(
+                GatewayVoiceRuntimeCompositionError.LOCAL_RUNTIME_UNAVAILABLE,
+            )
+
+    internal fun reconnectLocalVoiceIngressFromPendingBootstrap(): GatewayVoiceRuntimeCompositionResult =
+        localGatewayVoiceRuntimeComposition?.reconnect()
+            ?: GatewayVoiceRuntimeCompositionResult.Rejected(
+                GatewayVoiceRuntimeCompositionError.LOCAL_RUNTIME_UNAVAILABLE,
+            )
+
+    internal fun consumeLocalGovernedDeviceCommand(
+        commandId: String,
+    ): W15JDeviceCommandConsumptionResult =
+        activeGatewayCommandConsumer?.consume(commandId)
+            ?: W15JDeviceCommandConsumptionResult.NoEffect(
+                reason = "governed device command consumer is not composed",
+            )
+
+    private fun connectLocalGatewayVoiceIngress(
+        grant: GatewayBootstrapGrant,
+        expectedRegistrationVersion: Int?,
+    ): Boolean {
+        val client =
+            runCatching {
+                GatewayDevicePlaneClient.forPhysicalAdbReverse(
+                    config = environmentConfig,
+                    sessionClient = secureDeviceSessionClient,
+                    port = 8080,
+                )
+            }.getOrNull() ?: return false
+        val credentialProvider = OneShotGatewayCredentialProvider(grant.credential)
+        val request =
+            GatewayDevicePlaneConnectRequest(
+                gatewaySessionId = grant.gatewaySessionId,
+                tenantId = grant.tenantId,
+                actorKind = grant.actor.kind,
+                actorIdentityId = grant.actor.identityId,
+                correlationId = grant.correlationId,
+                deviceId = grant.deviceId,
+                deviceSessionId = grant.deviceSessionId,
+                credentialProvider = credentialProvider,
+                expectedRegistrationVersion = expectedRegistrationVersion,
+            )
+
+        val result =
+            try {
+                client.connect(request)
+            } catch (_: Exception) {
+                null
+            } finally {
+                // Even a failed or uncertain connection attempt must not retain the bootstrap credential.
+                credentialProvider.clear()
+            }
+        if (result !is GatewayDevicePlaneResult.Success) {
+            runCatching { client.close() }
+            return false
+        }
+
+        val projectionResult = runCatching { client.fetchVoiceProjection() }.getOrNull()
+        if (projectionResult !is GatewayDevicePlaneResult.Success) {
+            runCatching { client.close() }
+            return false
+        }
+        val installedProjection =
+            runCatching {
+                installableGatewayVoiceProjection(
+                    context = this,
+                    projection = projectionResult.value,
+                    expectedTenantId = grant.tenantId,
+                    runtimeProbe = if (BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) PhysicalAcceptanceNativeRuntimeProbe(this) else null,
+                )
+            }.getOrNull()
+        if (installedProjection == null) {
+            runCatching { client.close() }
+            return false
+        }
+
+        val actionPort = AndroidDeviceActionPorts.create(this)
+        val consumer =
+            runCatching {
+                W15JGatewayDeviceCommandConsumer.forAndroid(
+                    client = client,
+                    capabilityBridge = installedProjection.capabilityBridge,
+                    permissionContext = this,
+                    actionPort = actionPort,
+                    appIntegrationResolver = installedProjection.appIntegrationResolver,
+                )
+            }.getOrNull()
+        if (consumer == null) {
+            runCatching { client.close() }
+            return false
+        }
+        val offlineRuntime = composeOfflineRuntime(client, installedProjection, actionPort)
+        if (offlineRuntime == null) {
+            runCatching { client.close() }
+            return false
+        }
+
+        // Projection and native availability are installed before the W07 ingress becomes reachable.
+        // None of these local objects is authority; the side-effect consumer still requires the
+        // short-lived W07 authorization carried in the exact W14 claim envelope.
+        WakeVoiceRuntimeRegistry.projectionStore.replace(installedProjection.bundle)
+        activeGatewayDevicePlaneClient = client
+        activeGatewayVoiceProjection = installedProjection
+        activeGatewayCommandConsumer = consumer
+        activeGatewayOfflineRuntime = offlineRuntime
+        WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
+        return true
+    }
+
+    private fun reconnectLocalGatewayVoiceIngress(
+        grant: GatewayBootstrapGrant,
+        expectedRegistrationVersion: Int,
+    ): Boolean {
+        val existingClient = activeGatewayDevicePlaneClient
+        val client = existingClient ?: runCatching {
+            GatewayDevicePlaneClient.forPhysicalAdbReverse(
+                config = environmentConfig,
+                sessionClient = secureDeviceSessionClient,
+                port = 8080,
+            )
+        }.getOrNull() ?: return false
+        val credentialProvider = OneShotGatewayCredentialProvider(grant.credential)
+        val request =
+            GatewayDevicePlaneReconnectRequest(
+                gatewaySessionId = grant.gatewaySessionId,
+                tenantId = grant.tenantId,
+                actorKind = grant.actor.kind,
+                actorIdentityId = grant.actor.identityId,
+                correlationId = grant.correlationId,
+                deviceId = grant.deviceId,
+                deviceSessionId = grant.deviceSessionId,
+                credentialProvider = credentialProvider,
+                expectedRegistrationVersion = expectedRegistrationVersion,
+            )
+
+        val result =
+            try {
+                if (existingClient == null) {
+                    client.reconnectFromPersisted(request, deviceSessionMetadataStore.load())
+                } else {
+                    client.reconnect(request)
+                }
+            } catch (_: Exception) {
+                null
+            } finally {
+                credentialProvider.clear()
+            }
+        if (result !is GatewayDevicePlaneResult.Success) {
+            if (existingClient == null) runCatching { client.close() }
+            return false
+        }
+        activeGatewayDevicePlaneClient = client
+
+        val projectionResult = runCatching { client.fetchVoiceProjection() }.getOrNull()
+        if (projectionResult !is GatewayDevicePlaneResult.Success) return false
+        val installedProjection =
+            runCatching {
+                installableGatewayVoiceProjection(
+                    context = this,
+                    projection = projectionResult.value,
+                    expectedTenantId = grant.tenantId,
+                    runtimeProbe = if (BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) PhysicalAcceptanceNativeRuntimeProbe(this) else null,
+                )
+            }.getOrNull() ?: return false
+        val actionPort = AndroidDeviceActionPorts.create(this)
+        val consumer =
+            runCatching {
+                W15JGatewayDeviceCommandConsumer.forAndroid(
+                    client = client,
+                    capabilityBridge = installedProjection.capabilityBridge,
+                    permissionContext = this,
+                    actionPort = actionPort,
+                    appIntegrationResolver = installedProjection.appIntegrationResolver,
+                )
+            }.getOrNull() ?: return false
+        val offlineRuntime = composeOfflineRuntime(client, installedProjection, actionPort) ?: return false
+
+        WakeVoiceRuntimeRegistry.projectionStore.replace(installedProjection.bundle)
+        activeGatewayVoiceProjection = installedProjection
+        activeGatewayCommandConsumer = consumer
+        activeGatewayOfflineRuntime = offlineRuntime
+        WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
+        return true
+    }
+
+    private fun composeOfflineRuntime(
+        client: GatewayDevicePlaneClient,
+        projection: InstalledGatewayVoiceProjection,
+        actionPort: DeviceActionPort,
+    ): GatewayOfflineExecutionRuntime? =
+        runCatching {
+            GatewayOfflineExecutionRuntime.forAndroid(
+                client = client,
+                context = this,
+                capabilityBridge = projection.capabilityBridge,
+                actionPort = actionPort,
+                appIntegrationResolver = projection.appIntegrationResolver,
+            )
+        }.getOrNull()
+
+    internal fun dp5PrepareSafeDeferred(commandId: String): String {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return "OFFLINE_PREPARE_REJECTED"
+        val runtime = activeGatewayOfflineRuntime ?: return "OFFLINE_PREPARE_REJECTED"
+        return when (val result = runtime.prepareSafeDeferred(commandId)) {
+            is GatewayOfflinePrepareResult.Rejected -> "OFFLINE_PREPARE_REJECTED"
+            is GatewayOfflinePrepareResult.Prepared ->
+                when (result.decision) {
+                    is OfflineEnqueueDecision.Queued -> "OFFLINE_PREPARE_QUEUED_PASS"
+                    is OfflineEnqueueDecision.Duplicate -> "OFFLINE_PREPARE_DUPLICATE_PASS"
+                    is OfflineEnqueueDecision.Rejected -> "OFFLINE_PREPARE_REJECTED"
+                }
+        }
+    }
+
+    internal fun dp5DrainOffline(): String {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return "OFFLINE_DRAIN_REJECTED"
+        val runtime = activeGatewayOfflineRuntime ?: return "OFFLINE_DRAIN_REJECTED"
+        val dispositions = runtime.drain().map { it.disposition.name }
+        return "OFFLINE_DRAIN_${if (dispositions.isEmpty()) "EMPTY" else dispositions.joinToString("_")}_PASS"
+    }
+
+    internal fun dp5OfflineSnapshot(): String {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return "OFFLINE_SNAPSHOT_REJECTED"
+        val runtime = activeGatewayOfflineRuntime ?: return "OFFLINE_SNAPSHOT_REJECTED"
+        val states = runtime.snapshot().map { it.state.name }
+        return "OFFLINE_SNAPSHOT_${if (states.isEmpty()) "EMPTY" else states.joinToString("_")}_PASS"
+    }
+
+    internal fun dp5RevokeCurrentSession(): Boolean {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return false
+        val client = activeGatewayDevicePlaneClient ?: return false
+        return client.revokeCurrentSession("dp5:physical-session-revoke") is GatewayDevicePlaneResult.Success
+    }
+
+    internal fun dp5RotateCurrentSession(newDeviceSessionId: String): Boolean {
+        if (!BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) return false
+        val client = activeGatewayDevicePlaneClient ?: return false
+        return client.rotateCurrentSession(
+            newDeviceSessionId = newDeviceSessionId,
+            reasonReference = "dp5:physical-session-rotate",
+        ) is GatewayDevicePlaneResult.Success
+    }
+
+    private fun clearLocalGatewayVoiceRuntime() {
+        WakeVoiceRuntimeRegistry.clearAuthorityIngress()
+        WakeVoiceRuntimeRegistry.projectionStore.clear()
+        activeGatewayCommandConsumer = null
+        activeGatewayOfflineRuntime = null
+        activeGatewayVoiceProjection = null
+        runCatching { activeGatewayDevicePlaneClient?.close() }
+        activeGatewayDevicePlaneClient = null
+    }
 }

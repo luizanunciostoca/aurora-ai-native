@@ -2,6 +2,7 @@ package ai.aurora.device.voice
 
 import android.Manifest
 import android.app.Activity
+import android.os.Looper
 import ai.aurora.device.AuroraApplication
 import ai.aurora.device.permission.AndroidRuntimePermissionProbe
 import ai.aurora.device.permission.PermissionConsentBroker
@@ -40,7 +41,20 @@ object WakeVoiceRuntimeRegistry {
         transcriptConfidence: Double?,
         nowMs: Long = System.currentTimeMillis(),
     ): WakeVoiceRoute {
-        val catalog = GovernedVoiceCommandCatalog(projectionStore::current, nowMs = { nowMs }).snapshot()
+        var catalog = GovernedVoiceCommandCatalog(projectionStore::current, nowMs = { nowMs }).snapshot()
+        if (shouldRecoverGovernedVoiceCatalog(catalog) && Looper.myLooper() != Looper.getMainLooper()) {
+            // Process death intentionally clears process-local projection/ingress objects. A fresh
+            // utterance may recompose that transport state once from persisted W14 metadata plus a
+            // new authenticated bootstrap grant. This is transport recovery only: no command has
+            // been submitted yet, and failure leaves the normal fail-closed conversation fallback.
+            val app = activity.application as? AuroraApplication
+            val recovered =
+                runCatching { app?.reconnectLocalVoiceIngressFromPendingBootstrap() }
+                    .getOrNull() is GatewayVoiceRuntimeCompositionResult.Composed
+            if (recovered) {
+                catalog = GovernedVoiceCommandCatalog(projectionStore::current, nowMs = { nowMs }).snapshot()
+            }
+        }
         if (catalog !is GovernedVoiceCatalogResult.Ready) {
             return WakeVoiceRoute.ConversationFallback(
                 WakeVoiceFallbackReason.COMMAND_CATALOG_UNAVAILABLE,

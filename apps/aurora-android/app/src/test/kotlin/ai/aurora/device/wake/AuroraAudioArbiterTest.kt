@@ -62,4 +62,17 @@ class AuroraAudioArbiterTest {
         assertTrue(AudioOwner.HOTWORD_MONITOR in arbiter.snapshot().owners)
         assertFalse(AudioOwner.STT in arbiter.snapshot().owners)
     }
+
+    @Test
+    fun `logical audio owners are non reentrant`() {
+        AudioOwner.entries.forEach { owner ->
+            val arbiter = AuroraAudioArbiter()
+            assertTrue("first $owner lease should be acquired", arbiter.tryAcquire(owner))
+            assertFalse("duplicate $owner lease must be rejected", arbiter.tryAcquire(owner))
+            assertEquals(setOf(owner), arbiter.snapshot().owners)
+
+            arbiter.release(owner)
+            assertTrue("$owner can be acquired again after release", arbiter.tryAcquire(owner))
+        }
+    }
 }

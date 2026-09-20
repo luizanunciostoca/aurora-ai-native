@@ -1,0 +1,92 @@
+name: Android Preview APK
+
+on:
+  pull_request:
+    branches:
+      - wave/15-interactive-v017-foundation
+    paths:
+      - 'apps/aurora-android/**'
+      - '.github/workflows/android-preview-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-apk:
+    name: preview-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+
+      - name: Set up Java
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '9.4.1'
+          cache-read-only: true
+
+      - name: Install stable Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK_ROOT"
+          SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Build LOCAL debug preview
+        shell: bash
+        env:
+          AURORA_ANDROID_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AURORA_HOST_SHA: UNBOUND_PREVIEW
+          AURORA_RELEASE_TUPLE_ID: W15_UI_PREVIEW_ONLY
+          AURORA_LOCAL_GATEWAY_ORIGIN: http://127.0.0.1:8080
+        run: >-
+          gradle --no-daemon --console=plain -p apps/aurora-android
+          :app:testLocalDebugUnitTest
+          :app:assembleLocalDebug
+
+      - name: Record preview evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='apps/aurora-android/app/build/outputs/apk/local/debug/app-local-debug.apk'
+          test -f "$APK"
+          mkdir -p /tmp/aurora-preview
+          cp "$APK" /tmp/aurora-preview/aurora-w15-preview-local-debug.apk
+          sha256sum /tmp/aurora-preview/aurora-w15-preview-local-debug.apk \
+            | tee /tmp/aurora-preview/aurora-w15-preview-local-debug.apk.sha256
+          BUILD_TOOLS="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}/build-tools/36.0.0"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs \
+            /tmp/aurora-preview/aurora-w15-preview-local-debug.apk \
+            | tee /tmp/aurora-preview/apksigner-verification.txt
+          {
+            echo "source_sha=${{ github.event.pull_request.head.sha || github.sha }}"
+            echo 'variant=localDebug'
+            echo 'signing_profile=DEBUG_FALLBACK'
+            echo 'release_tuple=W15_UI_PREVIEW_ONLY'
+            echo 'host_sha=UNBOUND_PREVIEW'
+            echo 'gateway_origin=http://127.0.0.1:8080'
+            echo 'dp5_candidate_replacement=false'
+          } | tee /tmp/aurora-preview/preview-metadata.txt
+
+      - name: Upload preview APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aurora-w15-preview-${{ github.event.pull_request.head.sha || github.sha }}
+          path: /tmp/aurora-preview
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0

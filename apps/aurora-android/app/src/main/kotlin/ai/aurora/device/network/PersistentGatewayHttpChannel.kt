@@ -30,6 +30,20 @@ internal class GatewayTransportException(
     cause: Throwable? = null,
 ) : Exception(failure.name, cause)
 
+internal fun gatewayIoFailure(
+    requestWriteStarted: Boolean,
+    cause: Throwable,
+): GatewayTransportException =
+    GatewayTransportException(
+        if (requestWriteStarted) {
+            GatewayTransportFailure.TRANSPORT_UNCERTAIN
+        } else {
+            GatewayTransportFailure.CONNECTION_UNAVAILABLE
+        },
+        requestMayHaveReachedPeer = requestWriteStarted,
+        cause = cause,
+    )
+
 internal interface GatewayHttpChannel : AutoCloseable {
     @Throws(GatewayTransportException::class)
     fun post(path: String, body: String): GatewayHttpResponse
@@ -97,7 +111,7 @@ internal class PersistentGatewayHttpChannel private constructor(
             )
         }
 
-        var wroteRequest = false
+        var requestWriteStarted = false
         try {
             val requestHead = buildString {
                 append("POST ")
@@ -116,10 +130,14 @@ internal class PersistentGatewayHttpChannel private constructor(
                 append("\r\n")
             }.toByteArray(StandardCharsets.US_ASCII)
 
+            // Once the first socket write is attempted, an I/O failure is conservatively
+            // uncertain. BufferedOutputStream may flush while write() is still in progress, so
+            // waiting until flush() returns can incorrectly classify a partially delivered request
+            // as CONNECTION_UNAVAILABLE and invite unsafe retry behavior upstream.
+            requestWriteStarted = true
             output.write(requestHead)
             output.write(bodyBytes)
             output.flush()
-            wroteRequest = true
             requests += 1
 
             val statusLine = readAsciiLine(input, limits.maxHeaderBytes)
@@ -157,15 +175,7 @@ internal class PersistentGatewayHttpChannel private constructor(
             throw error
         } catch (error: Exception) {
             close()
-            throw GatewayTransportException(
-                if (wroteRequest) {
-                    GatewayTransportFailure.TRANSPORT_UNCERTAIN
-                } else {
-                    GatewayTransportFailure.CONNECTION_UNAVAILABLE
-                },
-                requestMayHaveReachedPeer = wroteRequest,
-                cause = error,
-            )
+            throw gatewayIoFailure(requestWriteStarted, error)
         }
     }
 
