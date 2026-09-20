@@ -240,23 +240,31 @@ async function bootstrapAndroid(serial, reference) {
   adb(serial, ['shell', 'input', 'tap', String(button.x), String(button.y)]);
 
   // The Host HTTP server runs in this same Node process. Yield the event loop after
-  // the tap so Android can complete the bootstrap exchange before any sync ADB polling.
+  // the tap so Android can complete the bootstrap exchange. Technical success is
+  // verified from the W14 session binding, not from foreground UI text.
   await delay(1200);
-  for (let index = 0; index < 16; index += 1) {
-    xml = uiXml(serial, 'dp5-life004-inprocess-result');
-    if (
-      xml.includes(
-        'Canal W14 autenticado pronto; comandos de voz seguem para avaliação W07 governada.',
-      )
-    ) {
-      return;
+}
+
+async function waitForSessionRebind(serial, material, previousConnectionId) {
+  for (let index = 0; index < 20; index += 1) {
+    await delay(300);
+    try {
+      const session = readSession(serial);
+      if (
+        session.tenantId === material.tenantId &&
+        session.deviceSessionId === material.deviceSessionId &&
+        session.deviceId === material.deviceId &&
+        session.connectionId !== previousConnectionId &&
+        Number.isSafeInteger(session.registrationVersion) &&
+        session.registrationVersion > 0
+      ) {
+        return session;
+      }
+    } catch {
+      // Preferences can be transiently unavailable while the bootstrap exchange commits.
     }
-    await delay(250);
   }
-  if (/Bootstrap rejeitado|composição bloqueada|indisponível/u.test(xml)) {
-    throw new Error('Android bootstrap rejected after connect timeout');
-  }
-  throw new Error('Android bootstrap did not become ready');
+  throw new Error('Android W14 session did not rebind to the fresh Host');
 }
 
 function readSession(serial) {
@@ -450,20 +458,15 @@ async function executeLife004() {
     recordPhase('BOOTSTRAP_STAGED', { hostInstanceId: address.hostInstanceId });
 
     const serial = serialFromAdb();
-    await bootstrapAndroid(serial, bootstrap.value.bootstrapReference);
-    recordPhase('BOOTSTRAP_COMPOSED', { hostInstanceId: address.hostInstanceId });
-    const session = readSession(serial);
     const material = provider.loadAndValidateW15JDp5Material(MATERIAL);
-
-    if (
-      session.tenantId !== material.tenantId ||
-      session.deviceSessionId !== material.deviceSessionId ||
-      session.deviceId !== material.deviceId ||
-      !Number.isSafeInteger(session.registrationVersion) ||
-      session.registrationVersion <= 0
-    ) {
-      throw new Error('Android session binding does not match fresh DP5 material');
-    }
+    const previousSession = readSession(serial);
+    await bootstrapAndroid(serial, bootstrap.value.bootstrapReference);
+    const session = await waitForSessionRebind(serial, material, previousSession.connectionId);
+    recordPhase('BOOTSTRAP_COMPOSED', {
+      hostInstanceId: address.hostInstanceId,
+      connectionId: session.connectionId,
+      gatewaySessionId: session.gatewaySessionId,
+    });
 
     campaign('start', 'DP5-LIFE-004');
     const attempt = latestAttemptDir();
