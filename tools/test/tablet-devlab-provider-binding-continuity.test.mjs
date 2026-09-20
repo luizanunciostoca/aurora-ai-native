@@ -10,41 +10,34 @@ const source = readFileSync(
   'utf8',
 );
 
+function expectSource(value) {
+  assert.equal(source.includes(value), true);
+}
+
 test('bound W14 provider refresh preserves the registered actor identity', () => {
-  assert.match(
-    source,
-    /secure_regular_file "\$MATERIAL" \|\| fail "existing DP5 material is insecure"/u,
-  );
-  assert.match(source, /def prior_bound_actor\(path, current_binding\):/u);
-  assert.match(source, /current_binding\['mode'\] != 'BOUND'/u);
-  assert.match(
-    source,
-    /previous\.get\('tenantId'\) != current_binding\['tenantId'\]/u,
-  );
-  assert.match(
-    source,
-    /previous\.get\('deviceId'\) != current_binding\['deviceId'\]/u,
-  );
-  assert.match(
-    source,
-    /previous\.get\('deviceSessionId'\) != current_binding\['deviceSessionId'\]/u,
-  );
-  assert.match(source, /previous\.get\('authorizesExecution'\) is not False/u);
-  assert.match(source, /previous\.get\('canGrantPermission'\) is not False/u);
-  assert.match(source, /actor_identity_id = previous\.get\('actorIdentityId'\)/u);
-  assert.match(source, /'actorIdentityId': actor_identity_id/u);
-  assert.match(source, /refusing identity drift/u);
+  const required = [
+    'secure_regular_file "$MATERIAL" || fail "existing DP5 material is insecure"',
+    'def prior_bound_actor(path, current_binding):',
+    "current_binding['mode'] != 'BOUND'",
+    "previous.get('tenantId') != current_binding['tenantId']",
+    "previous.get('deviceId') != current_binding['deviceId']",
+    "previous.get('deviceSessionId') != current_binding['deviceSessionId']",
+    "previous.get('authorizesExecution') is not False",
+    "previous.get('canGrantPermission') is not False",
+    "actor_identity_id = previous.get('actorIdentityId')",
+    "'actorIdentityId': actor_identity_id",
+    'refusing identity drift',
+  ];
+  for (const value of required) expectSource(value);
 });
 
-test('fresh install still creates a new bounded actor while consent stays non-authoritative', () => {
-  assert.match(
-    source,
-    /if actor_identity_id is None:\n    actor_identity_id = f'idn_\{crockford26\(\)\}'/u,
-  );
-  assert.match(
-    source,
-    /'operatorApprovalReference': consent\['approvalReference'\]/u,
-  );
-  assert.match(source, /'authorizesExecution': False/u);
-  assert.match(source, /'canGrantPermission': False/u);
+test('fresh install creates a new actor while consent remains non-authoritative', () => {
+  const required = [
+    'if actor_identity_id is None:',
+    "actor_identity_id = f'idn_{crockford26()}'",
+    "'operatorApprovalReference': consent['approvalReference']",
+    "'authorizesExecution': False",
+    "'canGrantPermission': False",
+  ];
+  for (const value of required) expectSource(value);
 });
