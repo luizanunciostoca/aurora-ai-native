@@ -14,6 +14,8 @@ const HOST = join(DEVLAB, 'worktrees', 'host');
 const STATE = join(DEVLAB, 'state');
 const MATERIAL = join(DEVLAB, 'config', 'w15j-dp5-material.json');
 const EVIDENCE = join(DEVLAB, 'evidence', 'w15j-dp5');
+const PHASE_FILE = join(STATE, 'dp5-life004-phase.json');
+const MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS = 240;
 
 export function canonicalJson(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
@@ -153,6 +155,15 @@ function adb(serial, args, options = {}) {
   return run('adb', ['-s', serial, ...args], options);
 }
 
+function recordPhase(phase, detail = {}) {
+  writeFileSync(
+    PHASE_FILE,
+    `${JSON.stringify({ phase, recordedAt: new Date().toISOString(), ...detail }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+  chmodSync(PHASE_FILE, 0o600);
+}
+
 function serialFromAdb() {
   const result = run('adb', ['devices']);
   const serial = result.stdout
@@ -172,6 +183,7 @@ function nodeBounds(xml, matcher) {
     return {
       x: Math.floor((Number(bounds[1]) + Number(bounds[3])) / 2),
       y: Math.floor((Number(bounds[2]) + Number(bounds[4])) / 2),
+      tag,
     };
   }
   throw new Error('required UI node not found');
@@ -200,10 +212,16 @@ function bootstrapAndroid(serial, reference) {
   }
   if (!xml.includes('Bootstrap LOCAL')) throw new Error('Bootstrap LOCAL screen unavailable');
   const field = nodeBounds(xml, (tag) => /class="android\.widget\.EditText"/u.test(tag));
-  const button = nodeBounds(xml, (tag) => /text="Conectar runtime governado"/u.test(tag));
   adb(serial, ['shell', 'input', 'tap', String(field.x), String(field.y)]);
   adb(serial, ['shell', 'for i in $(seq 1 180); do input keyevent KEYCODE_DEL; done']);
   adb(serial, ['shell', 'input', 'text', reference]);
+  run('sleep', ['0.25']);
+  xml = uiXml(serial, 'dp5-life004-inprocess-filled');
+  if (!xml.includes(reference)) throw new Error('bootstrap reference was not entered');
+  const button = nodeBounds(
+    xml,
+    (tag) => /text="Conectar runtime governado"/u.test(tag) && /enabled="true"/u.test(tag),
+  );
   adb(serial, ['shell', 'input', 'tap', String(button.x), String(button.y)]);
   for (let index = 0; index < 30; index += 1) {
     xml = uiXml(serial, 'dp5-life004-inprocess-result');
@@ -349,11 +367,20 @@ function sha256(buffer) {
 }
 
 async function executeLife004() {
+  recordPhase('PRECHECK');
   const hostSha = assertCleanHostSha();
   run('bash', [join(ROOT, 'tools/tablet-devlab/verify-host-prebuild.sh')]);
+  recordPhase('PREBUILD_VERIFIED', { hostSha });
   run('bash', [join(ROOT, 'tools/tablet-devlab/prepare-dp5-provider.sh')], {
     env: { ...process.env, AURORA_DP5_EFFECT_APPROVED: 'YES' },
   });
+  recordPhase('PROVIDER_PREPARED');
+  run('python', [
+    join(ROOT, 'tools/tablet-devlab/check-bootstrap-principal-age.py'),
+    MATERIAL,
+    String(MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS),
+  ]);
+  recordPhase('BOOTSTRAP_PRINCIPAL_FRESH');
   stopExistingHost();
 
   const databaseUrl = readEnvValue(join(STATE, 'postgres.env'), 'AURORA_W15J_DATABASE_URL');
@@ -375,7 +402,7 @@ async function executeLife004() {
       gatewayPort: 8080,
       bootstrapPort: 8081,
       bootstrapCredentialTtlMs: 10 * 60_000,
-      bootstrapMaxPrincipalAgeMs: 10 * 60_000,
+      bootstrapMaxPrincipalAgeMs: MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS * 1000,
     },
     input.dependencies,
   );
@@ -391,17 +418,21 @@ async function executeLife004() {
     }
     console.log(`W03_EXISTING_STATE_COMPATIBLE=${seed.executionRef}`);
   }
+  recordPhase('W03_RECONCILED');
 
   let started = false;
   try {
     const address = await host.start();
     started = true;
+    recordPhase('HOST_STARTED', { hostInstanceId: address.hostInstanceId });
     const bootstrap = host.stageBootstrap(input.principal);
     if (!bootstrap.ok)
       throw new Error(`bootstrap stage failed: ${bootstrap.error?.code ?? 'unknown'}`);
+    recordPhase('BOOTSTRAP_STAGED', { hostInstanceId: address.hostInstanceId });
 
     const serial = serialFromAdb();
     bootstrapAndroid(serial, bootstrap.value.bootstrapReference);
+    recordPhase('BOOTSTRAP_COMPOSED', { hostInstanceId: address.hostInstanceId });
     const session = readSession(serial);
     const material = provider.loadAndValidateW15JDp5Material(MATERIAL);
 
@@ -417,6 +448,7 @@ async function executeLife004() {
 
     campaign('start', 'DP5-LIFE-004');
     const attempt = latestAttemptDir();
+    recordPhase('CAMPAIGN_STARTED', { attempt });
     const before = JSON.parse(readFileSync(join(attempt, 'before', 'snapshot.json'), 'utf8'));
     if ((before.captureFailures ?? []).length !== 0) {
       throw new Error('baseline capture incomplete; physical action withheld');
@@ -435,12 +467,14 @@ async function executeLife004() {
     ) {
       throw new Error(`governed dispatch rejected: ${dispatch.code ?? 'protocol'}`);
     }
+    recordPhase('GOVERNED_DISPATCH_READY', { attempt });
 
     const prepare = physicalControl('OFFLINE_PREPARE', material.commandId);
     writeFileSync(join(attempt, 'offline-prepare.txt'), prepare);
     if (!prepare.includes('OFFLINE_PREPARE_QUEUED_PASS')) {
       throw new Error('OFFLINE_PREPARE did not queue safe deferred work');
     }
+    recordPhase('SAFE_DEFERRED_QUEUED', { attempt });
 
     const snapshot = physicalControl('OFFLINE_SNAPSHOT');
     writeFileSync(join(attempt, 'offline-snapshot-before.txt'), snapshot);
@@ -466,6 +500,7 @@ async function executeLife004() {
     }).stdout.trim();
     writeFileSync(transitionPath, `pid_after_force_stop=${pidStopped}\n`, { flag: 'a' });
     if (pidStopped) throw new Error('Aurora process remained alive after force-stop');
+    recordPhase('PROCESS_STOPPED', { attempt });
 
     const relaunch = adb(serial, ['shell', 'am', 'start', '-W', '-n', MAIN]).stdout;
     writeFileSync(join(attempt, 'relaunch.txt'), relaunch);
@@ -474,6 +509,7 @@ async function executeLife004() {
     const pidAfter = adb(serial, ['shell', 'pidof', PACKAGE], { allowFailure: true }).stdout.trim();
     if (!pidAfter || pidAfter === pidBefore) throw new Error('Aurora relaunch PID is not fresh');
     writeFileSync(transitionPath, `pid_after_relaunch=${pidAfter}\n`, { flag: 'a' });
+    recordPhase('PROCESS_RELAUNCHED', { attempt });
 
     const afterQueue = queueBytes(serial);
     const afterQueuePath = join(attempt, 'offline-queue-after.xml');
@@ -535,6 +571,7 @@ async function executeLife004() {
       { mode: 0o600 },
     );
 
+    recordPhase('EVIDENCE_RECORDED_NOT_VERDICT', { attempt });
     console.log('DP5_LIFE_004_ACTION=RECORDED_NOT_VERDICT');
     console.log(`attempt=${attempt}`);
     console.log(`host_sha=${hostSha}`);
@@ -550,9 +587,9 @@ async function executeLife004() {
 const invoked = process.argv[1] ? pathToFileURL(process.argv[1]).href : '';
 if (import.meta.url === invoked) {
   executeLife004().catch((error) => {
-    console.error(
-      `DP5_LIFE_004_INPROCESS_ERROR=${error instanceof Error ? error.message : String(error)}`,
-    );
+    const message = error instanceof Error ? error.message : String(error);
+    recordPhase('ERROR', { error: message });
+    console.error(`DP5_LIFE_004_INPROCESS_ERROR=${message}`);
     process.exitCode = 2;
   });
 }

@@ -156,3 +156,17 @@ test('LIFE-004 bootstrap enters through exported MainActivity', async () => {
     true,
   );
 });
+
+test('LIFE-004 enforces canonical bootstrap freshness and persistent phase telemetry', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const source = await readFile(
+    new URL('../tablet-devlab/dp5-life004-inprocess.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.equal(source.includes('MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS = 240'), true);
+  assert.equal(source.includes("recordPhase('BOOTSTRAP_PRINCIPAL_FRESH')"), true);
+  assert.equal(source.includes("recordPhase('BOOTSTRAP_COMPOSED'"), true);
+  assert.equal(source.includes("recordPhase('ERROR'"), true);
+  assert.equal(source.includes('bootstrap reference was not entered'), true);
+  assert.equal(source.includes('/enabled="true"/u.test(tag)'), true);
+});
