@@ -15,12 +15,13 @@ secure_regular_file() {
 
 [[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
 [[ -t 0 && -t 1 ]] || fail "an interactive physical-operator TTY is required"
-for cmd in python sha256sum stat git; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
+for cmd in python sha256sum stat git adb; do command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"; done
 
 DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 STATE_DIR="$DEVLAB_ROOT/state"
 WORKTREE_STATE="$STATE_DIR/worktrees.txt"
 RUNTIME_CANDIDATE="$STATE_DIR/w15j-runtime-host-candidate.txt"
+RUNTIME_ANDROID_CANDIDATE="$STATE_DIR/w15j-runtime-android-candidate.txt"
 CONSENT="$STATE_DIR/dp5-effect-consent.json"
 ANDROID_DIR="$DEVLAB_ROOT/worktrees/android"
 HOST_DIR="$DEVLAB_ROOT/worktrees/host"
@@ -36,6 +37,28 @@ for sha in "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA"; do
   [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "worktree tuple contains malformed SHA"
 done
 
+RUNTIME_ANDROID_SHA="$ANDROID_SHA"
+RUNTIME_APK_SHA=""
+if [[ -e "$RUNTIME_ANDROID_CANDIDATE" ]]; then
+  secure_regular_file "$RUNTIME_ANDROID_CANDIDATE" || fail "runtime Android candidate is insecure"
+  [[ "$(awk -F= '$1=="kind" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")" == "W15J_RUNTIME_ANDROID_CANDIDATE_V1" ]] ||
+    fail "runtime Android candidate kind mismatch"
+  [[ "$(awk -F= '$1=="authorizes_execution" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")" == "false" ]] ||
+    fail "runtime Android candidate cannot authorize execution"
+  [[ "$(awk -F= '$1=="physical_acceptance" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")" == "false" ]] ||
+    fail "runtime Android candidate cannot claim physical acceptance"
+  RUNTIME_ANDROID_SHA="$(awk -F= '$1=="android_sha" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")"
+  RUNTIME_APK_SHA="$(awk -F= '$1=="apk_sha256" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")"
+else
+  [[ "$(git -C "$ANDROID_DIR" rev-parse HEAD)" == "$ANDROID_SHA" ]] ||
+    fail "runtime Android candidate is required when Android differs from the historical tuple"
+  SIGNING_IDENTITY="$DEVLAB_ROOT/artifacts/FINAL_SIGNING_IDENTITY.txt"
+  secure_regular_file "$SIGNING_IDENTITY" || fail "final signing identity is required"
+  RUNTIME_APK_SHA="$(sed -n 's/^final_apk_sha256=//p' "$SIGNING_IDENTITY")"
+fi
+[[ "$RUNTIME_ANDROID_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "runtime Android candidate SHA is malformed"
+[[ "$RUNTIME_APK_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "runtime Android APK SHA is malformed"
+
 RUNTIME_HOST_SHA="$HOST_SHA"
 if [[ -e "$RUNTIME_CANDIDATE" ]]; then
   secure_regular_file "$RUNTIME_CANDIDATE" || fail "runtime Host candidate is insecure"
@@ -49,13 +72,22 @@ if [[ -e "$RUNTIME_CANDIDATE" ]]; then
 fi
 [[ "$RUNTIME_HOST_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "runtime Host candidate SHA is malformed"
 
-for pair in "$MAIN_DIR:$MAIN_SHA" "$ANDROID_DIR:$ANDROID_SHA" "$HOST_DIR:$RUNTIME_HOST_SHA"; do
+for pair in "$MAIN_DIR:$MAIN_SHA" "$ANDROID_DIR:$RUNTIME_ANDROID_SHA" "$HOST_DIR:$RUNTIME_HOST_SHA"; do
   path="${pair%%:*}"
   expected="${pair##*:}"
   [[ -d "$path/.git" || -f "$path/.git" ]] || fail "required exact worktree missing: $path"
   [[ "$(git -C "$path" rev-parse HEAD)" == "$expected" ]] || fail "worktree drift detected: $path"
   [[ -z "$(git -C "$path" status --porcelain)" ]] || fail "worktree is dirty: $path"
 done
+
+mapfile -t DEVICES < <(adb devices | awk 'NR>1 && $2=="device" {print $1}')
+[[ "${#DEVICES[@]}" -eq 1 ]] || fail "exactly one authorized self-ADB device is required"
+SERIAL="${DEVICES[0]}"
+mapfile -t PACKAGE_PATHS < <(adb -s "$SERIAL" shell pm path ai.aurora.device.local 2>/dev/null | tr -d '\r' | sed -n 's/^package://p')
+[[ "${#PACKAGE_PATHS[@]}" -eq 1 ]] || fail "exactly one installed Aurora base APK is required"
+[[ "${PACKAGE_PATHS[0]}" == */base.apk ]] || fail "installed Aurora package is split/non-canonical"
+INSTALLED_APK_SHA="$(adb -s "$SERIAL" shell sha256sum "${PACKAGE_PATHS[0]}" | tr -d '\r' | awk '{print $1}')"
+[[ "$INSTALLED_APK_SHA" == "$RUNTIME_APK_SHA" ]] || fail "installed Aurora APK does not match the runtime Android candidate"
 
 CHALLENGE="$(python - <<'PY'
 import secrets
@@ -70,8 +102,11 @@ Historical candidate tuple:
   main         $MAIN_SHA
   android      $ANDROID_SHA
   host         $HOST_SHA
+Runtime Android:
+  runtime android $RUNTIME_ANDROID_SHA
+  runtime apk     $RUNTIME_APK_SHA
 Runtime Host:
-  runtime host $RUNTIME_HOST_SHA
+  runtime host    $RUNTIME_HOST_SHA
 
 Scope: one governed media-volume step-up plus one governed Aurora self-launch, only after current W02/W07 authority.
 This consent is not policy authority, not an execution authorization, not retry permission,
@@ -88,7 +123,7 @@ mkdir -p "$STATE_DIR"
 chmod 700 "$STATE_DIR"
 umask 077
 
-python - "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" "$RUNTIME_HOST_SHA" <<'PY'
+python - "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$RUNTIME_ANDROID_SHA" "$RUNTIME_APK_SHA" "$HOST_SHA" "$RUNTIME_HOST_SHA" <<'PY'
 import base64
 import json
 import os
@@ -96,18 +131,20 @@ import secrets
 import sys
 from datetime import datetime, timedelta, timezone
 
-path, main_sha, android_sha, host_sha, runtime_host_sha = sys.argv[1:]
+path, main_sha, android_sha, runtime_android_sha, runtime_apk_sha, host_sha, runtime_host_sha = sys.argv[1:]
 now = datetime.now(timezone.utc)
 expires = now + timedelta(minutes=10)
 iso = lambda value: value.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
 approval = 'apr_' + base64.urlsafe_b64encode(secrets.token_bytes(18)).decode('ascii').rstrip('=')
 record = {
     'kind': 'W15J_DP5_PHYSICAL_EFFECT_CONSENT',
-    'schemaVersion': '1.1.0',
+    'schemaVersion': '1.2.0',
     'issuedAt': iso(now),
     'expiresAt': iso(expires),
     'mainSha': main_sha,
     'androidSha': android_sha,
+    'runtimeAndroidSha': runtime_android_sha,
+    'runtimeApkSha256': runtime_apk_sha,
     'hostSha': host_sha,
     'runtimeHostSha': runtime_host_sha,
     'scope': 'BOUNDED_VOLUME_STEP_AND_AURORA_SELF_LAUNCH',

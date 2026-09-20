@@ -33,6 +33,7 @@ DB_ENV="$STATE_DIR/postgres.env"
 PROVIDER_STATE="$STATE_DIR/provider.txt"
 WORKTREE_STATE="$STATE_DIR/worktrees.txt"
 RUNTIME_CANDIDATE="$STATE_DIR/w15j-runtime-host-candidate.txt"
+RUNTIME_ANDROID_CANDIDATE="$STATE_DIR/w15j-runtime-android-candidate.txt"
 CONSENT="$STATE_DIR/dp5-effect-consent.json"
 PACKAGE_ID="${AURORA_PACKAGE_ID:-ai.aurora.device.local}"
 BINDING_XML="$STATE_DIR/.android-w14-binding-$$.xml"
@@ -53,6 +54,28 @@ HOST_SHA="$(awk -F= '$1 == "host" {print $2}' "$WORKTREE_STATE")"
 for sha in "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA"; do
   [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || fail "worktree tuple contains malformed SHA"
 done
+
+RUNTIME_ANDROID_SHA="$ANDROID_SHA"
+RUNTIME_APK_SHA=""
+if [[ -e "$RUNTIME_ANDROID_CANDIDATE" ]]; then
+  secure_regular_file "$RUNTIME_ANDROID_CANDIDATE" || fail "runtime Android candidate is insecure"
+  [[ "$(awk -F= '$1=="kind" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")" == "W15J_RUNTIME_ANDROID_CANDIDATE_V1" ]] ||
+    fail "runtime Android candidate kind mismatch"
+  [[ "$(awk -F= '$1=="authorizes_execution" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")" == "false" ]] ||
+    fail "runtime Android candidate cannot authorize execution"
+  [[ "$(awk -F= '$1=="physical_acceptance" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")" == "false" ]] ||
+    fail "runtime Android candidate cannot claim physical acceptance"
+  RUNTIME_ANDROID_SHA="$(awk -F= '$1=="android_sha" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")"
+  RUNTIME_APK_SHA="$(awk -F= '$1=="apk_sha256" {print $2}' "$RUNTIME_ANDROID_CANDIDATE")"
+else
+  [[ "$(git -C "$DEVLAB_ROOT/worktrees/android" rev-parse HEAD)" == "$ANDROID_SHA" ]] ||
+    fail "runtime Android candidate is required when Android differs from the historical tuple"
+  RUNTIME_APK_SHA="$(sed -n 's/^final_apk_sha256=//p' "$SIGNING_IDENTITY")"
+fi
+[[ "$RUNTIME_ANDROID_SHA" =~ ^[0-9a-f]{40}$ ]] || fail "runtime Android candidate SHA is malformed"
+[[ "$RUNTIME_APK_SHA" =~ ^[0-9a-f]{64}$ ]] || fail "runtime Android APK SHA is malformed"
+[[ "$(git -C "$DEVLAB_ROOT/worktrees/android" rev-parse HEAD)" == "$RUNTIME_ANDROID_SHA" ]] || fail "android worktree drifted"
+[[ -z "$(git -C "$DEVLAB_ROOT/worktrees/android" status --porcelain)" ]] || fail "android worktree is dirty"
 
 RUNTIME_HOST_SHA="$HOST_SHA"
 if [[ -e "$RUNTIME_CANDIDATE" ]]; then
@@ -78,12 +101,17 @@ trap cleanup_binding EXIT
 mapfile -t DEVICES < <(adb devices | awk 'NR>1 && $2=="device" {print $1}')
 [[ "${#DEVICES[@]}" -eq 1 ]] || fail "exactly one authorized self-ADB device is required"
 SERIAL="${DEVICES[0]}"
+mapfile -t PACKAGE_PATHS < <(adb -s "$SERIAL" shell pm path "$PACKAGE_ID" 2>/dev/null | tr -d '\r' | sed -n 's/^package://p')
+[[ "${#PACKAGE_PATHS[@]}" -eq 1 ]] || fail "exactly one installed Aurora base APK is required"
+[[ "${PACKAGE_PATHS[0]}" == */base.apk ]] || fail "installed Aurora package is split/non-canonical"
+INSTALLED_APK_SHA="$(adb -s "$SERIAL" shell sha256sum "${PACKAGE_PATHS[0]}" | tr -d '\r' | awk '{print $1}')"
+[[ "$INSTALLED_APK_SHA" == "$RUNTIME_APK_SHA" ]] || fail "installed Aurora APK does not match the runtime Android candidate"
 QEMU="$(adb -s "$SERIAL" shell getprop ro.kernel.qemu | tr -d '\r\n')"
 [[ "$QEMU" != "1" && "$SERIAL" != emulator-* ]] || fail "physical tablet required"
 adb -s "$SERIAL" exec-out run-as "$PACKAGE_ID" sh -c 'if [ -f shared_prefs/aurora_device_session_metadata.xml ]; then cat shared_prefs/aurora_device_session_metadata.xml; else printf "<map />\n"; fi' >"$BINDING_XML" || fail "could not read Android W14 binding state"
 chmod 600 "$BINDING_XML"
 
-python - "$MATERIAL" "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$HOST_SHA" "$RUNTIME_HOST_SHA" "$BINDING_XML" "$SIGNER_CERT_SHA" <<'PY'
+python - "$MATERIAL" "$CONSENT" "$MAIN_SHA" "$ANDROID_SHA" "$RUNTIME_ANDROID_SHA" "$RUNTIME_APK_SHA" "$HOST_SHA" "$RUNTIME_HOST_SHA" "$BINDING_XML" "$SIGNER_CERT_SHA" <<'PY'
 import json
 import os
 import re
@@ -91,7 +119,7 @@ import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
-material_path, consent_path, main_sha, android_sha, host_sha, runtime_host_sha, binding_path, signer_cert_sha = sys.argv[1:]
+material_path, consent_path, main_sha, android_sha, runtime_android_sha, runtime_apk_sha, host_sha, runtime_host_sha, binding_path, signer_cert_sha = sys.argv[1:]
 if not re.fullmatch(r'[a-f0-9]{64}', signer_cert_sha):
     raise SystemExit('final signer certificate digest is invalid')
 with open(consent_path, 'r', encoding='utf-8') as handle:
@@ -104,6 +132,8 @@ expected_keys = {
     'expiresAt',
     'mainSha',
     'androidSha',
+    'runtimeAndroidSha',
+    'runtimeApkSha256',
     'hostSha',
     'runtimeHostSha',
     'scope',
@@ -114,11 +144,13 @@ expected_keys = {
 }
 if set(consent) != expected_keys:
     raise SystemExit('DP5 effect consent schema is invalid')
-if consent['kind'] != 'W15J_DP5_PHYSICAL_EFFECT_CONSENT' or consent['schemaVersion'] != '1.1.0':
+if consent['kind'] != 'W15J_DP5_PHYSICAL_EFFECT_CONSENT' or consent['schemaVersion'] != '1.2.0':
     raise SystemExit('DP5 effect consent identity is invalid')
 if (
     consent['mainSha'] != main_sha
     or consent['androidSha'] != android_sha
+    or consent['runtimeAndroidSha'] != runtime_android_sha
+    or consent['runtimeApkSha256'] != runtime_apk_sha
     or consent['hostSha'] != host_sha
     or consent['runtimeHostSha'] != runtime_host_sha
 ):
@@ -290,19 +322,22 @@ CONSUMED_CONSENT="$STATE_DIR/dp5-effect-consent.consumed-$WINDOW.json"
 mv "$CONSENT" "$CONSUMED_CONSENT"
 chmod 600 "$CONSUMED_CONSENT"
 
-python - "$MATERIAL" "$PROVIDER_STATE" "$HOST_SHA" "$RUNTIME_HOST_SHA" "$CONSENT_SHA" "$CONSUMED_CONSENT" <<'PY'
+python - "$MATERIAL" "$PROVIDER_STATE" "$ANDROID_SHA" "$RUNTIME_ANDROID_SHA" "$RUNTIME_APK_SHA" "$HOST_SHA" "$RUNTIME_HOST_SHA" "$CONSENT_SHA" "$CONSUMED_CONSENT" <<'PY'
 import hashlib
 import json
 import os
 import sys
 
-material_path, state_path, legacy_host_sha, runtime_host_sha, consent_sha, consumed_consent_path = sys.argv[1:]
+material_path, state_path, legacy_android_sha, runtime_android_sha, runtime_apk_sha, legacy_host_sha, runtime_host_sha, consent_sha, consumed_consent_path = sys.argv[1:]
 with open(material_path, 'rb') as handle:
     digest = hashlib.sha256(handle.read()).hexdigest()
 with open(material_path, 'r', encoding='utf-8') as handle:
     material = json.load(handle)
 state = '\n'.join([
     'status=READY_NOT_ACCEPTED',
+    f'android_candidate_sha={runtime_android_sha}',
+    f'legacy_android_tuple_sha={legacy_android_sha}',
+    f'runtime_apk_sha256={runtime_apk_sha}',
     f'host_candidate_sha={runtime_host_sha}',
     f'legacy_host_tuple_sha={legacy_host_sha}',
     f'material_sha256={digest}',

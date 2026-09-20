@@ -222,7 +222,11 @@ test('physical effect consent requires an interactive exact-tuple operator chall
   assert.match(source, /w15j-runtime-host-candidate\.txt/);
   assert.match(source, /W15J_RUNTIME_HOST_CANDIDATE_V1/);
   assert.match(source, /runtimeHostSha/);
-  assert.match(source, /'schemaVersion': '1\.1\.0'/);
+  assert.match(source, /runtimeAndroidSha/);
+  assert.match(source, /runtimeApkSha256/);
+  assert.match(source, /w15j-runtime-android-candidate\.txt/);
+  assert.match(source, /W15J_RUNTIME_ANDROID_CANDIDATE_V1/);
+  assert.match(source, /'schemaVersion': '1\.2\.0'/);
   assert.match(source, /runtime Host candidate cannot authorize execution/);
   assert.match(source, /runtime Host candidate cannot claim physical acceptance/);
   assert.match(source, /timedelta\(minutes=10\)/);
@@ -233,14 +237,27 @@ test('physical effect consent requires an interactive exact-tuple operator chall
   assert.match(source, /unconsumed DP5 effect consent already exists/);
 });
 
+test('runtime Android candidate binds the exact installed APK without rewriting the historical tuple', () => {
+  const source = read('set-runtime-android-candidate.sh');
+  assert.match(source, /W15J_RUNTIME_ANDROID_CANDIDATE_V1/);
+  assert.match(source, /android_sha=/);
+  assert.match(source, /apk_sha256=/);
+  assert.match(source, /installed APK does not match the signed runtime artifact/);
+  assert.match(source, /authorizes_execution=false/);
+  assert.match(source, /physical_acceptance=false/);
+  assert.doesNotMatch(source, /worktrees\.txt.*>/);
+});
+
 test('DP5 provider material requires both explicit opt-in and fresh interactive consent', () => {
   const source = read('prepare-dp5-provider.sh');
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED:-/);
   assert.match(source, /AURORA_DP5_EFFECT_APPROVED=YES/);
   assert.match(source, /dp5-effect-consent\.json/);
   assert.match(source, /W15J_DP5_PHYSICAL_EFFECT_CONSENT/);
-  assert.match(source, /schemaVersion'\] != '1\.1\.0'/);
+  assert.match(source, /schemaVersion'\] != '1\.2\.0'/);
   assert.match(source, /runtimeHostSha/);
+  assert.match(source, /runtimeAndroidSha/);
+  assert.match(source, /runtimeApkSha256/);
   assert.match(source, /w15j-runtime-host-candidate\.txt/);
   assert.match(source, /host_candidate_sha=\{runtime_host_sha\}/);
   assert.match(source, /legacy_host_tuple_sha=\{legacy_host_sha\}/);
