@@ -701,12 +701,24 @@ class GatewayDevicePlaneClient internal constructor(
         ) ?: return transportRejected()
         val registered = parseRegistration(registerResponse)
         if (registered is GatewayDevicePlaneResult.Rejected) return registered
+        val registeredView = (registered as GatewayDevicePlaneResult.Success).value
+        if (registeredView.state == W14DeviceLifecycleState.ACTIVE) return registered
+        if (registeredView.state != W14DeviceLifecycleState.REGISTERED) {
+            return rejected(GatewayDevicePlaneClientError.PROTOCOL_MALFORMED)
+        }
 
         val activateResponse = post(
             "/v1/device/registrations/activate",
             StrictJson.encodeObject(emptyList()),
         ) ?: return transportRejected()
-        return parseRegistration(activateResponse)
+        val activated = parseRegistration(activateResponse)
+        if (
+            activated is GatewayDevicePlaneResult.Success &&
+            activated.value.state != W14DeviceLifecycleState.ACTIVE
+        ) {
+            return rejected(GatewayDevicePlaneClientError.PROTOCOL_MALFORMED)
+        }
+        return activated
     }
 
     private fun openDeviceSession(

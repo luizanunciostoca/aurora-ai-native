@@ -55,6 +55,36 @@ class GatewayDevicePlaneClientTest {
     }
 
     @Test
+    fun `connect reuses an already active registration without duplicate activation`() {
+        val channel = FakeChannel(
+            gatewayResponse("conn-1", generation = 1),
+            registrationResponse("ACTIVE", version = 2),
+            sessionResponse("conn-1", generation = 1, version = 2),
+        )
+        val acceptance = RecordingAcceptance()
+        val client = GatewayDevicePlaneClient(
+            channelFactory = GatewayHttpChannelFactory { channel },
+            proofFactory = RecordingProofFactory(),
+            sessionAcceptance = acceptance,
+            nowMs = { 500 },
+        )
+
+        val result = client.connect(
+            connectRequest().copy(expectedRegistrationVersion = 2),
+        ) as GatewayDevicePlaneResult.Success
+
+        assertEquals(2, result.value.registration.ref.registrationVersion)
+        assertEquals(W14DeviceLifecycleState.ACTIVE, result.value.registration.state)
+        assertEquals(1, acceptance.registrationCount)
+        assertEquals(1, acceptance.sessionCount)
+        assertEquals(3, channel.requests.size)
+        assertEquals("/v1/device/registrations/register", channel.requests[1].first)
+        assertTrue(channel.requests[1].second.contains("\"expectedVersion\":2"))
+        assertEquals("/v1/device/sessions/open", channel.requests[2].first)
+        assertFalse(channel.requests.any { it.first == "/v1/device/registrations/activate" })
+    }
+
+    @Test
     fun `receipt signs server-compatible integrity evidence without sending digest or authority`() {
         val channel = FakeChannel(
             gatewayResponse("conn-1", generation = 1),
