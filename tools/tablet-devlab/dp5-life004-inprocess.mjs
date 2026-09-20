@@ -76,6 +76,35 @@ export function parseSessionPrefs(xml) {
   });
 }
 
+export function executionStateCompatible(seed, attempt, containment) {
+  if (attempt === null || containment === null) return false;
+  const expectedQuota = seed.quota ?? null;
+  const actualQuota = attempt.quota ?? null;
+  return (
+    attempt.tenantId === seed.tenantId &&
+    attempt.actionIntentId === seed.actionIntentId &&
+    attempt.executionRef === seed.executionRef &&
+    attempt.attemptNumber === seed.attemptNumber &&
+    attempt.maxAttempts === seed.maxAttempts &&
+    JSON.stringify(actualQuota) === JSON.stringify(expectedQuota) &&
+    containment.tenantId === seed.tenantId &&
+    containment.circuitKey === seed.circuitKey &&
+    containment.authorizesExecution === false &&
+    containment.snapshot.circuit.state === seed.containment.circuit.state &&
+    containment.snapshot.circuit.consecutiveFailures ===
+      seed.containment.circuit.consecutiveFailures &&
+    containment.snapshot.circuit.halfOpenProbeInFlight ===
+      seed.containment.circuit.halfOpenProbeInFlight &&
+    containment.snapshot.killSwitch.state === seed.containment.killSwitch.state &&
+    containment.snapshot.dependencyHealth === seed.containment.dependencyHealth &&
+    containment.snapshot.cancellationRequested === seed.containment.cancellationRequested &&
+    containment.snapshot.currentInFlight === seed.containment.currentInFlight &&
+    containment.snapshot.maxInFlight === seed.containment.maxInFlight &&
+    containment.snapshot.retryDepth === seed.containment.retryDepth &&
+    containment.snapshot.maxRetryDepth === seed.containment.maxRetryDepth
+  );
+}
+
 export function buildDispatchRequest(material, session, nowMs = Date.now()) {
   const actionIntent = buildActionIntent(material);
   const canonicalPayloadHash = `sha256:${createHash('sha256').update(canonicalJson(actionIntent), 'utf8').digest('hex')}`;
@@ -227,6 +256,32 @@ function stopExistingHost() {
   throw new Error('existing host did not stop');
 }
 
+function verifyExistingExecutionState(databaseUrl, seed) {
+  const { PsqlW03SyncExecutor } = require(
+    join(HOST, 'services/mobile-gateway/dist/physical-host/w03-postgres-reservations.js'),
+  );
+  const { W03PostgresExecutionAttemptQuotaSource } = require(
+    join(HOST, 'services/mobile-gateway/dist/physical-host/w03-attempt-quota-source.js'),
+  );
+  const { W03PostgresCurrentContainmentStateSource } = require(
+    join(HOST, 'services/mobile-gateway/dist/physical-host/w03-containment-state.js'),
+  );
+  const sql = new PsqlW03SyncExecutor({ databaseUrl });
+  const attemptSource = new W03PostgresExecutionAttemptQuotaSource(sql);
+  const containmentSource = new W03PostgresCurrentContainmentStateSource(sql);
+  const attempt = attemptSource.lookup({
+    tenantId: seed.tenantId,
+    actionIntentId: seed.actionIntentId,
+    executionRef: seed.executionRef,
+  });
+  const containment = containmentSource.resolveCurrent({
+    tenantId: seed.tenantId,
+    circuitKey: seed.circuitKey,
+    evaluatedAt: new Date().toISOString(),
+  });
+  return executionStateCompatible(seed, attempt, containment);
+}
+
 function assertCleanHostSha() {
   const expected = readFileSync(join(STATE, 'worktrees.txt'), 'utf8')
     .split(/\r?\n/u)
@@ -315,7 +370,14 @@ async function executeLife004() {
 
   for (const seed of input.executionStateSeed) {
     const result = host.stageExecutionState(seed);
-    if (!result.ok) throw new Error(`execution state stage failed: ${result.code}`);
+    if (result.ok) continue;
+    if (
+      result.code !== 'ATTEMPT_ALREADY_EXISTS' ||
+      !verifyExistingExecutionState(databaseUrl, seed)
+    ) {
+      throw new Error(`execution state stage failed: ${result.code}`);
+    }
+    console.log(`W03_EXISTING_STATE_COMPATIBLE=${seed.executionRef}`);
   }
 
   let started = false;

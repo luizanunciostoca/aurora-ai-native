@@ -5,6 +5,7 @@ import { URL } from 'node:url';
 import {
   buildActionIntent,
   buildDispatchRequest,
+  executionStateCompatible,
   gatewaySessionIdFromConnectionId,
   parseSessionPrefs,
 } from '../tablet-devlab/dp5-life004-inprocess.mjs';
@@ -93,4 +94,49 @@ test('LIFE-004 helper cannot drain work or synthesize a verdict', async () => {
   assert.equal(source.includes('OFFLINE_DRAIN'), false);
   assert.equal(source.includes("campaign('finish'"), false);
   assert.equal(source.includes('DP5_LIFE_004_ACTION=RECORDED_NOT_VERDICT'), true);
+});
+
+test('compatible existing W03 state is accepted read-only', () => {
+  const seed = {
+    tenantId: material.tenantId,
+    actionIntentId: material.actionIntentId,
+    executionRef: material.executionId,
+    attemptNumber: 1,
+    maxAttempts: 1,
+    quota: { limit: 1, used: 0 },
+    circuitKey: 'w15j:device:audio:volume',
+    containment: {
+      circuit: { state: 'CLOSED', consecutiveFailures: 0, halfOpenProbeInFlight: false },
+      killSwitch: { state: 'INACTIVE' },
+      dependencyHealth: 'HEALTHY',
+      cancellationRequested: false,
+      currentInFlight: 0,
+      maxInFlight: 1,
+      retryDepth: 0,
+      maxRetryDepth: 0,
+    },
+  };
+
+  const attempt = {
+    tenantId: seed.tenantId,
+    actionIntentId: seed.actionIntentId,
+    executionRef: seed.executionRef,
+    attemptNumber: 1,
+    maxAttempts: 1,
+    quota: { limit: 1, used: 0 },
+  };
+  const containment = {
+    tenantId: seed.tenantId,
+    circuitKey: seed.circuitKey,
+    authorizesExecution: false,
+    snapshot: JSON.parse(JSON.stringify(seed.containment)),
+  };
+  assert.equal(executionStateCompatible(seed, attempt, containment), true);
+  assert.equal(
+    executionStateCompatible(seed, { ...attempt, quota: { limit: 1, used: 1 } }, containment),
+    false,
+  );
+  const changed = JSON.parse(JSON.stringify(containment));
+  changed.snapshot.killSwitch.state = 'ACTIVE';
+  assert.equal(executionStateCompatible(seed, attempt, changed), false);
 });
