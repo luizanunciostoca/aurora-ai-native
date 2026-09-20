@@ -212,7 +212,9 @@ function stopExistingHost() {
   const pid = Number(pidMatch[1]);
   try {
     process.kill(pid, 'SIGTERM');
-  } catch {}
+  } catch {
+    return;
+  }
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     try {

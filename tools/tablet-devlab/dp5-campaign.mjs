@@ -105,7 +105,8 @@ function capture(path, command, args, filter) {
   const exitCode = result.status ?? (result.error?.code === 'ETIMEDOUT' ? 124 : 127);
   let output = String(result.stdout || '');
   if (result.stderr) output += '\n[stderr]\n' + result.stderr;
-  if (result.error) output += '\n[capture-error]\n' + String(result.error.code || result.error.message);
+  if (result.error)
+    output += '\n[capture-error]\n' + String(result.error.code || result.error.message);
   if (filter) output = filter(output);
   output = redact(output);
   if (Buffer.byteLength(output) > 2_000_000) output = output.slice(-2_000_000);
@@ -223,21 +224,24 @@ function snapshot(attemptDir, phase, scenario, correlationId) {
       " 2>&1 | grep -A2 -B2 -E 'RECORD_AUDIO|granted=true|granted=false' | head -n 300",
   );
   shell('memory.txt', 'dumpsys meminfo ' + PACKAGE_ID + ' 2>&1 | head -n 500');
-  shell('cpu.txt', "top -b -n 1 2>&1 | head -n 40");
+  shell('cpu.txt', 'top -b -n 1 2>&1 | head -n 40');
   shell('battery.txt', 'dumpsys battery 2>&1');
   shell('thermal.txt', 'dumpsys thermalservice 2>&1 | head -n 500');
   shell(
     'network.txt',
-    "echo airplane_mode=$(settings get global airplane_mode_on 2>/dev/null || true); " +
-      "ip -brief addr show wlan0 2>/dev/null || ip addr show wlan0 2>/dev/null || true; " +
-      "ip route 2>/dev/null | head -n 40; getprop dhcp.wlan0.ipaddress",
+    'echo airplane_mode=$(settings get global airplane_mode_on 2>/dev/null || true); ' +
+      'ip -brief addr show wlan0 2>/dev/null || ip addr show wlan0 2>/dev/null || true; ' +
+      'ip route 2>/dev/null | head -n 40; getprop dhcp.wlan0.ipaddress',
   );
 
   const logPath = join(dir, 'logcat.txt');
   captures.push({
     reference: relative(attemptDir, logPath).replaceAll('\\', '/'),
-    exitCode: capture(logPath, ADB, ['-s', serial, 'logcat', '-d', '-t', '1200', '-v', 'threadtime'], (text) =>
-      logFilter(text, correlationId),
+    exitCode: capture(
+      logPath,
+      ADB,
+      ['-s', serial, 'logcat', '-d', '-t', '1200', '-v', 'threadtime'],
+      (text) => logFilter(text, correlationId),
     ),
   });
 

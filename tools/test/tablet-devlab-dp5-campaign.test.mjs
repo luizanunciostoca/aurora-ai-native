@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { URL } from 'node:url';
 
 import { REQUIRED_DP5_SCENARIO_PATHS } from '../acceptance/w15j-preflight.mjs';
 import { DP5_SCENARIOS } from '../tablet-devlab/dp5-scenario-catalog.mjs';
@@ -191,7 +192,6 @@ test('48 explicit PASS records still generate NOT_ACCEPTED disposition', () => {
   assert.match(report, /physical_acceptance=false/);
   assert.doesNotMatch(report, /DP5 ACCEPTED/);
 });
-
 
 test('DP5 snapshot preserves the remote shell command as one adb argument', () => {
   const source = readFileSync(
