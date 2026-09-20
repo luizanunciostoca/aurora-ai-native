@@ -73,6 +73,23 @@ test('supervisor preserves W14 continuity without becoming an authority surface'
   assert.equal(source.includes('authorizesExecution: true'), false);
 });
 
+test('refresh validates candidate input before stopping the active Host', async () => {
+  const source = await readFile(
+    new URL('../tablet-devlab/dp5-host-supervisor.mjs', import.meta.url),
+    'utf8',
+  );
+  const refreshStart = source.indexOf("if (input.op === 'REFRESH')");
+  const dispatchStart = source.indexOf("if (input.op === 'DISPATCH')", refreshStart);
+  assert.notEqual(refreshStart, -1);
+  assert.notEqual(dispatchStart, -1);
+  const refreshBlock = source.slice(refreshStart, dispatchStart);
+  const prepareIndex = refreshBlock.indexOf('await prepareRuntimeInput(databaseUrl)');
+  const stopIndex = refreshBlock.indexOf('await stopActive(active)');
+  assert.notEqual(prepareIndex, -1);
+  assert.notEqual(stopIndex, -1);
+  assert.equal(prepareIndex < stopIndex, true);
+});
+
 test('supervisor start wrapper is fail-closed and never kills an unknown Host', async () => {
   const source = await readFile(
     new URL('../tablet-devlab/start-dp5-host-supervisor.sh', import.meta.url),

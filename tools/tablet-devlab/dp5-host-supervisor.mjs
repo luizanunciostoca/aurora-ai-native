@@ -80,7 +80,7 @@ export function validateSupervisorRequest(value) {
   return false;
 }
 
-async function buildRuntime(continuity, databaseUrl) {
+async function prepareRuntimeInput(databaseUrl) {
   const provider = await import(
     pathToFileURL(join(HOST, 'tools/physical/w15j-local-dp5-provider-runtime.mjs')).href
   );
@@ -89,6 +89,11 @@ async function buildRuntime(continuity, databaseUrl) {
     materialPath: MATERIAL,
   });
   const material = provider.loadAndValidateW15JDp5Material(MATERIAL);
+  return { input, material };
+}
+
+async function buildRuntime(continuity, databaseUrl, preparedInput = null) {
+  const { input, material } = preparedInput ?? (await prepareRuntimeInput(databaseUrl));
 
   const { W15JLocalPhysicalHost } = require(
     join(HOST, 'services/mobile-gateway/dist/physical-host/local-physical-host.js'),
@@ -182,10 +187,13 @@ export async function startSupervisor(socketPath = DEFAULT_SOCKET) {
     }
     if (input.op === 'STATUS') return { ok: true, value: safeStatus(active, hostSha) };
     if (input.op === 'REFRESH') {
+      // Validate provider/material bindings before disrupting the currently active Host.
+      // A stale or malformed candidate must fail closed while preserving the known-good runtime.
+      const preparedInput = await prepareRuntimeInput(databaseUrl);
       await stopActive(active);
       active = null;
       writeStatus(active, hostSha);
-      active = await buildRuntime(continuity, databaseUrl);
+      active = await buildRuntime(continuity, databaseUrl, preparedInput);
       writeStatus(active, hostSha);
       return {
         ok: true,
