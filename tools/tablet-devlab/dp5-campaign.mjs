@@ -488,8 +488,11 @@ function start(evidenceDir, id, requestedCorrelationId) {
   const p = paths(evidenceDir);
   const campaign = loadCampaign(p.state);
   const record = scenario(campaign, id);
-  if (record.attempts.some((entry) => entry.status === 'STARTED'))
-    fail(id + ' already has an active attempt');
+  if (
+    record.attempts.some((entry) => ['STARTED', 'CAPTURED_AWAITING_VERDICT'].includes(entry.status))
+  ) {
+    fail(id + ' already has an active or captured attempt awaiting verdict');
+  }
   const attemptNumber = record.attempts.length + 1;
   const attemptDir = join(p.harness, id, 'attempt-' + String(attemptNumber).padStart(2, '0'));
   ensureDir(attemptDir);
@@ -518,17 +521,65 @@ function start(evidenceDir, id, requestedCorrelationId) {
   return { record, attemptDir };
 }
 
-function finish(evidenceDir, id, status, cause, observed) {
+function captureAttempt(evidenceDir, id) {
   const p = paths(evidenceDir);
   const campaign = loadCampaign(p.state);
   const record = scenario(campaign, id);
   const attempt = [...record.attempts].reverse().find((entry) => entry.status === 'STARTED');
-  if (!attempt) fail(id + ' has no active attempt');
+  if (!attempt) fail(id + ' has no STARTED attempt to capture');
   const attemptDir = join(p.harness, id, 'attempt-' + String(attempt.attempt).padStart(2, '0'));
   const after = snapshot(attemptDir, 'after', DP5_SCENARIO_BY_ID[id], attempt.correlationId);
+  const capturedAtUtc = now();
+  const capturedNs = process.hrtime.bigint();
+  const elapsedMs = Number(capturedNs - BigInt(attempt.startedMonotonicNs)) / 1_000_000;
+
+  attempt.status = 'CAPTURED_AWAITING_VERDICT';
+  attempt.capturedAtUtc = capturedAtUtc;
+  attempt.capturedMonotonicNs = capturedNs.toString();
+  attempt.elapsedMs = Math.round(elapsedMs * 1000) / 1000;
+  attempt.after = after;
+
+  secureWrite(
+    join(attemptDir, 'capture-status.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 'dp5-scenario-capture-v1',
+        campaignId: campaign.campaignId,
+        scenarioId: id,
+        scenarioPath: record.path,
+        attempt: attempt.attempt,
+        correlationId: attempt.correlationId,
+        startedAtUtc: attempt.startedAtUtc,
+        capturedAtUtc,
+        startedMonotonicNs: attempt.startedMonotonicNs,
+        capturedMonotonicNs: attempt.capturedMonotonicNs,
+        elapsedMs: attempt.elapsedMs,
+        disposition: 'EVIDENCE_CAPTURED_AWAITING_EXPLICIT_OPERATOR_VERDICT',
+        authorizesExecution: false,
+        provesExecutionSuccessByItself: false,
+        retryAuthorized: false,
+        physicalAcceptance: false,
+      },
+      null,
+      2,
+    ) + '\n',
+  );
+  const manifestPath = manifest(attemptDir);
+  saveCampaign(p.state, campaign);
+  return { attemptDir, manifestPath, capturedAtUtc };
+}
+
+function recordVerdict(evidenceDir, id, status, cause, observed) {
+  const p = paths(evidenceDir);
+  const campaign = loadCampaign(p.state);
+  const record = scenario(campaign, id);
+  const attempt = [...record.attempts]
+    .reverse()
+    .find((entry) => entry.status === 'CAPTURED_AWAITING_VERDICT');
+  if (!attempt) fail(id + ' has no captured attempt awaiting verdict');
+  const attemptDir = join(p.harness, id, 'attempt-' + String(attempt.attempt).padStart(2, '0'));
   const finishedAtUtc = now();
   const finishedNs = process.hrtime.bigint();
-  const elapsedMs = Number(finishedNs - BigInt(attempt.startedMonotonicNs)) / 1_000_000;
   const receiptPath = join(attemptDir, 'scenario-receipt.json');
   const refs = filesRecursive(attemptDir).map((entry) =>
     relative(evidenceDir, entry.path).replaceAll('\\', '/'),
@@ -546,11 +597,9 @@ function finish(evidenceDir, id, status, cause, observed) {
   attempt.status = 'FINISHED';
   attempt.finishedAtUtc = finishedAtUtc;
   attempt.finishedMonotonicNs = finishedNs.toString();
-  attempt.elapsedMs = Math.round(elapsedMs * 1000) / 1000;
   attempt.operatorVerdict = status;
   attempt.operatorObservedPhysicalResult = observed;
   attempt.failureCause = record.failureCause;
-  attempt.after = after;
 
   secureWrite(
     receiptPath,
@@ -563,8 +612,10 @@ function finish(evidenceDir, id, status, cause, observed) {
         attempt: attempt.attempt,
         correlationId: attempt.correlationId,
         startedAtUtc: attempt.startedAtUtc,
+        capturedAtUtc: attempt.capturedAtUtc,
         finishedAtUtc,
         startedMonotonicNs: attempt.startedMonotonicNs,
+        capturedMonotonicNs: attempt.capturedMonotonicNs,
         finishedMonotonicNs: attempt.finishedMonotonicNs,
         elapsedMs: attempt.elapsedMs,
         operatorVerdict: status,
@@ -601,6 +652,11 @@ function finish(evidenceDir, id, status, cause, observed) {
   saveCampaign(p.state, campaign);
   generateReport(evidenceDir, campaign, dossier);
   return { receiptPath, manifestPath };
+}
+
+function finish(evidenceDir, id, status, cause, observed) {
+  captureAttempt(evidenceDir, id);
+  return recordVerdict(evidenceDir, id, status, cause, observed);
 }
 
 function counts(campaign) {
@@ -802,7 +858,9 @@ function help() {
       'next [--evidence-dir <dir>]',
       'show <scenario-id>',
       'start <scenario-id> [--correlation-id <id>] [--evidence-dir <dir>]',
-      'finish <scenario-id> --status PASS|FAIL|BLOCKED [--observed] [--cause <text>]',
+      'capture <scenario-id> [--evidence-dir <dir>]',
+      'verdict <scenario-id> --status PASS|FAIL|BLOCKED [--observed] [--cause <text>]',
+      'finish <scenario-id> --status PASS|FAIL|BLOCKED [--observed] [--cause <text>]  # capture + verdict',
       'annotate --kind finding|waiver|regression --text <text> [--reference <path>]',
       'report [--evidence-dir <dir>]',
       '',
@@ -865,11 +923,28 @@ async function main() {
     );
     return;
   }
-  if (command === 'finish') {
+  if (command === 'capture') {
+    const id = opts._[0];
+    if (!id) fail('scenario id is required');
+    const result = captureAttempt(evidenceDir, id);
+    console.log(
+      'DP5_SCENARIO_EVIDENCE_CAPTURED_AWAITING_VERDICT\nid=' +
+        id +
+        '\npath=' +
+        result.attemptDir +
+        '\nmanifest=' +
+        result.manifestPath,
+    );
+    return;
+  }
+  if (command === 'verdict' || command === 'finish') {
     const id = opts._[0];
     if (!id) fail('scenario id is required');
     const status = String(opts.status || '').toUpperCase();
-    const result = finish(evidenceDir, id, status, opts.cause || '', opts.observed === true);
+    const result =
+      command === 'finish'
+        ? finish(evidenceDir, id, status, opts.cause || '', opts.observed === true)
+        : recordVerdict(evidenceDir, id, status, opts.cause || '', opts.observed === true);
     console.log(
       'DP5_SCENARIO_OPERATOR_VERDICT_RECORDED_NOT_ACCEPTED\nid=' +
         id +

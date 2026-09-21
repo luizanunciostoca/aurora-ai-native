@@ -201,3 +201,16 @@ test('DP5 snapshot preserves the remote shell command as one adb argument', () =
   assert.match(source, /\['-s', serial, 'shell', command\]/u);
   assert.doesNotMatch(source, /\['-s', serial, 'shell', 'sh', '-c', command\]/u);
 });
+
+test('DP5 harness supports capture-before-verdict batching without synthesizing PASS', () => {
+  const source = readFileSync(
+    new URL('../tablet-devlab/dp5-campaign.mjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(source, /CAPTURED_AWAITING_VERDICT/u);
+  assert.match(source, /DP5_SCENARIO_EVIDENCE_CAPTURED_AWAITING_VERDICT/u);
+  assert.match(source, /command === 'capture'/u);
+  assert.match(source, /command === 'verdict' \|\| command === 'finish'/u);
+  assert.match(source, /EVIDENCE_CAPTURED_AWAITING_EXPLICIT_OPERATOR_VERDICT/u);
+  assert.match(source, /captureAttempt\(evidenceDir, id\);\s*return recordVerdict/u);
+});
