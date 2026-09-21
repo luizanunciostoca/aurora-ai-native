@@ -214,3 +214,18 @@ test('DP5 harness supports capture-before-verdict batching without synthesizing 
   assert.match(source, /EVIDENCE_CAPTURED_AWAITING_EXPLICIT_OPERATOR_VERDICT/u);
   assert.match(source, /captureAttempt\(evidenceDir, id\);\s*return recordVerdict/u);
 });
+
+test('finish validates the operator verdict before capturing after-state', () => {
+  const source = readFileSync(
+    new URL('../tablet-devlab/dp5-campaign.mjs', import.meta.url),
+    'utf8',
+  );
+  const start = source.indexOf('function finish(evidenceDir, id, status, cause, observed)');
+  const end = source.indexOf('\nfunction counts(campaign)', start);
+  const block = source.slice(start, end);
+  assert.ok(start >= 0 && end > start);
+  assert.ok(
+    block.indexOf('PASS requires explicit --observed') <
+      block.indexOf('captureAttempt(evidenceDir, id)'),
+  );
+});

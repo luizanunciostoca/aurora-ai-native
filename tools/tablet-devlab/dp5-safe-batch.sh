@@ -61,7 +61,7 @@ HOST_INSTANCE="$(jq -r '.value.hostInstanceId' "$SUPERVISOR")"
 PREFLIGHT_HOST="$(awk -F= '$1=="host_instance_id"{print $2}' "$PREFLIGHT")"
 [[ "$HOST_INSTANCE" == "$PREFLIGHT_HOST" ]] || fail "collector Host instance continuity mismatch"
 RAW_XML="$STATE/safe-batch-session.xml"
-trap 'rm -f "$RAW_XML" "$STATE/safe-batch-installed.apk"' EXIT
+trap 'rm -f "$RAW_XML" "$STATE/safe-batch-id002.xml" "$STATE/safe-batch-installed.apk"' EXIT
 adb -s "$SERIAL" exec-out run-as "$PKG" sh -c   'cat shared_prefs/aurora_device_session_metadata.xml' > "$RAW_XML"
 chmod 600 "$RAW_XML"
 python3 - "$RAW_XML" "$MATERIAL" <<'PY'

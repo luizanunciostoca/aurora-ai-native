@@ -655,6 +655,13 @@ function recordVerdict(evidenceDir, id, status, cause, observed) {
 }
 
 function finish(evidenceDir, id, status, cause, observed) {
+  if (!FINAL.has(status)) fail('status must be PASS, FAIL, or BLOCKED');
+  if (status === 'PASS' && observed !== true) {
+    fail('PASS requires explicit --observed physical operator attestation');
+  }
+  if ((status === 'FAIL' || status === 'BLOCKED') && !String(cause || '').trim()) {
+    fail(status + ' requires --cause');
+  }
   captureAttempt(evidenceDir, id);
   return recordVerdict(evidenceDir, id, status, cause, observed);
 }
