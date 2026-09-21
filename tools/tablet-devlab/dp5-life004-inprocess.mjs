@@ -4,7 +4,7 @@ import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, URL } from 'node:url';
 
 import { supervisorRequest } from './dp5-host-supervisor-client.mjs';
 import { executionStateCompatible } from './dp5-w03-state-compat.mjs';

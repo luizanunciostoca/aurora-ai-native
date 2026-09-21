@@ -4,7 +4,7 @@ import { createServer } from 'node:net';
 import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, URL } from 'node:url';
 
 import { executionStateCompatible } from './dp5-w03-state-compat.mjs';
 
@@ -343,7 +343,7 @@ export async function startSupervisor(socketPath = DEFAULT_SOCKET) {
     try {
       await stopActive(active);
       active = null;
-      writeStatus(active, hostSha);
+      writeStatus(active, hostSha, supervisorSourceSha);
     } finally {
       server.close();
     }
