@@ -9,6 +9,8 @@ import { pathToFileURL } from 'node:url';
 import { executionStateCompatible } from './dp5-w03-state-compat.mjs';
 
 const require = createRequire(import.meta.url);
+const ROOT =
+  process.env.AURORA_REPO_ROOT ?? new URL('../..', import.meta.url).pathname.replace(/\/$/u, '');
 const DEVLAB = process.env.AURORA_DEVLAB_ROOT ?? join(homedir(), 'aurora-devlab');
 const HOST = join(DEVLAB, 'worktrees', 'host');
 const STATE = join(DEVLAB, 'state');
@@ -30,10 +32,11 @@ function hostHead() {
   return execFileSync('git', ['-C', HOST, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
 }
 
-function safeStatus(active, hostSha) {
+function safeStatus(active, hostSha, supervisorSourceSha) {
   return Object.freeze({
     kind: 'DP5_HOST_SUPERVISOR_STATUS',
     hostSha,
+    supervisorSourceSha,
     active: active !== null,
     hostInstanceId: active?.hostInstanceId ?? null,
     materialGeneratedAt: active?.material.generatedAt ?? null,
@@ -43,10 +46,14 @@ function safeStatus(active, hostSha) {
   });
 }
 
-function writeStatus(active, hostSha) {
-  writeFileSync(STATUS_FILE, `${JSON.stringify(safeStatus(active, hostSha), null, 2)}\n`, {
-    mode: 0o600,
-  });
+function writeStatus(active, hostSha, supervisorSourceSha) {
+  writeFileSync(
+    STATUS_FILE,
+    `${JSON.stringify(safeStatus(active, hostSha, supervisorSourceSha), null, 2)}\n`,
+    {
+      mode: 0o600,
+    },
+  );
   chmodSync(STATUS_FILE, 0o600);
 }
 
@@ -175,6 +182,13 @@ async function stopActive(active) {
 
 export async function startSupervisor(socketPath = DEFAULT_SOCKET) {
   const hostSha = hostHead();
+  const { execFileSync } = require('node:child_process');
+  const supervisorSourceSha = execFileSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], {
+    encoding: 'utf8',
+  }).trim();
+  if (!/^[0-9a-f]{40}$/u.test(supervisorSourceSha)) {
+    throw new Error('supervisor source SHA unavailable');
+  }
   const hostModule = require(
     join(HOST, 'services/mobile-gateway/dist/physical-host/local-physical-host.js'),
   );
@@ -187,13 +201,15 @@ export async function startSupervisor(socketPath = DEFAULT_SOCKET) {
   let closing = false;
 
   if (existsSync(socketPath)) rmSync(socketPath, { force: true });
-  writeStatus(active, hostSha);
+  writeStatus(active, hostSha, supervisorSourceSha);
 
   const handleRequest = async (input) => {
     if (!validateSupervisorRequest(input)) {
       return { ok: false, code: 'REQUEST_REJECTED', authorizesExecution: false };
     }
-    if (input.op === 'STATUS') return { ok: true, value: safeStatus(active, hostSha) };
+    if (input.op === 'STATUS') {
+      return { ok: true, value: safeStatus(active, hostSha, supervisorSourceSha) };
+    }
     if (input.op === 'REAUTHORIZE') {
       if (active === null) {
         return { ok: false, code: 'HOST_NOT_ACTIVE', authorizesExecution: false };
@@ -213,7 +229,7 @@ export async function startSupervisor(socketPath = DEFAULT_SOCKET) {
       if (active.hostInstanceId !== hostInstanceId) {
         throw new Error('host instance changed during in-place reauthorization');
       }
-      writeStatus(active, hostSha);
+      writeStatus(active, hostSha, supervisorSourceSha);
       return {
         ok: true,
         value: {
@@ -233,9 +249,9 @@ export async function startSupervisor(socketPath = DEFAULT_SOCKET) {
       const preparedInput = await prepareRuntimeInput(databaseUrl);
       await stopActive(active);
       active = null;
-      writeStatus(active, hostSha);
+      writeStatus(active, hostSha, supervisorSourceSha);
       active = await buildRuntime(continuity, databaseUrl, preparedInput);
-      writeStatus(active, hostSha);
+      writeStatus(active, hostSha, supervisorSourceSha);
       return {
         ok: true,
         value: {
@@ -263,7 +279,7 @@ export async function startSupervisor(socketPath = DEFAULT_SOCKET) {
     if (input.op === 'STOP') {
       await stopActive(active);
       active = null;
-      writeStatus(active, hostSha);
+      writeStatus(active, hostSha, supervisorSourceSha);
       closing = true;
       return {
         ok: true,

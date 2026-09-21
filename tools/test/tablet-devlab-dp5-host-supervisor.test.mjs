@@ -65,6 +65,8 @@ test('supervisor preserves W14 continuity without becoming an authority surface'
   );
   assert.equal(source.includes('createW15JLocalPhysicalHostW14Continuity'), true);
   assert.equal(source.includes('w14Continuity: continuity'), true);
+  assert.equal(source.includes('supervisorSourceSha'), true);
+  assert.equal(source.includes("new URL('../..', import.meta.url)"), true);
   assert.equal(source.includes('chmodSync(socketPath, 0o600)'), true);
   assert.equal(source.includes('createServer({ allowHalfOpen: true }'), true);
   assert.equal(source.includes('DP5_HOST_SUPERVISOR_SOCKET_ERROR='), true);
@@ -131,6 +133,12 @@ test('supervisor start wrapper is fail-closed and never kills an unknown Host', 
     'utf8',
   );
   assert.equal(source.includes('verify-host-prebuild.sh'), true);
+  assert.equal(source.includes('SCRIPT_DIR='), true);
+  assert.equal(
+    source.includes('ROOT="${AURORA_REPO_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"'),
+    true,
+  );
+  assert.equal(source.includes('$HOME/aurora-ai-native'), false);
   assert.equal(source.includes('EXPECTED_HOST_SHA='), true);
   assert.equal(source.includes('existing supervisor is bound to a different Host SHA'), true);
   assert.equal(source.includes('refusing to replace an unknown Host'), true);

@@ -297,7 +297,8 @@ function assertCleanHostSha() {
   return actual;
 }
 
-const ROOT = process.env.AURORA_REPO_ROOT ?? join(homedir(), 'aurora-ai-native');
+const ROOT =
+  process.env.AURORA_REPO_ROOT ?? new URL('../..', import.meta.url).pathname.replace(/\/$/u, '');
 
 function campaign(...args) {
   return run(process.execPath, [join(ROOT, 'tools/tablet-devlab/dp5-campaign.mjs'), ...args]);
@@ -354,14 +355,16 @@ async function executeLife004() {
   ]);
   recordPhase('BOOTSTRAP_PRINCIPAL_FRESH');
   const supervisorStatus = await supervisorRequest({ op: 'STATUS' });
+  const expectedSupervisorSourceSha = run('git', ['-C', ROOT, 'rev-parse', 'HEAD']).stdout.trim();
   if (
     !supervisorStatus.ok ||
     supervisorStatus.value?.hostSha !== hostSha ||
+    supervisorStatus.value?.supervisorSourceSha !== expectedSupervisorSourceSha ||
     supervisorStatus.value?.active !== true ||
     typeof supervisorStatus.value?.hostInstanceId !== 'string'
   ) {
     throw new Error(
-      'DP5 host supervisor is unavailable, inactive or bound to a different Host SHA',
+      'DP5 host supervisor is unavailable, inactive or bound to different Host/tooling provenance',
     );
   }
   const existingHostInstanceId = supervisorStatus.value.hostInstanceId;

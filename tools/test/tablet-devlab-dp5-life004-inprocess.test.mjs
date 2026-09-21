@@ -217,6 +217,12 @@ test('LIFE-004 enforces canonical bootstrap freshness and persistent phase telem
   assert.equal(source.includes('session.connectionId !== previousConnectionId'), false);
   assert.equal(source.includes("supervisorRequest({ op: 'REAUTHORIZE' })"), true);
   assert.equal(source.includes("supervisorRequest({ op: 'REFRESH' })"), false);
+  assert.equal(source.includes('expectedSupervisorSourceSha'), true);
+  assert.equal(
+    source.includes('supervisorStatus.value?.supervisorSourceSha !== expectedSupervisorSourceSha'),
+    true,
+  );
+  assert.equal(source.includes("new URL('../..', import.meta.url)"), true);
   assert.equal(source.includes('refresh.value?.hostInstanceId !== existingHostInstanceId'), true);
   assert.equal(
     source.includes("supervisorRequest({ op: 'DISPATCH', request: dispatchRequest })"),

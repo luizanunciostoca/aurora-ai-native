@@ -11,7 +11,8 @@ for cmd in node python stat; do
   command -v "$cmd" >/dev/null 2>&1 || fail "$cmd is missing"
 done
 
-ROOT="${AURORA_REPO_ROOT:-$HOME/aurora-ai-native}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="${AURORA_REPO_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 DEVLAB="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
 STATE="$DEVLAB/state"
 SOCKET="$STATE/dp5-host-supervisor.sock"
