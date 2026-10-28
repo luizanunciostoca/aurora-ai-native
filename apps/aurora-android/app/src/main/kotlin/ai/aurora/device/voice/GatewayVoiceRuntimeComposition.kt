@@ -187,14 +187,16 @@ internal class GatewayVoiceRuntimeComposition(
                         GatewayVoiceRuntimeConnectFailure(GatewayVoiceRuntimeConnectStage.UNEXPECTED_FAILURE),
                     )
                 }
-        if (connected is GatewayVoiceRuntimeConnectResult.Rejected) {
-            clearRuntime()
-            return rejected(
-                GatewayVoiceRuntimeCompositionError.CONNECTION_REJECTED,
-                connectionFailure = connected.failure,
-            )
+        return when (connected) {
+            GatewayVoiceRuntimeConnectResult.Connected -> GatewayVoiceRuntimeCompositionResult.Composed
+            is GatewayVoiceRuntimeConnectResult.Rejected -> {
+                clearRuntime()
+                rejected(
+                    GatewayVoiceRuntimeCompositionError.CONNECTION_REJECTED,
+                    connectionFailure = connected.failure,
+                )
+            }
         }
-        return GatewayVoiceRuntimeCompositionResult.Composed
     }
 
     @Synchronized
@@ -234,14 +236,16 @@ internal class GatewayVoiceRuntimeComposition(
                         GatewayVoiceRuntimeConnectFailure(GatewayVoiceRuntimeConnectStage.UNEXPECTED_FAILURE),
                     )
                 }
-        if (reconnected is GatewayVoiceRuntimeConnectResult.Rejected) {
-            clearRuntime()
-            return rejected(
-                GatewayVoiceRuntimeCompositionError.RECONNECT_REJECTED,
-                connectionFailure = reconnected.failure,
-            )
+        return when (reconnected) {
+            GatewayVoiceRuntimeConnectResult.Connected -> GatewayVoiceRuntimeCompositionResult.Composed
+            is GatewayVoiceRuntimeConnectResult.Rejected -> {
+                clearRuntime()
+                rejected(
+                    GatewayVoiceRuntimeCompositionError.RECONNECT_REJECTED,
+                    connectionFailure = reconnected.failure,
+                )
+            }
         }
-        return GatewayVoiceRuntimeCompositionResult.Composed
     }
 }
 
