@@ -35,11 +35,13 @@ import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionResult
 import ai.aurora.device.voice.GatewayVoiceRuntimeConnector
 import ai.aurora.device.voice.GatewayVoiceRuntimeReconnector
 import ai.aurora.device.voice.GovernedW07VoiceAuthorityIngress
+import ai.aurora.device.voice.GovernedVoiceProjectionBundle
 import ai.aurora.device.voice.InstalledGatewayVoiceProjection
 import ai.aurora.device.voice.OneShotGatewayCredentialProvider
 import ai.aurora.device.voice.WakeVoiceRuntimeRegistry
 import ai.aurora.device.voice.installableGatewayVoiceProjection
 import ai.aurora.device.voice.localGatewayBindingFrom
+import ai.aurora.device.voice.refreshedNativeVoiceProjection
 
 class AuroraApplication : Application() {
     lateinit var environmentConfig: RuntimeEnvironmentConfig
@@ -52,6 +54,7 @@ class AuroraApplication : Application() {
     private var localGatewayBootstrapRuntime: ProcessLocalGatewayBootstrapRuntime? = null
     private var localGatewayVoiceRuntimeComposition: GatewayVoiceRuntimeComposition? = null
     private var activeGatewayDevicePlaneClient: GatewayDevicePlaneClient? = null
+    @Volatile
     private var activeGatewayVoiceProjection: InstalledGatewayVoiceProjection? = null
     private var activeGatewayCommandConsumer: W15JGatewayDeviceCommandConsumer? = null
     private var activeGatewayOfflineRuntime: GatewayOfflineExecutionRuntime? = null
@@ -151,6 +154,26 @@ class AuroraApplication : Application() {
             ?: GatewayVoiceRuntimeCompositionResult.Rejected(
                 GatewayVoiceRuntimeCompositionError.LOCAL_RUNTIME_UNAVAILABLE,
             )
+
+    /** Read-only native re-probe for the exact process-local authenticated projection. */
+    internal fun currentVoiceProjectionWithFreshNativeState(): GovernedVoiceProjectionBundle? {
+        val active = activeGatewayVoiceProjection ?: return null
+        val current = WakeVoiceRuntimeRegistry.projectionStore.current() ?: return null
+        if (
+            current.activeTenantId != active.bundle.activeTenantId ||
+            current.registry != active.bundle.registry ||
+            current.vocabulary != active.bundle.vocabulary
+        ) {
+            return null
+        }
+        // Probe failure is not missing W14 catalog authority. Treat every native capability as
+        // unavailable for this utterance; W15-F will recheck its own preconditions before effect.
+        val observations =
+            runCatching { active.capabilityBridge.discoverAll() }.getOrElse { emptyList() }
+        // A different bootstrap generation may have replaced the projection while probing.
+        if (activeGatewayVoiceProjection !== active) return null
+        return refreshedNativeVoiceProjection(current, active.bundle, observations)
+    }
 
     internal fun consumeLocalGovernedDeviceCommand(
         commandId: String,

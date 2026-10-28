@@ -55,6 +55,45 @@ class GovernedVoiceCatalogProjectionTest {
     }
 
     @Test
+    fun freshNativeObservationRestoresAvailabilityWithoutRenewingCanonicalProjection() {
+        val expiredNative = nativeObservation().copy(expiresAtMs = nowMs)
+        val current = bundle().copy(nativeCapabilityObservations = listOf(expiredNative))
+        val before = catalog(current).snapshot() as GovernedVoiceCatalogResult.Ready
+        assertTrue(before.snapshot.availableCapabilityIds.isEmpty())
+
+        val refreshed = refreshedNativeVoiceProjection(current, current, listOf(nativeObservation()))
+        assertTrue(refreshed != null)
+        val after = catalog(refreshed!!).snapshot() as GovernedVoiceCatalogResult.Ready
+        assertEquals(setOf("camera.open"), after.snapshot.availableCapabilityIds)
+        assertEquals(current.registry, refreshed.registry)
+        assertEquals(current.vocabulary, refreshed.vocabulary)
+        assertEquals(listOf(expiredNative), current.nativeCapabilityObservations)
+
+        val revoked = refreshedNativeVoiceProjection(
+            current,
+            current,
+            listOf(nativeObservation().copy(availability = NativeCapabilityAvailability.PRECONDITION_REQUIRED)),
+        )!!
+        val afterRevocation = catalog(revoked).snapshot() as GovernedVoiceCatalogResult.Ready
+        assertTrue(afterRevocation.snapshot.availableCapabilityIds.isEmpty())
+    }
+
+    @Test
+    fun nativeRefreshRejectsProjectionDriftAndCannotExtendExpiredRegistry() {
+        val current = bundle()
+        val wrongTenant = current.copy(activeTenantId = "tenant-other")
+        val wrongRegistry = current.copy(registry = current.registry.copy(registryVersion = "other"))
+        assertEquals(null, refreshedNativeVoiceProjection(current, wrongTenant, listOf(nativeObservation())))
+        assertEquals(null, refreshedNativeVoiceProjection(current, wrongRegistry, listOf(nativeObservation())))
+
+        val expired = current.copy(registry = current.registry.copy(expiresAtMs = nowMs))
+        val refreshed = refreshedNativeVoiceProjection(expired, expired, listOf(nativeObservation()))!!
+        val result = catalog(refreshed).snapshot() as GovernedVoiceCatalogResult.Rejected
+        assertEquals(GovernedVoiceCatalogRejection.REGISTRY_NOT_CURRENT, result.reason)
+        assertEquals(null, refreshedNativeVoiceProjection(null, current, listOf(nativeObservation())))
+    }
+
+    @Test
     fun tenantMismatchFailsCapabilityAvailabilityClosed() {
         val projection =
             bundle().copy(registry = registry(entries = listOf(capability(tenantId = "tenant-other"))))

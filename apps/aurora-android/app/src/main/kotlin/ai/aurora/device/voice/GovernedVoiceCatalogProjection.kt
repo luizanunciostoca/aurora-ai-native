@@ -145,6 +145,26 @@ class GovernedVoiceProjectionStore {
     fun current(): GovernedVoiceProjectionBundle? = bundle?.frozenCopy()
 }
 
+/**
+ * Re-observe only W15-C device availability for the same authenticated W04/W15-G projection.
+ * This never refreshes registry/vocabulary expiry, creates a command, or grants authority.
+ */
+internal fun refreshedNativeVoiceProjection(
+    current: GovernedVoiceProjectionBundle?,
+    installed: GovernedVoiceProjectionBundle,
+    nativeObservations: List<NativeCapabilityObservation>,
+): GovernedVoiceProjectionBundle? {
+    if (
+        current == null ||
+        current.activeTenantId != installed.activeTenantId ||
+        current.registry != installed.registry ||
+        current.vocabulary != installed.vocabulary
+    ) {
+        return null
+    }
+    return current.copy(nativeCapabilityObservations = nativeObservations).frozenCopy()
+}
+
 data class GovernedVoiceCatalogSnapshot(
     val activeTenantId: String,
     val registryVersion: String,
