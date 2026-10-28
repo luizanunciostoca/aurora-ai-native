@@ -1,7 +1,7 @@
 # Device Plane — Dependency Matrix
 
 Status: `ACTIVE_CANONICAL_FOR_PLANNING`  
-Date: 2026-08-31  
+Date: 2026-10-28 (owner-directed W15-J Experience Gate / W20-H full DP5 amendment)  
 Authority: Manual v0.4.1 + ADR-002
 
 ## Canonical DAG
@@ -14,7 +14,7 @@ W07 executor targets ----+--> W15 Android Device Plane
 W14 gateway/session -----|
 ```
 
-W17 consumes W15 runtime evidence. W19 hardens the converged Device Plane. W20 performs physical release acceptance.
+W17 consumes accepted W15 first-experience integration evidence without claiming comprehensive DP5. W19 hardens the converged Device Plane. W20-H owns full DP5 physical certification and DP7 release E2E; W20-J owns final release approval.
 
 ## Stage requirements
 
@@ -47,9 +47,9 @@ The existence of `apps/aurora-android` scaffold does not release W15 implementat
 - DP2 — W07 device-compatible execution-target contracts accepted.
 - DP3 — W14 Device Gateway/session contracts accepted.
 - DP4 — W15-00 ownership/contracts accepted.
-- DP5 — W15 runtime integration accepted.
+- DP5 — comprehensive physical Android integration certified at W20-H after re-scoped W15-J first-experience acceptance.
 - DP6 — W17 telemetry + W19 security gates accepted.
-- DP7 — W20 physical device acceptance / Release 1.0.
+- DP7 — W20-H physical device release acceptance; Release 1.0 decision remains W20-J.
 
 These are additional Device Plane guards and never replace canonical program-wave prerequisites.
 
@@ -63,4 +63,4 @@ These are additional Device Plane guards and never replace canonical program-wav
 
 ## Current program state
 
-DP0 is planning-complete only. DP1-DP7 remain pending/dependency-gated. W02-D is currently `IN_PROGRESS` in draft/open PR #41 after PB1 release; PB2 remains closed until W02-D is accepted and published. Because the W02-D branch started before the Device Plane planning merge, its final acceptance must first rebase/revalidate against the latest main. The canonical W02 sequence remains D -> PB2 -> E -> PB3 -> F -> PB4 -> G -> PB5 before downstream waves are released according to the main roadmap.
+At the 2026-10-28 governance snapshot, W00-W14 and W15-00..W15-I were already accepted. W15-J #344 is still OPEN and not accepted, and W16-00 #116 remains PREBUILD/readiness-only. A valid 8/8 physical Experience Gate, exact-head W15-J acceptance, controlled merge and post-merge verification are required before W16 BUILD. DP5 remains CLOSED until the complete 48-scenario physical certification at W20-H, including >=100 wake attempts, seven-role semantics, full threats/resources/privacy/recovery, sealing, operator attestation, independent review and Risk Gates A-D. Refer to [W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md](../w15/W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md).
