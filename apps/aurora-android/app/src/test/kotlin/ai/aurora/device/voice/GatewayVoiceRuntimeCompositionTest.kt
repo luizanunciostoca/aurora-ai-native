@@ -34,7 +34,7 @@ class GatewayVoiceRuntimeCompositionTest {
                 connector = GatewayVoiceRuntimeConnector { value, registrationVersion ->
                     observedGrant = value
                     observedRegistrationVersion = registrationVersion
-                    true
+                    GatewayVoiceRuntimeConnectResult.Connected
                 },
                 clearRuntime = { clearCount += 1 },
             )
@@ -72,7 +72,7 @@ class GatewayVoiceRuntimeCompositionTest {
                 bindingProvider = { binding },
                 connector = GatewayVoiceRuntimeConnector { _, _ ->
                     connectorCalls += 1
-                    true
+                    GatewayVoiceRuntimeConnectResult.Connected
                 },
                 clearRuntime = {},
             )
@@ -107,7 +107,7 @@ class GatewayVoiceRuntimeCompositionTest {
                 connector = GatewayVoiceRuntimeConnector { value, registrationVersion ->
                     observedGrant = value
                     observedRegistrationVersion = registrationVersion
-                    true
+                    GatewayVoiceRuntimeConnectResult.Connected
                 },
                 clearRuntime = {},
             )
@@ -145,7 +145,7 @@ class GatewayVoiceRuntimeCompositionTest {
                         GatewayBootstrapClientResult.Success(grant())
                     },
                     bindingProvider = { localGatewayBindingFrom(state) },
-                    connector = GatewayVoiceRuntimeConnector { _, _ -> true },
+                    connector = GatewayVoiceRuntimeConnector { _, _ -> GatewayVoiceRuntimeConnectResult.Connected },
                     clearRuntime = {},
                 )
             val result = composition.compose()
@@ -182,7 +182,9 @@ class GatewayVoiceRuntimeCompositionTest {
                     GatewayBootstrapClientResult.Success(grant())
                 },
                 bindingProvider = { LocalGatewayBinding.FreshInstall },
-                connector = GatewayVoiceRuntimeConnector { _, _ -> false },
+                connector = GatewayVoiceRuntimeConnector { _, _ -> GatewayVoiceRuntimeConnectResult.Rejected(
+                        GatewayVoiceRuntimeConnectFailure(GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_OPEN),
+                    ) },
                 clearRuntime = { clearCount += 1 },
             ).compose()
         assertTrue(connectionRejected is GatewayVoiceRuntimeCompositionResult.Rejected)
@@ -190,9 +192,45 @@ class GatewayVoiceRuntimeCompositionTest {
             GatewayVoiceRuntimeCompositionError.CONNECTION_REJECTED,
             (connectionRejected as GatewayVoiceRuntimeCompositionResult.Rejected).error,
         )
+        assertEquals(GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_OPEN, connectionRejected.connectionFailure?.stage)
+        assertFalse(connectionRejected.retryAuthorized)
         assertEquals(3, clearCount)
     }
 
+    @Test
+    fun `W14 connection rejection carries diagnostic without retry authority`() {
+        val failure = GatewayVoiceRuntimeConnectFailure(
+            stage = GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_OPEN,
+            persistedSessionExpired = true,
+        )
+        val result = GatewayVoiceRuntimeComposition(
+            grantSource = GatewayBootstrapGrantSource { _, _ -> GatewayBootstrapClientResult.Success(grant()) },
+            bindingProvider = { localGatewayBindingFrom(boundState()) },
+            connector = GatewayVoiceRuntimeConnector { _, _ ->
+                GatewayVoiceRuntimeConnectResult.Rejected(failure)
+            },
+            clearRuntime = {},
+        ).compose() as GatewayVoiceRuntimeCompositionResult.Rejected
+        assertEquals(GatewayVoiceRuntimeCompositionError.CONNECTION_REJECTED, result.error)
+        assertEquals(GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_OPEN, result.connectionFailure?.stage)
+        assertTrue(result.connectionFailure?.persistedSessionExpired == true)
+        assertFalse(result.authorizesExecution)
+        assertFalse(result.provesExecutionSuccess)
+        assertFalse(result.retryAuthorized)
+    }
+
+    @Test
+    fun `credential shaped upstream codes are excluded from diagnostic envelope`() {
+        try {
+            GatewayVoiceRuntimeConnectFailure(
+                stage = GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_OPEN,
+                upstreamCode = "gwc_privatecredential",
+            )
+            fail("unallowlisted diagnostic must be rejected")
+        } catch (_: IllegalArgumentException) {
+            // Strict uppercase code allowlist; no bearer may reach the bootstrap screen.
+        }
+    }
     @Test
     fun `reconnect uses exact active binding without clearing healthy runtime`() {
         val binding = localGatewayBindingFrom(boundState()) as LocalGatewayBinding.Bound
@@ -213,7 +251,7 @@ class GatewayVoiceRuntimeCompositionTest {
                 reconnector = GatewayVoiceRuntimeReconnector { value, registrationVersion ->
                     observedGrant = value
                     observedRegistrationVersion = registrationVersion
-                    true
+                    GatewayVoiceRuntimeConnectResult.Connected
                 },
                 clearRuntime = { clearCount += 1 },
             )
@@ -237,7 +275,7 @@ class GatewayVoiceRuntimeCompositionTest {
                     GatewayBootstrapClientResult.Success(grant())
                 },
                 bindingProvider = { LocalGatewayBinding.FreshInstall },
-                connector = GatewayVoiceRuntimeConnector { _, _ -> true },
+                connector = GatewayVoiceRuntimeConnector { _, _ -> GatewayVoiceRuntimeConnectResult.Connected },
                 clearRuntime = { clearCount += 1 },
             )
         val freshResult = fresh.reconnect() as GatewayVoiceRuntimeCompositionResult.Rejected
@@ -252,8 +290,10 @@ class GatewayVoiceRuntimeCompositionTest {
                     GatewayBootstrapClientResult.Success(grant())
                 },
                 bindingProvider = { bound },
-                connector = GatewayVoiceRuntimeConnector { _, _ -> true },
-                reconnector = GatewayVoiceRuntimeReconnector { _, _ -> false },
+                connector = GatewayVoiceRuntimeConnector { _, _ -> GatewayVoiceRuntimeConnectResult.Connected },
+                reconnector = GatewayVoiceRuntimeReconnector { _, _ -> GatewayVoiceRuntimeConnectResult.Rejected(
+                        GatewayVoiceRuntimeConnectFailure(GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_OPEN),
+                    ) },
                 clearRuntime = { clearCount += 1 },
             ).reconnect() as GatewayVoiceRuntimeCompositionResult.Rejected
         assertEquals(GatewayVoiceRuntimeCompositionError.RECONNECT_REJECTED, rejected.error)
