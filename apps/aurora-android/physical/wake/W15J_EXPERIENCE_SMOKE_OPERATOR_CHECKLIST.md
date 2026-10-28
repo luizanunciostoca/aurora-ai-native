@@ -1,7 +1,7 @@
 # W15-J Experience Gate — guided physical smoke (eight checks)
 
 Status: `OPERATOR_RUNBOOK / NO_AUTOMATIC_PASS`  
-Authority: [W15-J experience-first decision](../../../docs/governance/w15/W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md)
+Authority: [W15-J experience-first decision](../../../../docs/governance/w15/W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md)
 
 This is **not** the original full DP5 acceptance runbook. Keep the 48-scenario DP5 harness, wake campaign and dossier machinery intact for W20-H.
 
