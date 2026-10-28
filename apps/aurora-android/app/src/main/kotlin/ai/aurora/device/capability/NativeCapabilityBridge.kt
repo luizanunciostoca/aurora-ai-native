@@ -29,16 +29,21 @@ class NativeCapabilityBridge(
     }
 
     fun discover(capabilityId: String): NativeCapabilityObservation {
-        val currentMs = nowMs()
         val binding = bindingsById[capabilityId]
-            ?: return NativeCapabilityObservation(
-                capabilityId = capabilityId,
-                availability = NativeCapabilityAvailability.UNKNOWN_CAPABILITY,
-                observedAtMs = currentMs,
-                expiresAtMs = currentMs,
-            )
+            ?: run {
+                val currentMs = nowMs()
+                return NativeCapabilityObservation(
+                    capabilityId = capabilityId,
+                    availability = NativeCapabilityAvailability.UNKNOWN_CAPABILITY,
+                    observedAtMs = currentMs,
+                    expiresAtMs = currentMs,
+                )
+            }
 
-        return observe(binding, runtimeProbe.snapshot(binding), currentMs)
+        // Sample the validation clock after the platform probe. Sampling before it would classify
+        // a normal later observation as future and therefore stale even when permissions are valid.
+        val snapshot = runtimeProbe.snapshot(binding)
+        return observe(binding, snapshot, nowMs())
     }
 
     fun discoverAll(): List<NativeCapabilityObservation> =
@@ -51,17 +56,20 @@ class NativeCapabilityBridge(
      * It does not authorize an action and does not replace W07 target/current-authority validation.
      */
     fun resolve(capabilityId: String): NativeCapabilityResolution {
-        val currentMs = nowMs()
         val binding = bindingsById[capabilityId]
-            ?: return NativeCapabilityResolution.Rejected(
-                NativeCapabilityObservation(
-                    capabilityId = capabilityId,
-                    availability = NativeCapabilityAvailability.UNKNOWN_CAPABILITY,
-                    observedAtMs = currentMs,
-                    expiresAtMs = currentMs,
-                ),
-            )
-        val observation = observe(binding, runtimeProbe.snapshot(binding), currentMs)
+            ?: run {
+                val currentMs = nowMs()
+                return NativeCapabilityResolution.Rejected(
+                    NativeCapabilityObservation(
+                        capabilityId = capabilityId,
+                        availability = NativeCapabilityAvailability.UNKNOWN_CAPABILITY,
+                        observedAtMs = currentMs,
+                        expiresAtMs = currentMs,
+                    ),
+                )
+            }
+        val snapshot = runtimeProbe.snapshot(binding)
+        val observation = observe(binding, snapshot, nowMs())
         return if (observation.isAvailable) {
             NativeCapabilityResolution.Ready(binding = binding, observation = observation)
         } else {

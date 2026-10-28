@@ -39,9 +39,9 @@ object WakeVoiceRuntimeRegistry {
         activity: Activity,
         transcript: String,
         transcriptConfidence: Double?,
-        nowMs: Long = System.currentTimeMillis(),
+        nowMs: () -> Long = { System.currentTimeMillis() },
     ): WakeVoiceRoute {
-        var catalog = GovernedVoiceCommandCatalog(projectionStore::current, nowMs = { nowMs }).snapshot()
+        var catalog = GovernedVoiceCommandCatalog(projectionStore::current, nowMs = nowMs).snapshot()
         if (shouldRecoverGovernedVoiceCatalog(catalog) && Looper.myLooper() != Looper.getMainLooper()) {
             // Process death intentionally clears process-local projection/ingress objects. A fresh
             // utterance may recompose that transport state once from persisted W14 metadata plus a
@@ -52,7 +52,7 @@ object WakeVoiceRuntimeRegistry {
                 runCatching { app?.reconnectLocalVoiceIngressFromPendingBootstrap() }
                     .getOrNull() is GatewayVoiceRuntimeCompositionResult.Composed
             if (recovered) {
-                catalog = GovernedVoiceCommandCatalog(projectionStore::current, nowMs = { nowMs }).snapshot()
+                catalog = GovernedVoiceCommandCatalog(projectionStore::current, nowMs = nowMs).snapshot()
             }
         }
         if (catalog !is GovernedVoiceCatalogResult.Ready) {
@@ -70,7 +70,7 @@ object WakeVoiceRuntimeRegistry {
                 promptLauncher = PermissionPromptLauncher {
                     error("wake fast path must never launch permission UI implicitly")
                 },
-                nowMs = { nowMs },
+                nowMs = nowMs,
             )
         val microphone =
             permissionBroker.observe(RuntimePermissionRequirement(Manifest.permission.RECORD_AUDIO))
@@ -94,7 +94,7 @@ object WakeVoiceRuntimeRegistry {
                     )
                 },
                 authorityIngress = authorityIngress,
-                nowMs = { nowMs },
+                nowMs = nowMs,
             )
         return router.route(transcript, transcriptConfidence)
     }
