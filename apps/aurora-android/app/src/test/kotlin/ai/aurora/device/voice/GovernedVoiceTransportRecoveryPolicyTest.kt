@@ -32,6 +32,7 @@ class GovernedVoiceTransportRecoveryPolicyTest {
                     GovernedVoiceCatalogRejection.DUPLICATE_NATIVE_OBSERVATION,
                     GovernedVoiceCatalogRejection.DUPLICATE_COMMAND_ID,
                     GovernedVoiceCatalogRejection.UNKNOWN_CAPABILITY_REFERENCE,
+                    GovernedVoiceCatalogRejection.EMPTY_COMMANDS,
                 )
         ) {
             assertFalse(

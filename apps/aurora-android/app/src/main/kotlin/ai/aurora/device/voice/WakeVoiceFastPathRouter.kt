@@ -41,7 +41,15 @@ sealed interface WakeVoiceRoute {
         val reason: WakeVoiceFallbackReason,
         val decision: VoiceFastPathDecision? = null,
         val dispatch: VoiceDispatchCandidate? = null,
-    ) : WakeVoiceRoute
+        val catalogRejection: GovernedVoiceCatalogRejection? = null,
+    ) : WakeVoiceRoute {
+        init {
+            require(
+                catalogRejection == null ||
+                    reason == WakeVoiceFallbackReason.COMMAND_CATALOG_UNAVAILABLE
+            )
+        }
+    }
 }
 
 data class WakeVoiceFastPathInputs(

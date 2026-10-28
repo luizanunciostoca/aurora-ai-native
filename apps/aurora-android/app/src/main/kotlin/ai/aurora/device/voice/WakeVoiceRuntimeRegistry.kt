@@ -58,6 +58,7 @@ object WakeVoiceRuntimeRegistry {
         if (catalog !is GovernedVoiceCatalogResult.Ready) {
             return WakeVoiceRoute.ConversationFallback(
                 WakeVoiceFallbackReason.COMMAND_CATALOG_UNAVAILABLE,
+                catalogRejection = (catalog as? GovernedVoiceCatalogResult.Rejected)?.reason,
             )
         }
 

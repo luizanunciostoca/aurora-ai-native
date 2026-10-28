@@ -1,6 +1,7 @@
 package ai.aurora.device.wake
 
 import android.content.Context
+import ai.aurora.device.voice.GovernedVoiceCatalogRejection
 
 /**
  * Stores bounded operational wake diagnostics only. No PCM, transcript, secret, authority token,
@@ -18,6 +19,8 @@ data class WakeRuntimeStatus(
     val lastEvaluationLatencyMs: Long?,
     val lastEvaluationConfidence: Double?,
     val lastEvaluationResult: String?,
+    val lastCatalogRejection: GovernedVoiceCatalogRejection?,
+    val lastCatalogRejectionAtMs: Long?,
 )
 
 class WakeRuntimeStatusStore(context: Context) {
@@ -38,6 +41,11 @@ class WakeRuntimeStatusStore(context: Context) {
             lastEvaluationConfidence =
                 preferences.longOrNull(KEY_LAST_EVALUATION_CONFIDENCE_BITS)?.let { bits -> Double.fromBits(bits) },
             lastEvaluationResult = preferences.getString(KEY_LAST_EVALUATION_RESULT, null),
+            lastCatalogRejection =
+                preferences.getString(KEY_LAST_CATALOG_REJECTION, null)?.let { code ->
+                    enumValues<GovernedVoiceCatalogRejection>().firstOrNull { it.name == code }
+                },
+            lastCatalogRejectionAtMs = preferences.longOrNull(KEY_LAST_CATALOG_REJECTION_AT),
         )
 
     fun update(
@@ -71,6 +79,17 @@ class WakeRuntimeStatusStore(context: Context) {
         )
     }
 
+    /** Stores only the closed enum, never a transcript, tenant, grant, token or exception body. */
+    fun recordCatalogRejection(reason: GovernedVoiceCatalogRejection) {
+        check(
+            preferences
+                .edit()
+                .putString(KEY_LAST_CATALOG_REJECTION, reason.name)
+                .putLong(KEY_LAST_CATALOG_REJECTION_AT, System.currentTimeMillis())
+                .commit(),
+        )
+    }
+
     fun incrementConfirmed() = increment(KEY_CONFIRMED)
 
     fun incrementRejectedOrIgnored() = increment(KEY_REJECTED)
@@ -96,5 +115,7 @@ class WakeRuntimeStatusStore(context: Context) {
         private const val KEY_LAST_EVALUATION_LATENCY = "last_evaluation_latency_ms"
         private const val KEY_LAST_EVALUATION_CONFIDENCE_BITS = "last_evaluation_confidence_bits"
         private const val KEY_LAST_EVALUATION_RESULT = "last_evaluation_result"
+        private const val KEY_LAST_CATALOG_REJECTION = "last_catalog_rejection"
+        private const val KEY_LAST_CATALOG_REJECTION_AT = "last_catalog_rejection_at_ms"
     }
 }

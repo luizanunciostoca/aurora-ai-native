@@ -18,6 +18,14 @@ class GovernedVoiceCatalogProjectionTest {
     }
 
     @Test
+    fun emptyVocabularyIsRejectedWithSpecificNonAuthorizingDiagnostic() {
+        val empty = bundle().copy(vocabulary = vocabulary(bindings = emptyList()))
+        val result = catalog(empty).snapshot() as GovernedVoiceCatalogResult.Rejected
+
+        assertEquals(GovernedVoiceCatalogRejection.EMPTY_COMMANDS, result.reason)
+    }
+
+    @Test
     fun onlyCurrentTenantMatchedDeviceCapabilityWithNativeObservationBecomesAvailable() {
         val result = catalog(bundle()).snapshot() as GovernedVoiceCatalogResult.Ready
         assertEquals(setOf("camera.open"), result.snapshot.availableCapabilityIds)

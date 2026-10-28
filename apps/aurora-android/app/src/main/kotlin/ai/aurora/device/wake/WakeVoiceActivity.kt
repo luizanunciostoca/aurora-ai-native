@@ -212,12 +212,14 @@ class WakeVoiceActivity : Activity() {
                     runOnUiThread {
                         if (isFinishing || isDestroyed) return@runOnUiThread
                         when (work) {
-                            is GovernedVoiceTurnWorkResult.Fallback ->
+                            is GovernedVoiceTurnWorkResult.Fallback -> {
+                                work.route.catalogRejection?.let(statusStore::recordCatalogRejection)
                                 complete(
                                     state = "VOICE_FALLBACK_${work.route.reason.name}",
                                     display = AuroraAssistantResponseComposer.fallback(work.route),
                                     stage = AuroraAssistantStage.DEGRADED,
                                 )
+                            }
                             is GovernedVoiceTurnWorkResult.Authority ->
                                 handleGovernedConsumption(work.route, work.consumption)
                         }

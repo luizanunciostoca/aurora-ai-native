@@ -232,6 +232,12 @@ class MainActivity : Activity() {
                 appendLine("Wake runtime: $runtimeLabel")
                 appendLine("Confirmed wakes: ${runtime.confirmedWakeCount}")
                 append("Rejected/ignored: ${runtime.rejectedOrIgnoredCount}")
+                runtime.lastCatalogRejection?.let { reason ->
+                    append("\nLast catalog rejection: ${reason.name}")
+                    runtime.lastCatalogRejectionAtMs?.let { observedAtMs ->
+                        append(" (observed at $observedAtMs ms)")
+                    }
+                }
                 errorLabel?.let { append("\nLast sanitized error: $it") }
             },
         )

@@ -178,6 +178,7 @@ enum class GovernedVoiceCatalogRejection {
     DUPLICATE_NATIVE_OBSERVATION,
     DUPLICATE_COMMAND_ID,
     UNKNOWN_CAPABILITY_REFERENCE,
+    EMPTY_COMMANDS,
 }
 
 sealed interface GovernedVoiceCatalogResult {
@@ -273,6 +274,12 @@ class GovernedVoiceCommandCatalog(
                         },
                 )
             }
+
+        if (commands.isEmpty()) {
+            return GovernedVoiceCatalogResult.Rejected(
+                GovernedVoiceCatalogRejection.EMPTY_COMMANDS,
+            )
+        }
 
         return GovernedVoiceCatalogResult.Ready(
             GovernedVoiceCatalogSnapshot(
