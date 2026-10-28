@@ -104,5 +104,8 @@ test('a smoke record cannot assert DP5 certification or execution authority', ()
   assert.throws(() => validateExperienceEvidence(record), /dp5Certified must be explicitly false/);
   record.dp5Certified = false;
   record.authorizesExecution = true;
-  assert.throws(() => validateExperienceEvidence(record), /authorizesExecution must be explicitly false/);
+  assert.throws(
+    () => validateExperienceEvidence(record),
+    /authorizesExecution must be explicitly false/,
+  );
 });
