@@ -22,5 +22,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Verify W15-J Experience Gate fail-closed evidence rules
+        run: node tools/acceptance/w15j-experience-gate.test.mjs
       - run: npm run build
       - run: npm run audit:cleanup
