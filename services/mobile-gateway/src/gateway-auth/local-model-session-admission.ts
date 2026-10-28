@@ -99,9 +99,7 @@ function validTime(value: unknown): value is number {
   );
 }
 
-function parseBody(
-  value: unknown,
-): {
+function parseBody(value: unknown): {
   readonly deviceSessionId: string;
   readonly requestId: string;
   readonly deadlineMs: number;
