@@ -32,6 +32,9 @@ import ai.aurora.device.voice.GatewayBootstrapGrantSource
 import ai.aurora.device.voice.GatewayVoiceRuntimeComposition
 import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionError
 import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionResult
+import ai.aurora.device.voice.GatewayVoiceRuntimeConnectFailure
+import ai.aurora.device.voice.GatewayVoiceRuntimeConnectResult
+import ai.aurora.device.voice.GatewayVoiceRuntimeConnectStage
 import ai.aurora.device.voice.GatewayVoiceRuntimeConnector
 import ai.aurora.device.voice.GatewayVoiceRuntimeReconnector
 import ai.aurora.device.voice.GovernedW07VoiceAuthorityIngress
@@ -183,18 +186,42 @@ class AuroraApplication : Application() {
                 reason = "governed device command consumer is not composed",
             )
 
+    /**
+     * The bootstrap exchange has already verified the one-use reference. Every subsequent
+     * failure is returned as an allowlisted stage, never as a bearer, device ID or retry grant.
+     * An expired persisted W14 session is diagnostic context, not permission to bypass W14.
+     */
     private fun connectLocalGatewayVoiceIngress(
         grant: GatewayBootstrapGrant,
         expectedRegistrationVersion: Int?,
-    ): Boolean {
-        val client =
-            runCatching {
-                GatewayDevicePlaneClient.forPhysicalAdbReverse(
-                    config = environmentConfig,
-                    sessionClient = secureDeviceSessionClient,
-                    port = 8080,
-                )
-            }.getOrNull() ?: return false
+    ): GatewayVoiceRuntimeConnectResult {
+        val persistedSessionExpired = runCatching {
+            deviceSessionMetadataStore.load().session?.let {
+                System.currentTimeMillis() >= it.gatewayAuthExpiresAtMs
+            } ?: false
+        }.getOrDefault(false)
+        fun rejected(
+            stage: GatewayVoiceRuntimeConnectStage,
+            result: GatewayDevicePlaneResult<*>? = null,
+        ): GatewayVoiceRuntimeConnectResult.Rejected {
+            val network = result as? GatewayDevicePlaneResult.Rejected
+            return GatewayVoiceRuntimeConnectResult.Rejected(
+                GatewayVoiceRuntimeConnectFailure(
+                    stage = stage,
+                    networkError = network?.error,
+                    upstreamCode = network?.upstreamCode?.takeIf { it.matches(Regex("[A-Z][A-Z0-9_]{0,63}")) },
+                    persistedSessionExpired = persistedSessionExpired,
+                ),
+            )
+        }
+
+        val client = runCatching {
+            GatewayDevicePlaneClient.forPhysicalAdbReverse(
+                config = environmentConfig,
+                sessionClient = secureDeviceSessionClient,
+                port = 8080,
+            )
+        }.getOrNull() ?: return rejected(GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_CLIENT)
         val credentialProvider = OneShotGatewayCredentialProvider(grant.credential)
         val request =
             GatewayDevicePlaneConnectRequest(
@@ -209,76 +236,92 @@ class AuroraApplication : Application() {
                 expectedRegistrationVersion = expectedRegistrationVersion,
             )
 
-        val result =
-            try {
-                client.connect(request)
-            } catch (_: Exception) {
-                null
-            } finally {
-                // Even a failed or uncertain connection attempt must not retain the bootstrap credential.
-                credentialProvider.clear()
-            }
+        val result = try {
+            client.connect(request)
+        } catch (_: Exception) {
+            null
+        } finally {
+            // Do not retain or replay the one-shot credential after any outcome.
+            credentialProvider.clear()
+        }
         if (result !is GatewayDevicePlaneResult.Success) {
             runCatching { client.close() }
-            return false
+            return rejected(GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_OPEN, result)
         }
 
         val projectionResult = runCatching { client.fetchVoiceProjection() }.getOrNull()
         if (projectionResult !is GatewayDevicePlaneResult.Success) {
             runCatching { client.close() }
-            return false
+            return rejected(GatewayVoiceRuntimeConnectStage.VOICE_PROJECTION_FETCH, projectionResult)
         }
-        val installedProjection =
-            runCatching {
-                installableGatewayVoiceProjection(
-                    context = this,
-                    projection = projectionResult.value,
-                    expectedTenantId = grant.tenantId,
-                    runtimeProbe = if (BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) PhysicalAcceptanceNativeRuntimeProbe(this) else null,
-                )
-            }.getOrNull()
+        val installedProjection = runCatching {
+            installableGatewayVoiceProjection(
+                context = this,
+                projection = projectionResult.value,
+                expectedTenantId = grant.tenantId,
+                runtimeProbe =
+                    if (BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) PhysicalAcceptanceNativeRuntimeProbe(this)
+                    else null,
+            )
+        }.getOrNull()
         if (installedProjection == null) {
             runCatching { client.close() }
-            return false
+            return rejected(GatewayVoiceRuntimeConnectStage.VOICE_PROJECTION_INSTALL)
         }
 
         val actionPort = AndroidDeviceActionPorts.create(this)
-        val consumer =
-            runCatching {
-                W15JGatewayDeviceCommandConsumer.forAndroid(
-                    client = client,
-                    capabilityBridge = installedProjection.capabilityBridge,
-                    permissionContext = this,
-                    actionPort = actionPort,
-                    appIntegrationResolver = installedProjection.appIntegrationResolver,
-                )
-            }.getOrNull()
+        val consumer = runCatching {
+            W15JGatewayDeviceCommandConsumer.forAndroid(
+                client = client,
+                capabilityBridge = installedProjection.capabilityBridge,
+                permissionContext = this,
+                actionPort = actionPort,
+                appIntegrationResolver = installedProjection.appIntegrationResolver,
+            )
+        }.getOrNull()
         if (consumer == null) {
             runCatching { client.close() }
-            return false
+            return rejected(GatewayVoiceRuntimeConnectStage.DEVICE_COMMAND_CONSUMER)
         }
         val offlineRuntime = composeOfflineRuntime(client, installedProjection, actionPort)
         if (offlineRuntime == null) {
             runCatching { client.close() }
-            return false
+            return rejected(GatewayVoiceRuntimeConnectStage.OFFLINE_RUNTIME)
         }
 
-        // Projection and native availability are installed before the W07 ingress becomes reachable.
-        // None of these local objects is authority; the side-effect consumer still requires the
-        // short-lived W07 authorization carried in the exact W14 claim envelope.
         WakeVoiceRuntimeRegistry.projectionStore.replace(installedProjection.bundle)
         activeGatewayDevicePlaneClient = client
         activeGatewayVoiceProjection = installedProjection
         activeGatewayCommandConsumer = consumer
         activeGatewayOfflineRuntime = offlineRuntime
         WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
-        return true
+        return GatewayVoiceRuntimeConnectResult.Connected
     }
 
     private fun reconnectLocalGatewayVoiceIngress(
         grant: GatewayBootstrapGrant,
         expectedRegistrationVersion: Int,
-    ): Boolean {
+    ): GatewayVoiceRuntimeConnectResult {
+        val persistedSessionExpired = runCatching {
+            deviceSessionMetadataStore.load().session?.let {
+                System.currentTimeMillis() >= it.gatewayAuthExpiresAtMs
+            } ?: false
+        }.getOrDefault(false)
+        fun rejected(
+            stage: GatewayVoiceRuntimeConnectStage,
+            result: GatewayDevicePlaneResult<*>? = null,
+        ): GatewayVoiceRuntimeConnectResult.Rejected {
+            val network = result as? GatewayDevicePlaneResult.Rejected
+            return GatewayVoiceRuntimeConnectResult.Rejected(
+                GatewayVoiceRuntimeConnectFailure(
+                    stage = stage,
+                    networkError = network?.error,
+                    upstreamCode = network?.upstreamCode?.takeIf { it.matches(Regex("[A-Z][A-Z0-9_]{0,63}")) },
+                    persistedSessionExpired = persistedSessionExpired,
+                ),
+            )
+        }
+
         val existingClient = activeGatewayDevicePlaneClient
         val client = existingClient ?: runCatching {
             GatewayDevicePlaneClient.forPhysicalAdbReverse(
@@ -286,7 +329,7 @@ class AuroraApplication : Application() {
                 sessionClient = secureDeviceSessionClient,
                 port = 8080,
             )
-        }.getOrNull() ?: return false
+        }.getOrNull() ?: return rejected(GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_CLIENT)
         val credentialProvider = OneShotGatewayCredentialProvider(grant.credential)
         val request =
             GatewayDevicePlaneReconnectRequest(
@@ -301,54 +344,56 @@ class AuroraApplication : Application() {
                 expectedRegistrationVersion = expectedRegistrationVersion,
             )
 
-        val result =
-            try {
-                if (existingClient == null) {
-                    client.reconnectFromPersisted(request, deviceSessionMetadataStore.load())
-                } else {
-                    client.reconnect(request)
-                }
-            } catch (_: Exception) {
-                null
-            } finally {
-                credentialProvider.clear()
+        val result = try {
+            if (existingClient == null) {
+                client.reconnectFromPersisted(request, deviceSessionMetadataStore.load())
+            } else {
+                client.reconnect(request)
             }
+        } catch (_: Exception) {
+            null
+        } finally {
+            credentialProvider.clear()
+        }
         if (result !is GatewayDevicePlaneResult.Success) {
             if (existingClient == null) runCatching { client.close() }
-            return false
+            return rejected(GatewayVoiceRuntimeConnectStage.DEVICE_PLANE_OPEN, result)
         }
         activeGatewayDevicePlaneClient = client
 
         val projectionResult = runCatching { client.fetchVoiceProjection() }.getOrNull()
-        if (projectionResult !is GatewayDevicePlaneResult.Success) return false
-        val installedProjection =
-            runCatching {
-                installableGatewayVoiceProjection(
-                    context = this,
-                    projection = projectionResult.value,
-                    expectedTenantId = grant.tenantId,
-                    runtimeProbe = if (BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) PhysicalAcceptanceNativeRuntimeProbe(this) else null,
-                )
-            }.getOrNull() ?: return false
+        if (projectionResult !is GatewayDevicePlaneResult.Success) {
+            return rejected(GatewayVoiceRuntimeConnectStage.VOICE_PROJECTION_FETCH, projectionResult)
+        }
+        val installedProjection = runCatching {
+            installableGatewayVoiceProjection(
+                context = this,
+                projection = projectionResult.value,
+                expectedTenantId = grant.tenantId,
+                runtimeProbe =
+                    if (BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS) PhysicalAcceptanceNativeRuntimeProbe(this)
+                    else null,
+            )
+        }.getOrNull() ?: return rejected(GatewayVoiceRuntimeConnectStage.VOICE_PROJECTION_INSTALL)
         val actionPort = AndroidDeviceActionPorts.create(this)
-        val consumer =
-            runCatching {
-                W15JGatewayDeviceCommandConsumer.forAndroid(
-                    client = client,
-                    capabilityBridge = installedProjection.capabilityBridge,
-                    permissionContext = this,
-                    actionPort = actionPort,
-                    appIntegrationResolver = installedProjection.appIntegrationResolver,
-                )
-            }.getOrNull() ?: return false
-        val offlineRuntime = composeOfflineRuntime(client, installedProjection, actionPort) ?: return false
+        val consumer = runCatching {
+            W15JGatewayDeviceCommandConsumer.forAndroid(
+                client = client,
+                capabilityBridge = installedProjection.capabilityBridge,
+                permissionContext = this,
+                actionPort = actionPort,
+                appIntegrationResolver = installedProjection.appIntegrationResolver,
+            )
+        }.getOrNull() ?: return rejected(GatewayVoiceRuntimeConnectStage.DEVICE_COMMAND_CONSUMER)
+        val offlineRuntime = composeOfflineRuntime(client, installedProjection, actionPort)
+            ?: return rejected(GatewayVoiceRuntimeConnectStage.OFFLINE_RUNTIME)
 
         WakeVoiceRuntimeRegistry.projectionStore.replace(installedProjection.bundle)
         activeGatewayVoiceProjection = installedProjection
         activeGatewayCommandConsumer = consumer
         activeGatewayOfflineRuntime = offlineRuntime
         WakeVoiceRuntimeRegistry.installAuthorityIngress(GovernedW07VoiceAuthorityIngress(client))
-        return true
+        return GatewayVoiceRuntimeConnectResult.Connected
     }
 
     private fun composeOfflineRuntime(
