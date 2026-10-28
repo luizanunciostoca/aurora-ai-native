@@ -41,7 +41,7 @@ class VoiceCapabilityInquiryTest {
         val response =
             VoiceCapabilityInventory.describe(
                 ready(
-                    available = setOf("audio.volume.set"),
+                    available = setOf("audio.volume.set", "shell.execute"),
                     commands =
                         listOf(
                             definition("volume-up", "audio.volume.set", VoiceCommandRisk.LOW),
