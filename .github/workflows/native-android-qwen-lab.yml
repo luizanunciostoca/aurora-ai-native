@@ -38,6 +38,49 @@ jobs:
           test "$actual" = "$UPSTREAM_SHA"
           echo "Pinned upstream SHA: $actual"
 
+      - name: Disable backups and device migration in the disposable lab sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c '
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          base = Path("upstream-llama/examples/llama.android/app/src/main")
+          manifest = base / "AndroidManifest.xml"
+          old = manifest.read_text(encoding="utf-8")
+          before = "android:allowBackup=\"true\""
+          if old.count(before) != 1:
+              raise SystemExit("LAB_UPSTREAM_BACKUP_PRECONDITION_CHANGED")
+          manifest.write_text(old.replace(before, "android:allowBackup=\"false\""), encoding="utf-8")
+
+          extraction = base / "res/xml/data_extraction_rules.xml"
+          original = extraction.read_text(encoding="utf-8")
+          if "<data-extraction-rules>" not in original:
+              raise SystemExit("LAB_UPSTREAM_EXTRACTION_PRECONDITION_CHANGED")
+          extraction.write_text("""<?xml version="1.0" encoding="utf-8"?>
+          <data-extraction-rules>
+              <cloud-backup><exclude domain="root" path="." /></cloud-backup>
+              <device-transfer><exclude domain="root" path="." /></device-transfer>
+          </data-extraction-rules>
+          """, encoding="utf-8")
+
+          legacy = base / "res/xml/backup_rules.xml"
+          legacy_original = legacy.read_text(encoding="utf-8")
+          if "<full-backup-content>" not in legacy_original:
+              raise SystemExit("LAB_UPSTREAM_LEGACY_BACKUP_PRECONDITION_CHANGED")
+          legacy.write_text("""<?xml version="1.0" encoding="utf-8"?>
+          <full-backup-content>
+              <exclude domain="root" path="." />
+          </full-backup-content>
+          """, encoding="utf-8")
+          for candidate in (manifest, extraction, legacy):
+              ET.parse(candidate)
+          print("LAB_BACKUP_AND_TRANSFER_EXCLUDED_AT_SOURCE")
+          '
+          git -C upstream-llama diff --check
+          test "$(git -C upstream-llama diff --name-only | wc -l)" -eq 3
+
       - name: Set up JDK 17
         uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
@@ -82,6 +125,10 @@ jobs:
           test -s "$apk"
           test -s "$aar"
           unzip -Z1 "$apk" | awk '/^lib\/arm64-v8a\/.*\.so$/ { found = 1 } END { exit(found ? 0 : 1) }'
+          test "$(apkanalyzer manifest application-id "$apk")" = 'com.example.llama.aichat'
+          merged_manifest="$(apkanalyzer manifest print "$apk")"
+          grep -Fq 'android:allowBackup="false"' <<< "$merged_manifest"
+          echo 'LAB_BACKUP_DISABLED_VERIFIED_FROM_APK'
           echo 'UPSTREAM_SAMPLE_ONLY_NOT_AURORA_APK'
           sha256sum "$apk" "$aar"
 
