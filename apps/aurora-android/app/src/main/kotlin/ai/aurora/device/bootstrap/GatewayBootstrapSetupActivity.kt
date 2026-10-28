@@ -11,6 +11,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import ai.aurora.device.AuroraApplication
+import ai.aurora.device.BuildConfig
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.ui.AuroraActivityUi
 import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionError
@@ -165,8 +166,8 @@ class GatewayBootstrapSetupActivity : Activity() {
     }
 }
 
-private fun GatewayVoiceRuntimeCompositionResult.toOperatorMessage(reconnect: Boolean): String =
-    when (this) {
+private fun GatewayVoiceRuntimeCompositionResult.toOperatorMessage(reconnect: Boolean): String {
+    val summary = when (this) {
         GatewayVoiceRuntimeCompositionResult.Composed ->
             if (reconnect) {
                 "Canal W14 reconectado com nova conexão; sessão governada retomada."
@@ -189,3 +190,16 @@ private fun GatewayVoiceRuntimeCompositionResult.toOperatorMessage(reconnect: Bo
                     "Reconexão autenticada rejeitada; runtime local foi fechado com segurança."
             }
     }
+    if (
+        !BuildConfig.AURORA_PHYSICAL_ACCEPTANCE_CONTROLS ||
+        this !is GatewayVoiceRuntimeCompositionResult.Rejected ||
+        connectionFailure == null
+    ) {
+        return summary
+    }
+    val details = connectionFailure
+    // Enum values and allowlisted error codes only. No credential, identifier or request body.
+    return "$summary Diagnóstico W14: etapa=${details.stage.name}; rede=${details.networkError?.name ?: "NA"}; " +
+        "origem=${details.upstreamCode ?: "NA"}; sessão_persistida_expirada=${details.persistedSessionExpired}. " +
+        "Nenhuma retentativa automática está autorizada."
+}
