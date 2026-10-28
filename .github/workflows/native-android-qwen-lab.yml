@@ -1,0 +1,96 @@
+name: Native Android llama.cpp feasibility (lab only)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/native-android-qwen-lab.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-android-llama-lab-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-upstream-sample:
+    # Never run untrusted fork code with the repository's workflow identity.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      UPSTREAM_SHA: 8642541b255bfb5dc39cd351a178be09013a55d6
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx2g -Dorg.gradle.workers.max=2
+    steps:
+      - name: Check out pinned public upstream Android sample
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 8642541b255bfb5dc39cd351a178be09013a55d6
+          path: upstream-llama
+          persist-credentials: false
+
+      - name: Verify exact upstream identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git -C upstream-llama rev-parse HEAD)"
+          test "$actual" = "$UPSTREAM_SHA"
+          echo "Pinned upstream SHA: $actual"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          log-accepted-android-sdk-licenses: false
+
+      - name: Set up pinned Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '8.14.3'
+          cache-read-only: true
+
+      - name: Install upstream-required SDK, NDK and CMake
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install \
+            'platforms;android-36' \
+            'build-tools;36.0.0' \
+            'ndk;29.0.13113456' \
+            'cmake;3.31.6'
+
+      - name: Build only upstream debug lab APK and Android library
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --console=plain \
+            -p upstream-llama/examples/llama.android \
+            :lib:assembleDebug :app:assembleDebug
+
+      - name: Check ARM64 native library and artifact hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='upstream-llama/examples/llama.android/app/build/outputs/apk/debug/app-debug.apk'
+          aar='upstream-llama/examples/llama.android/lib/build/outputs/aar/lib-debug.aar'
+          test -s "$apk"
+          test -s "$aar"
+          unzip -Z1 "$apk" | awk '/^lib\/arm64-v8a\/.*\.so$/ { found = 1 } END { exit(found ? 0 : 1) }'
+          echo 'UPSTREAM_SAMPLE_ONLY_NOT_AURORA_APK'
+          sha256sum "$apk" "$aar"
+
+      - name: Retain non-shipping lab artifacts for two days
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: upstream-llama-android-lab-not-aurora
+          if-no-files-found: error
+          retention-days: 2
+          path: |
+            upstream-llama/examples/llama.android/app/build/outputs/apk/debug/app-debug.apk
+            upstream-llama/examples/llama.android/lib/build/outputs/aar/lib-debug.aar
