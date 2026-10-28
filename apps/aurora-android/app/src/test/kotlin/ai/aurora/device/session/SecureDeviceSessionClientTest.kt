@@ -19,7 +19,8 @@ class SecureDeviceSessionClientTest {
         val material = client.prepareRegistrationKey()
         assertFalse(material.authorizesExecution)
         assertTrue(client.acceptRegistration(registration()).isSuccess())
-        assertTrue(client.acceptSession(session(), nowMs = 200).isSuccess())
+        assertTrue(client.acceptSession(session(), nowMs = 200, gatewayGeneration = 7).isSuccess())
+        assertEquals(7, store.state.session?.gatewayGeneration)
         assertEquals(DeviceSessionAvailability.ACTIVE, client.sessionAvailability(300))
 
         val payload = "challenge".encodeToByteArray()

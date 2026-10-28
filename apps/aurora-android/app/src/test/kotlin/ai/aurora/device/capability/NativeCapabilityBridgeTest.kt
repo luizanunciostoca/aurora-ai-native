@@ -75,6 +75,23 @@ class NativeCapabilityBridgeTest {
     }
 
     @Test
+    fun `platform observation a millisecond after entry is not falsely classified as future`() {
+        var clockMs = NOW_MS
+        val bridge =
+            NativeCapabilityBridge(
+                bindings = listOf(binding()),
+                runtimeProbe = NativeRuntimeProbe {
+                    clockMs += 1L
+                    availableSnapshot(observedAtMs = clockMs)
+                },
+                nowMs = { clockMs },
+            )
+
+        assertEquals(NativeCapabilityAvailability.AVAILABLE, bridge.discover(CAPABILITY_ID).availability)
+        assertTrue(bridge.resolve(CAPABILITY_ID) is NativeCapabilityResolution.Ready)
+    }
+
+    @Test
     fun `unsupported api and feature are deterministic local availability failures`() {
         val lowApi = fixture(snapshot = availableSnapshot(apiLevel = 27), minApiLevel = 28)
         val missingFeature =

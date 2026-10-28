@@ -15,6 +15,16 @@ function collectTests(directory, tests) {
   }
 }
 
+function collectW15JAcceptanceTests(tests) {
+  const directory = resolve(repoRoot, 'tools/acceptance');
+  if (!existsSync(directory)) return;
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.startsWith('w15j-') && entry.name.endsWith('.test.mjs')) {
+      tests.push(join(directory, entry.name));
+    }
+  }
+}
+
 function run(command, args) {
   return spawnSync(command, args, { cwd: repoRoot, stdio: 'inherit' }).status ?? 1;
 }
@@ -61,7 +71,11 @@ const controlTests = [];
 collectTests(resolve(repoRoot, 'packages/control/test'), controlTests);
 controlTests.sort();
 
-const testFiles = ['tools/test/smoke.test.mjs', ...controlTests];
+const w15jAcceptanceTests = [];
+collectW15JAcceptanceTests(w15jAcceptanceTests);
+w15jAcceptanceTests.sort();
+
+const testFiles = ['tools/test/smoke.test.mjs', ...w15jAcceptanceTests, ...controlTests];
 let status = run(process.execPath, ['--experimental-strip-types', '--test', ...testFiles]);
 
 const executorTests = [];
@@ -150,6 +164,6 @@ if (status === 0) {
 
 const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 console.log(
-  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} context_tests=${contextTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
+  `[aurora:test] control_tests=${controlTests.length} w15j_acceptance_tests=${w15jAcceptanceTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} context_tests=${contextTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
 );
 process.exit(status);

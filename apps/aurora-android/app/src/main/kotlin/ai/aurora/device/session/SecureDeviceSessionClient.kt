@@ -194,7 +194,9 @@ class SecureDeviceSessionClient(
     fun acceptSession(
         session: W14DeviceSessionTrustView,
         nowMs: Long,
+        gatewayGeneration: Int = 1,
     ): DeviceSessionClientResult<LocalDeviceSessionState> {
+        require(gatewayGeneration > 0) { "gatewayGeneration must be positive" }
         val current = metadataStore.load()
         val registration = current.registration
             ?: return DeviceSessionClientResult.Rejected(
@@ -258,6 +260,7 @@ class SecureDeviceSessionClient(
                     connectionId = session.connectionId,
                     gatewayAuthExpiresAtMs = session.gatewayAuthExpiresAtMs,
                     lastEvaluatedAtMs = session.lastEvaluatedAtMs,
+                    gatewayGeneration = gatewayGeneration,
                 ),
             )
         metadataStore.save(next)

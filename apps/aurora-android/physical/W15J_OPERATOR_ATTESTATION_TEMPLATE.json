@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "w15j-attestation-v1",
+  "role": "OPERATOR",
+  "identity": "REQUIRED_TRIMMED_BOUNDED_OPERATOR_IDENTITY",
+  "observedAtUtc": "REQUIRED_RFC3339_UTC_WITHIN_COLLECTOR_WINDOW",
+  "androidCandidateSha": "REQUIRED_40_HEX",
+  "hostCandidateSha": "REQUIRED_40_HEX",
+  "reconciledMainSha": "REQUIRED_40_HEX",
+  "packagingHeadSha": "REQUIRED_40_HEX",
+  "artifactId": "REQUIRED",
+  "apkSha256": "REQUIRED_64_HEX",
+  "hostInstanceId": "REQUIRED_whi_<64-lowercase-hex>",
+  "statement": "REQUIRED_TRIMMED_BOUNDED_ATTESTATION_STATEMENT"
+}

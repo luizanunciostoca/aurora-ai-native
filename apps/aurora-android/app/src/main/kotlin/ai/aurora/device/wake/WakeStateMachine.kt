@@ -3,14 +3,13 @@ package ai.aurora.device.wake
 import java.util.concurrent.atomic.AtomicLong
 
 /** Deterministic acoustic/presence state only; transitions never confer action authority. */
-class WakeStateMachine(
+class WakeStateMachine internal constructor(
     private val config: WakeConfig = WakeConfig(),
+    private val acceptanceHistory: WakeAcceptanceHistory = WakeAcceptanceHistory(),
 ) {
     var state: WakeState = WakeState.DISABLED
         private set
 
-    private var lastAcceptedAtMs: Long? = null
-    private var lastAcceptedFingerprint: String? = null
     private val candidateSequence = AtomicLong(0)
 
     fun transition(next: WakeState) {
@@ -39,8 +38,7 @@ class WakeStateMachine(
 
     fun disarm() {
         state = WakeState.DISABLED
-        lastAcceptedAtMs = null
-        lastAcceptedFingerprint = null
+        acceptanceHistory.clear()
     }
 
     fun evaluate(observation: WakeObservation): WakeEvaluation {
@@ -65,22 +63,8 @@ class WakeStateMachine(
             return WakeEvaluation.Rejected(RejectionReason.SELF_PLAYBACK)
         }
 
-        val previousAt = lastAcceptedAtMs
-        if (previousAt != null) {
-            val elapsed = observation.observedAtMs - previousAt
-            if (elapsed < 0 || elapsed < config.debounceMs) {
-                return WakeEvaluation.Rejected(RejectionReason.DEBOUNCED)
-            }
-            if (elapsed < config.cooldownMs) {
-                return WakeEvaluation.Rejected(RejectionReason.COOLDOWN)
-            }
-            if (
-                elapsed < config.duplicateWindowMs &&
-                observation.featureFingerprint == lastAcceptedFingerprint
-            ) {
-                return WakeEvaluation.Rejected(RejectionReason.DUPLICATE)
-            }
-        }
+        val bounded = acceptanceHistory.evaluateAndRecord(observation, config)
+        if (bounded != null) return WakeEvaluation.Rejected(bounded)
 
         transition(WakeState.HOTWORD_CANDIDATE)
         val candidate =
@@ -92,8 +76,6 @@ class WakeStateMachine(
                 confidence = observation.confidence,
                 featureFingerprint = observation.featureFingerprint,
             )
-        lastAcceptedAtMs = observation.observedAtMs
-        lastAcceptedFingerprint = observation.featureFingerprint
         transition(WakeState.HOTWORD_CONFIRMED)
         return WakeEvaluation.Confirmed(candidate)
     }

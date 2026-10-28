@@ -34,7 +34,9 @@ class AuroraAudioArbiter(
 
     @Synchronized
     fun tryAcquire(owner: AudioOwner): Boolean {
-        if (!isCompatible(owner)) return false
+        // Leases are intentionally non-reentrant. owners is a set, so accepting the same logical
+        // owner twice would allow the first release to erase the second component's live lease.
+        if (owner in owners || !isCompatible(owner)) return false
         owners += owner
         return true
     }
@@ -69,8 +71,8 @@ class AuroraAudioArbiter(
     @Synchronized
     private fun isCompatible(owner: AudioOwner): Boolean =
         when (owner) {
-            AudioOwner.STT -> owners.isEmpty() || owners == setOf(AudioOwner.STT)
-            AudioOwner.ENROLLMENT -> owners.isEmpty() || owners == setOf(AudioOwner.ENROLLMENT)
+            AudioOwner.STT -> owners.isEmpty()
+            AudioOwner.ENROLLMENT -> owners.isEmpty()
             AudioOwner.TTS ->
                 AudioOwner.STT !in owners &&
                     AudioOwner.ENROLLMENT !in owners &&

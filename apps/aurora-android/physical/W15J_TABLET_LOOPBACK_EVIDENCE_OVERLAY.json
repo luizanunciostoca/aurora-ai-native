@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "w15j-tablet-loopback-overlay-v1",
+  "environment": {
+    "gatewayTransport": "LOCAL_TABLET_LOOPBACK",
+    "adbReversePort": null,
+    "controlPlane": "SELF_ADB_WIRELESS_DEBUGGING"
+  },
+  "transportInvariant": "The exact W15-J host owns 127.0.0.1:8080 and 127.0.0.1:8081 on the same representative tablet. No adb reverse mapping for either port may exist during the physical window. Self-ADB is control/evidence only and never authority.",
+  "authorityInvariant": "INTELLIGENCE != AUTHORITY != EXECUTION",
+  "physicallyAccepted": false
+}

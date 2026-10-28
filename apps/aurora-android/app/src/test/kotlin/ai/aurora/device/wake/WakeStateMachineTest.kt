@@ -103,4 +103,34 @@ class WakeStateMachineTest {
         val duplicate = machine.evaluate(WakeObservation(1_700, 0.95, "same"))
         assertEquals(RejectionReason.DUPLICATE, (duplicate as WakeEvaluation.Rejected).reason)
     }
+
+    @Test
+    fun `suppression survives wake engine recreation when history is shared`() {
+        val config =
+            WakeConfig(
+                debounceMs = 200,
+                cooldownMs = 500,
+                duplicateWindowMs = 1_000,
+            )
+        val sharedHistory = WakeAcceptanceHistory()
+        val firstEngineMachine = WakeStateMachine(config, sharedHistory)
+        firstEngineMachine.arm()
+        assertTrue(
+            firstEngineMachine.evaluate(
+                WakeObservation(1_000, 0.95, "same"),
+            ) is WakeEvaluation.Confirmed,
+        )
+
+        val rearmedEngineMachine = WakeStateMachine(config, sharedHistory)
+        rearmedEngineMachine.arm()
+
+        val debounced = rearmedEngineMachine.evaluate(WakeObservation(1_100, 0.95, "different"))
+        assertEquals(RejectionReason.DEBOUNCED, (debounced as WakeEvaluation.Rejected).reason)
+        val cooldown = rearmedEngineMachine.evaluate(WakeObservation(1_300, 0.95, "different"))
+        assertEquals(RejectionReason.COOLDOWN, (cooldown as WakeEvaluation.Rejected).reason)
+        val duplicate = rearmedEngineMachine.evaluate(WakeObservation(1_700, 0.95, "same"))
+        assertEquals(RejectionReason.DUPLICATE, (duplicate as WakeEvaluation.Rejected).reason)
+        val accepted = rearmedEngineMachine.evaluate(WakeObservation(2_100, 0.95, "same"))
+        assertTrue(accepted is WakeEvaluation.Confirmed)
+    }
 }

@@ -60,8 +60,12 @@ object WakeSetupUiPolicy {
                     "O treinamento foi interrompido ao sair da tela. Inicie novamente e mantenha esta tela visível durante as três amostras."
                 !input.modelReady ->
                     "Treine três amostras de Aurora antes de ativar a escuta local."
-                input.wakeEnabled && input.assistantRoleAvailable && !input.assistantSelected ->
-                    "O wake local está configurado. Para acordar a Aurora em segundo plano, defina Aurora como assistente padrão do Android."
+                input.wakeEnabled && !input.assistantSelected ->
+                    if (input.assistantRoleAvailable) {
+                        "O wake local está configurado. Para acordar a Aurora em segundo plano, defina Aurora como assistente padrão do Android."
+                    } else {
+                        "O Android não expôs o pedido rápido de assistente. Use o botão abaixo para abrir Apps padrão e selecione Aurora em App assistente digital."
+                    }
                 input.wakeEnabled ->
                     "Wake local configurado. Diga Aurora para iniciar uma interação; a detecção nunca concede autoridade de ação."
                 else ->
@@ -78,8 +82,8 @@ object WakeSetupUiPolicy {
             }
         val assistantButtonLabel =
             when {
-                !input.assistantRoleAvailable -> "Assistente padrão indisponível neste Android"
                 input.assistantSelected -> "Aurora já é o assistente padrão"
+                !input.assistantRoleAvailable -> "Abrir configuração de assistente padrão"
                 else -> "Definir Aurora como assistente padrão"
             }
 
@@ -95,8 +99,9 @@ object WakeSetupUiPolicy {
                 if (input.privacyModeEnabled) "Desativar modo de privacidade" else "Ativar modo de privacidade",
             canRequestMicrophone = !input.microphoneGranted && !enrollmentActive,
             canTrain = input.microphoneGranted && !input.privacyModeEnabled && !enrollmentActive,
-            canRequestAssistantRole =
-                input.assistantRoleAvailable && !input.assistantSelected && !enrollmentActive,
+            // Even when ROLE_ASSISTANT itself is unavailable, the explicit user action must remain
+            // usable so the coordinator can fall back to Android's Default apps settings.
+            canRequestAssistantRole = !input.assistantSelected && !enrollmentActive,
             canEnableWake =
                 input.microphoneGranted &&
                     input.modelReady &&

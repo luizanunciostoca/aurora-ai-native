@@ -2,6 +2,7 @@ package ai.aurora.device.voice
 
 import android.Manifest
 import android.app.Activity
+import android.os.Looper
 import ai.aurora.device.AuroraApplication
 import ai.aurora.device.permission.AndroidRuntimePermissionProbe
 import ai.aurora.device.permission.PermissionConsentBroker
@@ -38,12 +39,27 @@ object WakeVoiceRuntimeRegistry {
         activity: Activity,
         transcript: String,
         transcriptConfidence: Double?,
-        nowMs: Long = System.currentTimeMillis(),
+        nowMs: () -> Long = { System.currentTimeMillis() },
     ): WakeVoiceRoute {
-        val catalog = GovernedVoiceCommandCatalog(projectionStore::current, nowMs = { nowMs }).snapshot()
+        val androidApp = activity.application as? AuroraApplication
+        val currentProjection = { androidApp?.currentVoiceProjectionWithFreshNativeState() }
+        var catalog = GovernedVoiceCommandCatalog(currentProjection, nowMs = nowMs).snapshot()
+        if (shouldRecoverGovernedVoiceCatalog(catalog) && Looper.myLooper() != Looper.getMainLooper()) {
+            // Process death intentionally clears process-local projection/ingress objects. A fresh
+            // utterance may recompose that transport state once from persisted W14 metadata plus a
+            // new authenticated bootstrap grant. This is transport recovery only: no command has
+            // been submitted yet, and failure leaves the normal fail-closed conversation fallback.
+            val recovered =
+                runCatching { androidApp?.reconnectLocalVoiceIngressFromPendingBootstrap() }
+                    .getOrNull() is GatewayVoiceRuntimeCompositionResult.Composed
+            if (recovered) {
+                catalog = GovernedVoiceCommandCatalog(currentProjection, nowMs = nowMs).snapshot()
+            }
+        }
         if (catalog !is GovernedVoiceCatalogResult.Ready) {
             return WakeVoiceRoute.ConversationFallback(
                 WakeVoiceFallbackReason.COMMAND_CATALOG_UNAVAILABLE,
+                catalogRejection = (catalog as? GovernedVoiceCatalogResult.Rejected)?.reason,
             )
         }
 
@@ -55,7 +71,7 @@ object WakeVoiceRuntimeRegistry {
                 promptLauncher = PermissionPromptLauncher {
                     error("wake fast path must never launch permission UI implicitly")
                 },
-                nowMs = { nowMs },
+                nowMs = nowMs,
             )
         val microphone =
             permissionBroker.observe(RuntimePermissionRequirement(Manifest.permission.RECORD_AUDIO))
@@ -79,7 +95,7 @@ object WakeVoiceRuntimeRegistry {
                     )
                 },
                 authorityIngress = authorityIngress,
-                nowMs = { nowMs },
+                nowMs = nowMs,
             )
         return router.route(transcript, transcriptConfidence)
     }

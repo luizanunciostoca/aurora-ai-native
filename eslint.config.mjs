@@ -41,7 +41,7 @@ export default tseslint.config(
     name: 'aurora/node-tooling',
     files: ['tools/**/*.{js,mjs,cjs}'],
     languageOptions: {
-      globals: { console: 'readonly', process: 'readonly' },
+      globals: { console: 'readonly', process: 'readonly', structuredClone: 'readonly' },
     },
   },
 );

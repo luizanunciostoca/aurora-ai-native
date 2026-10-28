@@ -32,6 +32,26 @@ class WakeVoiceFastPathRouterTest {
     }
 
     @Test
+    fun `redacted catalog diagnostic can accompany only catalog fallback`() {
+        val reason = GovernedVoiceCatalogRejection.REGISTRY_NOT_CURRENT
+        val catalogFallback =
+            WakeVoiceRoute.ConversationFallback(
+                WakeVoiceFallbackReason.COMMAND_CATALOG_UNAVAILABLE,
+                catalogRejection = reason,
+            )
+
+        assertEquals(reason, catalogFallback.catalogRejection)
+        assertTrue(
+            runCatching {
+                WakeVoiceRoute.ConversationFallback(
+                    WakeVoiceFallbackReason.FAST_PATH_BLOCKED,
+                    catalogRejection = reason,
+                )
+            }.isFailure,
+        )
+    }
+
+    @Test
     fun `missing recognizer confidence cannot borrow wake confidence`() {
         val router = router(W07VoiceAuthorityIngressResult.AcceptedForEvaluation)
 

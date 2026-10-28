@@ -100,6 +100,32 @@ data class WakeCandidate(
     }
 }
 
+enum class WakeEvaluationResult {
+    CONFIRMED,
+    REJECTED,
+}
+
+data class WakeEvaluationTelemetry(
+    val id: String,
+    val observedAtMs: Long,
+    val latencyMs: Long,
+    val confidence: Double,
+    val result: WakeEvaluationResult,
+    val authorizesExecution: Boolean = false,
+    val provesExecutionSuccess: Boolean = false,
+    val retryAuthorized: Boolean = false,
+) {
+    init {
+        require(id.isNotBlank() && id.length <= 128)
+        require(observedAtMs >= 0)
+        require(latencyMs >= 0)
+        require(confidence in 0.0..1.0)
+        require(!authorizesExecution) { "wake telemetry never authorizes execution" }
+        require(!provesExecutionSuccess) { "wake telemetry never proves an outcome" }
+        require(!retryAuthorized) { "wake telemetry never authorizes retry" }
+    }
+}
+
 sealed interface WakeEvaluation {
     data class Confirmed(val candidate: WakeCandidate) : WakeEvaluation
     data class Rejected(val reason: RejectionReason) : WakeEvaluation

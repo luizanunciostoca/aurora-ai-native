@@ -7,11 +7,14 @@ import android.text.InputType
 import android.text.TextWatcher
 import android.view.View
 import android.view.WindowManager
+import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import ai.aurora.device.AuroraApplication
 import ai.aurora.device.config.AuroraEnvironment
 import ai.aurora.device.ui.AuroraActivityUi
+import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionError
+import ai.aurora.device.voice.GatewayVoiceRuntimeCompositionResult
 
 /**
  * LOCAL physical-acceptance helper only. The reference is copied directly into process memory and
@@ -20,11 +23,14 @@ import ai.aurora.device.ui.AuroraActivityUi
  */
 class GatewayBootstrapSetupActivity : Activity() {
     private var referenceView: EditText? = null
+    private var actionButton: Button? = null
+    private var reconnectButton: Button? = null
+    private var compositionInProgress = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // A bootstrap reference is transient credential material. Prevent recents/screenshot capture
-        // and do not let the EditText participate in instance-state/autofill persistence.
+        // The bootstrap reference is transient credential material. Prevent task/screenshot capture
+        // and do not let the EditText participate in instance-state or autofill persistence.
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
         val app = application as AuroraApplication
@@ -59,22 +65,25 @@ class GatewayBootstrapSetupActivity : Activity() {
         referenceView = reference
         layout.addView(reference)
 
-        val loadButton =
-            AuroraActivityUi.actionButton(this, "Carregar bootstrap temporário") {
-                val candidate = reference.text?.toString().orEmpty()
-                reference.text?.clear()
-                val installed = app.localGatewayBootstrapRuntime().installReference(candidate)
-                status.text =
-                    if (installed) {
-                        "Bootstrap temporário carregado somente em memória. Agora retorne ao fluxo de teste físico."
-                    } else {
-                        "Referência inválida; nenhum bootstrap foi carregado. Solicite uma referência nova ao host LOCAL."
-                    }
+        val action =
+            AuroraActivityUi.actionButton(this, "Conectar runtime governado") {
+                submitReference(app, status, reconnect = false)
             }.apply {
                 isEnabled = false
                 filterTouchesWhenObscured = true
             }
-        layout.addView(loadButton)
+        actionButton = action
+        layout.addView(action)
+
+        val reconnect =
+            AuroraActivityUi.actionButton(this, "Reconectar runtime governado") {
+                submitReference(app, status, reconnect = true)
+            }.apply {
+                isEnabled = false
+                filterTouchesWhenObscured = true
+            }
+        reconnectButton = reconnect
+        layout.addView(reconnect)
         reference.addTextChangedListener(
             object : TextWatcher {
                 override fun beforeTextChanged(
@@ -90,7 +99,9 @@ class GatewayBootstrapSetupActivity : Activity() {
                     before: Int,
                     count: Int,
                 ) {
-                    loadButton.isEnabled = !s.isNullOrBlank()
+                    val enabled = !compositionInProgress && !s.isNullOrBlank()
+                    actionButton?.isEnabled = enabled
+                    reconnectButton?.isEnabled = enabled
                 }
 
                 override fun afterTextChanged(s: Editable?) = Unit
@@ -99,9 +110,48 @@ class GatewayBootstrapSetupActivity : Activity() {
         setContentView(screen.root)
     }
 
+    private fun submitReference(
+        app: AuroraApplication,
+        status: TextView,
+        reconnect: Boolean,
+    ) {
+        if (compositionInProgress) return
+        val reference = referenceView ?: return
+        val candidate = reference.text?.toString().orEmpty()
+        reference.text?.clear()
+        if (!app.localGatewayBootstrapRuntime().installReference(candidate)) {
+            status.text =
+                "Referência inválida; nenhum bootstrap foi carregado. Solicite uma referência nova ao host LOCAL."
+            return
+        }
+
+        compositionInProgress = true
+        actionButton?.isEnabled = false
+        reconnectButton?.isEnabled = false
+        status.text =
+            if (reconnect) "Reconectando canal W14 autenticado…" else "Compondo canal W14 autenticado e ingress W07 governado…"
+        Thread(
+            {
+                val result =
+                    if (reconnect) app.reconnectLocalVoiceIngressFromPendingBootstrap()
+                    else app.composeLocalVoiceIngressFromPendingBootstrap()
+                runOnUiThread {
+                    compositionInProgress = false
+                    if (!isFinishing && !isDestroyed) {
+                        val enabled = !reference.text.isNullOrBlank()
+                        actionButton?.isEnabled = enabled
+                        reconnectButton?.isEnabled = enabled
+                        status.text = result.toOperatorMessage(reconnect)
+                    }
+                }
+            },
+            if (reconnect) "aurora-w14-bootstrap-reconnect" else "aurora-w14-bootstrap-compose",
+        ).start()
+    }
+
     override fun onStop() {
-        // If the operator leaves this screen before submitting, do not retain credential text in a
-        // stopped Activity instance or task snapshot.
+        // If the operator leaves before submitting, do not retain credential text in a stopped
+        // Activity instance or task snapshot.
         referenceView?.text?.clear()
         super.onStop()
     }
@@ -109,6 +159,33 @@ class GatewayBootstrapSetupActivity : Activity() {
     override fun onDestroy() {
         referenceView?.text?.clear()
         referenceView = null
+        actionButton = null
+        reconnectButton = null
         super.onDestroy()
     }
 }
+
+private fun GatewayVoiceRuntimeCompositionResult.toOperatorMessage(reconnect: Boolean): String =
+    when (this) {
+        GatewayVoiceRuntimeCompositionResult.Composed ->
+            if (reconnect) {
+                "Canal W14 reconectado com nova conexão; sessão governada retomada."
+            } else {
+                "Canal W14 autenticado pronto; comandos de voz seguem para avaliação W07 governada."
+            }
+        is GatewayVoiceRuntimeCompositionResult.Rejected ->
+            when (error) {
+                GatewayVoiceRuntimeCompositionError.LOCAL_RUNTIME_UNAVAILABLE ->
+                    "Runtime local indisponível; composição bloqueada."
+                GatewayVoiceRuntimeCompositionError.LOCAL_BINDING_INVALID ->
+                    "Binding local inconsistente; composição bloqueada."
+                GatewayVoiceRuntimeCompositionError.BOOTSTRAP_REJECTED ->
+                    "Bootstrap rejeitado; obtenha uma nova referência temporária."
+                GatewayVoiceRuntimeCompositionError.TENANT_BINDING_MISMATCH ->
+                    "Binding autenticado divergente; composição bloqueada."
+                GatewayVoiceRuntimeCompositionError.CONNECTION_REJECTED ->
+                    "Canal autenticado indisponível; composição bloqueada."
+                GatewayVoiceRuntimeCompositionError.RECONNECT_REJECTED ->
+                    "Reconexão autenticada rejeitada; runtime local foi fechado com segurança."
+            }
+    }

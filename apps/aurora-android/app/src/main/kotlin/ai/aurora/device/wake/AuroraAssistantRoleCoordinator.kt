@@ -3,6 +3,7 @@ package ai.aurora.device.wake
 import android.app.Activity
 import android.app.role.RoleManager
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -21,6 +22,9 @@ data class AuroraAssistantRoleSnapshot(
 ) {
     val selected: Boolean
         get() = roleHeld || activeVoiceInteractionService
+
+    val wakeEligible: Boolean
+        get() = if (roleAvailable) roleHeld else activeVoiceInteractionService
 }
 
 enum class AuroraAssistantSelectionLaunch {
@@ -33,11 +37,11 @@ enum class AuroraAssistantSelectionLaunch {
 }
 
 object AuroraAssistantRoleCoordinator {
-    fun snapshot(activity: Activity): AuroraAssistantRoleSnapshot {
+    fun snapshot(context: Context): AuroraAssistantRoleSnapshot {
         val activeService =
             VoiceInteractionService.isActiveService(
-                activity,
-                ComponentName(activity, AuroraVoiceInteractionService::class.java),
+                context,
+                ComponentName(context, AuroraVoiceInteractionService::class.java),
             )
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             return AuroraAssistantRoleSnapshot(
@@ -47,9 +51,14 @@ object AuroraAssistantRoleCoordinator {
             )
         }
 
-        val roles = activity.getSystemService(RoleManager::class.java)
-        val roleAvailable = roles?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true
-        val roleHeld = roleAvailable && roles?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
+        val roles = context.getSystemService(RoleManager::class.java)
+        val roleAvailable = runCatching {
+            roles?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true
+        }.getOrDefault(false)
+        val roleHeld =
+            roleAvailable &&
+                runCatching { roles?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true }
+                    .getOrDefault(false)
         return AuroraAssistantRoleSnapshot(
             roleAvailable = roleAvailable,
             roleHeld = roleHeld,
@@ -57,6 +66,10 @@ object AuroraAssistantRoleCoordinator {
         )
     }
 
+    /**
+     * Prefer the platform role-consent sheet when it is available. If an OEM does not expose the
+     * role, or refuses to launch the sheet, fall back to the system's default-app settings.
+     */
     fun requestSelection(
         activity: Activity,
         requestCode: Int,
@@ -66,7 +79,9 @@ object AuroraAssistantRoleCoordinator {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && current.roleAvailable) {
             val roles = activity.getSystemService(RoleManager::class.java)
-            val roleIntent = runCatching { roles?.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT) }.getOrNull()
+            val roleIntent =
+                runCatching { roles?.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT) }
+                    .getOrNull()
             if (
                 roleIntent != null &&
                 runCatching { activity.startActivityForResult(roleIntent, requestCode) }.isSuccess
@@ -75,6 +90,15 @@ object AuroraAssistantRoleCoordinator {
             }
         }
 
+        return openSystemSelection(activity)
+    }
+
+    /**
+     * Continue an explicit user request after an OEM role sheet returned without selecting Aurora.
+     * This never changes the role itself; it only opens a user-controlled Android settings surface.
+     */
+    fun continueSelectionAfterRoleResult(activity: Activity): AuroraAssistantSelectionLaunch {
+        if (snapshot(activity).selected) return AuroraAssistantSelectionLaunch.ALREADY_SELECTED
         return openSystemSelection(activity)
     }
 
@@ -88,12 +112,29 @@ object AuroraAssistantRoleCoordinator {
                 Settings.ACTION_SETTINGS to AuroraAssistantSelectionLaunch.GENERAL_SETTINGS,
             )
 
+        // Do not preflight with PackageManager.resolveActivity(). Package-visibility filtering can
+        // hide a Settings activity from queries even though startActivity() is permitted. Trying the
+        // public Settings actions directly and catching failure is both safer and more reliable.
         for ((action, result) in routes) {
             val intent = Intent(action).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            val resolvable = runCatching { intent.resolveActivity(activity.packageManager) != null }.getOrDefault(false)
-            if (!resolvable) continue
             if (runCatching { activity.startActivity(intent) }.isSuccess) return result
         }
         return AuroraAssistantSelectionLaunch.FAILED
     }
+
+    fun userGuidance(result: AuroraAssistantSelectionLaunch): String =
+        when (result) {
+            AuroraAssistantSelectionLaunch.ALREADY_SELECTED ->
+                "Aurora já é o assistente padrão deste dispositivo."
+            AuroraAssistantSelectionLaunch.ROLE_REQUEST ->
+                "Confirme Aurora na tela de seleção do Android."
+            AuroraAssistantSelectionLaunch.DEFAULT_APPS_SETTINGS ->
+                "Em Apps padrão, abra App assistente digital e selecione Aurora."
+            AuroraAssistantSelectionLaunch.VOICE_INPUT_SETTINGS ->
+                "Abra a opção de assistente/entrada por voz e selecione Aurora."
+            AuroraAssistantSelectionLaunch.GENERAL_SETTINGS ->
+                "Abra Aplicativos > Apps padrão > App assistente digital e selecione Aurora."
+            AuroraAssistantSelectionLaunch.FAILED ->
+                "Não consegui abrir a seleção automaticamente. Abra Configurações > Aplicativos > Apps padrão > App assistente digital e selecione Aurora."
+        }
 }
