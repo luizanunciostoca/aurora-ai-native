@@ -21,6 +21,7 @@ const MAX_INPUT_BYTES = 8_192;
 const MAX_OUTPUT_BYTES = 32_768;
 const MAX_TOKENS = 256;
 const MAX_REQUEST_MS = 30_000;
+const MAX_MODEL_OBSERVATION_AGE_MS = 10_000;
 
 /** Structural projection of an already selected W05-B MODEL route. */
 export interface SelectedModelRouteProjection {
@@ -28,6 +29,14 @@ export interface SelectedModelRouteProjection {
   readonly family: 'MODEL';
   readonly strategyId: string;
   readonly strategyVersion: string;
+  readonly selectedVia: 'PREFERRED' | 'FALLBACK';
+  readonly currentAvailability: 'CURRENT_AVAILABLE' | 'CURRENT_DEGRADED';
+  readonly evidence: Readonly<{
+    strategyRegistryVersion: string;
+    capabilityPlanStatus: 'READY' | 'BLOCKED';
+    budgetState: 'WITHIN_BUDGET' | 'DEGRADED' | 'EXHAUSTED';
+    budgetAction: 'CONTINUE_OPTIONAL' | 'DEGRADE_OPTIONAL' | 'STOP_OPTIONAL' | 'HOLD';
+  }>;
   readonly tenant: Readonly<{ tenantId: string }>;
   readonly correlation: Readonly<{ correlationId: string }>;
   readonly authoritySemantics: 'INTELLIGENCE_ONLY_NO_AUTHORITY';
@@ -112,6 +121,13 @@ function validRoute(request: LocalInferenceRequest): boolean {
     route.family === 'MODEL' &&
     route.strategyId === LOCAL_QWEN_STRATEGY_ID &&
     nonEmpty(route.strategyVersion) &&
+    (route.selectedVia === 'PREFERRED' || route.selectedVia === 'FALLBACK') &&
+    (route.currentAvailability === 'CURRENT_AVAILABLE' ||
+      route.currentAvailability === 'CURRENT_DEGRADED') &&
+    nonEmpty(route.evidence?.strategyRegistryVersion) &&
+    route.evidence.capabilityPlanStatus === 'READY' &&
+    route.evidence.budgetState === 'WITHIN_BUDGET' &&
+    route.evidence.budgetAction === 'CONTINUE_OPTIONAL' &&
     route.tenant?.tenantId === request.tenantId &&
     route.correlation?.correlationId === request.correlationId &&
     nonEmpty(request.tenantId) &&
@@ -134,7 +150,8 @@ function manifestState(
     manifest.modelSha256 !== QWEN35_2B_Q4_K_M_SHA256 ||
     !Number.isSafeInteger(manifest.observedAtEpochMs) ||
     !Number.isSafeInteger(manifest.maxAgeMs) ||
-    manifest.maxAgeMs < 0
+    manifest.maxAgeMs < 0 ||
+    manifest.maxAgeMs > MAX_MODEL_OBSERVATION_AGE_MS
   ) {
     return 'INVALID';
   }
