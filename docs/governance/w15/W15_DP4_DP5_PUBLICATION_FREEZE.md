@@ -11,7 +11,7 @@ The Device Plane barrier chain consumed by W15 is:
 - `DP2` — W07 DEVICE-compatible target/executor semantics accepted.
 - `DP3` — W14 gateway/device registration/session/trust/replay/receipt-ingress integration accepted. DP3 opened with W14-H issue `#265`, PR `#384`, merge `8d2f4498983c04921ad18512fc02e759c244ff3a`.
 - `DP4` — W15 Android capability/executor core publication gate, defined below.
-- `DP5` — W15 integrated physical Android device-plane acceptance gate, defined below.
+- `DP5` — comprehensive integrated physical Android device-plane certification, now deferred to W20-H, defined below.
 
 DP4 and DP5 are publication barriers, not synonyms for “code exists” or “CI is green”. Both require governed acceptance evidence and preserve W02/W03/W04/W07/W14 authority.
 
@@ -54,15 +54,21 @@ When the criteria pass, Program Control may state:
 
 DP4 does **not** claim installed-app coverage, voice fast path, offline orchestration, Device Owner/Launcher support, physical-device performance, production SLO, device-security hardening or release readiness.
 
-## DP5 — Integrated physical Android device plane
+## W15-J — first-experience physical integration gate (2026-10-28 owner decision)
+
+W15-J now accepts a strictly scoped eight-scenario physical smoke proving the first supervised tablet experience; full DP5 is **not** a prerequisite for W16 development. The canonical decision, exact EX-01..EX-08 checks, hard-stop criteria, safety boundaries, evidence and post-merge obligations are in [W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md](W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md).
+
+W16 remains blocked until W15-J itself receives governed `aurora:accepted` on main after all eight genuine physical observations, exact-head Android/Host/DevLab gate review, Risk Gates A-D proportional to the smoke, controlled integration and post-merge CI. `EXPERIENCE_READY` alone is not a release or build authorization. A supervised first experience is not production/Release 1.0 or comprehensive DP5.
+
+## DP5 — Integrated physical Android device plane (deferred to W20-H)
 
 ### Owner
 
-W15-J is the terminal W15 node and the only node that can provide the physical-integration evidence required to close DP5. Program Control publishes DP5 only after W15-J acceptance and aggregate review.
+W20-H is the terminal physical-certification owner for **full DP5 plus DP7**. W15-J is the upstream first-experience integration gate, not the full-DP5 certification owner. Program Control may publish DP5 only after W20-H completes the original comprehensive physical evidence, risk and reviewer requirements on the final release-candidate tuple.
 
 ### Required accepted nodes
 
-DP5 requires every canonical W15 runtime node to be resolved under the frozen DAG:
+DP5 at W20-H requires every canonical W15 runtime node to be accepted under the frozen DAG, plus the W16-W19 release-relevant integration/security/telemetry handoffs:
 
 - W15-A, W15-B, W15-C, W15-D, W15-E, W15-F, W15-G, W15-H, W15-I, W15-J.
 
@@ -80,15 +86,15 @@ For W15-I, “resolved” may be an accepted, evidence-backed decision that the 
 8. measured battery/CPU/memory/storage/foreground-service/startup/reconnect observations are recorded on representative physical target hardware/builds and are labelled as W15 device observations rather than production SLOs;
 9. rollback/recovery exists for session compromise, Keystore invalidation/reinstall, app integration failure and any optional privileged deployment profile;
 10. Risk Gates A-D PASS for the integrated physical boundary;
-11. unresolved production telemetry requirements are handed to W17, device threat-hardening items to W19, and final release/rollout acceptance to W20.
+11. W17 telemetry and W19 threat-hardening handoffs are reconciled before the final physical certification; the Release 1.0 decision remains separately owned by W20-J.
 
 ### DP5 publication statement
 
 When the criteria pass, Program Control may state:
 
-`DP5 OPEN — W15 integrated physical Android device plane is accepted for downstream telemetry, hardening and release gates.`
+`DP5 OPEN — comprehensive integrated physical Android device plane is certified on the final W20-H physical release candidate.`
 
-DP5 is **not** Release 1.0 and does not supersede W17/W19/W20.
+DP5 is **not** Release 1.0 and does not supersede W20-J. In the revised sequencing, W17/W19 development may consume the accepted W15-J Experience Gate but cannot claim full DP5 certification.
 
 ## Freeze and invalidation rules
 

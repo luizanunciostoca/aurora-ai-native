@@ -34,7 +34,13 @@ CI green is necessary but not sufficient: semantic authority, failure behavior a
 | W15-G | deterministic fast-path boundary; transcript/intent separated from authority; false wake/ambiguity/privacy/lifecycle/permission negative paths; high-risk escalation |
 | W15-H | W03-compatible dedupe/replay; reconnect/process restart/prolonged offline; expired authority/session/cancelled/uncertain work not blindly replayed; duplicate and late-receipt tests |
 | W15-I | explicit deployment justification; standard-app correctness independent of privileged profile; provisioning/unprovisioning/recovery tests if implemented; elevated privilege inventory |
-| W15-J | physical Android evidence for lifecycle, session, capability, permission, native/app action, offline/reconnect, voice, kill/cancel, uncertainty; measured device performance/battery/resource observations; threat scenarios; DP4/DP5 closeout; downstream W17/W19/W20 handoff |
+| W15-J | Exactly eight representative-tablet first-experience checks EX-01..EX-08: exact APK install/start; W14 session; 5–10 exploratory wakes; one W02/W07-governed benign native effect; Receipt/Evidence/readback; DENY; cancel/kill; offline/reconnect/duplicate/restart. Must pass scoped A-D, exact-head software gates and post-merge verification. **No full DP5 publication**; original full physical matrix now belongs to W20-H. |
+
+## W15-J scope split: first experience vs final certification
+
+The repository-owner decision of 2026-10-28 changes the W15-J Definition of Done to the eight-scenario Experience Gate described in [W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md](W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md). These checks must be physically witnessed, with exact source/APK/device/environment provenance. No P0/P1 may be deferred and none of the universal exact-head acceptance lifecycle is waived.
+
+Risk Gates A-D remain mandatory on the **bounded eight-scenario integration surface**, not as a substitute for the comprehensive DP5 physical gate. The existing 48-scenario preflight validator, >=100 wake campaign, full threat/resource/role evidence, immutable sealing, operator attestation and independent certification remain intact and become W20-H prerequisites for DP5+DP7. W16 BUILD requires real W15-J `aurora:accepted` after post-merge checks; it does not require a premature `DP5 OPEN` claim.
 
 ## Risk Gate A — Correctness and state-machine integrity
 
@@ -68,7 +74,7 @@ PASS requires evidence appropriate to the node and forbids overstating scope.
 - Unit/emulator timing may demonstrate algorithmic bounds but is labelled test-only.
 - W15-A through W15-I must avoid unbounded queues, retry loops, wake locks, listeners, foreground work or storage growth.
 - W15-H must bound offline queue size/age and reconnect/retry cadence while preserving W03/W07 semantics.
-- W15-J must record physical-device observations for startup/session/reconnect and representative native execution latency plus battery/CPU/memory/storage/foreground-service effects appropriate to the target tablet/profile.
+- W15-J Experience Gate must record basic tablet startup/session/native-effect/reconnect observations sufficient to detect critical first-experience failures; the full battery/CPU/memory/storage/foreground-service observations and distributions remain mandatory for W20-H full DP5.
 - Production SLOs remain W17-owned; W15 evidence cannot be relabelled as global production SLO proof.
 
 ## Risk Gate D — Failure, recovery and reversibility
@@ -97,4 +103,4 @@ Acceptance evidence is exact-SHA evidence. Any change to candidate HEAD invalida
 - treating a transport ack/local OS success callback as verified business success without the owning W07 semantics;
 - accepting permission/trust/biometric/Keystore state as policy authority;
 - broadening W15 scope to shared/root/cross-wave files without explicit Program Control reconciliation;
-- marking DP4/DP5 closed from partial descendants or CI alone.
+- marking DP4/DP5 closed from partial descendants, W15-J experience smoke, or CI alone.
