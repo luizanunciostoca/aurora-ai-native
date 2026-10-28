@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import ai.aurora.device.AuroraApplication
 import ai.aurora.device.MainActivity
+import ai.aurora.device.executor.AndroidDeviceActionPorts
 import ai.aurora.device.executor.DeviceExecutionOutcome
 import ai.aurora.device.executor.W15JDeviceCommandConsumptionResult
 import ai.aurora.device.ui.AuroraAssistantResponseComposer
@@ -16,8 +17,13 @@ import ai.aurora.device.voice.AndroidLocalDeviceReadProvider
 import ai.aurora.device.voice.AuroraTextToSpeechOutput
 import ai.aurora.device.voice.BoundedSpeechRecognitionFailure
 import ai.aurora.device.voice.BoundedSpeechRecognizer
+import ai.aurora.device.voice.GovernedVoiceCatalogRejection
+import ai.aurora.device.voice.GovernedVoiceCatalogResult
+import ai.aurora.device.voice.GovernedVoiceCommandCatalog
 import ai.aurora.device.voice.LocalDeviceReadPolicy
 import ai.aurora.device.voice.SingleFlightWorkDispatcher
+import ai.aurora.device.voice.VoiceCapabilityInquiryPolicy
+import ai.aurora.device.voice.VoiceCapabilityInventory
 import ai.aurora.device.voice.WakeVoiceRoute
 import ai.aurora.device.voice.WakeVoiceRuntimeRegistry
 
@@ -93,25 +99,61 @@ class WakeVoiceActivity : Activity() {
                             surface.render(AuroraAssistantStage.UNDERSTANDING)
                             surface.setStatusLine("Processando sua solicitação…")
                         }
-                        val localReadIntent = LocalDeviceReadPolicy.resolve(result.transcript)
-                        if (localReadIntent != null) {
-                            val localRead =
-                                runCatching { localReadProvider.read(localReadIntent) }.getOrNull()
-                            runOnUiThread {
-                                if (isFinishing || isDestroyed) return@runOnUiThread
-                                complete(
-                                    state = "VOICE_LOCAL_READ_${localReadIntent.name}",
-                                    display =
-                                        localRead?.display
-                                            ?: "Não consegui ler essa informação do dispositivo agora.",
-                                    stage = AuroraAssistantStage.COMPLETED,
-                                )
+                        when {
+                            VoiceCapabilityInquiryPolicy.matches(result.transcript) -> {
+                                // Read-only query: never request a bootstrap grant, W07 ingress or
+                                // device effect just to describe the session's capabilities.
+                                val inventory =
+                                    runCatching {
+                                        val app = application as? AuroraApplication
+                                        val catalog =
+                                            GovernedVoiceCommandCatalog(
+                                                projectionProvider = {
+                                                    app?.currentVoiceProjectionWithFreshNativeState()
+                                                },
+                                            ).snapshot()
+                                        val nativeActions =
+                                            AndroidDeviceActionPorts.create(this).registeredActionIds()
+                                        VoiceCapabilityInventory.describe(catalog, nativeActions)
+                                    }.getOrElse {
+                                        VoiceCapabilityInventory.describe(
+                                            GovernedVoiceCatalogResult.Rejected(
+                                                GovernedVoiceCatalogRejection.PROJECTION_UNAVAILABLE,
+                                            ),
+                                            emptySet(),
+                                        )
+                                    }
+                                runOnUiThread {
+                                    if (isFinishing || isDestroyed) return@runOnUiThread
+                                    complete(
+                                        state = "VOICE_CAPABILITY_INQUIRY",
+                                        display = inventory.display,
+                                        stage = AuroraAssistantStage.COMPLETED,
+                                    )
+                                }
                             }
-                        } else {
-                            dispatchGovernedVoiceTurn(
-                                transcript = result.transcript,
-                                transcriptConfidence = result.confidence,
-                            )
+                            else -> {
+                                val localReadIntent = LocalDeviceReadPolicy.resolve(result.transcript)
+                                if (localReadIntent != null) {
+                                    val localRead =
+                                        runCatching { localReadProvider.read(localReadIntent) }.getOrNull()
+                                    runOnUiThread {
+                                        if (isFinishing || isDestroyed) return@runOnUiThread
+                                        complete(
+                                            state = "VOICE_LOCAL_READ_${localReadIntent.name}",
+                                            display =
+                                                localRead?.display
+                                                    ?: "Não consegui ler essa informação do dispositivo agora.",
+                                            stage = AuroraAssistantStage.COMPLETED,
+                                        )
+                                    }
+                                } else {
+                                    dispatchGovernedVoiceTurn(
+                                        transcript = result.transcript,
+                                        transcriptConfidence = result.confidence,
+                                    )
+                                }
+                            }
                         }
                     },
                     onFailure = { failure ->
