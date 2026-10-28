@@ -23,6 +23,14 @@ const route: SelectedModelRouteProjection = {
   family: 'MODEL',
   strategyId: LOCAL_QWEN_STRATEGY_ID,
   strategyVersion: '1',
+  selectedVia: 'PREFERRED',
+  currentAvailability: 'CURRENT_AVAILABLE',
+  evidence: {
+    strategyRegistryVersion: 'w05-e:test-v1',
+    capabilityPlanStatus: 'READY',
+    budgetState: 'WITHIN_BUDGET',
+    budgetAction: 'CONTINUE_OPTIONAL',
+  },
   tenant: { tenantId: 'tenant-test-a' },
   correlation: { correlationId: 'correlation-test-a' },
   authoritySemantics: 'INTELLIGENCE_ONLY_NO_AUTHORITY',
@@ -119,6 +127,17 @@ test('W05 local model invokes only loopback and returns untrusted text, never ex
   expectNoAuthority(result);
 });
 
+test('W05 degraded fallback is still only an informational model response', async () => {
+  const instance = client(fakeFetch(async () => completion('Resposta local com cautela')));
+  const result = await instance.infer(
+    request({
+      route: { ...route, selectedVia: 'FALLBACK', currentAvailability: 'CURRENT_DEGRADED' },
+    }),
+  );
+  assert.equal(result.status, 'GENERATED');
+  expectNoAuthority(result);
+});
+
 test('W05 local model rejects route/context/authority drift before HTTP', async () => {
   let calls = 0;
   const instance = client(
@@ -131,6 +150,16 @@ test('W05 local model rejects route/context/authority drift before HTTP', async 
     request({ tenantId: 'another-tenant' }),
     request({ correlationId: 'another-correlation' }),
     request({ route: { ...route, strategyId: 'some-other-model' } }),
+    request({ route: { ...route, currentAvailability: 'STALE' as 'CURRENT_AVAILABLE' } }),
+    request({ route: { ...route, evidence: { ...route.evidence, strategyRegistryVersion: '' } } }),
+    request({
+      route: { ...route, evidence: { ...route.evidence, capabilityPlanStatus: 'BLOCKED' } },
+    }),
+    request({ route: { ...route, evidence: { ...route.evidence, budgetState: 'EXHAUSTED' } } }),
+    request({ route: { ...route, evidence: { ...route.evidence, budgetAction: 'HOLD' } } }),
+    request({
+      route: { ...route, evidence: { ...route.evidence, budgetAction: 'DEGRADE_OPTIONAL' } },
+    }),
     request({ route: { ...route, family: 'SPECIALIST' as 'MODEL' } }),
     request({ route: { ...route, authorizesExecution: true as false } }),
     request({
@@ -162,6 +191,7 @@ test('W05 model manifest digest/freshness cannot be inferred from model output',
     { ...manifest, modelSha256: 'another-model' },
     { ...manifest, modelId: 'http://evil.invalid/Qwen3.5-2B-Q4_K_M.gguf' },
     { ...manifest, authorizesExecution: true as false },
+    { ...manifest, maxAgeMs: 100_000 },
   ];
   for (const value of invalid) {
     const result = await instance.infer(request({ manifest: value }));
