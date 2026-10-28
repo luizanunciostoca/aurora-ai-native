@@ -4,6 +4,7 @@ import ai.aurora.device.bootstrap.GatewayBootstrapClientError
 import ai.aurora.device.bootstrap.GatewayBootstrapClientResult
 import ai.aurora.device.bootstrap.GatewayBootstrapGrant
 import ai.aurora.device.network.GatewayCredentialProvider
+import ai.aurora.device.network.GatewayDevicePlaneClientError
 import ai.aurora.device.session.LocalDeviceSessionState
 import ai.aurora.device.session.W14DeviceLifecycleState
 
@@ -49,17 +50,53 @@ internal fun interface GatewayBootstrapGrantSource {
     ): GatewayBootstrapClientResult<GatewayBootstrapGrant>
 }
 
+/** Safe stage metadata. Never contains device, actor, tenant, bearer or bootstrap reference. */
+internal enum class GatewayVoiceRuntimeConnectStage {
+    DEVICE_PLANE_CLIENT,
+    DEVICE_PLANE_OPEN,
+    VOICE_PROJECTION_FETCH,
+    VOICE_PROJECTION_INSTALL,
+    DEVICE_COMMAND_CONSUMER,
+    OFFLINE_RUNTIME,
+    UNEXPECTED_FAILURE,
+}
+
+internal data class GatewayVoiceRuntimeConnectFailure(
+    val stage: GatewayVoiceRuntimeConnectStage,
+    val networkError: GatewayDevicePlaneClientError? = null,
+    val upstreamCode: String? = null,
+    val persistedSessionExpired: Boolean = false,
+) {
+    init {
+        require(upstreamCode == null || Regex("[A-Z][A-Z0-9_]{0,63}").matches(upstreamCode)) {
+            "W14 diagnostic code must be allowlisted"
+        }
+    }
+}
+
+internal sealed interface GatewayVoiceRuntimeConnectResult {
+    data object Connected : GatewayVoiceRuntimeConnectResult
+
+    data class Rejected(val failure: GatewayVoiceRuntimeConnectFailure) : GatewayVoiceRuntimeConnectResult
+}
+
 internal fun interface GatewayVoiceRuntimeConnector {
     /**
-     * Connects the already-authenticated W14 device plane and installs only the governed W07
-     * evaluation ingress. Returning true never means action authority or execution success.
+     * A typed, non-authoritative stage result. A rejected/uncertain connection never permits
+     * consuming another credential or retrying without independent reconciliation.
      */
-    fun connectAndInstall(grant: GatewayBootstrapGrant, expectedRegistrationVersion: Int?): Boolean
+    fun connectAndInstall(
+        grant: GatewayBootstrapGrant,
+        expectedRegistrationVersion: Int?,
+    ): GatewayVoiceRuntimeConnectResult
 }
 
 internal fun interface GatewayVoiceRuntimeReconnector {
-    /** Rebinds one already-composed W14 runtime to a fresh authenticated transport generation. */
-    fun reconnectAndInstall(grant: GatewayBootstrapGrant, expectedRegistrationVersion: Int): Boolean
+    /** Rebinds a W14 session only through an authenticated new transport generation. */
+    fun reconnectAndInstall(
+        grant: GatewayBootstrapGrant,
+        expectedRegistrationVersion: Int,
+    ): GatewayVoiceRuntimeConnectResult
 }
 
 internal enum class GatewayVoiceRuntimeCompositionError {
@@ -77,6 +114,7 @@ internal sealed interface GatewayVoiceRuntimeCompositionResult {
     data class Rejected(
         val error: GatewayVoiceRuntimeCompositionError,
         val bootstrapError: GatewayBootstrapClientError? = null,
+        val connectionFailure: GatewayVoiceRuntimeConnectFailure? = null,
         val authorizesExecution: Boolean = false,
         val provesExecutionSuccess: Boolean = false,
         val retryAuthorized: Boolean = false,
@@ -101,7 +139,11 @@ internal class GatewayVoiceRuntimeComposition(
     private val bindingProvider: () -> LocalGatewayBinding,
     private val connector: GatewayVoiceRuntimeConnector,
     private val reconnector: GatewayVoiceRuntimeReconnector =
-        GatewayVoiceRuntimeReconnector { _, _ -> false },
+        GatewayVoiceRuntimeReconnector { _, _ ->
+            GatewayVoiceRuntimeConnectResult.Rejected(
+                GatewayVoiceRuntimeConnectFailure(GatewayVoiceRuntimeConnectStage.UNEXPECTED_FAILURE),
+            )
+        },
     private val clearRuntime: () -> Unit,
 ) {
     @Synchronized
@@ -140,10 +182,17 @@ internal class GatewayVoiceRuntimeComposition(
 
         val connected =
             runCatching { connector.connectAndInstall(grant, bound?.registrationVersion) }
-                .getOrDefault(false)
-        if (!connected) {
+                .getOrElse {
+                    GatewayVoiceRuntimeConnectResult.Rejected(
+                        GatewayVoiceRuntimeConnectFailure(GatewayVoiceRuntimeConnectStage.UNEXPECTED_FAILURE),
+                    )
+                }
+        if (connected is GatewayVoiceRuntimeConnectResult.Rejected) {
             clearRuntime()
-            return rejected(GatewayVoiceRuntimeCompositionError.CONNECTION_REJECTED)
+            return rejected(
+                GatewayVoiceRuntimeCompositionError.CONNECTION_REJECTED,
+                connectionFailure = connected.failure,
+            )
         }
         return GatewayVoiceRuntimeCompositionResult.Composed
     }
@@ -180,10 +229,17 @@ internal class GatewayVoiceRuntimeComposition(
         }
         val reconnected =
             runCatching { reconnector.reconnectAndInstall(grant, bound.registrationVersion) }
-                .getOrDefault(false)
-        if (!reconnected) {
+                .getOrElse {
+                    GatewayVoiceRuntimeConnectResult.Rejected(
+                        GatewayVoiceRuntimeConnectFailure(GatewayVoiceRuntimeConnectStage.UNEXPECTED_FAILURE),
+                    )
+                }
+        if (reconnected is GatewayVoiceRuntimeConnectResult.Rejected) {
             clearRuntime()
-            return rejected(GatewayVoiceRuntimeCompositionError.RECONNECT_REJECTED)
+            return rejected(
+                GatewayVoiceRuntimeCompositionError.RECONNECT_REJECTED,
+                connectionFailure = reconnected.failure,
+            )
         }
         return GatewayVoiceRuntimeCompositionResult.Composed
     }
@@ -216,5 +272,10 @@ private fun LocalGatewayBinding.deviceSessionIdOrNull(): String? =
 private fun rejected(
     error: GatewayVoiceRuntimeCompositionError,
     bootstrapError: GatewayBootstrapClientError? = null,
+    connectionFailure: GatewayVoiceRuntimeConnectFailure? = null,
 ): GatewayVoiceRuntimeCompositionResult.Rejected =
-    GatewayVoiceRuntimeCompositionResult.Rejected(error = error, bootstrapError = bootstrapError)
+    GatewayVoiceRuntimeCompositionResult.Rejected(
+        error = error,
+        bootstrapError = bootstrapError,
+        connectionFailure = connectionFailure,
+    )
