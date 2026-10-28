@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  createLocalQwenStrategyDescriptor,
   createStrategyRegistry,
   evaluateStrategyAvailability,
   selectStrategy,
@@ -149,4 +150,96 @@ test('strategy descriptors expose no credential or executable target authority f
   assert.equal(keys.includes('authority'), false);
   assert.equal(keys.includes('providerbinding'), false);
   assert.equal(keys.includes('executiontarget'), false);
+});
+
+const localNow = Date.parse('2026-10-28T12:00:05.000Z');
+const verifiedHealthFixture = {
+  source: 'W05F_VERIFIED_LOCAL_MODEL_HEALTH',
+  state: 'AVAILABLE',
+  observedAt: '2026-10-28T12:00:01.000Z',
+  maxAgeMs: 10_000,
+  modelIntegrityVerified: true,
+  endpointIdentityVerified: true,
+  authorizesExecution: false,
+};
+const localSelection = {
+  preferredStrategyId: 'aurora.local.qwen35.2b',
+  modality: 'CODE',
+  taskClass: 'GENERATIVE',
+  reasoningLevel: 'L2',
+  nowEpochMs: localNow,
+};
+
+test('local Qwen descriptor remains unselectable with no attested W05-F health projection', () => {
+  const descriptor = createLocalQwenStrategyDescriptor({ nowEpochMs: localNow });
+  assert.equal(descriptor.kind, 'MODEL');
+  assert.equal(descriptor.availability.state, 'UNKNOWN');
+  const result = selectStrategy(created([descriptor]), localSelection);
+  assert.deepEqual(result, {
+    status: 'NOT_SELECTED',
+    code: 'NO_COMPATIBLE_AVAILABLE_STRATEGY',
+    authorizesExecution: false,
+  });
+});
+
+test('current verified health makes only compatible local informational CODE tasks selectable', () => {
+  const descriptor = createLocalQwenStrategyDescriptor({
+    nowEpochMs: localNow,
+    health: verifiedHealthFixture,
+  });
+  assert.equal(descriptor.availability.source, 'W05F_VERIFIED_LOCAL_MODEL_HEALTH');
+  assert.equal(descriptor.semanticVersion, '1');
+  const registry = created([descriptor]);
+  const selected = selectStrategy(registry, localSelection);
+  assert.equal(selected.status, 'SELECTED');
+  assert.equal(selected.strategy.strategyId, 'aurora.local.qwen35.2b');
+  assert.equal(selected.authorizesExecution, false);
+
+  for (const rejected of [
+    { ...localSelection, modality: 'IMAGE' },
+    { ...localSelection, taskClass: 'EXECUTION_REQUEST' },
+    { ...localSelection, reasoningLevel: 'L5' },
+  ]) {
+    assert.equal(selectStrategy(registry, rejected).status, 'NOT_SELECTED');
+  }
+});
+
+test('local Qwen refuses forged, future or stale health metadata without creating availability', () => {
+  const badHealth = [
+    { ...verifiedHealthFixture, modelIntegrityVerified: false },
+    { ...verifiedHealthFixture, endpointIdentityVerified: false },
+    { ...verifiedHealthFixture, source: 'W05F_SELF_REPORTED' },
+    { ...verifiedHealthFixture, authorizesExecution: true },
+    { ...verifiedHealthFixture, maxAgeMs: 100_000 },
+    { ...verifiedHealthFixture, observedAt: '2026-10-28T12:00:06.000Z' },
+    { ...verifiedHealthFixture, observedAt: '2026-10-28T11:59:00.000Z' },
+  ];
+  for (const health of badHealth) {
+    const descriptor = createLocalQwenStrategyDescriptor({ nowEpochMs: localNow, health });
+    assert.equal(descriptor.availability.state, 'UNKNOWN');
+    assert.equal(selectStrategy(created([descriptor]), localSelection).status, 'NOT_SELECTED');
+  }
+});
+
+test('unavailable Qwen takes only an explicit registered fallback without tool authority', () => {
+  const descriptor = createLocalQwenStrategyDescriptor({
+    nowEpochMs: localNow,
+    health: { ...verifiedHealthFixture, state: 'UNAVAILABLE' },
+    fallbackStrategyIds: ['strategy:deterministic'],
+  });
+  const registry = created([
+    descriptor,
+    strategy({
+      strategyId: 'strategy:deterministic',
+      kind: 'DETERMINISTIC',
+      name: 'Registered no-AI fallback',
+      compatibility: { modalities: ['CODE'], taskClasses: ['GENERATIVE'], reasoningLevels: ['L2'] },
+      availability: { ...strategy().availability, observedAt: '2026-10-28T12:00:00.000Z' },
+    }),
+  ]);
+  const result = selectStrategy(registry, localSelection);
+  assert.equal(result.status, 'SELECTED');
+  assert.equal(result.selectedVia, 'FALLBACK');
+  assert.equal(result.strategy.strategyId, 'strategy:deterministic');
+  assert.equal(result.authorizesExecution, false);
 });

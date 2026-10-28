@@ -231,6 +231,91 @@ export function evaluateStrategyAvailability(
   }
 }
 
+/**
+ * W05-E readiness for the W05-F local inference candidate. W05-E consumes
+ * observed health; it never probes Android/Termux, verifies GGUF bytes, or
+ * grants a model permission to invoke a tool. The separate W05-F verifier and
+ * Android endpoint-identity boundary are not implemented by this descriptor.
+ */
+export interface LocalQwenHealthProjection {
+  readonly source: 'W05F_VERIFIED_LOCAL_MODEL_HEALTH';
+  readonly state: 'AVAILABLE' | 'DEGRADED' | 'UNAVAILABLE';
+  readonly observedAt: string;
+  readonly maxAgeMs: number;
+  readonly modelIntegrityVerified: true;
+  readonly endpointIdentityVerified: true;
+  readonly authorizesExecution: false;
+}
+
+export interface LocalQwenDescriptorRequest {
+  readonly nowEpochMs: number;
+  readonly health?: LocalQwenHealthProjection;
+  readonly fallbackStrategyIds?: readonly string[];
+}
+
+const LOCAL_QWEN_MAX_AGE_MS = 10_000;
+const LOCAL_QWEN_UNVERIFIED_OBSERVATION: StrategyAvailabilityObservation = {
+  state: 'UNKNOWN',
+  observedAt: '1970-01-01T00:00:00.000Z',
+  maxAgeMs: 0,
+  source: 'W05F_LOCAL_MODEL_NOT_VERIFIED',
+};
+
+/**
+ * Create one optional descriptor in the canonical W05-E registry. Without a
+ * current, separately attested runtime projection it remains unselectable.
+ * The projection is a caller assertion, not a cryptographic attestation; the
+ * consuming host must prove it before the strategy can be activated.
+ */
+export function createLocalQwenStrategyDescriptor(
+  request: LocalQwenDescriptorRequest,
+): StrategyDescriptor {
+  const health = request?.health;
+  const healthObservation: StrategyAvailabilityObservation | undefined = health
+    ? {
+        state: health.state,
+        observedAt: health.observedAt,
+        maxAgeMs: health.maxAgeMs,
+        source: health.source,
+      }
+    : undefined;
+  const currentState =
+    health &&
+    healthObservation &&
+    Number.isSafeInteger(request?.nowEpochMs) &&
+    Number.isSafeInteger(health.maxAgeMs) &&
+    health.maxAgeMs >= 0 &&
+    health.maxAgeMs <= LOCAL_QWEN_MAX_AGE_MS &&
+    health.modelIntegrityVerified === true &&
+    health.endpointIdentityVerified === true &&
+    health.authorizesExecution === false &&
+    health.source === 'W05F_VERIFIED_LOCAL_MODEL_HEALTH' &&
+    (health.state === 'AVAILABLE' || health.state === 'DEGRADED' || health.state === 'UNAVAILABLE')
+      ? evaluateStrategyAvailability(healthObservation, request.nowEpochMs)
+      : null;
+  const observation =
+    currentState === 'CURRENT_AVAILABLE' ||
+    currentState === 'CURRENT_DEGRADED' ||
+    currentState === 'UNAVAILABLE'
+      ? (healthObservation ?? LOCAL_QWEN_UNVERIFIED_OBSERVATION)
+      : LOCAL_QWEN_UNVERIFIED_OBSERVATION;
+
+  return {
+    strategyId: 'aurora.local.qwen35.2b',
+    semanticVersion: '1',
+    kind: 'MODEL',
+    name: 'Local Qwen3.5-2B candidate',
+    description: 'Bounded text/code inference; informational output only.',
+    compatibility: {
+      modalities: ['TEXT', 'CODE'],
+      taskClasses: ['INFORMATIONAL', 'GENERATIVE'],
+      reasoningLevels: ['L1', 'L2', 'L3'],
+    },
+    availability: observation,
+    fallbackStrategyIds: request?.fallbackStrategyIds ?? [],
+  };
+}
+
 export function isStrategyCompatible(
   strategy: StrategyDescriptor,
   request: Pick<StrategySelectionRequest, 'modality' | 'taskClass' | 'reasoningLevel'>,
