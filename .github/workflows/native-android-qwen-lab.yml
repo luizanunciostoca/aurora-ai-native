@@ -1,0 +1,147 @@
+name: Native Android llama.cpp feasibility (lab only)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/native-android-qwen-lab.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-android-llama-lab-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  build-upstream-sample:
+    # Never run untrusted fork code with the repository's workflow identity.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      UPSTREAM_SHA: 8642541b255bfb5dc39cd351a178be09013a55d6
+      GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx2g -Dorg.gradle.workers.max=2
+    steps:
+      - name: Check out pinned public upstream Android sample
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 8642541b255bfb5dc39cd351a178be09013a55d6
+          path: upstream-llama
+          persist-credentials: false
+
+      - name: Verify exact upstream identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git -C upstream-llama rev-parse HEAD)"
+          test "$actual" = "$UPSTREAM_SHA"
+          echo "Pinned upstream SHA: $actual"
+
+      - name: Disable backups and device migration in the disposable lab sample
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -c '
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          base = Path("upstream-llama/examples/llama.android/app/src/main")
+          manifest = base / "AndroidManifest.xml"
+          old = manifest.read_text(encoding="utf-8")
+          before = "android:allowBackup=\"true\""
+          if old.count(before) != 1:
+              raise SystemExit("LAB_UPSTREAM_BACKUP_PRECONDITION_CHANGED")
+          manifest.write_text(old.replace(before, "android:allowBackup=\"false\""), encoding="utf-8")
+
+          extraction = base / "res/xml/data_extraction_rules.xml"
+          original = extraction.read_text(encoding="utf-8")
+          if "<data-extraction-rules>" not in original:
+              raise SystemExit("LAB_UPSTREAM_EXTRACTION_PRECONDITION_CHANGED")
+          extraction.write_text("""<?xml version="1.0" encoding="utf-8"?>
+          <data-extraction-rules>
+              <cloud-backup><exclude domain="root" path="." /></cloud-backup>
+              <device-transfer><exclude domain="root" path="." /></device-transfer>
+          </data-extraction-rules>
+          """, encoding="utf-8")
+
+          legacy = base / "res/xml/backup_rules.xml"
+          legacy_original = legacy.read_text(encoding="utf-8")
+          if "<full-backup-content>" not in legacy_original:
+              raise SystemExit("LAB_UPSTREAM_LEGACY_BACKUP_PRECONDITION_CHANGED")
+          legacy.write_text("""<?xml version="1.0" encoding="utf-8"?>
+          <full-backup-content>
+              <exclude domain="root" path="." />
+          </full-backup-content>
+          """, encoding="utf-8")
+          for candidate in (manifest, extraction, legacy):
+              ET.parse(candidate)
+          print("LAB_BACKUP_AND_TRANSFER_EXCLUDED_AT_SOURCE")
+          '
+          git -C upstream-llama diff --check
+          test "$(git -C upstream-llama diff --name-only | wc -l)" -eq 3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd
+        with:
+          log-accepted-android-sdk-licenses: false
+
+      - name: Set up pinned Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb
+        with:
+          gradle-version: '8.14.3'
+          cache-read-only: true
+
+      - name: Install upstream-required SDK, NDK and CMake
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install \
+            'platforms;android-36' \
+            'build-tools;36.0.0' \
+            'ndk;29.0.13113456' \
+            'cmake;3.31.6'
+
+      - name: Build only upstream debug lab APK and Android library
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --console=plain \
+            -p upstream-llama/examples/llama.android \
+            :lib:assembleDebug :app:assembleDebug
+
+      - name: Check ARM64 native library and artifact hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk='upstream-llama/examples/llama.android/app/build/outputs/apk/debug/app-debug.apk'
+          aar='upstream-llama/examples/llama.android/lib/build/outputs/aar/lib-debug.aar'
+          test -s "$apk"
+          test -s "$aar"
+          unzip -Z1 "$apk" | awk '/^lib\/arm64-v8a\/.*\.so$/ { found = 1 } END { exit(found ? 0 : 1) }'
+          test "$(apkanalyzer manifest application-id "$apk")" = 'com.example.llama.aichat'
+          merged_manifest="$(apkanalyzer manifest print "$apk")"
+          grep -Fq 'android:allowBackup="false"' <<< "$merged_manifest"
+          grep -Fq 'android:name="com.example.llama.MainActivity"' <<< "$merged_manifest"
+          grep -Fq 'android.intent.action.MAIN' <<< "$merged_manifest"
+          grep -Fq 'android.intent.category.LAUNCHER' <<< "$merged_manifest"
+          echo 'LAB_LAUNCH_COMPONENT=com.example.llama.aichat/com.example.llama.MainActivity'
+          echo 'LAB_BACKUP_DISABLED_VERIFIED_FROM_APK'
+          echo 'UPSTREAM_SAMPLE_ONLY_NOT_AURORA_APK'
+          sha256sum "$apk" "$aar"
+
+      - name: Retain non-shipping lab artifacts for two days
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: upstream-llama-android-lab-not-aurora
+          if-no-files-found: error
+          retention-days: 2
+          path: |
+            upstream-llama/examples/llama.android/app/build/outputs/apk/debug/app-debug.apk
+            upstream-llama/examples/llama.android/lib/build/outputs/aar/lib-debug.aar
