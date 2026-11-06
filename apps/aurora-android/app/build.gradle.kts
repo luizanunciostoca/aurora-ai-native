@@ -98,7 +98,7 @@ android {
     }
 
     if (auroraNativePreparation) {
-        ndkVersion = "29.0.13113456"
+        ndkVersion = "30.0.16248370"
         externalNativeBuild {
             cmake {
                 path = file("src/main/cpp/CMakeLists.txt")

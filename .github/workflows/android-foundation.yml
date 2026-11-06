@@ -40,8 +40,9 @@ jobs:
           test -n "$SDK_ROOT"
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0" \
-            "ndk;29.0.13113456" "cmake;3.31.6"
+          # Stable channel only. Never accept a new license implicitly in this job.
+          "$SDKMANAGER" --channel=0 "platforms;android-36" "build-tools;36.0.0" \
+            "ndk;30.0.16248370" "cmake;3.31.6" </dev/null
       - name: Test and assemble Android foundation
         shell: bash
         run: >-

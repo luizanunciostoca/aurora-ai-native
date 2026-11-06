@@ -8,8 +8,8 @@ endif()
 # full revision instead; comparing that truncated variable would reject the correct pin.
 file(STRINGS "${CMAKE_ANDROID_NDK}/source.properties" AURORA_NDK_REVISION
     REGEX "^Pkg\\.Revision[ \t]*=")
-if(NOT AURORA_NDK_REVISION MATCHES "^Pkg\\.Revision[ \t]*=[ \t]*29\\.0\\.13113456(-beta1)?[ \t]*$")
-    message(FATAL_ERROR "Use the pinned Android NDK 29.0.13113456")
+if(NOT AURORA_NDK_REVISION MATCHES "^Pkg\\.Revision[ \t]*=[ \t]*30\\.0\\.16248370[ \t]*$")
+    message(FATAL_ERROR "Use the pinned stable Android NDK 30.0.16248370")
 endif()
 if(NOT DEFINED AURORA_LLAMA_SOURCE_DIR OR NOT IS_DIRECTORY "${AURORA_LLAMA_SOURCE_DIR}")
     message(FATAL_ERROR "Provide the pinned source checkout; CMake does not download dependencies")

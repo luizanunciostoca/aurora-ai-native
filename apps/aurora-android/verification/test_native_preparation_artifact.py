@@ -164,6 +164,21 @@ class NativePreparationArtifactTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 verifier.uleb(data, 0)
 
+    def test_accepts_only_the_exact_stable_ndk_revision(self):
+        properties = "Pkg.Desc = Android NDK\r\nPkg.Revision = 30.0.16248370\r\n"
+        self.assertEqual(verifier.inspect_ndk_revision(properties), "30.0.16248370")
+        for revision in ("29.0.13113456-beta1", "29.0.14206865", "30.0.16248370-beta1",
+                         "30.0.16248370-rc1", "30.0.16248371", "30.0", ""):
+            with self.subTest(revision=revision), self.assertRaisesRegex(ValueError, "NDK package revision"):
+                verifier.inspect_ndk_revision("Pkg.Revision = " + revision + "\n")
+
+    def test_rejects_missing_and_ambiguous_ndk_revisions(self):
+        for properties in ("Pkg.Desc = Android NDK\n",
+                           "Pkg.Revision = 30.0.16248370\nPkg.Revision = 30.0.16248370\n",
+                           "Pkg.Revision = 30.0.16248370\nPkg.Revision = 30.0.16248370-beta1\n"):
+            with self.subTest(properties=properties), self.assertRaisesRegex(ValueError, "NDK package revision"):
+                verifier.inspect_ndk_revision(properties)
+
     def test_rejects_missing_or_skipped_native_test_suites(self):
         directory = Path(self.temp.name)
         with self.assertRaisesRegex(ValueError, "NO_JOBS"):

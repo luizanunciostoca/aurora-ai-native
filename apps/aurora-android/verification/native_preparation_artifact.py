@@ -20,7 +20,7 @@ from pathlib import Path
 
 LLAMA_SHA = "8642541b255bfb5dc39cd351a178be09013a55d6"
 MODEL_SHA = "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223"
-NDK_VERSION = "29.0.13113456"
+NDK_VERSION = "30.0.16248370"
 BUILD_CONFIG = "Lai/aurora/device/BuildConfig;"
 LIBRARY_NAMES = {
     "lib/arm64-v8a/libaurora_llama.so",
@@ -35,6 +35,16 @@ def require(condition, reason):
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def inspect_ndk_revision(properties):
+    revisions = []
+    for line in properties.splitlines():
+        match = re.fullmatch(r"Pkg\.Revision[ \t]*=[ \t]*(.*?)[ \t]*", line)
+        if match:
+            revisions.append(match.group(1))
+    require(revisions == [NDK_VERSION], "NDK package revision mismatch")
+    return revisions[0]
 
 
 def uleb(data, offset):
@@ -230,8 +240,7 @@ def main():
     evidence = inspect_apk(args.apk, args.source_sha)
     native_tests = inspect_unit_reports(Path("apps/aurora-android/app/build/test-results/testLocalDebugUnitTest"))
     ndk_properties = (args.sdk / f"ndk/{NDK_VERSION}/source.properties").read_text(encoding="utf-8")
-    ndk_revision = re.search(r"(?m)^Pkg\.Revision\s*=\s*(29\.0\.13113456(?:-beta1)?)\s*$", ndk_properties)
-    require(ndk_revision is not None, "NDK package revision mismatch")
+    ndk_revision = inspect_ndk_revision(ndk_properties)
     build_tools = args.sdk / "build-tools/36.0.0"
     signer = command(str(build_tools / "apksigner"), "verify", "--verbose", "--print-certs", str(args.apk))
     require(re.search(r"Signer #1 certificate SHA-256 digest: [0-9a-f]{64}", signer), "missing certificate digest")
@@ -258,7 +267,7 @@ def main():
         "source_tree": command("git", "rev-parse", "HEAD^{tree}"),
         "llama_source_sha": LLAMA_SHA,
         "ndk": NDK_VERSION,
-        "observed_ndk_package_revision": ndk_revision.group(1),
+        "observed_ndk_package_revision": ndk_revision,
         "cmake": "3.31.6",
         "gradle": "9.4.1",
         "agp": "9.2.0",

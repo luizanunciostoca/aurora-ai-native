@@ -23,7 +23,7 @@ The future input seam is `NativePublicPromptSource.resolveCurrent`. Its default 
 | Item | Pin / rule |
 | --- | --- |
 | llama.cpp | `8642541b255bfb5dc39cd351a178be09013a55d6` |
-| NDK | `29.0.13113456` |
+| NDK | `30.0.16248370` — official r30 LTS, stable channel |
 | CMake | `3.31.6` |
 | Existing Android build | AGP `9.2.0`, Gradle `9.4.1`, Java 17 |
 | Native ABI/backend | `arm64-v8a`, baseline ARMv8-A, CPU, two inference threads |
@@ -32,7 +32,9 @@ The future input seam is `NativePublicPromptSource.resolveCurrent`. Its default 
 | Model expected later | `Qwen3.5-2B-Q4_K_M.gguf`, 1,280,835,840 bytes |
 | Model SHA-256 | `aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223` |
 
-CMake requires an exact clean upstream checkout and does not fetch dependencies. The engine is statically linked into a private `libaurora_llama.so`; archive symbols are hidden, with four checked JNI exports. Its MIT license is retained in APK assets. `libc++_shared.so` is the only additional packaged native library. There is no server, dynamic backend, GPU, common tool runner or model downloader.
+The [official NDK release listing](https://github.com/android/ndk/wiki) identifies r30 as the supported 2026 LTS release. Google's [SDK package metadata](https://dl.google.com/android/repository/repository2-3.xml) lists `ndk;30.0.16248370` in `channel-0`, without a preview revision, using `android-sdk-license`. The stable substitution is authorized in [#575, comment 6686220828](https://github.com/luizanunciostoca/aurora-ai-native/issues/575#issuecomment-6686220828). The previous `29.0.13113456` Preview attempt, [run 42225949609](https://github.com/luizanunciostoca/aurora-ai-native/actions/runs/42225949609), failed before tests because its Preview license was not accepted; it produced no APK. That failure remains historical evidence, not a passed build. The workflow uses only the stable channel and closed stdin; a new license requirement must stop the job, never be auto-accepted or bypassed.
+
+CMake and artifact verification require the exact stable package revision and reject preview suffixes or a mismatched revision. CMake requires an exact clean upstream checkout and does not fetch dependencies. The engine is statically linked into a private `libaurora_llama.so`; archive symbols are hidden, with four checked JNI exports. Its MIT license is retained in APK assets. `libc++_shared.so` is the only additional packaged native library. There is no server, dynamic backend, GPU, common tool runner or model downloader.
 
 No model is downloaded, bundled, copied, imported or used by this preparation. The private store uses a fixed app-private identity, readonly/no-follow open, SHA-256 and metadata checks. JNI duplicates the **same held descriptor**, uses `fdopen` and `llama_model_load_from_file_ptr`, and keeps it alive until the model is freed. This avoids reopening a path after verification. It does not claim protection against a malicious same-UID writer altering that same inode; no importer or in-place writer is added here.
 
