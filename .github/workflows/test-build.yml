@@ -25,4 +25,8 @@ jobs:
       - name: Verify W15-J Experience Gate fail-closed evidence rules
         run: node tools/acceptance/w15j-experience-gate.test.mjs
       - run: npm run build
+      - name: Verify offline W14 to W05/W06 local-model composition
+        run: |
+          node node_modules/typescript/bin/tsc -p services/mobile-gateway/tsconfig.test.json --pretty false
+          node tools/test/local-model-session-composition.mjs
       - run: npm run audit:cleanup
