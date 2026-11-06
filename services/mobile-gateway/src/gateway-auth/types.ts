@@ -46,6 +46,8 @@ export interface GatewayAuthClaims {
 
 export interface GatewayAuthenticator {
   verify(credential: string, nowMs: number): GatewayAuthClaims | null;
+  /** Optional fail-closed observer invoked only after a gateway session is fully established. */
+  noteSessionEstablished?(snapshot: GatewaySessionSnapshot): void;
 }
 
 export interface GatewayTransportConfig {

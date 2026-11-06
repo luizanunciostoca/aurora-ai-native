@@ -6,6 +6,20 @@ export {
 export { buildDeliveryEvidence } from './evidence';
 export { boundedBackoffSeconds, decideIdempotency } from './idempotency';
 export {
+  COMPARE_AND_SWAP_EXECUTION_ATTEMPT_QUOTA_SQL,
+  INSERT_EXECUTION_ATTEMPT_QUOTA_SQL,
+  SELECT_EXECUTION_ATTEMPT_QUOTA_SQL,
+  buildCompareAndSwapExecutionAttemptQuotaStatement,
+  buildInsertExecutionAttemptQuotaStatement,
+  buildSelectExecutionAttemptQuotaStatement,
+} from './attempt-quota';
+export type {
+  ExecutionAttemptQuotaCompareAndSwapInput,
+  ExecutionAttemptQuotaKey,
+  ExecutionAttemptQuotaRecord,
+  ExecutionAttemptQuotaWrite,
+} from './attempt-quota';
+export {
   ACK_INBOX_SQL,
   ACK_OUTBOX_SQL,
   CLAIM_INBOX_SQL,

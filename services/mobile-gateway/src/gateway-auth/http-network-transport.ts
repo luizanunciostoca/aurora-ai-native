@@ -7,6 +7,11 @@ import type {
   GatewayDevicePlaneResponse,
 } from './device-plane-network.js';
 import type { GatewaySessionManager } from './session-manager.js';
+import {
+  isLocalHostInstanceProbeResponse,
+  LOCAL_HOST_INSTANCE_PROBE_PATH,
+  type LocalHostInstanceProbePort,
+} from './local-host-instance-probe.js';
 import { GATEWAY_PROTOCOL_VERSION, type GatewaySessionSnapshot } from './types.js';
 
 const DEFAULT_MAX_BODY_BYTES = 32 * 1024;
@@ -33,6 +38,7 @@ type TransportErrorCode =
   | 'BODY_MALFORMED'
   | 'BODY_TOO_LARGE'
   | 'CONTENT_TYPE_UNSUPPORTED'
+  | 'HOST_INSTANCE_UNAVAILABLE'
   | 'METHOD_NOT_ALLOWED'
   | 'ROUTE_NOT_FOUND'
   | 'SESSION_ALREADY_BOUND'
@@ -92,6 +98,8 @@ export interface GatewayHttpNetworkTransportConfig {
   readonly keepAliveTimeoutMs?: number;
   readonly maxRequestsPerSocket?: number;
   readonly clock?: () => number;
+  /** Optional LOCAL host ownership probe. It is non-authoritative and loopback-only. */
+  readonly localHostInstanceProbe?: LocalHostInstanceProbePort;
 }
 
 export interface GatewayHttpNetworkAddress {
@@ -264,6 +272,7 @@ export class GatewayHttpNetworkTransport {
   readonly #manager: GatewaySessionManager;
   readonly #config: ResolvedConfig;
   readonly #devicePlane: GatewayDevicePlaneNetworkHandler | undefined;
+  readonly #localHostInstanceProbe: LocalHostInstanceProbePort | undefined;
   readonly #socketBindings = new WeakMap<SocketLike, SocketBinding>();
   readonly #devicePlaneStates = new WeakMap<SocketLike, GatewayDevicePlaneConnectionState>();
   readonly #server: ServerLike;
@@ -277,6 +286,15 @@ export class GatewayHttpNetworkTransport {
     this.#manager = manager;
     this.#config = resolveConfig(config);
     this.#devicePlane = devicePlane;
+    try {
+      const probe = config.localHostInstanceProbe;
+      if (probe !== undefined && (probe === null || typeof probe.current !== 'function')) {
+        throw new Error('invalid probe');
+      }
+      this.#localHostInstanceProbe = probe;
+    } catch {
+      throw new Error('Gateway HTTP transport LOCAL host instance probe is invalid.');
+    }
     this.#server = createServer((request: IncomingRequestLike, response: ServerResponseLike) => {
       void this.#handle(request, response);
     }) as ServerLike;
@@ -330,6 +348,38 @@ export class GatewayHttpNetworkTransport {
   async #handle(request: IncomingRequestLike, response: ServerResponseLike): Promise<void> {
     const method = request.method ?? '';
     const path = new URL(request.url ?? '/', 'http://aurora-gateway.invalid').pathname;
+    if (path === LOCAL_HOST_INSTANCE_PROBE_PATH && this.#localHostInstanceProbe !== undefined) {
+      if (method !== 'GET') {
+        transportError(
+          response,
+          405,
+          'METHOD_NOT_ALLOWED',
+          'LOCAL host instance probe accepts GET only.',
+        );
+        return;
+      }
+      let probeResponse: unknown;
+      try {
+        probeResponse = this.#localHostInstanceProbe.current('DEVICE_GATEWAY');
+      } catch {
+        probeResponse = null;
+      }
+      if (!isLocalHostInstanceProbeResponse(probeResponse, 'DEVICE_GATEWAY')) {
+        transportError(
+          response,
+          503,
+          'HOST_INSTANCE_UNAVAILABLE',
+          'LOCAL host instance probe is unavailable.',
+        );
+        return;
+      }
+      response.statusCode = 200;
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.setHeader('cache-control', 'no-store');
+      response.setHeader('pragma', 'no-cache');
+      response.end(JSON.stringify(probeResponse));
+      return;
+    }
     const deviceRoute = this.#devicePlane?.isRoute(path) === true;
     const knownRoute =
       path === '/v1/gateway/sessions/open' ||

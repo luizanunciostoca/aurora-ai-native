@@ -217,3 +217,82 @@ test('validates delivery broker limits, revocation boundaries, and time bounds',
     /limits are invalid/u,
   );
 });
+
+test('reconnect reference is one-shot and preserves the established gateway session id', () => {
+  let credentialCounter = 0;
+  let sessionCounter = 0;
+  let referenceCounter = 0;
+  const issuer = new TransientGatewayBootstrapBroker(
+    {},
+    {
+      credential: () => `gwc_${String(credentialCounter++).padStart(2, '0')}${'c'.repeat(41)}`,
+      gatewaySessionId: () => `gws_${String(sessionCounter++).padStart(2, '0')}${'s'.repeat(20)}`,
+    },
+  );
+  const broker = new GatewayBootstrapDeliveryBroker(
+    issuer,
+    {},
+    {
+      reference: () => `gbr_${String(referenceCounter++).padStart(2, '0')}${'r'.repeat(41)}`,
+    },
+  );
+  const manager = new GatewaySessionManager(issuer);
+  const beforeOpen = broker.stageReconnect(principal(), now);
+  assert.equal(beforeOpen.ok ? '' : beforeOpen.error.code, 'RECONNECT_TARGET_UNAVAILABLE');
+
+  const staged = broker.stage(principal(), now + 1);
+  assert.equal(staged.ok, true);
+  if (!staged.ok) throw new Error('initial bootstrap reference rejected');
+  const exchanged = broker.exchange(staged.value.bootstrapReference, now + 2);
+  assert.equal(exchanged.ok, true);
+  if (!exchanged.ok) throw new Error('initial bootstrap exchange rejected');
+
+  const opened = manager.openSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: exchanged.value.gatewaySessionId,
+    credential: exchanged.value.credential,
+    tenantId: exchanged.value.tenantId,
+    actor: exchanged.value.actor,
+    correlation: { correlationId: exchanged.value.correlationId },
+    nowMs: now + 3,
+  });
+  assert.equal(opened.ok, true);
+  if (!opened.ok) throw new Error('gateway session open failed');
+
+  const closed = manager.closeSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: opened.value.sessionId,
+    connectionId: opened.value.connectionId,
+    tenantId: opened.value.tenantId,
+    actorIdentityId: opened.value.actorIdentityId,
+    correlationId: opened.value.correlationId,
+    nowMs: now + 4,
+  });
+  assert.equal(closed.ok, true);
+
+  const reconnectReference = broker.stageReconnect(principal(), now + 5);
+  assert.equal(reconnectReference.ok, true);
+  if (!reconnectReference.ok) throw new Error('reconnect reference rejected');
+  const reconnectGrant = broker.exchange(reconnectReference.value.bootstrapReference, now + 6);
+  assert.equal(reconnectGrant.ok, true);
+  if (!reconnectGrant.ok) throw new Error('reconnect exchange rejected');
+  assert.equal(reconnectGrant.value.gatewaySessionId, opened.value.sessionId);
+  assert.notEqual(reconnectGrant.value.credential, exchanged.value.credential);
+  assert.equal(broker.exchange(reconnectReference.value.bootstrapReference, now + 7).ok, false);
+
+  const reconnected = manager.reconnectSession({
+    protocolVersion: GATEWAY_PROTOCOL_VERSION,
+    sessionId: reconnectGrant.value.gatewaySessionId,
+    credential: reconnectGrant.value.credential,
+    tenantId: reconnectGrant.value.tenantId,
+    actor: reconnectGrant.value.actor,
+    correlation: { correlationId: reconnectGrant.value.correlationId },
+    previousConnectionId: opened.value.connectionId,
+    nowMs: now + 8,
+  });
+  assert.equal(reconnected.ok, true);
+  if (!reconnected.ok) throw new Error('gateway reconnect failed');
+  assert.equal(reconnected.value.generation, 2);
+  assert.equal(reconnected.value.sessionId, opened.value.sessionId);
+  assert.equal(reconnected.value.authorizesExecution, false);
+});

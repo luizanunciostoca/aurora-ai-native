@@ -34,7 +34,13 @@ export interface GatewayBootstrapReferenceGrant {
 }
 
 export type GatewayBootstrapStageErrorCode =
-  'PRINCIPAL_INVALID' | 'PRINCIPAL_EXPIRED' | 'CAPACITY_EXHAUSTED' | 'ENTROPY_FAILURE';
+  | 'PRINCIPAL_INVALID'
+  | 'PRINCIPAL_EXPIRED'
+  | 'PRINCIPAL_STALE'
+  | 'CAPACITY_EXHAUSTED'
+  | 'RECONNECT_TARGET_UNAVAILABLE'
+  | 'RECONNECT_TARGET_AMBIGUOUS'
+  | 'ENTROPY_FAILURE';
 
 export type GatewayBootstrapExchangeErrorCode =
   'REFERENCE_INVALID' | 'REFERENCE_UNKNOWN' | 'REFERENCE_EXPIRED' | 'GRANT_REJECTED';
@@ -59,12 +65,16 @@ export type GatewayBootstrapExchangeResult =
       retryAuthorized: false;
     }>;
 
-interface PendingReferenceRecord {
+interface PendingReferenceBase {
   readonly reference: string;
   readonly principal: AuthenticatedGatewayBootstrapPrincipal;
   readonly issuedAtMs: number;
   readonly expiresAtMs: number;
 }
+
+type PendingReferenceRecord =
+  | (PendingReferenceBase & Readonly<{ kind: 'OPEN' }>)
+  | (PendingReferenceBase & Readonly<{ kind: 'RECONNECT'; gatewaySessionId: string }>);
 
 function defaultEntropy(): GatewayBootstrapReferenceEntropy {
   return { reference: () => `gbr_${randomBytes(32).toString('base64url')}` };
@@ -232,7 +242,56 @@ export class GatewayBootstrapDeliveryBroker {
       principal.authenticationExpiresAtMs,
       nowMs + this.#config.referenceTtlMs,
     );
-    this.#pending.set(reference, { reference, principal, issuedAtMs: nowMs, expiresAtMs });
+    this.#pending.set(reference, {
+      kind: 'OPEN',
+      reference,
+      principal,
+      issuedAtMs: nowMs,
+      expiresAtMs,
+    });
+    return {
+      ok: true,
+      value: {
+        bootstrapReference: reference,
+        expiresAtMs,
+        authorizesExecution: false,
+        provesExecutionSuccess: false,
+        retryAuthorized: false,
+      },
+    };
+  }
+
+  stageReconnect(principalInput: unknown, nowMs: number): GatewayBootstrapStageResult {
+    const principal = clonePrincipal(principalInput);
+    if (principal === null || !nonNegativeInteger(nowMs) || principal.authenticatedAtMs > nowMs) {
+      return stageRejected('PRINCIPAL_INVALID');
+    }
+    if (
+      principal.authenticationExpiresAtMs <= principal.authenticatedAtMs ||
+      nowMs >= principal.authenticationExpiresAtMs
+    ) {
+      return stageRejected('PRINCIPAL_EXPIRED');
+    }
+    this.#purgeExpired(nowMs);
+    if (this.#pending.size >= this.#config.maxPendingReferences) {
+      return stageRejected('CAPACITY_EXHAUSTED');
+    }
+    const target = this.#issuer.resolveReconnectTarget(principal, nowMs);
+    if (!target.ok) return stageRejected(target.error.code);
+    const reference = this.#generateUniqueReference();
+    if (reference === null) return stageRejected('ENTROPY_FAILURE');
+    const expiresAtMs = Math.min(
+      principal.authenticationExpiresAtMs,
+      nowMs + this.#config.referenceTtlMs,
+    );
+    this.#pending.set(reference, {
+      kind: 'RECONNECT',
+      reference,
+      principal,
+      gatewaySessionId: target.gatewaySessionId,
+      issuedAtMs: nowMs,
+      expiresAtMs,
+    });
     return {
       ok: true,
       value: {
@@ -261,7 +320,10 @@ export class GatewayBootstrapDeliveryBroker {
     if (nowMs < record.issuedAtMs || nowMs >= record.expiresAtMs) {
       return exchangeRejected('REFERENCE_EXPIRED');
     }
-    const issued = this.#issuer.issue(record.principal, nowMs);
+    const issued =
+      record.kind === 'OPEN'
+        ? this.#issuer.issue(record.principal, nowMs)
+        : this.#issuer.issueReconnect(record.principal, record.gatewaySessionId, nowMs);
     return issued.ok ? { ok: true, value: issued.value } : exchangeRejected('GRANT_REJECTED');
   }
 
