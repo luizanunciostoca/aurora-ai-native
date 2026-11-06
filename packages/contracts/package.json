@@ -51,6 +51,11 @@
       "require": "./dist/ids/index.js",
       "default": "./dist/ids/index.js"
     },
+    "./interaction-session": {
+      "types": "./dist/interaction-session/index.d.ts",
+      "require": "./dist/interaction-session/index.js",
+      "default": "./dist/interaction-session/index.js"
+    },
     "./identity-resolution": {
       "types": "./dist/identity-resolution/index.d.ts",
       "require": "./dist/identity-resolution/index.js",

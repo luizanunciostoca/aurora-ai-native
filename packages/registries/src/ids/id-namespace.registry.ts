@@ -46,6 +46,8 @@ export const ID_NAMESPACE_REGISTRY = {
   ),
   PolicyTokenId: active('ptk', 'Canonical policy-token identity.'),
   ExecutionId: active('exe', 'Canonical execution identity.'),
+  InteractionSessionId: active('ins', 'Canonical W14 interaction-session continuity identity.'),
+  InteractionTurnId: active('itr', 'Canonical ordered interaction-turn identity.'),
   CapabilityId: reserved('cap', 'Future Capability Registry namespace only.'),
   ProfileId: reserved('prf', 'Future agent/profile registry namespace only.'),
   WorkflowId: reserved('wfl', 'Future governed workflow namespace only.'),
@@ -65,7 +67,9 @@ export type ActiveIdNamespaceName =
   | 'EvidenceId'
   | 'DecisionId'
   | 'PolicyTokenId'
-  | 'ExecutionId';
+  | 'ExecutionId'
+  | 'InteractionSessionId'
+  | 'InteractionTurnId';
 
 export const ID_TYPE_DEPRECATIONS = {
   OwnerDecisionId: {

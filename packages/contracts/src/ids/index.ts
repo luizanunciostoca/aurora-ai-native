@@ -10,6 +10,8 @@ export type {
   EvidenceId,
   ExecutionId,
   IdentityId,
+  InteractionSessionId,
+  InteractionTurnId,
   InternalCanonicalId,
   OwnerDecisionId,
   PolicyTokenId,
