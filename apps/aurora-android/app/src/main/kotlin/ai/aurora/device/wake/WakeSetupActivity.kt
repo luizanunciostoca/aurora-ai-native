@@ -416,23 +416,45 @@ class WakeSetupActivity : Activity() {
     }
 
     private fun requestMicrophonePermissionOrSettings() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            refresh()
-            return
-        }
-        val previouslyDenied = statusStore.snapshot().state == "WAKE_PERMISSION_BLOCKED"
-        if (previouslyDenied && !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)) {
-            runCatching {
-                startActivity(
-                    Intent(
-                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                        Uri.parse("package:$packageName"),
-                    ),
-                )
+        val permissionGranted =
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val shouldShowRationale =
+            !permissionGranted &&
+                shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+        when (
+            MicrophonePermissionFlow.nextAction(
+                granted = permissionGranted,
+                requestAttempted = microphonePermissionRequestAttempted(),
+                shouldShowRationale = shouldShowRationale,
+            )
+        ) {
+            MicrophonePermissionAction.NONE -> refresh()
+            MicrophonePermissionAction.REQUEST -> {
+                markMicrophonePermissionRequestAttempted()
+                requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MICROPHONE)
             }
-            return
+            MicrophonePermissionAction.OPEN_SETTINGS -> {
+                runCatching {
+                    startActivity(
+                        Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName"),
+                        ),
+                    )
+                }
+            }
         }
-        requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_MICROPHONE)
+    }
+
+    private fun microphonePermissionRequestAttempted(): Boolean =
+        getSharedPreferences(PERMISSION_PREFS_NAME, MODE_PRIVATE)
+            .getBoolean(KEY_MICROPHONE_PERMISSION_REQUEST_ATTEMPTED, false)
+
+    private fun markMicrophonePermissionRequestAttempted() {
+        getSharedPreferences(PERMISSION_PREFS_NAME, MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_MICROPHONE_PERMISSION_REQUEST_ATTEMPTED, true)
+            .apply()
     }
 
     private fun requestAssistantRole() {
@@ -495,10 +517,15 @@ class WakeSetupActivity : Activity() {
             }
         guidanceView.text = ui.guidance
 
-        val permanentlyDenied =
-            !permissionGranted &&
-                runtime.state == "WAKE_PERMISSION_BLOCKED" &&
-                !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+        val microphonePermissionAction =
+            MicrophonePermissionFlow.nextAction(
+                granted = permissionGranted,
+                requestAttempted = microphonePermissionRequestAttempted(),
+                shouldShowRationale =
+                    !permissionGranted &&
+                        shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO),
+            )
+        val permanentlyDenied = microphonePermissionAction == MicrophonePermissionAction.OPEN_SETTINGS
         microphoneButton.text =
             if (permanentlyDenied) "Abrir configurações do microfone" else ui.microphoneButtonLabel
         microphoneButton.isEnabled = ui.canRequestMicrophone
@@ -522,5 +549,8 @@ class WakeSetupActivity : Activity() {
         private const val RUNTIME_REFRESH_DELAY_MS = 600L
         private const val MAX_ENROLLMENT_START_ATTEMPTS = 30
         private const val MAX_WAKE_REARM_ATTEMPTS = 30
+        private const val PERMISSION_PREFS_NAME = "aurora_permission_history"
+        private const val KEY_MICROPHONE_PERMISSION_REQUEST_ATTEMPTED =
+            "microphone_permission_request_attempted"
     }
 }
