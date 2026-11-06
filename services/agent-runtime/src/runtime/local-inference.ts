@@ -114,6 +114,98 @@ function nonEmpty(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+/** Read data properties once; never evaluate an ingress accessor or retain its envelope. */
+function ownDataSnapshot(
+  value: unknown,
+  allowedKeys: readonly string[],
+  exact = true,
+): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return null;
+  // Canonical W05 route/context records have additional evidence. Consume only
+  // this projection's fields; neither enumerate nor read the unused metadata.
+  const keys = exact ? Reflect.ownKeys(value) : allowedKeys;
+  if (exact && keys.length > allowedKeys.length) return null;
+  const result: Record<string, unknown> = Object.create(null) as Record<string, unknown>;
+  for (const key of keys) {
+    if (typeof key !== 'string' || !allowedKeys.includes(key)) return null;
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    if (!descriptor && !exact) continue;
+    if (!descriptor || !('value' in descriptor)) return null;
+    result[key] = descriptor.value as unknown;
+  }
+  return result;
+}
+
+const signalAbortedGetter = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'aborted')?.get;
+
+/** Use the native brand check/getter, not a caller-provided `aborted` accessor. */
+function signalAborted(signal: AbortSignal): boolean {
+  if (!signalAbortedGetter) throw new Error('AbortSignal is unavailable');
+  return signalAbortedGetter.call(signal) === true;
+}
+
+function snapshotRequest(value: unknown): LocalInferenceRequest | null {
+  try {
+    const request = ownDataSnapshot(value, [
+      'route',
+      'tenantId',
+      'correlationId',
+      'manifest',
+      'prompt',
+      'maxOutputTokens',
+      'deadlineEpochMs',
+      'signal',
+    ]);
+    if (!request) return null;
+    const route = ownDataSnapshot(
+      request.route,
+      [
+        'status',
+        'family',
+        'strategyId',
+        'strategyVersion',
+        'selectedVia',
+        'currentAvailability',
+        'evidence',
+        'tenant',
+        'correlation',
+        'authoritySemantics',
+        'downstreamExecutionStillRequiresCurrentValidation',
+        'authorizesExecution',
+      ],
+      false,
+    );
+    if (!route) return null;
+    const evidence = ownDataSnapshot(
+      route.evidence,
+      ['strategyRegistryVersion', 'capabilityPlanStatus', 'budgetState', 'budgetAction'],
+      false,
+    );
+    const tenant = ownDataSnapshot(route.tenant, ['tenantId'], false);
+    const correlation = ownDataSnapshot(route.correlation, ['correlationId'], false);
+    const manifest = ownDataSnapshot(request.manifest, [
+      'source',
+      'modelId',
+      'modelSha256',
+      'observedAtEpochMs',
+      'maxAgeMs',
+      'authorizesExecution',
+    ]);
+    if (!evidence || !tenant || !correlation || !manifest) return null;
+    if (request.signal !== undefined) signalAborted(request.signal as AbortSignal);
+    return {
+      ...request,
+      route: { ...route, evidence, tenant, correlation },
+      manifest,
+    } as unknown as LocalInferenceRequest;
+  } catch {
+    // Hostile proxies or malformed native signals are data rejection, not exceptions.
+    return null;
+  }
+}
+
 function validRoute(request: LocalInferenceRequest): boolean {
   const route = request.route;
   return (
@@ -165,24 +257,43 @@ function manifestState(
 }
 
 /** Never buffer an unbounded HTTP response, including on an error path. */
-async function readBoundedJson(response: Response): Promise<unknown> {
-  if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
-    throw new Error('response is not JSON');
-  }
+async function readBoundedJson(response: Response, signal: AbortSignal): Promise<unknown> {
   const reader = response.body?.getReader();
   if (!reader) throw new Error('missing response body');
   const chunks: Uint8Array[] = [];
   let bytes = 0;
+  let cancellation: Promise<void> | undefined;
+  const cancelReader = (): Promise<void> => {
+    cancellation ??= Promise.resolve()
+      .then(() => reader.cancel())
+      .then(
+        () => undefined,
+        () => undefined,
+      );
+    return cancellation;
+  };
+  const onAbort = () => {
+    void cancelReader();
+  };
+  signal.addEventListener('abort', onAbort, { once: true });
   try {
+    if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+      throw new Error('response is not JSON');
+    }
     for (;;) {
+      if (signal.aborted) throw new Error('response cancelled');
       const { done, value } = await reader.read();
+      if (signal.aborted) throw new Error('response cancelled');
       if (done) break;
       bytes += value.byteLength;
       if (bytes > MAX_OUTPUT_BYTES) throw new Error('response exceeds bound');
       chunks.push(value);
     }
   } finally {
-    await reader.cancel().catch(() => undefined);
+    signal.removeEventListener('abort', onAbort);
+    // This may never settle. The caller has a separate bound, while single-flight
+    // remains held until the underlying read AND cleanup actually settle.
+    await cancelReader();
   }
   const body = new Uint8Array(bytes);
   let offset = 0;
@@ -191,6 +302,14 @@ async function readBoundedJson(response: Response): Promise<unknown> {
     offset += chunk.byteLength;
   }
   return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(body)) as unknown;
+}
+
+async function discardResponse(response: Response): Promise<void> {
+  try {
+    await response.body?.cancel();
+  } catch {
+    // Never surface response/transport details or credentials in a failure result.
+  }
 }
 
 function extractCandidate(payload: unknown): string | null {
@@ -229,9 +348,18 @@ export class LocalQwenInferenceClient {
     };
   }
 
-  async infer(request: LocalInferenceRequest): Promise<LocalInferenceResult> {
+  async infer(input: LocalInferenceRequest): Promise<LocalInferenceResult> {
+    const request = snapshotRequest(input);
+    if (!request) return abstain('INVALID_REQUEST');
     if (!validRoute(request)) return abstain('INVALID_ROUTE');
-    const now = this.dependencies.now();
+    let now: number;
+    let alreadyCancelled: boolean;
+    try {
+      now = this.dependencies.now();
+      alreadyCancelled = request.signal ? signalAborted(request.signal) : false;
+    } catch {
+      return abstain('INVALID_REQUEST');
+    }
     if (
       !Number.isSafeInteger(now) ||
       !nonEmpty(request.prompt) ||
@@ -246,72 +374,127 @@ export class LocalQwenInferenceClient {
     const modelState = manifestState(request.manifest, now);
     if (modelState === 'INVALID') return abstain('UNVERIFIED_MODEL');
     if (modelState === 'STALE') return abstain('STALE_MODEL');
-    if (request.signal?.aborted) return abstain('CANCELLED');
+    if (alreadyCancelled) return abstain('CANCELLED');
     if (request.deadlineEpochMs <= now) return abstain('TIMEOUT');
     if (this.inFlight) return abstain('BUSY');
 
     this.inFlight = true;
     const controller = new AbortController();
-    const onCancel = () => controller.abort();
-    request.signal?.addEventListener('abort', onCancel, { once: true });
-    if (request.signal?.aborted) controller.abort();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      Math.min(request.deadlineEpochMs - now, MAX_REQUEST_MS),
-    );
-
-    try {
-      const response = await this.dependencies.transport(LOCAL_QWEN_CHAT_ENDPOINT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        redirect: 'error',
-        credentials: 'omit',
-        cache: 'no-store',
-        referrerPolicy: 'no-referrer',
-        signal: controller.signal,
-        body: JSON.stringify({
-          model: request.manifest.modelId,
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You provide untrusted suggestions only. Never claim permission, tool access, or execution.',
-            },
-            { role: 'user', content: request.prompt },
-          ],
-          max_tokens: request.maxOutputTokens,
-          temperature: 0,
-          stream: false,
-          chat_template_kwargs: { enable_thinking: false },
-        }),
-      });
-      if (!response.ok) {
-        return abstain(response.status >= 500 ? 'UNAVAILABLE' : 'REJECTED');
-      }
-      let candidate: string | null;
+    const deadline = Math.min(request.deadlineEpochMs, now + MAX_REQUEST_MS);
+    let stopCode: 'CANCELLED' | 'TIMEOUT' | undefined;
+    let resolveStopped: (result: LocalInferenceResult) => void = () => undefined;
+    const stopped = new Promise<LocalInferenceResult>((resolve) => {
+      resolveStopped = resolve;
+    });
+    const stop = (code: 'CANCELLED' | 'TIMEOUT') => {
+      stopCode ??= code;
+      controller.abort();
+      resolveStopped(abstain(stopCode));
+    };
+    const currentStop = (): 'CANCELLED' | 'TIMEOUT' | undefined => {
+      if (stopCode) return stopCode;
       try {
-        candidate = extractCandidate(await readBoundedJson(response));
+        if (request.signal && signalAborted(request.signal)) {
+          stop('CANCELLED');
+        } else {
+          const observed = this.dependencies.now();
+          if (!Number.isSafeInteger(observed) || observed >= deadline) stop('TIMEOUT');
+        }
       } catch {
-        if (request.signal?.aborted) return abstain('CANCELLED');
-        if (controller.signal.aborted) return abstain('TIMEOUT');
-        return abstain('MALFORMED_RESPONSE');
+        // Losing the budget/cancellation observation cannot release a live body.
+        stop('TIMEOUT');
       }
-      if (!candidate) return abstain('MALFORMED_RESPONSE');
-      return {
-        ...NO_AUTHORITY,
-        status: 'GENERATED',
-        content: candidate,
-        strategyId: request.route.strategyId,
-        modelSha256: QWEN35_2B_Q4_K_M_SHA256,
-      };
+      return stopCode;
+    };
+    const onCancel = () => stop('CANCELLED');
+    const detachCancellation = () => {
+      if (request.signal) {
+        try {
+          EventTarget.prototype.removeEventListener.call(request.signal, 'abort', onCancel);
+        } catch {
+          // A revoked/hostile signal cannot replace the already bounded result.
+        }
+      }
+    };
+    try {
+      if (request.signal) {
+        EventTarget.prototype.addEventListener.call(request.signal, 'abort', onCancel, {
+          once: true,
+        });
+        if (signalAborted(request.signal)) onCancel();
+      }
     } catch {
-      if (request.signal?.aborted) return abstain('CANCELLED');
-      if (controller.signal.aborted) return abstain('TIMEOUT');
-      return abstain('UNAVAILABLE');
+      detachCancellation();
+      this.inFlight = false;
+      return abstain('INVALID_REQUEST');
+    }
+    const timeout = setTimeout(() => stop('TIMEOUT'), deadline - now);
+
+    const operation = (async (): Promise<LocalInferenceResult> => {
+      try {
+        const beforeDispatch = currentStop();
+        if (beforeDispatch) return abstain(beforeDispatch);
+        const response = await this.dependencies.transport(LOCAL_QWEN_CHAT_ENDPOINT, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          redirect: 'error',
+          credentials: 'omit',
+          cache: 'no-store',
+          referrerPolicy: 'no-referrer',
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: request.manifest.modelId,
+            messages: [
+              {
+                role: 'system',
+                content:
+                  'You provide untrusted suggestions only. Never claim permission, tool access, or execution.',
+              },
+              { role: 'user', content: request.prompt },
+            ],
+            max_tokens: request.maxOutputTokens,
+            temperature: 0,
+            stream: false,
+            chat_template_kwargs: { enable_thinking: false },
+          }),
+        });
+        const afterTransport = currentStop();
+        if (afterTransport || !response.ok) {
+          await discardResponse(response);
+          return abstain(currentStop() ?? (response.status >= 500 ? 'UNAVAILABLE' : 'REJECTED'));
+        }
+        let candidate: string | null;
+        try {
+          candidate = extractCandidate(await readBoundedJson(response, controller.signal));
+        } catch {
+          return abstain(currentStop() ?? 'MALFORMED_RESPONSE');
+        }
+        const afterRead = currentStop();
+        if (afterRead) return abstain(afterRead);
+        if (!candidate) return abstain('MALFORMED_RESPONSE');
+        return {
+          ...NO_AUTHORITY,
+          status: 'GENERATED',
+          content: candidate,
+          strategyId: request.route.strategyId,
+          modelSha256: QWEN35_2B_Q4_K_M_SHA256,
+        };
+      } catch {
+        return abstain(stopCode ?? 'UNAVAILABLE');
+      }
+    })();
+    const settledOperation = operation.finally(() => {
+      // An aborted caller is not proof that an uncooperative transport/read has
+      // stopped. Retain BUSY until the actual operation and cleanup settle.
+      this.inFlight = false;
+    });
+    try {
+      const result = await Promise.race([settledOperation, stopped]);
+      const beforeReturn = currentStop();
+      return beforeReturn ? abstain(beforeReturn) : result;
     } finally {
       clearTimeout(timeout);
-      request.signal?.removeEventListener('abort', onCancel);
-      this.inFlight = false;
+      detachCancellation();
     }
   }
 }

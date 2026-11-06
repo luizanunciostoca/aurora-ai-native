@@ -31,6 +31,17 @@ const REQUIRED_W06_KEYS = [
 
 const REQUIRED_KEY_SET = new Set<string>(REQUIRED_W06_KEYS);
 
+const REQUIRED_REQUEST_KEYS = [
+  'route',
+  'tenantId',
+  'correlationId',
+  'manifest',
+  'minimizedPublicPrompt',
+  'maxOutputTokens',
+  'deadlineEpochMs',
+] as const;
+const REQUEST_KEY_SET = new Set<string>([...REQUIRED_REQUEST_KEYS, 'signal']);
+
 const NO_AUTHORITY = {
   authoritySemantics: 'INTELLIGENCE_ONLY_NO_AUTHORITY',
   authorizesExecution: false,
@@ -41,17 +52,46 @@ function refuseProjection(): LocalInferenceResult {
   return { ...NO_AUTHORITY, status: 'ABSTAINED', code: 'INVALID_REQUEST' };
 }
 
+/** Snapshot the envelope without executing untrusted accessors. */
+function snapshotRequest(request: unknown): PublicLocalInferenceRequest | null {
+  try {
+    if (request === null || typeof request !== 'object' || Array.isArray(request)) return null;
+    const prototype = Object.getPrototypeOf(request);
+    if (prototype !== Object.prototype && prototype !== null) return null;
+    const keys = Reflect.ownKeys(request);
+    if (keys.some((key) => typeof key !== 'string' || !REQUEST_KEY_SET.has(key))) return null;
+    const values: Record<string, unknown> = {};
+    for (const key of REQUIRED_REQUEST_KEYS) {
+      const descriptor = Object.getOwnPropertyDescriptor(request, key);
+      if (!descriptor || !('value' in descriptor)) return null;
+      values[key] = descriptor.value;
+    }
+    const signal = Object.getOwnPropertyDescriptor(request, 'signal');
+    if (signal !== undefined) {
+      if (!('value' in signal)) return null;
+      values.signal = signal.value;
+    }
+    if (typeof values.tenantId !== 'string' || typeof values.correlationId !== 'string') {
+      return null;
+    }
+    // Nested route/manifest and execution bounds remain the W05-F client's
+    // responsibility. Only this own-data snapshot reaches that boundary.
+    return values as unknown as PublicLocalInferenceRequest;
+  } catch {
+    return null;
+  }
+}
+
 /** Never read accessors or forward unknown properties from a model prompt. */
 function validatePublicPrompt(
   projection: unknown,
   tenantId: string,
   correlationId: string,
 ): string | null {
-  if (projection === null || typeof projection !== 'object' || Array.isArray(projection)) {
-    return null;
-  }
-
   try {
+    if (projection === null || typeof projection !== 'object' || Array.isArray(projection)) {
+      return null;
+    }
     if (Object.getPrototypeOf(projection) !== Object.prototype) return null;
     const keys = Reflect.ownKeys(projection);
     if (
@@ -76,22 +116,28 @@ function validatePublicPrompt(
       typeof values.prompt !== 'string' ||
       values.prompt.trim().length === 0 ||
       new TextEncoder().encode(values.prompt).byteLength > 8_192 ||
-      !Array.isArray(values.includedSourceReferences) ||
-      values.includedSourceReferences.length > 4
+      !Array.isArray(values.includedSourceReferences)
     ) {
       return null;
     }
     const prompt = values.prompt as string;
-    const references = values.includedSourceReferences as unknown[];
-    if (
-      references.some(
-        (reference) =>
-          typeof reference !== 'string' ||
-          reference.trim().length === 0 ||
-          prompt.includes(reference),
-      )
-    ) {
+    const references = values.includedSourceReferences;
+    const length = Object.getOwnPropertyDescriptor(references, 'length')?.value as unknown;
+    if (typeof length !== 'number' || !Number.isSafeInteger(length) || length < 0 || length > 4) {
       return null;
+    }
+    if (Reflect.ownKeys(references).length !== length + 1) return null;
+    for (let index = 0; index < length; index += 1) {
+      const descriptor = Object.getOwnPropertyDescriptor(references, String(index));
+      if (!descriptor || !('value' in descriptor)) return null;
+      const reference: unknown = descriptor.value;
+      if (
+        typeof reference !== 'string' ||
+        reference.trim().length === 0 ||
+        prompt.includes(reference)
+      ) {
+        return null;
+      }
     }
     return prompt;
   } catch {
@@ -110,24 +156,28 @@ function validatePublicPrompt(
  * invocation by a governed consumer; typed metadata is not cryptographic proof.
  */
 export async function inferWithPublicLocalModelPrompt(
-  client: LocalQwenInferenceClient,
+  // A private structural port accepts both the bounded base client and its
+  // authenticated wrapper; private implementation fields are not a contract.
+  client: Pick<LocalQwenInferenceClient, 'infer'>,
   request: PublicLocalInferenceRequest,
 ): Promise<LocalInferenceResult> {
+  const snapshot = snapshotRequest(request);
+  if (snapshot === null) return refuseProjection();
   const prompt = validatePublicPrompt(
-    request?.minimizedPublicPrompt,
-    request?.tenantId,
-    request?.correlationId,
+    snapshot.minimizedPublicPrompt,
+    snapshot.tenantId,
+    snapshot.correlationId,
   );
   if (prompt === null) return refuseProjection();
 
   return client.infer({
-    route: request.route,
-    tenantId: request.tenantId,
-    correlationId: request.correlationId,
-    manifest: request.manifest,
+    route: snapshot.route,
+    tenantId: snapshot.tenantId,
+    correlationId: snapshot.correlationId,
+    manifest: snapshot.manifest,
     prompt,
-    maxOutputTokens: request.maxOutputTokens,
-    deadlineEpochMs: request.deadlineEpochMs,
-    ...(request.signal === undefined ? {} : { signal: request.signal }),
+    maxOutputTokens: snapshot.maxOutputTokens,
+    deadlineEpochMs: snapshot.deadlineEpochMs,
+    ...(snapshot.signal === undefined ? {} : { signal: snapshot.signal }),
   });
 }
