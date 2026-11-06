@@ -50,6 +50,18 @@ The C API requires a model-provided supported template; absence/unsupported synt
 - Genuine end-of-generation with nonempty valid UTF-8 is required for success. Invalid input, cancellation, deadline, unavailable backend, failure or budget exhaustion returns no text. Reaching token/context/byte limits is not silently reported as success.
 - No prompt, model content, token stream or credential logging is added. Special model delimiters are rejected before template tokenization; this is not claimed as a general prompt-injection defense.
 
+## Kotlin prompt-currentness checkpoints
+
+The continuation allocated in [#575, comment 6688856373](https://github.com/luizanunciostoca/aurora-ai-native/issues/575#issuecomment-6688856373) changes only the private Kotlin runtime, its regression tests and this document. It is a normal single-parent continuation of the existing disabled preparation, not a merge, new authority owner or activation.
+
+The runtime reuses the same `NativePublicPromptSource.resolveCurrent` port after model verification/reservation, immediately before JNI `generate`, and after native release and descriptor closure, before publishing successful text. JNI library loading/reservation can already have occurred; this checkpoint prevents generation, not reservation. Each checkpoint requires the original opaque request reference and valid bounded UTF-8 with the original content identity. A private content digest identifies the captured prompt; it is not consent, a session attestation or an execution grant. An observed unavailable/changed/mismatched source or failed read denies that attempt permanently. Restoring the source cannot revive the denied call.
+
+Potentially blocking source reads run on the worker lane, outside the runtime lock. The independent cancellation/deadline lane can still settle the caller; the single-flight slot remains occupied until outstanding work returns. Runtime-owned temporary byte copies are cleared. The unchanged shipping factory remains disabled and does not call this port, open a model or instantiate JNI.
+
+**Limit:** model loading and decode are both inside the opaque JNI `generate` call. These Kotlin checks do not establish a fresh policy/session/consent check between model load and first decode, or continuous revocation during generation. This internal gap remains an activation gate. No JNI/C++ contract is changed by this continuation.
+
+**Host dependency gate:** core #588 contains concrete private W02/W05/W06 preparation consumers, but their authentic current policy/consent/purpose, routing and PUBLIC-source producers are not composed in the audited Host #462. Its DP5 policy is for local device control, not model data processing. W03 storage and W06 Memory Fabric do not themselves create that missing authority. The native prompt port is also still uncomposed: repeated reads in software tests do not establish an actual eleven-field W14 session binding or real consent. No fixture is promoted to production truth.
+
 ## Reproducible preparation and assertions
 
 Use the existing **Android Foundation** workflow. It checks out the exact PR head, runs the existing three-flavor foundation build/unit tests, checks out the engine pin separately, then builds the opt-in `localDebug` preparation. No new orchestrator or parallel release workflow is introduced.

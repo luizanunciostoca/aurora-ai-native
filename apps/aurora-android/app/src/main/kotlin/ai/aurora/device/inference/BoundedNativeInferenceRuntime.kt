@@ -1,5 +1,6 @@
 package ai.aurora.device.inference
 
+import java.security.MessageDigest
 import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicReference
@@ -36,6 +37,8 @@ internal class BoundedNativeInferenceRuntime(
         var model: NativeModelHandle? = null
         var verifiedStamp: NativeModelStamp? = null
         var operation: NativeTextOperation? = null
+        // Private equality check for this flight only, never an authorization or reusable handle.
+        var promptDigest: ByteArray? = null
         var workerStarted = false
         var workerDone = false
         var cancelIssued = false
@@ -117,7 +120,8 @@ internal class BoundedNativeInferenceRuntime(
             result = abstained(NativeInferenceFailure.NATIVE_FAILURE)
         } finally {
             synchronized(lock) {
-                flight.pending = flight.stopped.get()?.let { abstained(it) } ?: result
+                flight.pending = flight.stopped.get()?.let { abstained(it) }
+                    ?: if (flight.uncertain) abstained(NativeInferenceFailure.QUARANTINED) else result
                 flight.workerDone = true
             }
             enqueueCleanup(flight)
@@ -139,6 +143,15 @@ internal class BoundedNativeInferenceRuntime(
                         return abstained(NativeInferenceFailure.INVALID_REQUEST)
                     }
                     if (isStopped(flight)) return stoppedResult(flight)
+                    val digest = MessageDigest.getInstance("SHA-256").digest(prompt)
+                    val captured = synchronized(lock) {
+                        if (active !== flight || flight.uncertain || flight.stopped.get() != null) false
+                        else { flight.promptDigest = digest; true }
+                    }
+                    if (!captured) {
+                        digest.fill(0)
+                        return stoppedResult(flight)
+                    }
                     val model = try {
                         modelStore.openPinned()
                     } catch (_: NativeModelOwnershipUncertain) {
@@ -166,6 +179,13 @@ internal class BoundedNativeInferenceRuntime(
                         issueCancel(flight)
                         return stoppedResult(flight)
                     }
+                    // Hashing/reservation may outlive the source decision. Reuse the same owner
+                    // port outside the lock; a failed observation ends this flight without retry.
+                    if (!currentPromptMatches(flight)) {
+                        return if (isStopped(flight)) stoppedResult(flight)
+                        else abstained(NativeInferenceFailure.PROMPT_UNAVAILABLE)
+                    }
+                    // The owner read can block: recheck file identity and remaining time AFTER it.
                     if (model.stamp() != beforeHash) return abstained(NativeInferenceFailure.MODEL_INVALID)
                     val remaining = remainingBudget(flight)
                     if (remaining <= 0 || isStopped(flight)) return stoppedResult(flight)
@@ -182,6 +202,50 @@ internal class BoundedNativeInferenceRuntime(
                 }
             }
         }
+    }
+
+    private fun currentPromptMatches(flight: Flight): Boolean {
+        if (isStopped(flight)) return false
+        val expected = synchronized(lock) {
+            if (active !== flight || flight.uncertain) null else flight.promptDigest?.copyOf()
+        } ?: return false
+        var current: ByteArray? = null
+        var digest: ByteArray? = null
+        var matches = false
+        try {
+            val resolved = promptSource.resolveCurrent(flight.request.requestRef, NativeStopSignal { isStopped(flight) })
+            if (isStopped(flight)) return false
+            if (resolved !is NativePromptResolution.PublicText || resolved.requestRef != flight.request.requestRef) return false
+            current = resolved.copyUtf8()
+            if (NativeUtf8.text(current, NativeInferenceBounds.MAX_INPUT_BYTES) == null) return false
+            digest = MessageDigest.getInstance("SHA-256").digest(current)
+            if (!MessageDigest.isEqual(expected, digest) || isStopped(flight)) return false
+            // An executor may have accepted work before throwing. Quarantine can therefore be
+            // observed while the owner read is blocked, without setting a cancellation reason.
+            // A matching local copy is not enough: the same live Flight must still own its digest.
+            matches = synchronized(lock) {
+                val owned = flight.promptDigest
+                active === flight && !flight.uncertain && flight.stopped.get() == null &&
+                    owned != null && MessageDigest.isEqual(expected, owned)
+            }
+            return matches
+        } catch (_: LinkageError) {
+            return false
+        } catch (_: Exception) {
+            return false
+        } finally {
+            expected.fill(0)
+            current?.fill(0)
+            digest?.fill(0)
+            // Copies used by this worker are independent of the owned digest cleared by stop.
+            // A later source recovery cannot revive a capture already observed as invalid.
+            if (!matches) synchronized(lock) { clearPromptDigestLocked(flight) }
+        }
+    }
+
+    private fun clearPromptDigestLocked(flight: Flight) {
+        flight.promptDigest?.fill(0)
+        flight.promptDigest = null
     }
 
     private fun validateResult(result: NativeGenerationResult, budget: NativeInferenceBudget): NativeInferenceResult {
@@ -227,6 +291,7 @@ internal class BoundedNativeInferenceRuntime(
             flight.stopped.compareAndSet(null, reason)
             val result = stoppedResult(flight)
             flight.pending = result
+            clearPromptDigestLocked(flight)
             // Only CAS + latch notification; no model, cancellation callback or consumer code runs here.
             flight.call.finish(result)
         }
@@ -306,8 +371,22 @@ internal class BoundedNativeInferenceRuntime(
             quarantine(flight)
             return
         }
+        val needsCurrentPrompt = synchronized(lock) {
+            active === flight && !flight.uncertain && flight.stopped.get() == null &&
+                flight.pending is NativeInferenceResult.Text
+        }
+        // Run on the worker, AFTER proven release and original-FD close. Active remains reserved
+        // while this owner read is pending; independent stop/deadline/close never wait for it.
+        if (needsCurrentPrompt && !currentPromptMatches(flight)) {
+            synchronized(lock) {
+                if (active === flight && !flight.uncertain) {
+                    flight.pending = flight.stopped.get()?.let { abstained(it) }
+                        ?: abstained(NativeInferenceFailure.PROMPT_UNAVAILABLE)
+                }
+            }
+        }
         val timer = synchronized(lock) {
-            if (active !== flight) return
+            if (active !== flight || flight.uncertain) return
             // Final linearization check after native release and original-FD close, not before.
             val reason = flight.stopped.get() ?: try {
                 val remaining = Math.subtractExact(flight.request.deadlineNanos, clock.nowNanos())
@@ -319,7 +398,11 @@ internal class BoundedNativeInferenceRuntime(
             } catch (_: Exception) {
                 NativeInferenceFailure.NATIVE_FAILURE
             }
-            flight.call.finish(reason?.let { abstained(it) } ?: flight.pending)
+            // The call retains its cancellation closure/Flight. Do not retain denied Text or a
+            // fingerprint after publishing an abstention or detaching a completed flight.
+            if (reason != null) flight.pending = abstained(reason)
+            clearPromptDigestLocked(flight)
+            flight.call.finish(flight.pending)
             flight.model = null
             flight.operation = null
             active = null
@@ -332,7 +415,9 @@ internal class BoundedNativeInferenceRuntime(
         val timer = synchronized(lock) {
             if (active !== flight) return
             if (flight.workerStarted) { quarantine(flight); return }
-            flight.call.finish(flight.stopped.get()?.let { abstained(it) } ?: abstained(reason))
+            flight.pending = flight.stopped.get()?.let { abstained(it) } ?: abstained(reason)
+            clearPromptDigestLocked(flight)
+            flight.call.finish(flight.pending)
             active = null
             flight.timer
         }
@@ -345,6 +430,7 @@ internal class BoundedNativeInferenceRuntime(
             flight.uncertain = true
             quarantined = true
             flight.pending = abstained(NativeInferenceFailure.QUARANTINED)
+            clearPromptDigestLocked(flight)
             flight.call.finish(flight.stopped.get()?.let { abstained(it) } ?: flight.pending)
         }
     }

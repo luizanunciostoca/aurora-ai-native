@@ -461,6 +461,333 @@ class NativeInferenceRuntimeTest {
         assertEquals(0, h.storeCalls.get())
     }
 
+    @Test fun currentPromptIsRecheckedAfterHashAndReservationAndAfterTeardown() {
+        val h = Harness()
+        h.prompt = { ref, _ ->
+            when (h.sourceCalls.get()) {
+                1 -> {
+                    assertEquals(0, h.storeCalls.get())
+                    assertEquals(0, h.engine.reserves.get())
+                }
+                2 -> {
+                    assertEquals(1, h.model.hashCloses.get())
+                    assertEquals(1, h.engine.reserves.get())
+                    assertEquals(0, h.operation.generates.get())
+                    assertEquals(0, h.operation.releases.get())
+                    assertEquals(0, h.model.closes.get())
+                }
+                3 -> {
+                    assertEquals(1, h.operation.generates.get())
+                    assertEquals(1, h.operation.releases.get())
+                    assertEquals(1, h.model.closes.get())
+                }
+                else -> fail("A currentness checkpoint must not retry its owner read")
+            }
+            publicPrompt(ref)
+        }
+        val call = h.runtime.submit(h.request())
+        h.drain()
+        assertTrue(call.pollResult() is NativeInferenceResult.Text)
+        assertEquals(3, h.sourceCalls.get())
+        assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+    }
+
+    @Test fun promptInvalidatedDuringHashOrReservationCannotReachGeneration() {
+        // These source changes are JVM fixtures, not current session/consent authorities.
+        for (phase in listOf("hash", "reservation")) {
+            for (invalid in invalidPromptSources()) {
+                val h = Harness()
+                if (phase == "hash") h.model.beforeHash = { h.prompt = invalid }
+                else h.engine.onReserve = { h.prompt = invalid }
+                val call = h.runtime.submit(h.request())
+                h.drain()
+                assertFailure(call, NativeInferenceFailure.PROMPT_UNAVAILABLE)
+                assertEquals(2, h.sourceCalls.get())
+                assertEquals(0, h.operation.generates.get())
+                assertEquals(1, h.operation.releases.get())
+                assertEquals(1, h.model.closes.get())
+                assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+                assertFalse(call.pollResult().toString().contains("PRIVATE_CURRENTNESS_MARKER"))
+            }
+        }
+    }
+
+    @Test fun promptInvalidatedDuringGenerationReleaseOrFileCloseCannotEscapeAsText() {
+        for (phase in listOf("generation", "release", "close")) {
+            for (invalid in invalidPromptSources()) {
+                val h = Harness()
+                when (phase) {
+                    "generation" -> h.operation.onGenerate = { h.prompt = invalid; goodOutput() }
+                    "release" -> h.operation.onRelease = { h.prompt = invalid; true }
+                    "close" -> h.model.beforeClose = { h.prompt = invalid }
+                }
+                val call = h.runtime.submit(h.request())
+                h.drain()
+                assertFailure(call, NativeInferenceFailure.PROMPT_UNAVAILABLE)
+                assertEquals(3, h.sourceCalls.get())
+                assertEquals(1, h.operation.generates.get())
+                assertEquals(1, h.operation.releases.get())
+                assertEquals(1, h.model.closes.get())
+                assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+                assertFalse(call.pollResult().toString().contains("Resposta pública."))
+                assertFalse(call.pollResult().toString().contains("PRIVATE_CURRENTNESS_MARKER"))
+            }
+        }
+    }
+
+    @Test fun anObservedPromptInvalidationNeverRecoversTheSameFlight() {
+        for (checkpoint in listOf(2, 3)) {
+            val h = Harness()
+            h.prompt = { ref, _ ->
+                if (h.sourceCalls.get() == checkpoint) NativePromptResolution.Unavailable
+                else publicPrompt(ref)
+            }
+            val call = h.runtime.submit(h.request())
+            if (checkpoint == 2) {
+                h.operation.onRelease = {
+                    assertNull(call.pollResult())
+                    assertEquals(NativeInferenceState.BUSY, h.runtime.state())
+                    assertEquals(2, h.sourceCalls.get())
+                    // Restore while this invalidated flight still owns its reservation, not after
+                    // detachment. Cleanup must not retry the owner and revive the pending refusal.
+                    h.prompt = { ref, _ -> publicPrompt(ref) }
+                    true
+                }
+            }
+            h.drain()
+            assertFailure(call, NativeInferenceFailure.PROMPT_UNAVAILABLE)
+            val refusal = call.pollResult()
+            h.prompt = { ref, _ -> publicPrompt(ref) }
+            h.drain()
+            assertSame(refusal, call.pollResult())
+            assertEquals(checkpoint, h.sourceCalls.get())
+            assertEquals(if (checkpoint == 2) 0 else 1, h.operation.generates.get())
+            assertEquals(1, h.operation.releases.get())
+            assertEquals(1, h.model.closes.get())
+            assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+        }
+    }
+
+    @Test fun retainedFlightDoesNotKeepDeniedTextOrItsPromptFingerprint() {
+        // Private JVM inspection only: no production inspection API or additional source contract.
+        for (terminal in listOf("denial", "cancel", "quarantine")) {
+            val h = Harness()
+            val call = h.runtime.submit(h.request())
+            val flight = privateField(h.runtime, "active")!!
+            var ownedDigest: ByteArray? = null
+            h.prompt = { ref, _ ->
+                if (h.sourceCalls.get() == 2) {
+                    ownedDigest = privateField(flight, "promptDigest") as ByteArray
+                    assertTrue(ownedDigest!!.any { it != 0.toByte() })
+                }
+                if (terminal == "denial" && h.sourceCalls.get() == 3) {
+                    assertTrue(privateField(flight, "pending") is NativeInferenceResult.Text)
+                    NativePromptResolution.Unavailable
+                } else publicPrompt(ref)
+            }
+            h.operation.onRelease = {
+                assertTrue(privateField(flight, "pending") is NativeInferenceResult.Text)
+                if (terminal == "cancel") call.cancel()
+                terminal != "quarantine"
+            }
+            h.drain()
+            val expected = when (terminal) {
+                "cancel" -> NativeInferenceFailure.CANCELLED
+                "quarantine" -> NativeInferenceFailure.QUARANTINED
+                else -> NativeInferenceFailure.PROMPT_UNAVAILABLE
+            }
+            assertFailure(call, expected)
+            val pending = privateField(flight, "pending")
+            assertTrue(pending is NativeInferenceResult.Abstained)
+            assertEquals(expected, (pending as NativeInferenceResult.Abstained).reason)
+            assertNotNull(ownedDigest)
+            assertTrue(ownedDigest!!.all { it == 0.toByte() })
+            assertNull(privateField(flight, "promptDigest"))
+            // Completion retains the cancellation closure; prove the inspected Flight is the one
+            // still captured by that callable, not an unrelated fresh or synthetic Flight.
+            val cancellation = privateField(call, "cancellation")!!
+            assertTrue(cancellation.javaClass.declaredFields.any {
+                it.isAccessible = true
+                it.get(cancellation) === flight
+            })
+            assertEquals(if (terminal == "denial") 3 else 2, h.sourceCalls.get())
+            assertEquals(1, h.operation.releases.get())
+            assertEquals(if (terminal == "quarantine") 0 else 1, h.model.closes.get())
+        }
+    }
+
+    @Test fun quarantineWhileThePreGenerationSourceReadIsPendingCannotStartGeneration() {
+        val worker = daemonExecutor()
+        val entered = CountDownLatch(1)
+        val allowReturn = CountDownLatch(1)
+        val acceptedThenFailed = Executor { command ->
+            worker.execute(command)
+            await(entered)
+            // Deliberately nonconforming: the worker was accepted and started before throwing.
+            throw IllegalStateException("PRIVATE_EXECUTOR_FAILURE")
+        }
+        val h = Harness(work = acceptedThenFailed)
+        h.prompt = { ref, _ ->
+            if (h.sourceCalls.get() == 2) {
+                entered.countDown()
+                allowReturn.await()
+            }
+            publicPrompt(ref)
+        }
+        try {
+            val call = h.runtime.submit(h.request())
+            assertFailure(call, NativeInferenceFailure.QUARANTINED)
+            assertEquals(NativeInferenceState.QUARANTINED, h.runtime.state())
+            assertEquals(2, h.sourceCalls.get())
+            assertEquals(0, h.operation.generates.get())
+            allowReturn.countDown()
+            barrier(worker)
+            assertFailure(call, NativeInferenceFailure.QUARANTINED)
+            assertEquals(0, h.operation.generates.get())
+            assertEquals(2, h.sourceCalls.get())
+            assertEquals(0, h.operation.releases.get())
+            assertEquals(0, h.model.closes.get())
+            assertEquals(NativeInferenceState.QUARANTINED, h.runtime.state())
+            assertFailure(h.runtime.submit(h.request()), NativeInferenceFailure.QUARANTINED)
+            assertFalse(call.pollResult().toString().contains("PRIVATE_EXECUTOR_FAILURE"))
+        } finally {
+            allowReturn.countDown()
+            worker.shutdownNow()
+        }
+    }
+
+    @Test fun aBlockingCurrentnessReadCannotBlockCancellationDeadlineOrClose() {
+        for (checkpoint in listOf(2, 3)) {
+            for (stopKind in listOf("cancel", "deadline", "close")) {
+                val worker = daemonExecutor()
+                val trigger = daemonExecutor()
+                val entered = CountDownLatch(1)
+                val allowReturn = CountDownLatch(1)
+                val h = Harness(work = worker)
+                h.prompt = { ref, stop ->
+                    if (h.sourceCalls.get() == checkpoint) {
+                        entered.countDown()
+                        allowReturn.await()
+                        assertTrue(stop.isStopped())
+                    }
+                    publicPrompt(ref)
+                }
+                try {
+                    val request = h.request()
+                    val call = h.runtime.submit(request)
+                    await(entered)
+                    assertNull(call.pollResult())
+                    // A separate bounded lane detects an owner read accidentally made under lock.
+                    trigger.submit {
+                        when (stopKind) {
+                            "cancel" -> call.cancel()
+                            "deadline" -> {
+                                h.clock.now.set(request.deadlineNanos)
+                                h.scheduler.fireDue()
+                            }
+                            "close" -> h.runtime.close()
+                        }
+                    }.get(5, TimeUnit.SECONDS)
+                    val expected = when (stopKind) {
+                        "deadline" -> NativeInferenceFailure.TIMEOUT
+                        "close" -> NativeInferenceFailure.CLOSED
+                        else -> NativeInferenceFailure.CANCELLED
+                    }
+                    assertFailure(call, expected)
+                    assertEquals(
+                        if (stopKind == "close") NativeInferenceState.CLOSING else NativeInferenceState.BUSY,
+                        h.runtime.state(),
+                    )
+                    assertFailure(
+                        h.runtime.submit(h.request()),
+                        if (stopKind == "close") NativeInferenceFailure.CLOSED else NativeInferenceFailure.BUSY,
+                    )
+                    assertEquals(checkpoint, h.sourceCalls.get())
+                    assertEquals(if (checkpoint == 2) 0 else 1, h.operation.generates.get())
+                    assertEquals(if (checkpoint == 2) 0 else 1, h.model.closes.get())
+                    (h.cancellations as ManualExecutor).drain()
+                    allowReturn.countDown()
+                    await(h.model.closed)
+                    barrier(worker)
+                    assertFailure(call, expected)
+                    assertEquals(checkpoint, h.sourceCalls.get())
+                    assertEquals(1, h.operation.releases.get())
+                    assertEquals(1, h.model.closes.get())
+                    assertEquals(
+                        if (stopKind == "close") NativeInferenceState.CLOSED else NativeInferenceState.IDLE,
+                        h.runtime.state(),
+                    )
+                } finally {
+                    allowReturn.countDown()
+                    worker.shutdownNow()
+                    trigger.shutdownNow()
+                }
+            }
+        }
+    }
+
+    @Test fun modelStampIsCheckedAgainAfterThePreGenerationOwnerRead() {
+        val h = Harness()
+        h.prompt = { ref, _ ->
+            if (h.sourceCalls.get() == 2) h.model.metadata = h.model.metadata.copy(changedNanos = 99)
+            publicPrompt(ref)
+        }
+        val call = h.runtime.submit(h.request())
+        h.drain()
+        assertFailure(call, NativeInferenceFailure.MODEL_INVALID)
+        assertEquals(2, h.sourceCalls.get())
+        assertEquals(0, h.operation.generates.get())
+        assertEquals(1, h.operation.releases.get())
+        assertEquals(1, h.model.closes.get())
+    }
+
+    @Test fun deadlineAndClockFailureAreRecheckedAfterBothOwnerReads() {
+        for (checkpoint in listOf(2, 3)) {
+            for (clockFailure in listOf(false, true)) {
+                val h = Harness()
+                val request = h.request()
+                h.prompt = { ref, _ ->
+                    if (h.sourceCalls.get() == checkpoint) {
+                        if (clockFailure) h.clock.fail = true else h.clock.now.set(request.deadlineNanos)
+                    }
+                    publicPrompt(ref)
+                }
+                val call = h.runtime.submit(request)
+                h.drain()
+                (h.cancellations as ManualExecutor).drain()
+                h.drain()
+                assertFailure(call, if (clockFailure) NativeInferenceFailure.NATIVE_FAILURE else NativeInferenceFailure.TIMEOUT)
+                assertEquals(checkpoint, h.sourceCalls.get())
+                assertEquals(if (checkpoint == 2) 0 else 1, h.operation.generates.get())
+                assertEquals(1, h.operation.releases.get())
+                assertEquals(1, h.model.closes.get())
+                assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+            }
+        }
+    }
+
+    @Test fun finalPromptReadCannotMaskNativeFailureOrUncertainTeardown() {
+        for (failure in listOf("native", "release", "close")) {
+            val h = Harness()
+            h.prompt = { ref, _ ->
+                assertTrue("No final source read without a releasable Text candidate", h.sourceCalls.get() <= 2)
+                publicPrompt(ref)
+            }
+            when (failure) {
+                "native" -> h.operation.onGenerate = { NativeGenerationResult(NativeGenerationStatus.FAILURE, byteArrayOf(), 0, 0) }
+                "release" -> h.operation.onRelease = { false }
+                "close" -> h.model.closeFails = true
+            }
+            val call = h.runtime.submit(h.request())
+            h.drain()
+            assertFailure(call, if (failure == "native") NativeInferenceFailure.NATIVE_FAILURE else NativeInferenceFailure.QUARANTINED)
+            assertEquals(2, h.sourceCalls.get())
+            assertEquals(1, h.operation.generates.get())
+            assertEquals(1, h.operation.releases.get())
+            assertEquals(if (failure == "release") 0 else 1, h.model.closes.get())
+        }
+    }
+
     private class Harness(
         val work: Executor = ManualExecutor(),
         val cancellations: Executor = ManualExecutor(),
@@ -541,6 +868,7 @@ class NativeInferenceRuntimeTest {
         val bytes = testModelBytes()
         @Volatile var metadata = NativeModelStamp(1, 2, bytes.size.toLong(), 3, 4, 5, 6, true, true, true)
         @Volatile var beforeHash: () -> Unit = {}
+        @Volatile var beforeClose: () -> Unit = {}
         @Volatile var closeFails = false
         @Volatile var hashCloseFails = false
         @Volatile var hashOwnershipUncertain = false
@@ -564,6 +892,7 @@ class NativeInferenceRuntimeTest {
         }
         override fun close() {
             closes.incrementAndGet()
+            beforeClose()
             if (closeFails) throw IllegalStateException("private-file-close")
             closed.countDown()
             if (hashOwnershipUncertain) throw NativeModelOwnershipUncertain()
@@ -596,6 +925,19 @@ class NativeInferenceRuntimeTest {
     }
 
     private companion object {
+        fun privateField(owner: Any, name: String): Any? =
+            owner.javaClass.getDeclaredField(name).apply { isAccessible = true }.get(owner)
+        fun publicPrompt(ref: String): NativePromptResolution =
+            NativePromptResolution.PublicText(ref, "Pergunta pública.".toByteArray())
+        fun invalidPromptSources(): List<(String, NativeStopSignal) -> NativePromptResolution> = listOf(
+            { _, _ -> NativePromptResolution.Unavailable },
+            { _, _ -> NativePromptResolution.NotComposed },
+            { _, _ -> NativePromptResolution.PublicText("different-request", "Pergunta pública.".toByteArray()) },
+            { ref, _ -> NativePromptResolution.PublicText(ref, byteArrayOf()) },
+            { ref, _ -> NativePromptResolution.PublicText(ref, byteArrayOf(0xC3.toByte(), 0x28)) },
+            { ref, _ -> NativePromptResolution.PublicText(ref, "Texto diferente.".toByteArray()) },
+            { _, _ -> throw IllegalStateException("PRIVATE_CURRENTNESS_MARKER") },
+        )
         fun testModelBytes(): ByteArray = byteArrayOf(71, 71, 85, 70, 3, 0, 0, 0, 11, 22, 33, 44)
         fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         fun goodOutput(): NativeGenerationResult = NativeGenerationResult(0, "Resposta pública.".toByteArray(), 8, 4)
