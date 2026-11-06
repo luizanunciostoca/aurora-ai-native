@@ -25,6 +25,8 @@ canonical managers; it does not introduce another identity or policy registry.
 | `LocalModelSessionOperation.run` | Accept only request metadata and an authenticated socket binding; admit through existing W14 ownership | Malformed, unauthenticated, replayed or stale requests do not reach the core |
 | W14 current checks | Resolve current device registration, evaluate current trust/attestation, bind generation and connection | Revocation, rotation, reconnection and expiry suppress inference or output |
 | `SessionBoundLocalModel` | Snapshot the exact eleven-field identity, obtain a current W05/W06 preparation, preserve the PUBLIC-only bridge | Missing producers, identity mismatch and stale purpose/consent/source observations abstain |
+| `CurrentLocalModelPreparationSource` | Compose the owning W05 router and its current strategy port with the private current W06 context producer | Missing current records, changed routing/manifest or a stale context handle cannot become a preparation |
+| `CurrentPublicModelContext` | Call the existing W02 policy/consent and W06 acquisition/retrieval/minimization implementations on current read-only owner records | Invalid policy/consent denies before data acquisition; source drift, truncation and unsafe context deny prompt release |
 | `createSessionBoundKeyedLocalModel` | Reuse one existing bounded keyed client; check the request's live guard after credential acquisition and immediately before transport | Revocation while credentials are awaited must result in zero transport calls |
 | Final release guard | Recheck the captured preparation synchronously after W14's last asynchronous attestation check | No stale prepared text is released; absent, duplicate or invalid guards cannot approve output |
 | Lifecycle closure | Cancel/complete using the originally admitted session, connection and request | Uncertain finalization returns `RECONCILIATION_REQUIRED` and quarantines that operation; no automatic retry under another identity |
@@ -34,12 +36,37 @@ a synchronous current-state lookup and one-time registration of the final source
 guard. These callbacks are injected by the trusted composition, never deserialized
 from Android, a request body, prompt text or model output.
 
-The source port must invoke the existing W05 routing and W06 retrieval/minimization
-producers using the bound identity. Its asynchronous revalidation and synchronous
-`isCurrent` must consult current canonical purpose, consent and provenance state.
-The synchronous check is side-effect-free and fail-closed, not an optimistic cached
-approval. A type, reference, timestamp, boolean or Android OS permission is not proof
-that these producers have been connected to a real host.
+The private source implementation composes the existing producers using the bound
+identity. It does not create a policy, consent ledger, strategy registry or current
+source of truth. Host-owned data adapters remain explicit dependencies: they must
+read current records, not accept approval fields from Android or model output.
+Neither source class is installed in a running Host or exported from a public barrel.
+
+The W06 producer directly uses `lookupCurrentPolicy`, `precheckPolicy`,
+`evaluateConsent`, `validateContextQuery`, `acquireContextCandidates`,
+`evaluateContextRetrieval`, `compileMinimalContext` and
+`compilePublicLocalModelPrompt`. An ACTIVE exact-version policy and its applicable
+informational precheck are required; a present consent reference, PUBLIC label or
+`requiresConsent: false` alone is not permission. Applicable consent must be current
+and bound to the same subject, tenant, purpose and jurisdiction. Executable authority
+tokens and approvals do not belong in this read-only preparation.
+
+The W05 source invokes the owning router function with current routing data and the
+existing strategy-selection port; it does not accept a preselected route as proof.
+The narrow injected router/context ports avoid publishing private W06 APIs or
+introducing cross-package source/deep-artifact imports. The offline composition binds
+these ports to the actual canonical implementations, not an approving router stub.
+
+Revalidation re-reads captured dependencies: current owner records, policy,
+consent/purpose, source contents/revision/provenance, routing and model manifest.
+Asynchronous acquisition checks both sides of a read; truncated or partly rejected
+context cannot silently become READY. The synchronous current check is fail-closed,
+not an optimistic cached approval. A type, reference, timestamp, boolean or Android
+OS permission is not proof that a real host has supplied authentic current records.
+Once a captured preparation loses observed currentness, that capture is retired;
+restoring earlier owner bytes does not resurrect its handle. Recovery requires a
+new preparation. Consent data-category restrictions without a canonical W06 mapping
+are refused rather than silently treated as unrestricted consent.
 
 Two asynchronous checks cannot make each other atomic. Therefore the composition
 rechecks both sides synchronously at dispatch and release boundaries, including
@@ -76,16 +103,26 @@ node node_modules/typescript/bin/tsc -p services/mobile-gateway/tsconfig.test.js
 node tools/test/local-model-session-composition.mjs
 ```
 
+The normal test runner builds the already-published W02 policy package after
+contracts, before dependent tests. Quality's no-emit context project resolves that
+same public query API to its source. Emitted build/test configurations retain their
+normal package resolution. No public export, package manifest or lockfile change is
+needed, and a successful run must not rely on stale local declaration artifacts.
+
 The mobile-gateway test configuration transpiles with `noCheck`; this command is
 not evidence of strict type safety. The separate existing Quality typecheck covers
 the gateway-auth leaf, and the normal test runner performs its canonical checks.
 
-The one-tree composition proof loads actual compiled W14 managers and W05/W06
-producers/consumers, including the session-bound keyed factory. All authentication,
-attestation observations, source permissions, runtime health, manifest, credentials
-and model responses are **explicit synthetic fixtures**. No real model, tablet,
-backend or network endpoint is exercised. Global fetch is forbidden in the proof;
-the only transport is the counted synthetic transport.
+The one-tree composition proof loads actual compiled W14 managers and W02/W05/W06
+producers/consumers, including the current-record source classes and the session-bound
+keyed factory. The earlier injected-preparation boundary regressions remain explicitly
+distinguished from the new concrete-producer scenarios. Authentication, attestation,
+current owner records, source-adapter data, runtime health, manifest, credentials and
+model responses are **explicit synthetic fixtures**. The canonical evaluators and
+new producer implementations are actual code; the fixtures are not real consent or
+an authenticated data-owner service. No real model, tablet, backend or network
+endpoint is exercised. Global fetch is forbidden; the only model transport is counted
+and synthetic.
 
 The script binds source/artifact digests to the current checkout, rejects a dirty
 tracked source tree in normal mode and reports scenario/assertion counts. The explicit
@@ -111,11 +148,15 @@ runtime or physical-acceptance status.
 ## Remaining gates — not implemented or proven here
 
 1. Bind the actual host authentication, attestation, current purpose/consent/source
-   producers and launcher-owned ephemeral credential provider. Absence must remain
+   owners and launcher-owned ephemeral credential provider. The implemented private
+   composers do not supply those owners or persistent stores. Absence must remain
    unavailable; a permissive fixture must never be promoted as an implementation.
 2. Implement and prove the chosen native host-to-core boundary. The existing keyed
    HTTP client and this TypeScript proof are not equivalent to the disabled Android
-   JNI path and do not establish a persistent tablet session.
+   JNI path and do not establish a persistent tablet session. Before native activation,
+   current source/session checks are also needed after potentially long model-file
+   verification/loading and before generation and final result release. A cached
+   Android connection snapshot or one initial prompt resolution is insufficient.
 3. Obtain the distinct authorization required for installation, model import and
    activation, then prove the installed APK/digest, device/session, current permissions,
    real inference and observable behavior. None of these actions is included here.

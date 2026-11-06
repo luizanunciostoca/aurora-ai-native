@@ -6,7 +6,8 @@
     "baseUrl": ".",
     "paths": {
       "@aurora/contracts": ["../contracts/src/index.ts"],
-      "@aurora/contracts/*": ["../contracts/src/*/index.ts"]
+      "@aurora/contracts/*": ["../contracts/src/*/index.ts"],
+      "@aurora/policy-core/query": ["../policy/src/query/index.ts"]
     }
   },
   "include": ["src/**/*.ts"],

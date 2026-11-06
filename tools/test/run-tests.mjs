@@ -116,6 +116,14 @@ if (
   status = run(npm, ['run', 'build', '--workspace', '@aurora/contracts']);
 }
 
+// W06's private current-context producer consumes the existing published W02
+// query API. Build that dependency before compiling tests on a clean checkout;
+// the later workspace test phase must not be relied upon for stale dist files.
+if (status === 0 && contextTests.length > 0) {
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  status = run(npm, ['run', 'build', '--workspace', '@aurora/policy-core']);
+}
+
 if (status === 0) {
   status = compileAndRunServiceTests('services/executors', executorTests);
 }

@@ -11,9 +11,12 @@ import { fileURLToPath } from 'node:url';
 
 // Offline, one-tree composition proof. Run only after npm run build and
 // tsc -p services/mobile-gateway/tsconfig.test.json in the same checked-out tree.
-// W14 managers and W05/W06 producers/consumers are real compiled modules.
-// Authentication, attestation, source permissions, model health/manifest and
-// model transport are explicit synthetic fixtures, NOT physical/native proof.
+// W14 managers and W02/W05/W06 producers/consumers are real compiled modules.
+// The retained legacy fault cases inject a synthetic preparation source; the
+// separately labelled current-producer cases exercise the concrete new source.
+// Authentication, attestation, upstream owner records/readers, source adapters,
+// model health/manifest and transport remain explicit synthetic fixtures.
+// Neither case class is physical/native proof or an authenticated data-owner store.
 assert.equal(process.version, 'v22.16.0', 'use the pinned Node 22.16.0 runtime');
 const arguments_ = process.argv.slice(2);
 const allowDirtyPreparation = arguments_.includes('--allow-dirty-preparation');
@@ -51,6 +54,22 @@ const sourceArtifacts = [
     'packages/context/dist/minimal-context/model-prompt.js',
   ],
   [
+    'packages/context/src/minimal-context/current-public-model-context.ts',
+    'packages/context/dist/minimal-context/current-public-model-context.js',
+  ],
+  ['packages/context/src/query/validate.ts', 'packages/context/dist/query/validate.js'],
+  ['packages/context/src/sources/acquire.ts', 'packages/context/dist/sources/acquire.js'],
+  ['packages/contracts/src/consent/index.ts', 'packages/contracts/dist/consent/index.js'],
+  ['packages/policy/src/index.ts', 'packages/policy/dist/packages/policy/src/index.js'],
+  [
+    'packages/policy/src/query/current-policy.ts',
+    'packages/policy/dist/packages/policy/src/query/current-policy.js',
+  ],
+  [
+    'packages/policy/src/query/precheck.ts',
+    'packages/policy/dist/packages/policy/src/query/precheck.js',
+  ],
+  [
     'services/agent-runtime/src/runtime/public-local-model-bridge.ts',
     'services/agent-runtime/dist/runtime/public-local-model-bridge.js',
   ],
@@ -65,6 +84,10 @@ const sourceArtifacts = [
   [
     'services/agent-runtime/src/runtime/session-bound-local-model.ts',
     'services/agent-runtime/dist/runtime/session-bound-local-model.js',
+  ],
+  [
+    'services/agent-runtime/src/runtime/current-local-model-preparation-source.ts',
+    'services/agent-runtime/dist/runtime/current-local-model-preparation-source.js',
   ],
   [
     'services/mobile-gateway/src/gateway-auth/session-manager.ts',
@@ -159,8 +182,14 @@ const { compileMinimalContext } = from('packages/context/dist/minimal-context/co
 const { compilePublicLocalModelPrompt } = from(
   'packages/context/dist/minimal-context/model-prompt.js',
 );
+const { CurrentPublicModelContext } = from(
+  'packages/context/dist/minimal-context/current-public-model-context.js',
+);
 const { createSessionBoundKeyedLocalModel } = from(
   'services/agent-runtime/dist/runtime/session-bound-local-model.js',
+);
+const { CurrentLocalModelPreparationSource } = from(
+  'services/agent-runtime/dist/runtime/current-local-model-preparation-source.js',
 );
 const {
   LOCAL_QWEN_CHAT_ENDPOINT,
@@ -212,10 +241,19 @@ const totals = {
   producerCalls: 0,
   sourceRevalidations: 0,
   sourceSyncChecks: 0,
+  currentOwnerRecordReads: 0,
+  currentRoutingRecordReads: 0,
+  currentPolicyLookups: 0,
+  currentContextAdapterReads: 0,
+  currentSourceReads: 0,
+  currentStrategySelections: 0,
 };
 const results = [];
 const cases = [];
-const scenario = (name, run) => cases.push({ name, run });
+const scenario = (name, run) =>
+  cases.push({ name, run, coverage: 'LEGACY_INJECTED_PREPARATION_BOUNDARY_REGRESSION' });
+const currentProducerScenario = (name, run) =>
+  cases.push({ name, run, coverage: 'ACTUAL_W02_W05_W06_CURRENT_PREPARATION_COMPOSITION' });
 
 function noAuthority(value, gateway = false) {
   eq(value.authorizesExecution, false);
@@ -271,18 +309,10 @@ function health(now, overrides = {}) {
   };
 }
 
-function makeRoute(binding, now, healthProjection = health(now)) {
-  const descriptor = createLocalQwenStrategyDescriptor({
-    nowEpochMs: now,
-    ...(healthProjection === null ? {} : { health: healthProjection }),
-  });
-  const created = createStrategyRegistry('session-composition-fixture:v1', [descriptor]);
-  eq(created.status, 'CREATED');
-  const registry = created.registry;
+function routerInput(binding) {
   const tenant = { tenantId: binding.tenantId };
   const correlation = { correlationId: binding.correlationId };
-  let selectionCalls = 0;
-  const route = routeIntelligence({
+  return {
     tenant,
     correlation,
     classification: {
@@ -355,19 +385,33 @@ function makeRoute(binding, now, healthProjection = health(now)) {
       canSkipMandatoryValidation: false,
       authorizesExecution: false,
     },
-    strategies: {
-      registryVersion: registry.registryVersion,
-      select(criteria) {
-        selectionCalls += 1;
-        return selectStrategy(registry, criteria);
-      },
-    },
     preferences: {
       deterministic: [],
       model: [LOCAL_QWEN_STRATEGY_ID],
       specialist: [],
       computerUsePlanning: [],
       human: [],
+    },
+  };
+}
+
+function makeRoute(binding, now, healthProjection = health(now)) {
+  const descriptor = createLocalQwenStrategyDescriptor({
+    nowEpochMs: now,
+    ...(healthProjection === null ? {} : { health: healthProjection }),
+  });
+  const created = createStrategyRegistry('session-composition-fixture:v1', [descriptor]);
+  eq(created.status, 'CREATED');
+  const registry = created.registry;
+  let selectionCalls = 0;
+  const route = routeIntelligence({
+    ...routerInput(binding),
+    strategies: {
+      registryVersion: registry.registryVersion,
+      select(criteria) {
+        selectionCalls += 1;
+        return selectStrategy(registry, criteria);
+      },
     },
     nowEpochMs: now,
   });
@@ -485,6 +529,302 @@ function completion(withTools = false) {
   });
 }
 
+/**
+ * These are deliberately synthetic upstream owner records/readers, NOT the implementation under
+ * test. Policy decisions, context acquisition/minimization/prompt compilation and preparation
+ * currentness are performed by the real W02/W05/W06 modules below. Record timestamps are captured
+ * once per request; revalidation never refreshes an expired record or supplies an approval boolean.
+ */
+function currentOwnerFixture({
+  now,
+  counters,
+  options,
+  rememberBound,
+  rememberPreparation,
+  fixture,
+}) {
+  const entries = new Map();
+  let currentEntry;
+  const count = (name) => {
+    counters[name] += 1;
+    totals[name] += 1;
+  };
+  const entryFor = (bound) => {
+    const key = JSON.stringify([
+      bound.tenantId,
+      bound.actorIdentityId,
+      bound.correlationId,
+      bound.gatewaySessionId,
+      bound.connectionId,
+      bound.gatewayGeneration,
+      bound.deviceSessionId,
+      bound.deviceId,
+      bound.registrationVersion,
+      bound.requestId,
+      bound.deadlineMs,
+    ]);
+    const previous = entries.get(key);
+    if (previous) return previous;
+    const observed = now();
+    const expires = Math.min(observed + 4000, bound.deadlineMs);
+    const actor = { kind: 'HUMAN', identityId: bound.actorIdentityId };
+    const subject = { kind: 'IDENTITY', identityId: bound.actorIdentityId };
+    const purpose = {
+      kind: 'PurposeContext',
+      purposeId: 'public.information',
+      version: '1.0.0',
+      status: 'ACTIVE',
+      allowedDataClassifications: ['PUBLIC'],
+    };
+    const jurisdiction = { kind: 'JurisdictionContext', jurisdiction: 'BR', version: '1.0.0' };
+    const consent = {
+      kind: 'ConsentRecord',
+      schemaVersion: '1.0.0',
+      reference: {
+        kind: 'CONSENT_RECORD',
+        reference: 'consent:current-producer:fixture',
+        version: '1.0.0',
+      },
+      tenantId: bound.tenantId,
+      subject: { ...subject },
+      status: 'ACTIVE',
+      grantedAt: at(observed - 1000),
+      expiresAt: at(observed + 20000),
+      scope: { purposeIds: [purpose.purposeId], jurisdictions: ['BR'] },
+      provenance: {
+        source: 'synthetic-owner-fixture',
+        reference: 'consent-provenance:fixture',
+        capturedAt: at(observed - 1000),
+      },
+      classification: 'PUBLIC',
+    };
+    const policyReference = { reference: 'policy:current-producer:fixture', version: '1.0.0' };
+    const query = {
+      kind: 'ContextQuery',
+      schemaVersion: '1.0.0',
+      tenant: { tenantId: bound.tenantId },
+      correlation: { correlationId: bound.correlationId },
+      actor: { ...actor },
+      purpose: { ...purpose, allowedDataClassifications: [...purpose.allowedDataClassifications] },
+      jurisdiction: { ...jurisdiction },
+      requiresConsent: true,
+      consent: { ...consent.reference },
+      maxDataClassification: 'PUBLIC',
+      currentness: 'CURRENT_REQUIRED',
+      selectors: [
+        {
+          adapterId: ADAPTER,
+          sourceClass: 'COMPANY_KNOWLEDGE',
+          key: 'documentRef',
+          value: 'public:42',
+        },
+      ],
+      limits: { maxSourceFanout: 1, maxItemsPerSource: 2, maxTotalItems: 2 },
+    };
+    const policyEvaluation = {
+      kind: 'PolicyEvaluationRequest',
+      schemaVersion: '1.0.0',
+      policy: { ...policyReference },
+      correlation: { correlationId: bound.correlationId },
+      tenant: { tenantId: bound.tenantId },
+      tenantBoundary: {
+        status: 'WITHIN_BOUNDARY',
+        reason: 'BOUNDARY_CONFIRMED',
+        correlationId: bound.correlationId,
+        evidence: {
+          evaluatedTenantId: bound.tenantId,
+          actorIdentityId: bound.actorIdentityId,
+          matchedBindingCount: 1,
+          observedBindingTenantIds: [bound.tenantId],
+        },
+      },
+      actor: { ...actor },
+      subject,
+      action: 'model.public.process',
+      requestedScope: ['context:public'],
+      purpose: { ...purpose, allowedDataClassifications: [...purpose.allowedDataClassifications] },
+      jurisdiction: { ...jurisdiction },
+      dataClassification: 'PUBLIC',
+      consent,
+    };
+    const policySnapshot = {
+      kind: 'PolicySnapshot',
+      policy: { ...policyReference },
+      state: 'ACTIVE',
+      rules: [
+        {
+          ruleId: 'fixture-current-model-public-processing',
+          effect: 'ALLOW',
+          action: 'model.public.process',
+          scope: ['context:public'],
+          tenantIds: [bound.tenantId],
+          actorKinds: ['HUMAN'],
+          actorIdentityIds: [bound.actorIdentityId],
+          subjectReferences: [`identity:${bound.actorIdentityId}`],
+          purposeIds: [purpose.purposeId],
+          jurisdictions: ['BR'],
+          dataClassifications: ['PUBLIC'],
+          consentRequired: true,
+          authorityRequired: false,
+        },
+      ],
+    };
+    const contextRecord = {
+      kind: 'CURRENT_PUBLIC_MODEL_CONTEXT_RECORD',
+      reference: `context-owner:fixture:${bound.requestId}`,
+      binding: { ...bound },
+      observedAtEpochMs: observed,
+      expiresAtEpochMs: expires,
+      query,
+      policyEvaluation,
+      instruction: 'Resuma o horário público da empresa.',
+      retrievalPolicy: {
+        minimumTrustBps: 6000,
+        trustBpsByAdapter: { [ADAPTER]: 9500 },
+        maxAgeMsBySourceClass: { COMPANY_KNOWLEDGE: 60000 },
+      },
+      compilerLimits: { maxItems: 2, maxCanonicalUnits: 100000 },
+      allowedAdapterIds: [ADAPTER],
+    };
+    const routingRecord = {
+      kind: 'CURRENT_LOCAL_MODEL_ROUTING_RECORD',
+      reference: `routing-owner:fixture:${bound.requestId}`,
+      binding: { ...bound },
+      observedAtEpochMs: observed,
+      expiresAtEpochMs: expires,
+      routerRequest: routerInput(bound),
+      manifest: {
+        source: 'LOCAL_RUNTIME_MANIFEST_PROJECTION',
+        modelId: LOCAL_QWEN_MODEL_ID,
+        modelSha256: QWEN35_2B_Q4_K_M_SHA256,
+        observedAtEpochMs: observed - 100,
+        maxAgeMs: 5000,
+        authorizesExecution: false,
+      },
+      maxOutputTokens: 64,
+    };
+    const sourceItem = {
+      sourceReference: SOURCE,
+      sourceRevision: 'fixture-revision:v1',
+      tenant: { tenantId: bound.tenantId },
+      classification: 'PUBLIC',
+      observedAt: at(observed - 1000),
+      provenanceReference: PROVENANCE,
+      payload: PUBLIC_TEXT,
+    };
+    const entry = {
+      contextRecord,
+      routingRecord,
+      policySnapshot,
+      sourceItem,
+      modelHealth: health(observed),
+    };
+    entries.set(key, entry);
+    currentEntry = entry;
+    if (options.mutateCurrentOwners) options.mutateCurrentOwners(entry);
+    return entry;
+  };
+  const owner = {
+    readCurrent(bound) {
+      count('currentOwnerRecordReads');
+      return options.missingCurrentOwner ? null : entryFor(bound).contextRecord;
+    },
+    policy: {
+      getCurrent(request) {
+        count('currentPolicyLookups');
+        eq(request.policyReference, 'policy:current-producer:fixture');
+        eq(request.tenantId, TENANT);
+        eq(request.actorIdentityId, ACTOR);
+        return options.missingCurrentPolicy ? undefined : currentEntry.policySnapshot;
+      },
+    },
+    adapters: [
+      {
+        descriptor: {
+          adapterId: ADAPTER,
+          sourceClass: 'COMPANY_KNOWLEDGE',
+          readOnly: true,
+          supportedSelectorKeys: ['documentRef'],
+          maxItemsPerRead: 2,
+        },
+        async read(request) {
+          count('currentContextAdapterReads');
+          eq(request.tenant.tenantId, TENANT);
+          eq(request.actor.identityId, ACTOR);
+          eq(request.correlation.correlationId, CORRELATION);
+          eq(request.maxDataClassification, 'PUBLIC');
+          eq(request.currentness, 'CURRENT_REQUIRED');
+          eq(request.purpose.purposeId, 'public.information');
+          eq(request.consent.reference, 'consent:current-producer:fixture');
+          eq(request.selector.adapterId, ADAPTER);
+          eq(request.selector.value, 'public:42');
+          eq(request.limit, 2);
+          if (options.currentReadHook) await options.currentReadHook({ f: fixture(), counters });
+          return { items: [currentEntry.sourceItem] };
+        },
+      },
+    ],
+    readCurrentSource(bound, adapterId, sourceReference) {
+      count('currentSourceReads');
+      eq(adapterId, ADAPTER);
+      eq(sourceReference, SOURCE);
+      return entryFor(bound).sourceItem;
+    },
+  };
+  const context = new CurrentPublicModelContext({
+    now,
+    ...(options.uncomposedOwner ? {} : { owner }),
+  });
+  const routing = {
+    readCurrent(bound) {
+      count('currentRoutingRecordReads');
+      return options.missingCurrentRouting ? null : entryFor(bound).routingRecord;
+    },
+    strategies: {
+      registryVersion: 'session-composition-fixture:v1',
+      select(criteria) {
+        count('currentStrategySelections');
+        const descriptor = createLocalQwenStrategyDescriptor({
+          nowEpochMs: now(),
+          ...(currentEntry.modelHealth === null ? {} : { health: currentEntry.modelHealth }),
+        });
+        const registry = createStrategyRegistry('session-composition-fixture:v1', [descriptor]);
+        eq(registry.status, 'CREATED');
+        return selectStrategy(registry.registry, criteria);
+      },
+    },
+    routeIntelligence,
+  };
+  const actual = new CurrentLocalModelPreparationSource({
+    now,
+    context,
+    ...(options.uncomposedRouting ? {} : { routing }),
+  });
+  const source = {
+    async prepareCurrent(bound, signal) {
+      counters.producerCalls += 1;
+      totals.producerCalls += 1;
+      rememberBound(bound);
+      const prepared = await actual.prepareCurrent(bound, signal);
+      rememberPreparation(prepared);
+      if (options.currentPreparedHook)
+        await options.currentPreparedHook({ f: fixture(), prepared });
+      return prepared;
+    },
+    async revalidateCurrent(reference, bound, nowEpochMs, signal) {
+      counters.sourceRevalidations += 1;
+      totals.sourceRevalidations += 1;
+      return actual.revalidateCurrent(reference, bound, nowEpochMs, signal);
+    },
+    isCurrent(reference, bound, nowEpochMs) {
+      counters.sourceSyncChecks += 1;
+      totals.sourceSyncChecks += 1;
+      return actual.isCurrent(reference, bound, nowEpochMs);
+    },
+  };
+  return { source, currentOwners: () => currentEntry };
+}
+
 function fixture(options = {}) {
   let currentNow = NOW;
   let currentRecord;
@@ -499,6 +839,12 @@ function fixture(options = {}) {
     credentialReads: 0,
     transportCalls: 0,
     completionFaults: 0,
+    currentOwnerRecordReads: 0,
+    currentRoutingRecordReads: 0,
+    currentPolicyLookups: 0,
+    currentContextAdapterReads: 0,
+    currentSourceReads: 0,
+    currentStrategySelections: 0,
   };
   let lastPreparation;
   let lastBound;
@@ -639,6 +985,13 @@ function fixture(options = {}) {
         lastBound.requestId,
         'MinimalContextPackage',
         'DeviceSessionTrustSnapshot',
+        'policy:current-producer:fixture',
+        'consent:current-producer:fixture',
+        'consent-provenance:fixture',
+        'context-owner:fixture:',
+        'routing-owner:fixture:',
+        'model.public.process',
+        'context:public',
       ]) {
         eq(
           init.body.includes(forbidden),
@@ -651,7 +1004,7 @@ function fixture(options = {}) {
         : completion(options.toolOutput);
     },
   };
-  const source = {
+  const legacySource = {
     async prepareCurrent(bound, signal) {
       counters.producerCalls += 1;
       totals.producerCalls += 1;
@@ -726,6 +1079,21 @@ function fixture(options = {}) {
       return sourceCurrent;
     },
   };
+  const currentOwners = options.currentProducers
+    ? currentOwnerFixture({
+        now: () => currentNow,
+        counters,
+        options,
+        rememberBound(bound) {
+          lastBound = bound;
+        },
+        rememberPreparation(prepared) {
+          lastPreparation = prepared;
+        },
+        fixture: () => f,
+      })
+    : null;
+  const source = currentOwners?.source ?? legacySource;
   const core = createSessionBoundKeyedLocalModel({
     ...clientDependencies,
     ...(options.missingSource ? {} : { source }),
@@ -790,6 +1158,7 @@ function fixture(options = {}) {
       attestation = { ...attestation, ...changes };
     },
     preparation: () => lastPreparation,
+    currentOwners: () => currentOwners?.currentOwners(),
     trusted: () =>
       deviceSessions.getSession('device:composition:1', binding.connectionId, currentNow),
     outstanding() {
@@ -855,7 +1224,7 @@ function noModelCalls(f, expectedProducerCalls = 0) {
 }
 
 scenario(
-  'actual W14 managers and actual W05/W06 pipeline generate one information-only candidate',
+  'legacy injected orchestration with actual W14 and W05/W06 modules generates one information-only candidate',
   async () => {
     eq('createLocalQwenStrategyDescriptor' in registryPublic, false);
     const f = fixture();
@@ -1467,6 +1836,389 @@ scenario(
   },
 );
 
+currentProducerScenario(
+  'actual current W02/W05/W06 producers compose with W14 and the keyed client without fixture-made preparations',
+  async () => {
+    const f = fixture({ currentProducers: true });
+    const result = await bounded(f.run());
+    eq(result.status, 'GENERATED');
+    eq(result.content, GENERATED_TEXT);
+    noAuthority(result, true);
+    eq(result.strategyId, LOCAL_QWEN_STRATEGY_ID);
+    eq(result.modelSha256, QWEN35_2B_Q4_K_M_SHA256);
+    eq(f.counters.producerCalls, 1);
+    eq(f.counters.currentContextAdapterReads, 1);
+    ok(f.counters.currentPolicyLookups >= 3, 'policy must be read again at currentness boundaries');
+    ok(f.counters.currentSourceReads >= 3, 'provenance/content must be read again before release');
+    ok(f.counters.currentStrategySelections >= 3, 'current strategy must be selected again');
+    ok(f.counters.sourceRevalidations >= 2);
+    ok(f.counters.sourceSyncChecks >= 3);
+    eq(f.counters.credentialReads, 1);
+    eq(f.counters.transportCalls, 1);
+    eq(f.outstanding(), 0);
+    eq(f.preparation().kind, 'W05_W06_SESSION_LOCAL_MODEL_PREPARATION');
+    eq(f.preparation().minimizedPublicPrompt.status, 'READY');
+    deep(f.preparation().minimizedPublicPrompt.includedSourceReferences, [SOURCE]);
+    eq(f.preparation().route.family, 'MODEL');
+    eq(f.preparation().route.status, 'SELECTED');
+  },
+);
+
+currentProducerScenario(
+  'missing real-producer owner or current policy/routing records cannot be replaced by defaults',
+  async () => {
+    for (const missing of [
+      'uncomposedOwner',
+      'missingCurrentOwner',
+      'missingCurrentPolicy',
+      'uncomposedRouting',
+      'missingCurrentRouting',
+    ]) {
+      const f = fixture({ currentProducers: true, [missing]: true });
+      const result = await bounded(f.run());
+      abstained(result);
+      noModelCalls(f, 1);
+      eq(f.counters.currentContextAdapterReads, 0, `${missing} must fail before acquisition`);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+currentProducerScenario(
+  'canonical policy and consent deny missing revoked expired foreign or purpose-incompatible records before acquisition',
+  async () => {
+    const mutations = [
+      (entry) => {
+        entry.policySnapshot.rules[0].effect = 'DENY';
+      },
+      (entry) => {
+        entry.policySnapshot.rules[0].effect = 'REQUIRE_APPROVAL';
+      },
+      (entry) => {
+        delete entry.contextRecord.policyEvaluation.consent;
+      },
+      (entry) => {
+        entry.contextRecord.policyEvaluation.consent.status = 'REVOKED';
+      },
+      (entry) => {
+        entry.contextRecord.policyEvaluation.consent.expiresAt = at(NOW);
+      },
+      (entry) => {
+        entry.contextRecord.policyEvaluation.consent.subject.identityId = 'identity:foreign';
+      },
+      (entry) => {
+        entry.contextRecord.policyEvaluation.consent.scope.purposeIds = ['different.purpose'];
+      },
+      (entry) => {
+        entry.contextRecord.query.purpose.status = 'DISABLED';
+        entry.contextRecord.policyEvaluation.purpose.status = 'DISABLED';
+      },
+      (entry) => {
+        entry.contextRecord.query.tenant.tenantId = 'tenant:foreign';
+      },
+    ];
+    for (const mutateCurrentOwners of mutations) {
+      const f = fixture({ currentProducers: true, mutateCurrentOwners });
+      const result = await bounded(f.run());
+      abstained(result);
+      noModelCalls(f, 1);
+      eq(
+        f.counters.currentContextAdapterReads,
+        0,
+        'invalid data-use preconditions must precede acquisition',
+      );
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+currentProducerScenario(
+  'actual current router and manifest checks refuse unavailable model or blocked upstream budget',
+  async () => {
+    for (const mutateCurrentOwners of [
+      (entry) => {
+        entry.modelHealth = null;
+      },
+      (entry) => {
+        entry.modelHealth.observedAt = at(NOW - 20001);
+      },
+      (entry) => {
+        entry.routingRecord.manifest.modelSha256 = '0'.repeat(64);
+      },
+      (entry) => {
+        entry.routingRecord.routerRequest.budget.state = 'EXHAUSTED';
+      },
+    ]) {
+      const f = fixture({ currentProducers: true, mutateCurrentOwners });
+      abstained(await bounded(f.run()));
+      noModelCalls(f, 1);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+currentProducerScenario(
+  'actual acquisition and minimization refuse nonpublic stale or provenance-free source content',
+  async () => {
+    for (const mutateCurrentOwners of [
+      (entry) => {
+        entry.sourceItem.classification = 'INTERNAL';
+      },
+      (entry) => {
+        entry.sourceItem.provenanceReference = '';
+      },
+      (entry) => {
+        entry.sourceItem.observedAt = at(NOW - 120000);
+      },
+      (entry) => {
+        entry.sourceItem.tenant.tenantId = 'tenant:foreign';
+      },
+    ]) {
+      const f = fixture({ currentProducers: true, mutateCurrentOwners });
+      abstained(await bounded(f.run()));
+      noModelCalls(f, 1);
+      eq(f.counters.currentContextAdapterReads, 1);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+currentProducerScenario(
+  'actual current-source snapshot rejects an accessor without reading or disclosing its payload',
+  async () => {
+    let getterCalls = 0;
+    const f = fixture({
+      currentProducers: true,
+      mutateCurrentOwners(entry) {
+        Object.defineProperty(entry.sourceItem, 'payload', {
+          enumerable: true,
+          get() {
+            getterCalls += 1;
+            throw new Error('PRIVATE_MARKER_CURRENT_PRODUCER');
+          },
+        });
+      },
+    });
+    const result = await bounded(f.run());
+    abstained(result);
+    eq(getterCalls, 0, 'a source accessor must not execute even inside canonical acquisition');
+    noModelCalls(f, 1);
+    eq(JSON.stringify(result).includes('PRIVATE_MARKER'), false);
+    eq(f.outstanding(), 0);
+  },
+);
+
+currentProducerScenario(
+  'canonical current policy revocation during actual adapter acquisition prevents preparation',
+  async () => {
+    const started = deferred();
+    const release = deferred();
+    const f = fixture({
+      currentProducers: true,
+      async currentReadHook() {
+        started.resolve();
+        await release.promise;
+      },
+    });
+    const pending = f.run();
+    await bounded(started.promise);
+    eq(f.counters.currentContextAdapterReads, 1);
+    f.currentOwners().policySnapshot.rules[0].effect = 'DENY';
+    release.resolve();
+    abstained(await bounded(pending));
+    noModelCalls(f, 1);
+    eq(f.outstanding(), 0);
+  },
+);
+
+currentProducerScenario(
+  'owner identity drift during actual adapter acquisition cannot produce a cross-session preparation',
+  async () => {
+    const started = deferred();
+    const release = deferred();
+    const f = fixture({
+      currentProducers: true,
+      async currentReadHook() {
+        started.resolve();
+        await release.promise;
+      },
+    });
+    const pending = f.run();
+    await bounded(started.promise);
+    f.currentOwners().contextRecord.binding.gatewayGeneration += 1;
+    release.resolve();
+    abstained(await bounded(pending));
+    noModelCalls(f, 1);
+    eq(f.outstanding(), 0);
+  },
+);
+
+currentProducerScenario(
+  'changing source content without changing its revision still invalidates the captured preparation',
+  async () => {
+    const f = fixture({
+      currentProducers: true,
+      currentPreparedHook({ f: current, prepared }) {
+        ok(prepared !== null);
+        const before = current.currentOwners().sourceItem.sourceRevision;
+        current.currentOwners().sourceItem.payload = 'Outra informação pública.';
+        eq(current.currentOwners().sourceItem.sourceRevision, before);
+      },
+    });
+    abstained(await bounded(f.run()));
+    noModelCalls(f, 1);
+    eq(f.outstanding(), 0);
+  },
+);
+
+const currentRevocations = [
+  [
+    'policy',
+    (entry) => {
+      entry.policySnapshot.rules[0].effect = 'DENY';
+    },
+  ],
+  [
+    'consent',
+    (entry) => {
+      entry.contextRecord.policyEvaluation.consent.status = 'REVOKED';
+    },
+  ],
+  [
+    'source',
+    (entry) => {
+      entry.sourceItem.sourceRevision = 'fixture-revision:v2';
+    },
+  ],
+  [
+    'strategy',
+    (entry) => {
+      entry.modelHealth = null;
+    },
+  ],
+];
+
+for (const [owner, revoke] of currentRevocations) {
+  currentProducerScenario(
+    `actual ${owner} owner change during credential acquisition prevents every model dispatch`,
+    async () => {
+      const started = deferred();
+      const release = deferred();
+      const f = fixture({
+        currentProducers: true,
+        async credentialHook() {
+          started.resolve();
+          await release.promise;
+        },
+      });
+      const pending = f.run();
+      await bounded(started.promise);
+      eq(f.counters.transportCalls, 0);
+      revoke(f.currentOwners());
+      release.resolve();
+      abstained(await bounded(pending));
+      eq(f.counters.credentialReads, 1);
+      eq(f.counters.transportCalls, 0);
+      eq(f.outstanding(), 0);
+    },
+  );
+}
+
+for (const [owner, revoke] of currentRevocations) {
+  currentProducerScenario(
+    `actual ${owner} owner change in final W14 attestation prevents release of already generated text`,
+    async () => {
+      const started = deferred();
+      const release = deferred();
+      const f = fixture({
+        currentProducers: true,
+        async attestationHook({ readIndex, counters }) {
+          if (readIndex !== 4) return;
+          eq(counters.transportCalls, 1);
+          started.resolve();
+          await release.promise;
+        },
+      });
+      const pending = f.run();
+      await bounded(started.promise);
+      revoke(f.currentOwners());
+      const previousChecks = f.counters.sourceSyncChecks;
+      release.resolve();
+      const result = await bounded(pending);
+      abstained(result);
+      ok(
+        f.counters.sourceSyncChecks > previousChecks,
+        'W14 must invoke the actual source release guard',
+      );
+      eq(f.counters.transportCalls, 1);
+      eq(JSON.stringify(result).includes(GENERATED_TEXT), false);
+      eq(f.outstanding(), 0);
+    },
+  );
+}
+
+currentProducerScenario(
+  'expired owner observation is not refreshed by current-record reads',
+  async () => {
+    const f = fixture({
+      currentProducers: true,
+      currentPreparedHook({ f: current, prepared }) {
+        ok(prepared !== null);
+        eq(current.currentOwners().contextRecord.expiresAtEpochMs, NOW + 4000);
+        current.setNow(NOW + 4001);
+      },
+    });
+    abstained(await bounded(f.run()));
+    noModelCalls(f, 1);
+    eq(f.currentOwners().contextRecord.observedAtEpochMs, NOW);
+    eq(f.currentOwners().contextRecord.expiresAtEpochMs, NOW + 4000);
+    eq(f.outstanding(), 0);
+  },
+);
+
+currentProducerScenario(
+  'bounded cancellation during actual acquisition fences further reads until the old read settles and then recovers',
+  async () => {
+    const started = deferred();
+    const release = deferred();
+    const f = fixture({
+      currentProducers: true,
+      async currentReadHook({ counters }) {
+        if (counters.currentContextAdapterReads !== 1) return;
+        started.resolve();
+        await release.promise;
+      },
+    });
+    const request = f.body();
+    const pending = f.run(request);
+    await bounded(started.promise);
+    const cancellation = f.operation.cancel(request, f.binding);
+    eq(cancellation.requested, true);
+    noAuthority(cancellation, true);
+    abstained(await bounded(pending), 'CANCELLED');
+    // The source API deliberately returns null rather than exporting a BUSY result. Let outer
+    // logical cancellation settle, then prove the actual retained W06 read fence rather than
+    // assuming that every caller propagates the same diagnostic code as a native/HTTP client.
+    await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+    abstained(await bounded(f.run(f.body('request:current-owner:pending-read'))));
+    eq(f.counters.producerCalls, 2);
+    eq(f.counters.currentContextAdapterReads, 1, 'no second read may start before quiescence');
+    eq(f.counters.credentialReads, 0);
+    eq(f.counters.transportCalls, 0);
+    release.resolve();
+    await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+    const result = await bounded(f.run(f.body('request:current-owner:recovered')));
+    eq(result.status, 'GENERATED');
+    eq(result.content, GENERATED_TEXT);
+    noAuthority(result, true);
+    eq(f.counters.producerCalls, 3);
+    eq(f.counters.currentContextAdapterReads, 2);
+    eq(f.counters.credentialReads, 1);
+    eq(f.counters.transportCalls, 1);
+    eq(f.outstanding(), 0);
+  },
+);
+
 for (const entry of cases) {
   const before = assertions;
   const start = performance.now();
@@ -1474,12 +2226,25 @@ for (const entry of cases) {
   ok(assertions > before, 'every declared scenario must execute assertions');
   results.push({
     name: entry.name,
+    coverage: entry.coverage,
     verdict: 'PASS',
     assertions: assertions - before,
     elapsedMs: Math.round((performance.now() - start) * 1000) / 1000,
   });
 }
-eq(results.length, 34, 'all declared composition scenarios must execute; no skipped proofs');
+const legacyResults = results.filter(
+  (entry) => entry.coverage === 'LEGACY_INJECTED_PREPARATION_BOUNDARY_REGRESSION',
+);
+const currentProducerResults = results.filter(
+  (entry) => entry.coverage === 'ACTUAL_W02_W05_W06_CURRENT_PREPARATION_COMPOSITION',
+);
+eq(
+  legacyResults.length,
+  34,
+  'all previous boundary regression scenarios must remain; no skipped proofs',
+);
+eq(currentProducerResults.length, 19, 'all new actual current-producer scenarios must execute');
+eq(results.length, 53, 'every declared scenario must execute');
 eq(unexpectedFetchCalls, 0);
 for (const identity of identities) {
   eq(
@@ -1520,6 +2285,10 @@ console.log(
       scriptSha256: sha256(readFileSync(fileURLToPath(import.meta.url))),
       assertions,
       cases: results,
+      coverageCounts: {
+        legacyInjectedPreparationBoundaryRegressions: legacyResults.length,
+        actualCurrentPreparationProducerComposition: currentProducerResults.length,
+      },
       skipped: 0,
       unexpectedFetchCalls,
       syntheticFixtureCounters: totals,
@@ -1528,8 +2297,10 @@ console.log(
       canGrantPermission: false,
       identities,
       limitations: [
-        'All named W14 managers and W05/W06 producers/consumers are actual compiled source modules from this one tree.',
-        'Authenticator, device attestation, W04 planning inputs, context acquisition, source permission, model health/manifest and model transport are synthetic fixtures.',
+        'All named W14 managers and W02/W05/W06 producers/consumers are actual compiled source modules from this one tree.',
+        'The 34 legacy boundary regression scenarios deliberately inject a synthetic preparation orchestration; they do not prove the concrete current-source adapter.',
+        'The separately counted current-producer scenarios invoke actual CurrentPublicModelContext and CurrentLocalModelPreparationSource, current-policy lookup/precheck/consent, acquisition, minimization, prompt compilation and current strategy routing.',
+        'Authenticator, device attestation, W04 planning inputs, upstream owner/policy/consent/source records and readers, model health/manifest, credentials and model transport remain synthetic fixtures, not authenticated live authorities.',
         'The completion-denial case injects one explicit fault over an otherwise real GatewaySessionManager; it is not provider evidence.',
         'The global fetch is prohibited. No live HTTP/socket endpoint, model, GGUF integrity verification, Android/JNI, tablet or physical action was exercised.',
         'This proves bounded offline software composition only, not deployed core activation, W14 cryptographic peer authentication, data-consent attestation, native integration or final acceptance.',
