@@ -20,6 +20,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -109,6 +110,73 @@ struct Control {
         }
         return now >= deadline_nanos ? Status::DEADLINE : Status::SUCCESS_EOG;
     }
+};
+
+// JNI local references and JNIEnv belong only to the entering worker thread.
+// This is a private stop query, not a policy/consent owner or an approval cache.
+// In particular, never call it from llama's progress/abort callbacks: those may
+// run on engine threads and must remain atomic/deadline-only.
+class WorkerCurrentness {
+public:
+    WorkerCurrentness(JNIEnv * env, jobject signal)
+        : env_(env), signal_(signal), owner_(std::this_thread::get_id()) {}
+    WorkerCurrentness(const WorkerCurrentness &) = delete;
+    WorkerCurrentness & operator=(const WorkerCurrentness &) = delete;
+
+    bool has_signal() const noexcept { return signal_ != nullptr; }
+
+    Status check(Control & control) noexcept {
+        if (std::this_thread::get_id() != owner_) {
+            // Do not touch a JNIEnv, local reference, or worker-owned latch on
+            // the wrong thread. Cancellation is the existing atomic signal.
+            control.session.cancelled.store(true, std::memory_order_release);
+            return Status::FAILURE;
+        }
+        if (latched_ != Status::SUCCESS_EOG) { return latched_; }
+        Status stop = control.stop_status();
+        if (stop != Status::SUCCESS_EOG) { return latch(stop); }
+        if (signal_ == nullptr) { return latch(Status::INVALID_INPUT); }
+        if (env_->ExceptionCheck()) {
+            env_->ExceptionClear();
+            return latch(Status::FAILURE);
+        }
+        if (method_ == nullptr) {
+            jclass signal_class = env_->GetObjectClass(signal_);
+            if (env_->ExceptionCheck() || signal_class == nullptr) {
+                if (env_->ExceptionCheck()) { env_->ExceptionClear(); }
+                if (signal_class != nullptr) { env_->DeleteLocalRef(signal_class); }
+                return latch(Status::FAILURE);
+            }
+            method_ = env_->GetMethodID(signal_class, "isStopped", "()Z");
+            const bool lookup_failed = env_->ExceptionCheck() || method_ == nullptr;
+            if (env_->ExceptionCheck()) { env_->ExceptionClear(); }
+            env_->DeleteLocalRef(signal_class);
+            if (lookup_failed) { return latch(Status::FAILURE); }
+        }
+        const jboolean stopped = env_->CallBooleanMethod(signal_, method_);
+        if (env_->ExceptionCheck()) {
+            // No callback exception/message becomes output or a permissive
+            // retry. Clear it only to return the sanitized failure DTO.
+            env_->ExceptionClear();
+            return latch(Status::FAILURE);
+        }
+        // The owner read can block; a late false is not fresh budget authority.
+        stop = control.stop_status();
+        if (stop != Status::SUCCESS_EOG) { return latch(stop); }
+        if (stopped != JNI_FALSE) {
+            control.session.cancelled.store(true, std::memory_order_release);
+            return latch(Status::CANCELLED);
+        }
+        return Status::SUCCESS_EOG;
+    }
+
+private:
+    Status latch(Status status) noexcept { latched_ = status; return status; }
+    JNIEnv * const env_;
+    jobject const signal_;
+    const std::thread::id owner_;
+    jmethodID method_ = nullptr;
+    Status latched_ = Status::SUCCESS_EOG;
 };
 
 bool load_progress(float, void * opaque) noexcept {
@@ -280,11 +348,12 @@ Status plain_user_message(const llama_vocab * vocab, const std::string & text,
     return control.stop_status();
 }
 
-Status decode_batch(llama_context * context, llama_batch & batch, Control & control) {
-    Status stop = control.stop_status();
+Status decode_batch(llama_context * context, llama_batch & batch, Control & control,
+                    WorkerCurrentness & currentness) {
+    Status stop = currentness.check(control);
     if (stop != Status::SUCCESS_EOG) { return stop; }
     const int32_t result = llama_decode(context, batch);
-    stop = control.stop_status();
+    stop = currentness.check(control);
     if (stop != Status::SUCCESS_EOG) { return stop; }
     if (result == 0) { return Status::SUCCESS_EOG; }
     if (result == 1) { return Status::LIMIT_REACHED; }
@@ -296,8 +365,8 @@ Status decode_batch(llama_context * context, llama_batch & batch, Control & cont
 Outcome run_generation(JNIEnv * env, Session & session, jint model_fd,
                        jbyteArray prompt_utf8, jint max_output_tokens,
                        jint max_output_bytes, jint context_tokens,
-                       jlong remaining_budget_nanos) {
-    if (prompt_utf8 == nullptr || model_fd < 0 ||
+                       jlong remaining_budget_nanos, WorkerCurrentness & currentness) {
+    if (prompt_utf8 == nullptr || model_fd < 0 || !currentness.has_signal() ||
         max_output_tokens < 1 || max_output_tokens > MAX_OUTPUT_TOKENS ||
         max_output_bytes < 1 || max_output_bytes > MAX_OUTPUT_BYTES ||
         context_tokens < MIN_CONTEXT_TOKENS || context_tokens > MAX_CONTEXT_TOKENS ||
@@ -334,7 +403,7 @@ Outcome run_generation(JNIEnv * env, Session & session, jint model_fd,
     duplicate.release();
     OwnedFile file(stream, session);
     if (fseeko(file.get(), 0, SEEK_SET) != 0) { return failed(Status::FAILURE); }
-    stop = control.stop_status();
+    stop = currentness.check(control);
     if (stop != Status::SUCCESS_EOG) { return failed(stop); }
 
     BackendScope backend;
@@ -347,7 +416,7 @@ Outcome run_generation(JNIEnv * env, Session & session, jint model_fd,
     model_params.progress_callback_user_data = &control;
     using Model = std::unique_ptr<llama_model, decltype(&llama_model_free)>;
     Model model(llama_model_load_from_file_ptr(file.get(), model_params), llama_model_free);
-    stop = control.stop_status();
+    stop = currentness.check(control);
     if (stop != Status::SUCCESS_EOG) { return failed(stop); }
     if (!model) { return failed(Status::UNAVAILABLE); }
     if (!unchanged_model_fd(fileno(file.get()), model_before)) { return failed(Status::FAILURE); }
@@ -422,7 +491,7 @@ Outcome run_generation(JNIEnv * env, Session & session, jint model_fd,
             batch.value.seq_id[i][0] = 0;
             batch.value.logits[i] = (start + i == input_tokens - 1);
         }
-        stop = decode_batch(context.get(), batch.value, control);
+        stop = decode_batch(context.get(), batch.value, control, currentness);
         if (stop != Status::SUCCESS_EOG) { return failed(stop, input_tokens); }
     }
 
@@ -464,7 +533,7 @@ Outcome run_generation(JNIEnv * env, Session & session, jint model_fd,
         batch.value.n_seq_id[0] = 1;
         batch.value.seq_id[0][0] = 0;
         batch.value.logits[0] = true;
-        stop = decode_batch(context.get(), batch.value, control);
+        stop = decode_batch(context.get(), batch.value, control, currentness);
         if (stop != Status::SUCCESS_EOG) { return failed(stop, input_tokens, generated + 1); }
     }
     return failed(Status::LIMIT_REACHED, input_tokens, max_output_tokens);
@@ -519,7 +588,7 @@ extern "C" JNIEXPORT jobject JNICALL
 Java_ai_aurora_device_inference_NativeLlamaBindings_generate(
         JNIEnv * env, jclass, jlong id, jint model_fd, jbyteArray prompt_utf8,
         jint max_output_tokens, jint max_output_bytes, jint context_tokens,
-        jlong remaining_budget_nanos) {
+        jlong remaining_budget_nanos, jobject currentness) {
     std::shared_ptr<Session> session;
     Outcome outcome;
     try {
@@ -534,10 +603,21 @@ Java_ai_aurora_device_inference_NativeLlamaBindings_generate(
         // Never allocate Java objects or invoke a constructor under the
         // native ownership mutex: class initialization can re-enter JNI.
         if (!session) { return result_object(env, failed(Status::INVALID_INPUT)); }
+        WorkerCurrentness current(env, currentness);
         {
             RunningScope running(session);
             outcome = run_generation(env, *session, model_fd, prompt_utf8, max_output_tokens,
-                                     max_output_bytes, context_tokens, remaining_budget_nanos);
+                                     max_output_bytes, context_tokens, remaining_budget_nanos, current);
+            if (outcome.status == Status::SUCCESS_EOG) {
+                // run_generation's model/context/backend/FILE RAII has ended,
+                // but remain RUNNING until this last potentially blocking
+                // owner query returns. release must not free the reservation.
+                Control control{*session, session->deadline_nanos};
+                const Status stop = current.check(control);
+                if (stop != Status::SUCCESS_EOG) {
+                    outcome = failed(stop, outcome.input_tokens, outcome.output_tokens);
+                }
+            }
         }
         if (session->cleanup_failed.load(std::memory_order_acquire)) {
             outcome = failed(Status::FAILURE, outcome.input_tokens, outcome.output_tokens);

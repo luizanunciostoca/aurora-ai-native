@@ -3,6 +3,7 @@ package ai.aurora.device.inference
 import java.security.MessageDigest
 import java.util.concurrent.Executor
 import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -189,7 +190,17 @@ internal class BoundedNativeInferenceRuntime(
                     if (model.stamp() != beforeHash) return abstained(NativeInferenceFailure.MODEL_INVALID)
                     val remaining = remainingBudget(flight)
                     if (remaining <= 0 || isStopped(flight)) return stoppedResult(flight)
-                    val generated = operation.generate(model.descriptor, prompt, flight.request.budget, remaining)
+                    // This query belongs only to this synchronous call/Flight. A retained callback
+                    // cannot read a later source, model or flight after generate has returned.
+                    val checkpointOpen = AtomicBoolean(true)
+                    val generated = try {
+                        operation.generate(
+                            model.descriptor, prompt, flight.request.budget, remaining,
+                            NativeStopSignal { !checkpointOpen.get() || nativeGenerationStopped(flight) },
+                        )
+                    } finally {
+                        checkpointOpen.set(false)
+                    }
                     try {
                         if (isStopped(flight)) return stoppedResult(flight)
                         if (model.stamp() != beforeHash) return abstained(NativeInferenceFailure.MODEL_INVALID)
@@ -246,6 +257,50 @@ internal class BoundedNativeInferenceRuntime(
     private fun clearPromptDigestLocked(flight: Flight) {
         flight.promptDigest?.fill(0)
         flight.promptDigest = null
+    }
+
+    /** Only the synchronous JNI entry thread calls this; no source/model work runs under lock. */
+    private fun nativeGenerationStopped(flight: Flight): Boolean {
+        val ownsGeneration = synchronized(lock) {
+            active === flight && !flight.uncertain && !flight.workerDone &&
+                !flight.cleanupStarted && flight.stopped.get() == null
+        }
+        if (!ownsGeneration || isStopped(flight)) return true
+        if (!currentPromptMatches(flight)) {
+            // CAS preserves an earlier cancel/deadline/failure. A successful later lookup cannot
+            // recover this flight; currentPromptMatches has already erased its owned digest.
+            stop(flight, NativeInferenceFailure.PROMPT_UNAVAILABLE)
+            return true
+        }
+        if (isStopped(flight)) return true
+        val modelAndStamp = synchronized(lock) {
+            val model = flight.model
+            val stamp = flight.verifiedStamp
+            if (
+                active !== flight || flight.uncertain || flight.workerDone ||
+                    flight.cleanupStarted || flight.stopped.get() != null || model == null || stamp == null
+            ) null else model to stamp
+        } ?: return true
+        // The current-owner query can block or run arbitrary provider code. Check the same held
+        // descriptor's identity and the original deadline AFTER that query, not only beforehand.
+        val unchanged = try {
+            modelAndStamp.first.stamp() == modelAndStamp.second
+        } catch (_: LinkageError) {
+            stop(flight, NativeInferenceFailure.NATIVE_FAILURE)
+            return true
+        } catch (_: Exception) {
+            stop(flight, NativeInferenceFailure.NATIVE_FAILURE)
+            return true
+        }
+        if (!unchanged) {
+            stop(flight, NativeInferenceFailure.MODEL_INVALID)
+            return true
+        }
+        if (isStopped(flight)) return true
+        return synchronized(lock) {
+            active !== flight || flight.uncertain || flight.workerDone || flight.cleanupStarted ||
+                flight.stopped.get() != null || flight.promptDigest == null
+        }
     }
 
     private fun validateResult(result: NativeGenerationResult, budget: NativeInferenceBudget): NativeInferenceResult {

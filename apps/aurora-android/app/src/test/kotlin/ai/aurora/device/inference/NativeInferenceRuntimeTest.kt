@@ -13,6 +13,7 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -788,6 +789,268 @@ class NativeInferenceRuntimeTest {
         }
     }
 
+    @Test fun nativeCheckpointsQueryTheSameFlightUntilGenerateReturnsAndNeverGrantAuthority() {
+        val h = Harness()
+        h.operation.onGenerate = {
+            repeat(5) { index ->
+                assertFalse(checkNotNull(h.operation.capturedCurrentness).isStopped())
+                assertEquals(3 + index, h.sourceCalls.get())
+                assertEquals(0, h.operation.releases.get())
+                assertEquals(0, h.model.closes.get())
+            }
+            goodOutput()
+        }
+        val call = h.runtime.submit(h.request())
+        assertTrue((h.work as ManualExecutor).runNext())
+        assertNull(call.pollResult())
+        val retained = checkNotNull(h.operation.capturedCurrentness)
+        assertTrue(retained.isStopped()) // The synchronous native call has returned, not cleanup.
+        assertEquals(7, h.sourceCalls.get())
+        assertEquals(0, h.operation.releases.get())
+        h.drain()
+        val result = call.pollResult() as NativeInferenceResult.Text
+        assertFalse(result.authorizesExecution)
+        assertFalse(result.canInvokeTools)
+        assertEquals(8, h.sourceCalls.get()) // Existing post-release owner checkpoint is preserved.
+        assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+        assertTrue(retained.isStopped())
+        assertEquals(8, h.sourceCalls.get())
+    }
+
+    @Test fun aDeniedNativeCheckpointLatchesPromptUnavailableAndCannotRecoverOrPublishLateText() {
+        for (checkpoint in 1..5) {
+            for (invalid in invalidPromptSources()) {
+                val h = Harness()
+                val call = h.runtime.submit(h.request())
+                h.operation.onGenerate = {
+                    val signal = checkNotNull(h.operation.capturedCurrentness)
+                    repeat(checkpoint - 1) { assertFalse(signal.isStopped()) }
+                    h.prompt = invalid
+                    assertTrue(signal.isStopped())
+                    assertFailure(call, NativeInferenceFailure.PROMPT_UNAVAILABLE)
+                    val readsAtDenial = h.sourceCalls.get()
+                    h.prompt = { ref, _ -> publicPrompt(ref) }
+                    repeat(3) { assertTrue(signal.isStopped()) }
+                    assertEquals(readsAtDenial, h.sourceCalls.get())
+                    goodOutput() // Deliberately nonconforming fake engine; late text must be discarded.
+                }
+                h.drain()
+                assertFailure(call, NativeInferenceFailure.PROMPT_UNAVAILABLE)
+                assertEquals(checkpoint + 2, h.sourceCalls.get())
+                assertEquals(NativeInferenceState.BUSY, h.runtime.state())
+                assertEquals(0, h.operation.releases.get()) // Cancel lane still owns its signal.
+                (h.cancellations as ManualExecutor).drain()
+                h.drain()
+                assertFailure(call, NativeInferenceFailure.PROMPT_UNAVAILABLE)
+                assertFalse(call.pollResult().toString().contains("PRIVATE_CURRENTNESS_MARKER"))
+                assertFalse(call.pollResult().toString().contains("Resposta pública."))
+                assertEquals(1, h.operation.releases.get())
+                assertEquals(1, h.model.closes.get())
+                assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+            }
+        }
+    }
+
+    @Test fun nativeCheckpointChecksTheHeldModelIdentityAfterItsOwnerRead() {
+        for (checkpoint in 1..3) {
+            val h = Harness()
+            h.prompt = { ref, _ ->
+                if (h.sourceCalls.get() == checkpoint + 2) {
+                    h.model.metadata = h.model.metadata.copy(changedNanos = 95)
+                }
+                publicPrompt(ref)
+            }
+            val call = h.runtime.submit(h.request())
+            h.operation.onGenerate = {
+                val signal = checkNotNull(h.operation.capturedCurrentness)
+                repeat(checkpoint - 1) { assertFalse(signal.isStopped()) }
+                assertTrue(signal.isStopped())
+                assertFailure(call, NativeInferenceFailure.MODEL_INVALID)
+                assertTrue(signal.isStopped())
+                goodOutput()
+            }
+            h.drain()
+            (h.cancellations as ManualExecutor).drain()
+            h.drain()
+            assertFailure(call, NativeInferenceFailure.MODEL_INVALID)
+            assertEquals(checkpoint + 2, h.sourceCalls.get())
+            assertEquals(1, h.operation.releases.get())
+            assertEquals(1, h.model.closes.get())
+            assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+        }
+    }
+
+    @Test fun nativeCheckpointPreservesClockDeadlineCancellationAndCloseReasonsAfterOwnerReturn() {
+        for (stopKind in listOf("deadline", "clock", "cancel", "close")) {
+            val h = Harness()
+            val request = h.request()
+            val call = h.runtime.submit(request)
+            val expected = when (stopKind) {
+                "deadline" -> NativeInferenceFailure.TIMEOUT
+                "clock" -> NativeInferenceFailure.NATIVE_FAILURE
+                "close" -> NativeInferenceFailure.CLOSED
+                else -> NativeInferenceFailure.CANCELLED
+            }
+            h.prompt = { ref, _ ->
+                if (h.sourceCalls.get() == 3) {
+                    when (stopKind) {
+                        "deadline" -> h.clock.now.set(request.deadlineNanos)
+                        "clock" -> h.clock.fail = true
+                        "cancel" -> call.cancel()
+                        "close" -> h.runtime.close()
+                    }
+                }
+                publicPrompt(ref)
+            }
+            h.operation.onGenerate = {
+                assertTrue(checkNotNull(h.operation.capturedCurrentness).isStopped())
+                assertFailure(call, expected)
+                goodOutput()
+            }
+            h.drain()
+            (h.cancellations as ManualExecutor).drain()
+            h.drain()
+            assertFailure(call, expected)
+            assertEquals(3, h.sourceCalls.get())
+            assertEquals(1, h.operation.releases.get())
+            assertEquals(1, h.model.closes.get())
+            assertEquals(
+                if (stopKind == "close") NativeInferenceState.CLOSED else NativeInferenceState.IDLE,
+                h.runtime.state(),
+            )
+        }
+    }
+
+    @Test fun aBlockedNativeOwnerQueryCannotBlockStopOrReleaseTheFlightEarly() {
+        for (stopKind in listOf("cancel", "deadline", "close")) {
+            val worker = daemonExecutor()
+            val trigger = daemonExecutor()
+            val entered = CountDownLatch(1)
+            val allowReturn = CountDownLatch(1)
+            val observedStop = AtomicReference<Boolean?>(null)
+            val h = Harness(work = worker)
+            h.prompt = { ref, _ ->
+                if (h.sourceCalls.get() == 3) {
+                    entered.countDown()
+                    allowReturn.await()
+                }
+                publicPrompt(ref)
+            }
+            h.operation.onGenerate = {
+                observedStop.set(checkNotNull(h.operation.capturedCurrentness).isStopped())
+                goodOutput()
+            }
+            try {
+                val request = h.request()
+                val call = h.runtime.submit(request)
+                await(entered)
+                trigger.submit {
+                    when (stopKind) {
+                        "cancel" -> call.cancel()
+                        "deadline" -> { h.clock.now.set(request.deadlineNanos); h.scheduler.fireDue() }
+                        "close" -> h.runtime.close()
+                    }
+                }.get(5, TimeUnit.SECONDS)
+                val expected = when (stopKind) {
+                    "deadline" -> NativeInferenceFailure.TIMEOUT
+                    "close" -> NativeInferenceFailure.CLOSED
+                    else -> NativeInferenceFailure.CANCELLED
+                }
+                assertFailure(call, expected)
+                assertEquals(
+                    if (stopKind == "close") NativeInferenceState.CLOSING else NativeInferenceState.BUSY,
+                    h.runtime.state(),
+                )
+                assertEquals(0, h.operation.releases.get())
+                assertEquals(0, h.model.closes.get())
+                (h.cancellations as ManualExecutor).drain()
+                assertEquals(1, h.operation.cancels.get())
+                assertEquals(0, h.operation.releases.get())
+                allowReturn.countDown()
+                await(h.model.closed)
+                barrier(worker)
+                assertEquals(true, observedStop.get())
+                assertFailure(call, expected)
+                assertEquals(3, h.sourceCalls.get())
+                assertEquals(1, h.operation.releases.get())
+                assertEquals(1, h.model.closes.get())
+                assertEquals(
+                    if (stopKind == "close") NativeInferenceState.CLOSED else NativeInferenceState.IDLE,
+                    h.runtime.state(),
+                )
+            } finally {
+                allowReturn.countDown()
+                worker.shutdownNow()
+                trigger.shutdownNow()
+            }
+        }
+    }
+
+    @Test fun aRetainedNativeCheckpointCannotReadOrStopANewerFlight() {
+        val h = Harness()
+        val first = h.runtime.submit(h.request())
+        h.drain()
+        val firstResult = first.pollResult()
+        val stale = checkNotNull(h.operation.capturedCurrentness)
+        h.operation.onGenerate = {
+            val readsBeforeStaleQuery = h.sourceCalls.get()
+            assertTrue(stale.isStopped())
+            assertEquals(readsBeforeStaleQuery, h.sourceCalls.get())
+            first.cancel()
+            assertFalse(checkNotNull(h.operation.capturedCurrentness).isStopped())
+            goodOutput()
+        }
+        val second = h.runtime.submit(h.request().copy(requestRef = "different-opaque-request"))
+        h.drain()
+        assertTrue(firstResult is NativeInferenceResult.Text)
+        assertSame(firstResult, first.pollResult())
+        assertTrue(second.pollResult() is NativeInferenceResult.Text)
+        assertEquals(0, h.operation.cancels.get())
+        assertEquals(2, h.operation.releases.get())
+        assertEquals(2, h.model.closes.get())
+        assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+    }
+
+    @Test fun quarantineObservedDuringANativeOwnerReadCannotResumeThatCheckpoint() {
+        val worker = daemonExecutor()
+        val entered = CountDownLatch(1)
+        val allowReturn = CountDownLatch(1)
+        val observedStop = AtomicReference<Boolean?>(null)
+        val acceptedThenFailed = Executor { command ->
+            worker.execute(command)
+            await(entered)
+            throw IllegalStateException("PRIVATE_NATIVE_EXECUTOR_FAILURE")
+        }
+        val h = Harness(work = acceptedThenFailed)
+        h.prompt = { ref, _ ->
+            if (h.sourceCalls.get() == 3) { entered.countDown(); allowReturn.await() }
+            publicPrompt(ref)
+        }
+        h.operation.onGenerate = {
+            observedStop.set(checkNotNull(h.operation.capturedCurrentness).isStopped())
+            goodOutput()
+        }
+        try {
+            val call = h.runtime.submit(h.request())
+            assertFailure(call, NativeInferenceFailure.QUARANTINED)
+            assertEquals(NativeInferenceState.QUARANTINED, h.runtime.state())
+            assertEquals(1, h.operation.generates.get())
+            assertEquals(3, h.sourceCalls.get())
+            allowReturn.countDown()
+            barrier(worker)
+            assertEquals(true, observedStop.get())
+            assertFailure(call, NativeInferenceFailure.QUARANTINED)
+            assertEquals(3, h.sourceCalls.get())
+            assertEquals(0, h.operation.releases.get())
+            assertEquals(0, h.model.closes.get())
+            assertEquals(NativeInferenceState.QUARANTINED, h.runtime.state())
+            assertFalse(call.pollResult().toString().contains("PRIVATE_NATIVE_EXECUTOR_FAILURE"))
+        } finally {
+            allowReturn.countDown()
+            worker.shutdownNow()
+        }
+    }
+
     private class Harness(
         val work: Executor = ManualExecutor(),
         val cancellations: Executor = ManualExecutor(),
@@ -910,12 +1173,20 @@ class NativeInferenceRuntimeTest {
         val cancels = AtomicInteger()
         val releases = AtomicInteger()
         @Volatile var capturedPrompt = byteArrayOf()
+        @Volatile var capturedCurrentness: NativeStopSignal? = null
         @Volatile var onGenerate: () -> NativeGenerationResult = { goodOutput() }
         @Volatile var onCancel: () -> Boolean = { true }
         @Volatile var onRelease: () -> Boolean = { true }
-        override fun generate(modelDescriptor: Int, promptUtf8: ByteArray, budget: NativeInferenceBudget, remainingBudgetNanos: Long): NativeGenerationResult {
+        override fun generate(
+            modelDescriptor: Int,
+            promptUtf8: ByteArray,
+            budget: NativeInferenceBudget,
+            remainingBudgetNanos: Long,
+            currentness: NativeStopSignal,
+        ): NativeGenerationResult {
             generates.incrementAndGet()
             capturedPrompt = promptUtf8.copyOf()
+            capturedCurrentness = currentness
             assertEquals(17, modelDescriptor)
             assertTrue(remainingBudgetNanos in 1..NativeInferenceBounds.MAX_DURATION_NANOS)
             return onGenerate()

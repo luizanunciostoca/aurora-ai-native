@@ -1,12 +1,14 @@
 package ai.aurora.device.inference
 
 import java.lang.reflect.Modifier
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -27,9 +29,15 @@ class JniNativeTextEngineTest {
         assertEquals(java.lang.Boolean.TYPE, binding.getDeclaredMethod("release", java.lang.Long.TYPE).returnType)
         val generate = binding.getDeclaredMethod(
             "generate", java.lang.Long.TYPE, Integer.TYPE, ByteArray::class.java,
-            Integer.TYPE, Integer.TYPE, Integer.TYPE, java.lang.Long.TYPE,
+            Integer.TYPE, Integer.TYPE, Integer.TYPE, java.lang.Long.TYPE, NativeStopSignal::class.java,
         )
         assertEquals(NativeGenerationResult::class.java, generate.returnType)
+        assertEquals(java.lang.Boolean.TYPE, NativeStopSignal::class.java.getDeclaredMethod("isStopped").returnType)
+        assertEquals(
+            NativeStopSignal::class.java,
+            NativeTextOperation::class.java.declaredMethods.single { it.name == "generate" }.parameterTypes.last(),
+        )
+        assertFalse(binding.declaredMethods.any { it.name.endsWith("\$default") })
     }
 
     @Test
@@ -98,8 +106,10 @@ class JniNativeTextEngineTest {
         val prompt = prompt()
         val originalPrompt = prompt.copyOf()
         val budget = NativeInferenceBudget(8, 64, 256)
+        val checkpointCalls = AtomicInteger()
+        val currentness = NativeStopSignal { checkpointCalls.incrementAndGet(); false }
 
-        val result = operation.generate(47, prompt, budget, 2_000_000_000L)
+        val result = operation.generate(47, prompt, budget, 2_000_000_000L, currentness)
         assertEquals(NativeGenerationStatus.SUCCESS_EOG, result.statusCode)
         assertArrayEquals(nativeBody, result.outputUtf8)
         assertNotSame(nativeBody, result.outputUtf8)
@@ -113,6 +123,10 @@ class JniNativeTextEngineTest {
         assertEquals(64, api.generatedMaxBytes)
         assertEquals(256, api.generatedContextTokens)
         assertEquals(2_000_000_000L, api.generatedBudgetNanos)
+        assertSame(currentness, api.generatedCurrentness)
+        assertEquals(0, checkpointCalls.get()) // The adapter does not precompute or replace the query.
+        assertFalse(checkNotNull(api.generatedCurrentness).isStopped())
+        assertEquals(1, checkpointCalls.get())
         nativeBody.fill(0)
         assertEquals("4 🌊", String(result.outputUtf8, Charsets.UTF_8))
         assertTrue(operation.release())
@@ -146,7 +160,7 @@ class JniNativeTextEngineTest {
         for (budget in invalid) {
             val api = FakeApi()
             val operation = newOperation(api)
-            assertFailure(NativeGenerationStatus.INVALID, operation.generate(47, prompt(), budget, 1_000_000_000))
+            assertFailure(NativeGenerationStatus.INVALID, operation.generate(47, prompt(), budget, 1_000_000_000, noStop()))
             assertEquals(0, api.generateCalls)
             assertTrue(operation.release())
         }
@@ -157,13 +171,13 @@ class JniNativeTextEngineTest {
         for (duration in listOf(0L, -1L, Long.MIN_VALUE, NativeInferenceBounds.MAX_DURATION_NANOS + 1, Long.MAX_VALUE)) {
             val api = FakeApi()
             val operation = newOperation(api)
-            assertFailure(NativeGenerationStatus.INVALID, operation.generate(47, prompt(), budget(), duration))
+            assertFailure(NativeGenerationStatus.INVALID, operation.generate(47, prompt(), budget(), duration, noStop()))
             assertEquals(0, api.generateCalls)
             assertTrue(operation.release())
         }
         val api = FakeApi()
         val operation = newOperation(api)
-        assertFailure(NativeGenerationStatus.INVALID, operation.generate(-1, prompt(), budget(), 1_000_000_000))
+        assertFailure(NativeGenerationStatus.INVALID, operation.generate(-1, prompt(), budget(), 1_000_000_000, noStop()))
         assertEquals(0, api.generateCalls)
         assertTrue(operation.release())
     }
@@ -182,7 +196,7 @@ class JniNativeTextEngineTest {
         for (bytes in invalid) {
             val api = FakeApi()
             val operation = newOperation(api)
-            assertFailure(NativeGenerationStatus.INVALID, operation.generate(47, bytes, budget(), 1_000_000_000))
+            assertFailure(NativeGenerationStatus.INVALID, operation.generate(47, bytes, budget(), 1_000_000_000, noStop()))
             assertEquals(0, api.generateCalls)
             assertTrue(operation.release())
         }
@@ -306,14 +320,52 @@ class JniNativeTextEngineTest {
         assertEquals(listOf(41L, 41L, 41L), api.releasedIds)
     }
 
+    @Test
+    fun aCurrentnessQueryIsForwardedLiveRatherThanTurnedIntoAnAdmissionBoolean() {
+        val api = FakeApi()
+        var stopped = false
+        var calls = 0
+        val currentness = NativeStopSignal { calls++; stopped }
+        api.onGenerate = {
+            assertSame(currentness, api.generatedCurrentness)
+            assertFalse(checkNotNull(api.generatedCurrentness).isStopped())
+            stopped = true
+            assertTrue(checkNotNull(api.generatedCurrentness).isStopped())
+            NativeGenerationResult(NativeGenerationStatus.CANCELLED, ByteArray(0), 0, 0)
+        }
+        val operation = newOperation(api)
+        assertFailure(
+            NativeGenerationStatus.CANCELLED,
+            operation.generate(47, prompt(), budget(), 1_000_000_000L, currentness),
+        )
+        assertEquals(2, calls)
+        assertTrue(operation.release())
+    }
+
+    @Test
+    fun aThrowingCurrentnessQueryCannotBecomeTextInTheAdapterTestTransport() {
+        val api = FakeApi()
+        val currentness = NativeStopSignal { throw IllegalStateException("PRIVATE_CURRENTNESS_EXCEPTION") }
+        api.onGenerate = { checkNotNull(api.generatedCurrentness).isStopped(); api.response }
+        val operation = newOperation(api)
+        val result = operation.generate(47, prompt(), budget(), 1_000_000_000L, currentness)
+        assertFailure(NativeGenerationStatus.FAILURE, result)
+        assertFalse(result.toString().contains("PRIVATE_CURRENTNESS_EXCEPTION"))
+        assertTrue(checkNotNull(api.retainedPrompt).all { it == 0.toByte() })
+        assertTrue(operation.release())
+        // The real JNI exception/latch path is separately exercised by the model-free C++ harness.
+    }
+
     private fun prompt(): ByteArray = "public fixture: 2+2=?".toByteArray(Charsets.UTF_8)
 
     private fun budget(): NativeInferenceBudget = NativeInferenceBudget()
 
     private fun newOperation(api: FakeApi): NativeTextOperation = checkNotNull(JniNativeTextEngine(api).reserve())
 
+    private fun noStop(): NativeStopSignal = NativeStopSignal { false } // Explicit synthetic transport fixture.
+
     private fun generate(operation: NativeTextOperation): NativeGenerationResult =
-        operation.generate(47, prompt(), budget(), 1_000_000_000L)
+        operation.generate(47, prompt(), budget(), 1_000_000_000L, noStop())
 
     private fun assertFailure(expected: Int, result: NativeGenerationResult) {
         assertEquals(expected, result.statusCode)
@@ -342,6 +394,8 @@ class JniNativeTextEngineTest {
         var generatedMaxBytes = 0
         var generatedContextTokens = 0
         var generatedBudgetNanos = 0L
+        var generatedCurrentness: NativeStopSignal? = null
+        var onGenerate: (() -> NativeGenerationResult)? = null
         var observedPrompt: ByteArray? = null
         var retainedPrompt: ByteArray? = null
         val cancelledIds = mutableListOf<Long>()
@@ -367,6 +421,7 @@ class JniNativeTextEngineTest {
             maxOutputBytes: Int,
             contextTokens: Int,
             remainingBudgetNanos: Long,
+            currentness: NativeStopSignal,
         ): NativeGenerationResult {
             generateCalls++
             generatedId = id
@@ -375,12 +430,14 @@ class JniNativeTextEngineTest {
             generatedMaxBytes = maxOutputBytes
             generatedContextTokens = contextTokens
             generatedBudgetNanos = remainingBudgetNanos
+            generatedCurrentness = currentness
             retainedPrompt = promptUtf8
             observedPrompt = promptUtf8.copyOf()
             generateError?.let { throw it }
             if (cancelControlsResponse && cancelled) {
                 return NativeGenerationResult(NativeGenerationStatus.CANCELLED, ByteArray(0), 0, 0)
             }
+            onGenerate?.let { return it() }
             return response
         }
 

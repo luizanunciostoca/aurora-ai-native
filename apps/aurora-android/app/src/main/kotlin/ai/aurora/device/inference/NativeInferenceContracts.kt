@@ -210,12 +210,18 @@ internal object NativeGenerationStatus {
 }
 
 internal interface NativeTextOperation {
-    /** Synchronous on the dedicated worker only. Never claim teardown from a returned text alone. */
+    /**
+     * Synchronous on the dedicated worker only. currentness is an obligatory, same-call stop query,
+     * not an approval: the native entry thread polls it at its explicit work boundaries. It may
+     * read the existing prompt owner and block; never invoke it from an engine progress/abort
+     * thread or under an ownership lock. Never claim teardown from returned text alone.
+     */
     fun generate(
         modelDescriptor: Int,
         promptUtf8: ByteArray,
         budget: NativeInferenceBudget,
         remainingBudgetNanos: Long,
+        currentness: NativeStopSignal,
     ): NativeGenerationResult
 
     /** Signal only. Callers wait for generate + release, not this boolean, to prove quiescence. */

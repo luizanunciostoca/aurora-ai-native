@@ -1,6 +1,16 @@
-"""Synthetic negative/positive packaging fixtures. Not real JNI or model tests."""
+"""Packaging fixtures and a real-source JNI boundary harness with explicit doubles.
 
+Neither suite loads a real model, runs a JVM/Android device, or proves inference.
+The native harness compiles the complete production C++ against official JNI
+headers; only its JNI function table and engine implementation are test doubles.
+"""
+
+import hashlib
+import json
+import os
+import shutil
 import struct
+import subprocess
 import tempfile
 import unittest
 import warnings
@@ -195,6 +205,117 @@ class NativePreparationArtifactTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "failed or skipped"):
             verifier.inspect_unit_reports(directory)
+
+
+class NativeCurrentnessHarnessTests(unittest.TestCase):
+    """Executable native control-flow proof, not real engine/JVM/physical proof."""
+
+    @classmethod
+    def setUpClass(cls):
+        directory = Path(__file__).resolve().parent
+        harness = directory / "native-currentness"
+        cls.production_source = directory.parent / "app/src/main/cpp/aurora_llama_jni.cpp"
+        # CI supplies the configured JDK. The only override is explicitly
+        # test-scoped for an audited official header tree in local scratch.
+        override = os.environ.get("AURORA_TEST_JNI_INCLUDE")
+        java_home = os.environ.get("JAVA_HOME")
+        if override:
+            include = Path(override).resolve()
+        elif java_home:
+            include = Path(java_home).resolve() / "include"
+        else:
+            raise RuntimeError("JNI headers required: set JAVA_HOME or test-only AURORA_TEST_JNI_INCLUDE; no skip/fallback")
+        for header in (include / "jni.h", include / "linux/jni_md.h"):
+            if not header.is_file():
+                raise RuntimeError(f"Required official JNI header missing: {header}")
+        compiler = shutil.which("g++")
+        if compiler is None:
+            raise RuntimeError("g++ is required for the production JNI boundary harness; no skip")
+        cls.temp = tempfile.TemporaryDirectory(prefix="aurora-native-currentness-")
+        cls.addClassCleanup(cls.temp.cleanup)
+        cls.binary = Path(cls.temp.name) / "native_currentness_harness"
+        cls.source_sha256 = hashlib.sha256(cls.production_source.read_bytes()).hexdigest()
+        command = [compiler, "-std=c++17", "-O1", "-g", "-Wall", "-Wextra", "-Werror", "-pthread",
+                   "-I", str(harness), "-I", str(include), "-I", str(include / "linux"),
+                   str(harness / "native_currentness_harness.cpp"), "-o", str(cls.binary)]
+        compiled = subprocess.run(command, text=True, capture_output=True, timeout=120, check=False)
+        if compiled.returncode != 0:
+            raise RuntimeError("Production JNI harness compilation failed:\n" + compiled.stdout + compiled.stderr)
+        if hashlib.sha256(cls.production_source.read_bytes()).hexdigest() != cls.source_sha256:
+            raise RuntimeError("Production JNI source changed during compilation; discard stale harness")
+        cls.fixture = Path(cls.temp.name) / "sparse-empty-native-boundary.fixture"
+        descriptor = os.open(cls.fixture, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            # No bytes, weights, GGUF metadata or model content are written.
+            # This only reserves logical size for the production fd guard.
+            os.ftruncate(descriptor, 1_280_835_840)
+            os.fchmod(descriptor, 0o400)
+        finally:
+            os.close(descriptor)
+        metadata = cls.fixture.stat()
+        if metadata.st_size != 1_280_835_840 or metadata.st_blocks != 0:
+            raise RuntimeError("Native fixture must remain entirely sparse, with no allocated model contents")
+
+    def scenario(self, name):
+        self.assertEqual(hashlib.sha256(self.production_source.read_bytes()).hexdigest(), self.source_sha256,
+                         "Production JNI source changed after compilation; harness proof is stale")
+        completed = subprocess.run([str(self.binary), name, str(self.fixture)], text=True,
+                                   capture_output=True, timeout=10, check=False)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertEqual(result["scenario"], name)
+        self.assertEqual(result["result"], "PASS")
+        self.assertGreaterEqual(result["assertions"], 10)
+        self.assertEqual(result["engine"], "explicit-stub-no-inference")
+        self.assertEqual(result["jni"], "official-header-fake-table")
+        self.assertEqual(result["wrong_thread_jni"], 0)
+        result["production_source_sha256"] = self.source_sha256
+        print(json.dumps(result, sort_keys=True), flush=True)
+
+    def test_current_success_stays_bound_through_load_decode_and_cleanup(self):
+        self.scenario("current_success")
+
+    def test_revocation_during_load_stops_before_any_decode(self):
+        self.scenario("revoke_during_load")
+
+    def test_revocation_before_decode_prevents_engine_entry(self):
+        self.scenario("revoke_before_decode")
+
+    def test_revocation_during_decode_prevents_sampling_and_output(self):
+        self.scenario("revoke_after_decode")
+
+    def test_revocation_at_eog_discards_nonempty_speculative_output(self):
+        self.scenario("revoke_at_eog")
+
+    def test_revocation_during_cleanup_discards_success(self):
+        self.scenario("revoke_during_cleanup")
+
+    def test_null_callback_fails_closed_before_engine_entry(self):
+        self.scenario("callback_null")
+
+    def test_missing_callback_method_fails_closed_and_sticky(self):
+        self.scenario("callback_missing_method")
+
+    def test_throwing_callback_fails_closed_and_sticky(self):
+        self.scenario("callback_throws_sticky")
+
+    def test_transient_stop_cannot_resurrect_generation(self):
+        self.scenario("callback_stop_sticky")
+
+    def test_blocked_callback_cancellation_preserves_busy_ownership(self):
+        self.scenario("blocked_callback_cancel")
+
+    def test_blocked_callback_deadline_cannot_be_refreshed_by_late_false(self):
+        self.scenario("blocked_callback_deadline")
+
+    def test_final_callback_retains_running_after_raii_until_cancellation_observed(self):
+        self.scenario("blocked_final_callback_cancel")
+
+    def test_engine_progress_and_abort_threads_never_touch_jni(self):
+        self.scenario("engine_threads_no_jni")
+
+    def test_native_resources_keep_running_until_raii_has_completed(self):
+        self.scenario("raii_running_until_cleanup")
 
 
 if __name__ == "__main__":

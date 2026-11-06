@@ -14,6 +14,7 @@ internal object NativeLlamaBindings {
         maxOutputBytes: Int,
         contextTokens: Int,
         remainingBudgetNanos: Long,
+        currentness: NativeStopSignal,
     ): NativeGenerationResult
 
     @JvmStatic external fun cancel(id: Long): Boolean
@@ -32,6 +33,7 @@ internal interface NativeLlamaApi {
         maxOutputBytes: Int,
         contextTokens: Int,
         remainingBudgetNanos: Long,
+        currentness: NativeStopSignal,
     ): NativeGenerationResult
     fun cancel(id: Long): Boolean
     fun release(id: Long): Boolean
@@ -63,9 +65,10 @@ private object PackagedNativeLlamaApi : NativeLlamaApi {
         maxOutputBytes: Int,
         contextTokens: Int,
         remainingBudgetNanos: Long,
+        currentness: NativeStopSignal,
     ): NativeGenerationResult =
         NativeLlamaBindings.generate(
-            id, modelFd, promptUtf8, maxOutputTokens, maxOutputBytes, contextTokens, remainingBudgetNanos,
+            id, modelFd, promptUtf8, maxOutputTokens, maxOutputBytes, contextTokens, remainingBudgetNanos, currentness,
         )
 
     override fun cancel(id: Long): Boolean = NativeLlamaBindings.cancel(id)
@@ -94,6 +97,7 @@ internal class JniNativeTextEngine(private val api: NativeLlamaApi = PackagedNat
             promptUtf8: ByteArray,
             budget: NativeInferenceBudget,
             remainingBudgetNanos: Long,
+            currentness: NativeStopSignal,
         ): NativeGenerationResult {
             if (
                 released.get() || !generated.compareAndSet(false, true) || modelDescriptor < 0 ||
@@ -104,7 +108,7 @@ internal class JniNativeTextEngine(private val api: NativeLlamaApi = PackagedNat
             return try {
                 val result = api.generate(
                     id, modelDescriptor, snapshot, budget.maxOutputTokens,
-                    budget.maxOutputBytes, budget.contextTokens, remainingBudgetNanos,
+                    budget.maxOutputBytes, budget.contextTokens, remainingBudgetNanos, currentness,
                 )
                 if (result.statusCode != NativeGenerationStatus.SUCCESS_EOG) {
                     val code = if (result.statusCode in 1..6 && result.outputUtf8.isEmpty()) {

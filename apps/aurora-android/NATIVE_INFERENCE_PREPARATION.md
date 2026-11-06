@@ -50,7 +50,7 @@ The C API requires a model-provided supported template; absence/unsupported synt
 - Genuine end-of-generation with nonempty valid UTF-8 is required for success. Invalid input, cancellation, deadline, unavailable backend, failure or budget exhaustion returns no text. Reaching token/context/byte limits is not silently reported as success.
 - No prompt, model content, token stream or credential logging is added. Special model delimiters are rejected before template tokenization; this is not claimed as a general prompt-injection defense.
 
-## Kotlin prompt-currentness checkpoints
+## Kotlin prompt-currentness checkpoints and lineage
 
 The continuation allocated in [#575, comment 6688856373](https://github.com/luizanunciostoca/aurora-ai-native/issues/575#issuecomment-6688856373) changes only the private Kotlin runtime, its regression tests and this document. It is a normal single-parent continuation of the existing disabled preparation, not a merge, new authority owner or activation.
 
@@ -58,9 +58,33 @@ The runtime reuses the same `NativePublicPromptSource.resolveCurrent` port after
 
 Potentially blocking source reads run on the worker lane, outside the runtime lock. The independent cancellation/deadline lane can still settle the caller; the single-flight slot remains occupied until outstanding work returns. Runtime-owned temporary byte copies are cleared. The unchanged shipping factory remains disabled and does not call this port, open a model or instantiate JNI.
 
-**Limit:** model loading and decode are both inside the opaque JNI `generate` call. These Kotlin checks do not establish a fresh policy/session/consent check between model load and first decode, or continuous revocation during generation. This internal gap remains an activation gate. No JNI/C++ contract is changed by this continuation.
+That Kotlin-only continuation did not change JNI/C++ and could not check the source between native model load and first decode. The next private continuation below addresses those explicit native boundaries; it does not turn the source port into an authority producer or establish continuous revocation.
 
 **Host dependency gate:** core #588 contains concrete private W02/W05/W06 preparation consumers, but their authentic current policy/consent/purpose, routing and PUBLIC-source producers are not composed in the audited Host #462. Its DP5 policy is for local device control, not model data processing. W03 storage and W06 Memory Fabric do not themselves create that missing authority. The native prompt port is also still uncomposed: repeated reads in software tests do not establish an actual eleven-field W14 session binding or real consent. No fixture is promoted to production truth.
+
+## Native prompt-currentness checkpoints
+
+The continuation allocated in [#575, comment 6689923691](https://github.com/luizanunciostoca/aurora-ai-native/issues/575#issuecomment-6689923691) is a normal single-parent descendant of `c5914860216c081654899583b50a42340581ff97` on the same Draft #589. It changes the private Kotlin/JNI contract, implementation, focused tests and this document. It does not merge or activate any dependency, mutate main/#413/#588/#462, change the toolchain/workflow, or create another policy owner.
+
+`NativeTextOperation.generate`, its adapter and the native entry now require the existing `NativeStopSignal` as a same-call currentness query. There is no permissive default or caller-supplied approval. Its closure reuses the original flight's `NativePublicPromptSource.resolveCurrent`, original opaque request reference and captured content identity. An unavailable/changed/failed source permanently stops that flight with `PROMPT_UNAVAILABLE`; later recovery cannot revive it. The callback window closes when the synchronous generation call returns. A retained query cannot read a later flight. The same held model descriptor and original deadline are checked again **after** a potentially blocking owner read.
+
+The JNI entry thread polls this query before and after model loading, before and after each decode batch, and after native model/context/backend/file cleanup before successful output can escape. The final query remains within native `RUNNING` ownership: cancellation or a blocked source cannot make `release` report quiescence early. Missing callback/method, Java exception or a stop observation fails closed and is sticky; callback exception text is not logged or returned. The native DTO/export count remains unchanged, but the private generation signature changes, so this source requires a newly built APK. The preceding artifact does not certify this ABI.
+
+`JNIEnv`, method lookup and local references remain on the entering worker thread and outside the native ownership mutex. Engine progress and decode-abort callbacks remain atomic/deadline-only; they never call Java or an authority provider on an engine thread. Independent cancellation/deadline can settle the caller while the worker is blocked; BUSY/quarantine and resources remain until actual work and teardown finish.
+
+**Limit:** these are cooperative checkpoints, not instantaneous or continuous revocation inside an opaque model load, tokenization, decode or provider read. They cannot create missing current policy/consent/routing/session/PUBLIC-source producers. The shipping factory is still literally disabled, and there is still no application/voice/session caller of this leaf.
+
+## Bounded real-provider discovery
+
+A single metadata-only Native Termux Agent V3 probe, [morro-termux-control #3680](https://github.com/luizanunciostoca/morro-termux-control/issues/3680#issuecomment-6690018115), was read back on 2026-11-06 at 16:36:32 UTC. Its canonical request SHA-256 was `9d19cae530023311458fa470579aa3bb9a90ddf80c8a956d12f154a9ae9a3206`, matching preflight and result. It confirmed the expected boot/session on an SM-X820, aarch64, Android API 36, then read only three previously identified provider metadata files. It did not import/execute the provider, read credentials, start a service, install anything, load a model, grant consent or change boot.
+
+- `config/trusted-w15j-provider.mjs`: stable read; SHA-256 `a82741cebeac9917fdda9d3e0affb3a00cac9ebeb0d7a6f35e0bdfd330e8ef53`, byte-identical to the known DP5 local-device wrapper.
+- `config/w15j-dp5-material.json`: stable read, known DP5 material shape, expired; its non-authority flags remained false.
+- `state/dp5-effect-consent.json`: absent at observation time.
+
+This confirms the state of those three files only. It is not a broad search proving that no other provider exists, not a runtime invocation, and not current model-data authority. The expired DP5 material is not renewed or reinterpreted as IA consent. Real model-data producers and their current W14 binding remain a separate, unresolved composition gate.
+
+**Transport is also uncomposed:** core #588 at `36ad77e04fe0061a04e15d7a370585c5eb7f3567` exposes `createSessionBoundKeyedLocalModel` for the existing keyed HTTP client, explicitly not JNI (`services/agent-runtime/src/runtime/session-bound-local-model.ts`). Host #462 at `790049ae133035db3ed1517b31d9110d7f20d9a4` validates exact operator dependency keys without a model-source port (`services/mobile-gateway/src/physical-host/local-physical-host-operator.ts`). Adding fields to the external DP5 provider or flipping a native flag cannot complete this chain. An owner-reviewed extension of the existing composition and authenticated W14-to-native adapter is still required; it must preserve session identity, revocation, cancellation and non-authoritative model output. No second HTTP server, grant store or transport bypass is introduced here.
 
 ## Reproducible preparation and assertions
 
@@ -89,7 +113,11 @@ These commands build/test only; they do not install or enable anything. Artifact
 6. Rejects bundled `.gguf` files and renamed files starting with GGUF magic.
 7. Emits `BUILD_IDENTITY.json`, APK/library digests, certificate/manifest evidence and `SHA256SUMS.txt` only after assertions pass. The upload is labelled preparation-only.
 
-The Python packaging tests use synthetic APK/DEX/ELF fixtures and deliberate negative cases. Kotlin runtime tests use injected fakes for bounded lifecycle/guard behavior. Neither is real-model inference or physical proof. A real NDK build proves linking/packaging, not native execution. CI status, exact run/artifact IDs and independent review must be read back before declaring this preparation complete.
+The Python module preserves the original synthetic APK/DEX/ELF packaging cases and also compiles the integral production C++ translation unit into a host-side currentness harness. It uses real JDK JNI headers, an explicit fake JNI table, an explicit fake llama engine and a sparse readonly descriptor fixture; it does not load a GGUF model or run a Java VM/Android. Set `AURORA_TEST_JNI_INCLUDE` only for an equivalent trusted JNI include directory when `JAVA_HOME/include` is unavailable. Missing compiler/headers fail the harness rather than skipping it. The unchanged existing workflow invokes this same test module.
+
+The harness checks revoke-during-load, pre/post-decode invalidation, exceptions/missing callback, sticky refusal, blocked callbacks with cancellation/deadline, ownership/release, callback thread affinity and the final post-cleanup checkpoint. Its regression can be exercised against the unchanged `c5914860` C++ source with the test-only `AURORA_CURRENTNESS_SOURCE` include override; that override belongs only to the harness and is not a production bypass.
+
+Kotlin runtime tests use injected fakes for bounded lifecycle/guard behavior. The C++ harness proves behavior of the compiled production control flow against explicit doubles, not compatibility or inference with the real model. Neither suite is physical proof. A real NDK build proves linking/packaging, not native execution on the tablet. CI status, exact run/artifact IDs and independent review must be read back before declaring this preparation complete.
 
 ## Explicitly remaining gates
 
