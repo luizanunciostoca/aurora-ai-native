@@ -1,12 +1,46 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 
 import {
-  createLocalQwenStrategyDescriptor,
   createStrategyRegistry,
   evaluateStrategyAvailability,
   selectStrategy,
 } from '../dist/strategies/index.js';
+import { createLocalQwenStrategyDescriptor } from '../dist/strategies/local-qwen-descriptor.js';
+
+const require = createRequire(import.meta.url);
+
+test('local Qwen readiness does not expand the accepted root or strategies public API', () => {
+  // Accepted main c03d990: pin the published runtime symbol sets, not a
+  // second implementation. The readiness-only descriptor belongs to a leaf.
+  const strategyExports = [
+    'STRATEGY_AVAILABILITY_STATES',
+    'STRATEGY_KINDS',
+    'createStrategyRegistry',
+    'evaluateStrategyAvailability',
+    'findStrategy',
+    'isStrategyCompatible',
+    'selectStrategy',
+  ];
+  const rootExports = [
+    ...strategyExports,
+    'CONTRACT_VERSION_REGISTRY',
+    'ID_NAMESPACE_REGISTRY',
+    'ID_TYPE_DEPRECATIONS',
+    'InMemoryPolicySnapshotRegistry',
+    'PROVIDER_IDENTIFIER_POLICY',
+  ];
+  const strategies = require('@aurora/registries/strategies');
+  const root = require('@aurora/registries');
+  assert.deepEqual(Object.keys(strategies).sort(), strategyExports.sort());
+  assert.deepEqual(Object.keys(root).sort(), rootExports.sort());
+  assert.equal('createLocalQwenStrategyDescriptor' in strategies, false);
+  assert.equal('createLocalQwenStrategyDescriptor' in root, false);
+  assert.throws(() => require('@aurora/registries/strategies/local-qwen-descriptor'), {
+    code: 'ERR_PACKAGE_PATH_NOT_EXPORTED',
+  });
+});
 
 const observedAt = '2026-09-01T12:00:00.000Z';
 const nowEpochMs = Date.parse('2026-09-01T12:00:10.000Z');
