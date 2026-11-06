@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 // @ts-expect-error -- service harness has no @types/node; Node 22 provides this built-in.
 import test from 'node:test';
+// @ts-expect-error -- service harness has no @types/node; Node 22 provides this built-in.
+import { randomBytes } from 'node:crypto';
 
 import {
   LocalQwenInferenceClient,
@@ -14,6 +16,10 @@ import {
   inferWithPublicLocalModelPrompt,
   type PublicLocalInferenceRequest,
 } from '../src/runtime/public-local-model-bridge.js';
+import {
+  KeyedLocalQwenInferenceClient,
+  type EphemeralLocalModelCredential,
+} from '../src/runtime/keyed-local-inference.js';
 
 const NOW = Date.parse('2026-10-28T12:00:05Z');
 const TENANT = 'tenant:public-a';
@@ -84,6 +90,20 @@ function response(message = 'Atendimento de 09h às 18h.', tools?: unknown): Res
   return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: payload }] }), {
     headers: { 'content-type': 'application/json' },
   });
+}
+
+function credential(
+  overrides: Partial<EphemeralLocalModelCredential> = {},
+): EphemeralLocalModelCredential {
+  return {
+    kind: 'LOCAL_MODEL_EPHEMERAL_BEARER',
+    bearerToken: randomBytes(40).toString('base64url'),
+    observedAtEpochMs: NOW - 100,
+    expiresAtEpochMs: NOW + 20_000,
+    authorizesExecution: false,
+    canInvokeTools: false,
+    ...overrides,
+  };
 }
 
 function testClient(callback: (url: string, init?: RequestInit) => Promise<Response>): {
@@ -233,4 +253,190 @@ test('W05-F does not translate model tool calls into execution authority', async
   assert.equal(result.authorizesExecution, false);
   assert.equal(result.canInvokeTools, false);
   assert.equal(calls(), 1);
+});
+
+test('W05-F PUBLIC bridge composes the real keyed client without credential or context leakage', async () => {
+  const currentCredential = credential();
+  let credentialReads = 0;
+  let transportCalls = 0;
+  const client = new KeyedLocalQwenInferenceClient({
+    now: () => NOW,
+    credentialSource: {
+      async readCurrent() {
+        credentialReads += 1;
+        return currentCredential;
+      },
+    },
+    transport: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      transportCalls += 1;
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get('authorization'), `Bearer ${currentCredential.bearerToken}`);
+      assert.equal(headers.has('cookie'), false);
+      const serialized = String(init?.body);
+      for (const privateValue of [
+        currentCredential.bearerToken,
+        TENANT,
+        CORRELATION,
+        'source-ref-hidden-from-model',
+      ]) {
+        assert.equal(serialized.includes(privateValue), false);
+      }
+      const body = JSON.parse(serialized) as Record<string, unknown>;
+      assert.equal(body.model, LOCAL_QWEN_MODEL_ID);
+      assert.equal('tools' in body, false);
+      assert.equal('tool_choice' in body, false);
+      assert.equal((body.messages as Array<{ content: string }>)[1]?.content, PROMPT);
+      return response();
+    }) as typeof fetch,
+  });
+
+  // No cast to the base class: compilation itself covers the previously
+  // incompatible nominal signature at this real composition boundary.
+  const result = await inferWithPublicLocalModelPrompt(client, request());
+  assert.equal(result.status, 'GENERATED');
+  assert.equal(result.authorizesExecution, false);
+  assert.equal(result.canInvokeTools, false);
+  assert.equal(JSON.stringify(result).includes(currentCredential.bearerToken), false);
+  assert.equal(credentialReads, 1);
+  assert.equal(transportCalls, 1);
+});
+
+test('W05-F PUBLIC bridge rejects malformed projections before requesting credentials', async () => {
+  let credentialReads = 0;
+  let transportCalls = 0;
+  const client = new KeyedLocalQwenInferenceClient({
+    now: () => NOW,
+    credentialSource: {
+      async readCurrent() {
+        credentialReads += 1;
+        return credential();
+      },
+    },
+    transport: (async () => {
+      transportCalls += 1;
+      return response();
+    }) as typeof fetch,
+  });
+  for (const projection of [
+    minimizedPrompt({ tenantId: 'tenant:other' }),
+    minimizedPrompt({ authorizesExecution: true }),
+    minimizedPrompt({ canInvokeTools: true }),
+    minimizedPrompt({ credential: credential() }),
+  ]) {
+    const result = await inferWithPublicLocalModelPrompt(
+      client,
+      request({ minimizedPublicPrompt: projection }),
+    );
+    assert.equal(result.status, 'ABSTAINED');
+    if (result.status === 'ABSTAINED') assert.equal(result.code, 'INVALID_REQUEST');
+  }
+  assert.equal(credentialReads, 0);
+  assert.equal(transportCalls, 0);
+});
+
+test('W05-F PUBLIC bridge preserves keyed credential refusal and caller cancellation', async () => {
+  let transportCalls = 0;
+  for (const currentCredential of [null, credential({ expiresAtEpochMs: NOW - 1 })]) {
+    const client = new KeyedLocalQwenInferenceClient({
+      now: () => NOW,
+      credentialSource: { readCurrent: async () => currentCredential },
+      transport: (async () => {
+        transportCalls += 1;
+        return response();
+      }) as typeof fetch,
+    });
+    const result = await inferWithPublicLocalModelPrompt(client, request());
+    assert.equal(result.status, 'ABSTAINED');
+    assert.equal(result.authorizesExecution, false);
+    assert.equal(result.canInvokeTools, false);
+  }
+
+  let credentialReads = 0;
+  const cancelled = new AbortController();
+  cancelled.abort();
+  const client = new KeyedLocalQwenInferenceClient({
+    now: () => NOW,
+    credentialSource: {
+      async readCurrent() {
+        credentialReads += 1;
+        return credential();
+      },
+    },
+    transport: (async () => {
+      transportCalls += 1;
+      return response();
+    }) as typeof fetch,
+  });
+  const result = await inferWithPublicLocalModelPrompt(
+    client,
+    request({ signal: cancelled.signal }),
+  );
+  assert.equal(result.status, 'ABSTAINED');
+  if (result.status === 'ABSTAINED') assert.equal(result.code, 'CANCELLED');
+  assert.equal(credentialReads, 0);
+  assert.equal(transportCalls, 0);
+});
+
+test('W05-F PUBLIC bridge snapshots only own data without invoking envelope accessors', async () => {
+  const { client, calls } = testClient(async () => response());
+  let getterCalls = 0;
+  const accessor = request();
+  Object.defineProperty(accessor, 'minimizedPublicPrompt', {
+    get() {
+      getterCalls += 1;
+      throw new Error('must not execute an untrusted envelope accessor');
+    },
+  });
+  const proxy = new Proxy(request(), {
+    getOwnPropertyDescriptor() {
+      throw new Error('untrusted envelope trap');
+    },
+  });
+  const revoked = Proxy.revocable(request(), {});
+  revoked.revoke();
+  for (const malformed of [
+    null,
+    [],
+    {},
+    Object.create(request()) as unknown,
+    accessor,
+    proxy,
+    revoked.proxy,
+  ]) {
+    const result = await inferWithPublicLocalModelPrompt(
+      client,
+      malformed as PublicLocalInferenceRequest,
+    );
+    assert.equal(result.status, 'ABSTAINED');
+    if (result.status === 'ABSTAINED') assert.equal(result.code, 'INVALID_REQUEST');
+  }
+  assert.equal(getterCalls, 0);
+  assert.equal(calls(), 0);
+});
+
+test('W05-F PUBLIC bridge rejects sparse, accessor and trapped source references without reads', async () => {
+  const { client, calls } = testClient(async () => response());
+  let getterCalls = 0;
+  const accessor = ['private-reference'];
+  Object.defineProperty(accessor, '0', {
+    get() {
+      getterCalls += 1;
+      throw new Error('must not execute a source reference accessor');
+    },
+  });
+  const trapped = new Proxy(['private-reference'], {
+    getOwnPropertyDescriptor() {
+      throw new Error('untrusted source reference trap');
+    },
+  });
+  for (const references of [new Array(1), accessor, trapped]) {
+    const result = await inferWithPublicLocalModelPrompt(
+      client,
+      request({ minimizedPublicPrompt: minimizedPrompt({ includedSourceReferences: references }) }),
+    );
+    assert.equal(result.status, 'ABSTAINED');
+    if (result.status === 'ABSTAINED') assert.equal(result.code, 'INVALID_REQUEST');
+  }
+  assert.equal(getterCalls, 0);
+  assert.equal(calls(), 0);
 });

@@ -1,6 +1,10 @@
 // @ts-expect-error -- service harness has no @types/node; Node 22 provides this built-in.
 import assert from 'node:assert/strict';
 // @ts-expect-error -- service harness has no @types/node; Node 22 provides this built-in.
+import { readFileSync } from 'node:fs';
+// @ts-expect-error -- service harness has no @types/node; Node 22 provides this built-in.
+import { stripTypeScriptTypes } from 'node:module';
+// @ts-expect-error -- service harness has no @types/node; Node 22 provides this built-in.
 import test from 'node:test';
 
 import {
@@ -91,6 +95,30 @@ function expectNoAuthority(result: LocalInferenceResult): void {
   assert.equal(result.authoritySemantics, 'INTELLIGENCE_ONLY_NO_AUTHORITY');
 }
 
+function expectAbstained(result: LocalInferenceResult, code: string): void {
+  assert.equal(result.status, 'ABSTAINED');
+  if (result.status === 'ABSTAINED') assert.equal(result.code, code);
+  expectNoAuthority(result);
+}
+
+function deferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+} {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (reason: unknown) => void = () => undefined;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
+function nextTurn(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 test('W05 local model invokes only loopback and returns untrusted text, never execution', async () => {
   let calls = 0;
   const implementation = fakeFetch(async (url, init) => {
@@ -138,6 +166,162 @@ test('W05 degraded fallback is still only an informational model response', asyn
   expectNoAuthority(result);
 });
 
+test('W05 consumes the real router decision without reading or forwarding extra evidence', async () => {
+  // The harness runs at repoRoot. Exercise the accepted, type-import-only source;
+  // this test neither creates a second router nor publishes its private API.
+  const routerSource = readFileSync('packages/intelligence/src/router/router.ts', 'utf8');
+  const routerModule = (await import(
+    `data:text/javascript,${encodeURIComponent(stripTypeScriptTypes(routerSource))}`
+  )) as { routeIntelligence: (input: unknown) => unknown };
+  const tenant = route.tenant;
+  const correlation = {
+    ...route.correlation,
+    causation: { causationId: 'private-router-metadata' },
+  };
+  const identity = { tenantId: tenant.tenantId, correlationId: correlation.correlationId };
+  const decision = routerModule.routeIntelligence({
+    tenant,
+    correlation,
+    classification: {
+      tenant,
+      correlation,
+      taskClass: 'INFORMATIONAL',
+      modality: 'TEXT',
+      complexity: 'TRIVIAL',
+      reversibility: 'NOT_APPLICABLE',
+      riskSignals: [],
+      classificationConfidence: 'HIGH',
+      reasons: ['TASK_CLASS_FROM_OPERATION'],
+      authoritySemantics: 'CLASSIFIER_ONLY_NO_AUTHORITY',
+    },
+    reasoning: {
+      status: 'RESOLVED',
+      tenant,
+      correlation,
+      level: 'L3',
+      requestedLevel: 'L3',
+      reasons: ['TASK_NEED_FROM_COMPLEXITY'],
+      mandatorySafetyValidationRequired: true,
+      canSkipMandatoryValidation: false,
+      authorizesExecution: false,
+    },
+    confidence: {
+      kind: 'CONFIDENCE_EVALUATION',
+      schemaVersion: '1.0.0',
+      tenant,
+      correlation,
+      scoreBps: 9_000,
+      band: 'HIGH',
+      disposition: 'PROCEED_WITH_EVIDENCE',
+      decomposition: {
+        evidenceQualityBps: 9_000,
+        consistencyBps: 9_000,
+        coverageBps: 9_000,
+        freshnessBps: 9_000,
+        ambiguityBps: 1_000,
+      },
+      uncertaintyReasons: [],
+      calibrationInterfaceVersion: '1.0.0',
+      authorizesExecution: false,
+      canGrantPermission: false,
+    },
+    lane: {
+      ...identity,
+      source: 'W04_LANE_RESOLUTION',
+      lane: 'FAST',
+      mandatoryValidations: ['CURRENT_POLICY', 'CURRENT_AUTHORITY', 'EXECUTOR_PRECONDITIONS'],
+      authorizesExecution: false,
+    },
+    capabilityPlan: {
+      ...identity,
+      source: 'W04_CAPABILITY_PLAN',
+      status: 'READY',
+      registryVersion: 'w04:fixture',
+      authorizesExecution: false,
+    },
+    budget: {
+      ...identity,
+      source: 'W04_EXECUTION_BUDGET_ASSESSMENT',
+      budgetId: 'budget:fixture',
+      state: 'WITHIN_BUDGET',
+      action: 'CONTINUE_OPTIONAL',
+      mandatorySafetyValidationRequired: true,
+      canSkipMandatoryValidation: false,
+      authorizesExecution: false,
+    },
+    strategies: {
+      registryVersion: 'w05-e:fixture',
+      select(criteria: { preferredStrategyId: string }) {
+        assert.equal(criteria.preferredStrategyId, LOCAL_QWEN_STRATEGY_ID);
+        return {
+          status: 'SELECTED',
+          strategy: { strategyId: LOCAL_QWEN_STRATEGY_ID, semanticVersion: '1', kind: 'MODEL' },
+          selectedVia: 'PREFERRED',
+          currentAvailability: 'CURRENT_AVAILABLE',
+          authorizesExecution: false,
+        };
+      },
+    },
+    preferences: {
+      deterministic: [],
+      model: [LOCAL_QWEN_STRATEGY_ID],
+      specialist: [],
+      computerUsePlanning: [],
+      human: [],
+    },
+    nowEpochMs: NOW,
+  }) as SelectedModelRouteProjection & { reasons: readonly string[] };
+  assert.equal(decision.status, 'SELECTED');
+  assert.equal(decision.family, 'MODEL');
+  assert.deepEqual(decision.reasons, ['LOWEST_SUFFICIENT_ROUTE']);
+  assert.equal(Object.hasOwn(decision.evidence, 'taskClass'), true);
+  assert.equal(Object.hasOwn(decision.evidence, 'candidateFamilies'), true);
+
+  let getterReads = 0;
+  const unusedGetter = () => {
+    getterReads += 1;
+    throw new Error('private-router-metadata');
+  };
+  const unusedAccessors = Object.defineProperty(
+    {
+      ...decision,
+      evidence: Object.defineProperty({ ...decision.evidence }, 'candidateFamilies', {
+        get: unusedGetter,
+      }),
+      correlation: Object.defineProperty({ ...decision.correlation }, 'causation', {
+        get: unusedGetter,
+      }),
+    },
+    'reasons',
+    { get: unusedGetter },
+  );
+  const bodies: string[] = [];
+  const instance = client(
+    fakeFetch(async (_url, init) => {
+      bodies.push(String(init?.body));
+      return completion();
+    }),
+  );
+  for (const selected of [decision, unusedAccessors]) {
+    const result = await instance.infer(request({ route: selected }));
+    assert.equal(result.status, 'GENERATED');
+    expectNoAuthority(result);
+  }
+  assert.equal(getterReads, 0);
+  assert.equal(bodies.length, 2);
+  for (const body of bodies) {
+    for (const forbidden of [
+      'private-router-metadata',
+      'candidateFamilies',
+      'LOWEST_SUFFICIENT_ROUTE',
+      tenant.tenantId,
+      correlation.correlationId,
+    ]) {
+      assert.equal(body.includes(forbidden), false);
+    }
+  }
+});
+
 test('W05 local model rejects route/context/authority drift before HTTP', async () => {
   let calls = 0;
   const instance = client(
@@ -176,6 +360,25 @@ test('W05 local model rejects route/context/authority drift before HTTP', async 
       canInvokeTools: false,
     });
   }
+  assert.equal(calls, 0);
+});
+
+test('W05 a signal revoked after the ingress snapshot abstains before transport', async () => {
+  const controller = new AbortController();
+  const revocable = Proxy.revocable(controller.signal, {});
+  let calls = 0;
+  const instance = new LocalQwenInferenceClient({
+    now: () => {
+      revocable.revoke();
+      return NOW;
+    },
+    transport: fakeFetch(async () => {
+      calls += 1;
+      return completion();
+    }),
+  });
+  const result = await instance.infer(request({ signal: revocable.proxy }));
+  expectAbstained(result, 'INVALID_REQUEST');
   assert.equal(calls, 0);
 });
 
@@ -313,10 +516,314 @@ test('W05 local inference respects explicit cancellation and deadline abort', as
   const cancelled = await pending;
   assert.equal(cancelled.status, 'ABSTAINED');
   if (cancelled.status === 'ABSTAINED') assert.equal(cancelled.code, 'CANCELLED');
+  // Caller cancellation can resolve before the cooperative transport settles.
+  await nextTurn();
   const timeout = await instance.infer(request({ deadlineEpochMs: NOW + 20 }));
   assert.equal(timeout.status, 'ABSTAINED');
   if (timeout.status === 'ABSTAINED') assert.equal(timeout.code, 'TIMEOUT');
   expectNoAuthority(timeout);
+});
+
+test('W05 rejects malformed envelopes/accessors/proxies before transport', async () => {
+  let calls = 0;
+  let getterReads = 0;
+  const instance = client(
+    fakeFetch(async () => {
+      calls += 1;
+      return completion();
+    }),
+  );
+  const hostileGetter = () => {
+    getterReads += 1;
+    throw new Error('private ingress value must not be read');
+  };
+  const revoked = Proxy.revocable(request(), {});
+  revoked.revoke();
+  const inputs: unknown[] = [
+    null,
+    undefined,
+    42,
+    [],
+    Object.create(request()),
+    Object.defineProperty(request(), 'tenantId', { get: hostileGetter }),
+    request({
+      route: Object.defineProperty({ ...route }, 'evidence', { get: hostileGetter }),
+    }),
+    request({
+      route: {
+        ...route,
+        evidence: Object.defineProperty({ ...route.evidence }, 'budgetState', {
+          get: hostileGetter,
+        }),
+      },
+    }),
+    request({
+      manifest: Object.defineProperty({ ...manifest }, 'modelSha256', { get: hostileGetter }),
+    }),
+    request({
+      signal: Object.defineProperty({}, 'aborted', { get: hostileGetter }) as AbortSignal,
+    }),
+    new Proxy(request(), {
+      getPrototypeOf() {
+        throw new Error('private proxy failure');
+      },
+    }),
+    request({
+      route: new Proxy(route, {
+        getOwnPropertyDescriptor() {
+          throw new Error('private proxy failure');
+        },
+      }),
+    }),
+    new Proxy(request(), {
+      getOwnPropertyDescriptor() {
+        throw new Error('private proxy failure');
+      },
+    }),
+    revoked.proxy,
+  ];
+  for (const input of inputs) {
+    const result = await instance.infer(input as LocalInferenceRequest);
+    expectAbstained(result, 'INVALID_REQUEST');
+    assert.equal(JSON.stringify(result).includes('private'), false);
+  }
+  assert.equal(getterReads, 0);
+  assert.equal(calls, 0);
+});
+
+test(
+  'W05 deadline bounds a stalled transport and quarantines its late response cleanup',
+  { timeout: 1_000 },
+  async () => {
+    const transportResult = deferred<Response>();
+    const cleanup = deferred<undefined>();
+    let calls = 0;
+    let cancellations = 0;
+    const instance = client(
+      fakeFetch(async () => {
+        calls += 1;
+        return calls === 1 ? transportResult.promise : completion('fresh response');
+      }),
+    );
+    const first = await instance.infer(request({ deadlineEpochMs: NOW + 20 }));
+    expectAbstained(first, 'TIMEOUT');
+    expectAbstained(await instance.infer(request()), 'BUSY');
+    assert.equal(calls, 1);
+
+    transportResult.resolve(
+      new Response(
+        new ReadableStream<Uint8Array>({
+          cancel() {
+            cancellations += 1;
+            return cleanup.promise;
+          },
+        }),
+        { headers: { 'content-type': 'application/json' } },
+      ),
+    );
+    await nextTurn();
+    assert.equal(cancellations, 1);
+    expectAbstained(await instance.infer(request()), 'BUSY');
+    assert.equal(calls, 1);
+    cleanup.resolve(undefined);
+    await nextTurn();
+
+    const next = await instance.infer(request());
+    assert.equal(next.status, 'GENERATED');
+    if (next.status === 'GENERATED') assert.equal(next.content, 'fresh response');
+    assert.equal(calls, 2);
+    expectAbstained(first, 'TIMEOUT');
+  },
+);
+
+test(
+  'W05 cancellation is bounded even if transport ignores abort or rejects late',
+  { timeout: 1_000 },
+  async () => {
+    for (const rejectsLate of [false, true]) {
+      const transportResult = deferred<Response>();
+      const controller = new AbortController();
+      let calls = 0;
+      const instance = client(
+        fakeFetch(async () => {
+          calls += 1;
+          return calls === 1 ? transportResult.promise : completion('fresh response');
+        }),
+      );
+      const pending = instance.infer(request({ signal: controller.signal }));
+      controller.abort();
+      const cancelled = await pending;
+      expectAbstained(cancelled, 'CANCELLED');
+      expectAbstained(await instance.infer(request()), 'BUSY');
+      assert.equal(calls, 1);
+      if (rejectsLate) transportResult.reject(new Error('private transport failure'));
+      else transportResult.resolve(completion('late response must not escape'));
+      await nextTurn();
+
+      const next = await instance.infer(request());
+      assert.equal(next.status, 'GENERATED');
+      if (next.status === 'GENERATED') assert.equal(next.content, 'fresh response');
+      assert.equal(calls, 2);
+      expectAbstained(cancelled, 'CANCELLED');
+      assert.equal(JSON.stringify(cancelled).includes('private'), false);
+    }
+  },
+);
+
+test('W05 checks the deadline again after transport without waiting for the timer', async () => {
+  let now = NOW;
+  const instance = new LocalQwenInferenceClient({
+    now: () => now,
+    transport: fakeFetch(async () => {
+      now = NOW + 100;
+      return completion('late response');
+    }),
+  });
+  expectAbstained(await instance.infer(request({ deadlineEpochMs: NOW + 50 })), 'TIMEOUT');
+});
+
+test('W05 checks the deadline again after consuming the response body', async () => {
+  let now = NOW;
+  const instance = new LocalQwenInferenceClient({
+    now: () => now,
+    transport: fakeFetch(async () => {
+      const bytes = new TextEncoder().encode(
+        JSON.stringify({
+          choices: [
+            { finish_reason: 'stop', message: { role: 'assistant', content: 'late body' } },
+          ],
+        }),
+      );
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(bytes);
+          },
+          pull(controller) {
+            now = NOW + 100;
+            controller.close();
+          },
+        }),
+        { headers: { 'content-type': 'application/json' } },
+      );
+    }),
+  });
+  expectAbstained(await instance.infer(request({ deadlineEpochMs: NOW + 50 })), 'TIMEOUT');
+});
+
+test('W05 rechecks the deadline at final caller delivery after operation settlement', async () => {
+  let now = NOW;
+  const instance = new LocalQwenInferenceClient({
+    now: () => {
+      now += 10;
+      return now;
+    },
+    transport: fakeFetch(async () => completion('deadline expires at delivery')),
+  });
+  expectAbstained(await instance.infer(request({ deadlineEpochMs: NOW + 45 })), 'TIMEOUT');
+});
+
+test(
+  'W05 losing clock observation still cleans up and quarantines the live response',
+  { timeout: 1_000 },
+  async () => {
+    const cleanup = deferred<undefined>();
+    let failNextClock = false;
+    let calls = 0;
+    let cancellations = 0;
+    const instance = new LocalQwenInferenceClient({
+      now: () => {
+        if (failNextClock) {
+          failNextClock = false;
+          throw new Error('private clock failure');
+        }
+        return NOW;
+      },
+      transport: fakeFetch(async () => {
+        calls += 1;
+        if (calls > 1) return completion('recovered');
+        failNextClock = true;
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            cancel() {
+              cancellations += 1;
+              return cleanup.promise;
+            },
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        );
+      }),
+    });
+    const timedOut = await instance.infer(request());
+    expectAbstained(timedOut, 'TIMEOUT');
+    assert.equal(JSON.stringify(timedOut).includes('private'), false);
+    assert.equal(cancellations, 1);
+    expectAbstained(await instance.infer(request()), 'BUSY');
+    assert.equal(calls, 1);
+    cleanup.resolve(undefined);
+    await nextTurn();
+    assert.equal((await instance.infer(request())).status, 'GENERATED');
+    assert.equal(calls, 2);
+  },
+);
+
+test(
+  'W05 bounds stalled reads and cleanup, retaining BUSY until cleanup settles',
+  { timeout: 1_000 },
+  async () => {
+    for (const oversized of [false, true]) {
+      const cleanup = deferred<undefined>();
+      let calls = 0;
+      let cancellations = 0;
+      const instance = client(
+        fakeFetch(async () => {
+          calls += 1;
+          if (calls > 1) return completion('after cleanup');
+          return new Response(
+            new ReadableStream<Uint8Array>({
+              start(controller) {
+                if (oversized) controller.enqueue(new Uint8Array(33_000));
+              },
+              cancel() {
+                cancellations += 1;
+                return cleanup.promise;
+              },
+            }),
+            { headers: { 'content-type': 'application/json' } },
+          );
+        }),
+      );
+      const timedOut = await instance.infer(request({ deadlineEpochMs: NOW + 20 }));
+      expectAbstained(timedOut, 'TIMEOUT');
+      assert.equal(cancellations, 1);
+      expectAbstained(await instance.infer(request()), 'BUSY');
+      assert.equal(calls, 1);
+      cleanup.resolve(undefined);
+      await nextTurn();
+      const next = await instance.infer(request());
+      assert.equal(next.status, 'GENERATED');
+      if (next.status === 'GENERATED') assert.equal(next.content, 'after cleanup');
+      assert.equal(calls, 2);
+      expectAbstained(timedOut, 'TIMEOUT');
+    }
+  },
+);
+
+test('W05 snapshots admitted route and manifest before awaiting transport', async () => {
+  const transportResult = deferred<Response>();
+  const input = request({ route: { ...route }, manifest: { ...manifest } });
+  const instance = client(fakeFetch(async () => transportResult.promise));
+  const pending = instance.infer(input);
+  (input.route as { strategyId: string }).strategyId = 'caller-mutated-after-dispatch';
+  (input.manifest as { modelSha256: string }).modelSha256 = 'caller-mutated-after-dispatch';
+  transportResult.resolve(completion());
+  const result = await pending;
+  assert.equal(result.status, 'GENERATED');
+  if (result.status === 'GENERATED') {
+    assert.equal(result.strategyId, LOCAL_QWEN_STRATEGY_ID);
+    assert.equal(result.modelSha256, QWEN35_2B_Q4_K_M_SHA256);
+  }
+  expectNoAuthority(result);
 });
 
 test('prompt injection remains inert text; it cannot become a tool request', async () => {
