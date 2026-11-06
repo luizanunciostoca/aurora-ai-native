@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aurora.local/schemas/dp5-physical-campaign-v1.json",
+  "title": "Aurora W15-J DP5 Physical Test Campaign",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "campaignId",
+    "status",
+    "operator",
+    "tuple",
+    "scenarios",
+    "findings",
+    "waivers",
+    "regressions",
+    "physicalAcceptance",
+    "w15jAccepted",
+    "w16BuildUnblocked"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "dp5-physical-campaign-v1" },
+    "campaignId": { "type": "string", "minLength": 8 },
+    "status": { "enum": ["IN_PROGRESS", "COMPLETE_FOR_REVIEW"] },
+    "operator": { "type": "string", "minLength": 1 },
+    "physicalAcceptance": { "const": false },
+    "w15jAccepted": { "const": false },
+    "w16BuildUnblocked": { "const": false },
+    "tuple": {
+      "type": "object",
+      "required": ["candidateSha", "apk", "device", "environment", "provenance"],
+      "properties": {
+        "candidateSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "apk": {
+          "type": "object",
+          "required": ["applicationId", "variant", "versionCode", "versionName", "sha256"],
+          "properties": { "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+        },
+        "device": {
+          "type": "object",
+          "required": [
+            "serialSha256",
+            "manufacturer",
+            "model",
+            "product",
+            "apiLevel",
+            "buildFingerprint",
+            "physicalDeviceVerified"
+          ],
+          "properties": {
+            "serialSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "physicalDeviceVerified": { "const": true }
+          }
+        }
+      }
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 48,
+      "maxItems": 48,
+      "items": { "$ref": "#/$defs/scenario" }
+    },
+    "findings": { "type": "array", "items": { "$ref": "#/$defs/annotation" } },
+    "waivers": { "type": "array", "items": { "$ref": "#/$defs/annotation" } },
+    "regressions": { "type": "array", "items": { "$ref": "#/$defs/annotation" } }
+  },
+  "$defs": {
+    "annotation": {
+      "type": "object",
+      "required": ["id", "recordedAtUtc", "text"],
+      "properties": {
+        "id": { "type": "string" },
+        "recordedAtUtc": { "type": "string", "format": "date-time" },
+        "text": { "type": "string", "minLength": 1 },
+        "reference": { "type": ["string", "null"] }
+      }
+    },
+    "scenario": {
+      "type": "object",
+      "required": [
+        "id",
+        "path",
+        "name",
+        "category",
+        "apkVersion",
+        "commitSha",
+        "deviceIdentity",
+        "preconditions",
+        "setup",
+        "actions",
+        "expectedResult",
+        "expectedSignals",
+        "forbiddenSignals",
+        "timeoutMs",
+        "telemetryRequirements",
+        "requiredLogs",
+        "screenshotEvidence",
+        "receiptsRequired",
+        "timestampsRequired",
+        "monotonicTimingRequired",
+        "status",
+        "failureCause",
+        "evidenceReferences",
+        "cleanup",
+        "retryPolicy",
+        "manualActions",
+        "automationCollectors",
+        "humanVerdictRequired",
+        "attempts"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^DP5-[A-Z]+-[0-9]{3}$" },
+        "path": { "type": "string", "minLength": 3 },
+        "status": { "enum": ["NOT_RUN", "PASS", "FAIL", "BLOCKED"] },
+        "failureCause": { "type": ["string", "null"] },
+        "humanVerdictRequired": { "const": true },
+        "timestampsRequired": { "const": true },
+        "timeoutMs": { "type": "integer", "minimum": 1000 },
+        "attempts": { "type": "array", "items": { "$ref": "#/$defs/attempt" } }
+      }
+    },
+    "attempt": {
+      "type": "object",
+      "required": ["attempt", "status", "correlationId", "startedAtUtc", "startedMonotonicNs"],
+      "properties": {
+        "attempt": { "type": "integer", "minimum": 1 },
+        "status": { "enum": ["STARTED", "FINISHED"] },
+        "correlationId": { "type": "string", "minLength": 8 },
+        "startedAtUtc": { "type": "string", "format": "date-time" },
+        "startedMonotonicNs": { "type": "string", "pattern": "^[0-9]+$" },
+        "operatorVerdict": { "enum": ["PASS", "FAIL", "BLOCKED", null] }
+      }
+    }
+  }
+}

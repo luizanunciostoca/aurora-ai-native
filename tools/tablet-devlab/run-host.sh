@@ -1,0 +1,155 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -euo pipefail
+
+fail() {
+  printf 'Aurora Tablet-Only host start failed: %s\n' "$*" >&2
+  exit 2
+}
+
+secure_regular_file() {
+  local path="$1"
+  [[ -f "$path" && ! -L "$path" ]] || return 1
+  local mode
+  mode="$(stat -c '%a' "$path")"
+  [[ "$mode" == "600" ]] || return 1
+  [[ "$(stat -c '%u' "$path")" == "$(id -u)" ]] || return 1
+}
+
+[[ "${PREFIX:-}" == "/data/data/com.termux/files/usr" ]] || fail "run inside Termux"
+command -v proot-distro >/dev/null 2>&1 || fail "proot-distro is missing"
+command -v git >/dev/null 2>&1 || fail "git is missing"
+command -v python >/dev/null 2>&1 || fail "python is missing"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEVLAB_ROOT="${AURORA_DEVLAB_ROOT:-$HOME/aurora-devlab}"
+HOST_DIR="$DEVLAB_ROOT/worktrees/host"
+PROVIDER="$DEVLAB_ROOT/config/trusted-w15j-provider.mjs"
+MATERIAL="$DEVLAB_ROOT/config/w15j-dp5-material.json"
+READINESS_PARENT="$DEVLAB_ROOT/host-readiness"
+STATE_DIR="$DEVLAB_ROOT/state"
+WORKTREE_STATE="$STATE_DIR/worktrees.txt"
+DB_ENV="$STATE_DIR/postgres.env"
+BOOTSTRAP_REFRESH_FILE="$STATE_DIR/w15j-bootstrap-refresh.json"
+BOOTSTRAP_RECONNECT_FILE="$STATE_DIR/w15j-bootstrap-reconnect.json"
+PREBUILD_VERIFY="$SCRIPT_DIR/verify-host-prebuild.sh"
+USE_PREBUILT="${AURORA_W15J_USE_PREBUILT:-NO}"
+NODE_VERSION="22.16.0"
+NPM_VERSION="10.9.2"
+MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS=240
+
+[[ -d "$HOST_DIR/.git" || -f "$HOST_DIR/.git" ]] || fail "exact host worktree is missing; run worktrees.sh"
+secure_regular_file "$WORKTREE_STATE" || fail "trusted worktree state missing or insecure; run worktrees.sh"
+secure_regular_file "$DB_ENV" || fail "PostgreSQL state missing or insecure; run setup-postgres.sh"
+secure_regular_file "$PROVIDER" || fail "trusted provider missing or insecure; run prepare-dp5-provider.sh"
+secure_regular_file "$MATERIAL" || fail "DP5 material missing or insecure; run prepare-dp5-provider.sh"
+[[ "$USE_PREBUILT" == "NO" || "$USE_PREBUILT" == "YES" ]] || fail "AURORA_W15J_USE_PREBUILT must be YES or NO"
+if [[ "$USE_PREBUILT" == "YES" ]]; then
+  [[ -x "$PREBUILD_VERIFY" ]] || fail "host prebuild verifier is missing"
+  bash "$PREBUILD_VERIFY" || fail "verified host prebuild is unavailable or stale"
+fi
+
+HOST_SHA="$(git -C "$HOST_DIR" rev-parse HEAD)"
+STATE_HOST_SHA="$(awk -F= '$1 == "host" {print $2}' "$WORKTREE_STATE")"
+[[ "$STATE_HOST_SHA" =~ ^[a-f0-9]{40}$ ]] || fail "worktree state host SHA is malformed"
+EXPECTED_HOST_SHA="${AURORA_HOST_SHA:-$STATE_HOST_SHA}"
+[[ "$EXPECTED_HOST_SHA" =~ ^[a-f0-9]{40}$ ]] || fail "expected host SHA is malformed"
+[[ "$HOST_SHA" == "$EXPECTED_HOST_SHA" ]] || fail "host worktree is $HOST_SHA, expected $EXPECTED_HOST_SHA"
+[[ -z "$(git -C "$HOST_DIR" status --porcelain)" ]] || fail "host worktree must be clean"
+
+grep -q 'TABLET_DEVLAB_PROVIDER_NOT_CONFIGURED' "$PROVIDER" && \
+  fail "provider is still the fail-closed template; run prepare-dp5-provider.sh"
+
+python "$SCRIPT_DIR/check-bootstrap-principal-age.py" "$MATERIAL" "$MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS" || \
+  fail "DP5 material is too old for safe W14 bootstrap start; create fresh consent/provider material"
+
+mkdir -p "$READINESS_PARENT" "$STATE_DIR"
+chmod 700 "$READINESS_PARENT" "$STATE_DIR"
+for bootstrap_control_file in "$BOOTSTRAP_REFRESH_FILE" "$BOOTSTRAP_RECONNECT_FILE"; do
+  if [[ -e "$bootstrap_control_file" ]]; then
+    secure_regular_file "$bootstrap_control_file" || fail "stale bootstrap control file is insecure"
+    rm -f -- "$bootstrap_control_file"
+  fi
+done
+
+# Fail before the provider can stage W03 state when a stale LOCAL host already owns the fixed ports.
+# Socket bind is used instead of /proc/ss because Android may hide PRoot listener ownership.
+python - <<'PY_PORTS' || fail "fixed LOCAL ports 8080/8081 are unavailable; stop the stale host before retrying"
+import socket
+
+sockets = []
+try:
+    for port in (8080, 8081):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(('127.0.0.1', port))
+        except OSError as error:
+            print(f'AURORA_W15J_FIXED_PORT_PRECHECK=OCCUPIED port={port} errno={error.errno}')
+            sock.close()
+            raise SystemExit(41)
+        sockets.append(sock)
+finally:
+    for sock in sockets:
+        sock.close()
+PY_PORTS
+RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
+READINESS_DIR="$READINESS_PARENT/$RUN_ID"
+[[ ! -e "$READINESS_DIR" ]] || fail "readiness path unexpectedly exists: $READINESS_DIR"
+printf '%s\n' "$READINESS_DIR" >"$STATE_DIR/last-readiness-termux.txt"
+chmod 600 "$STATE_DIR/last-readiness-termux.txt"
+
+# The trusted #462 runner requires /usr/bin/git to be root-owned. On Android/PRoot, the synthetic
+# Debian root identity exposes the Debian filesystem with uid=0 while providing no Android root or
+# kernel privilege escalation. Keep Aurora's HOME/NVM runtime under /home/aurora, and use this
+# synthetic root identity only for the governed host process so the existing trusted-Git invariant
+# remains unchanged.
+proot-distro login debian \
+  --bind "$DEVLAB_ROOT:/aurora-devlab" \
+  -- bash -lc "
+set -euo pipefail
+export HOME=/home/aurora
+export NVM_DIR=/home/aurora/.nvm
+# shellcheck disable=SC1090
+source \"\$NVM_DIR/nvm.sh\"
+nvm use $NODE_VERSION >/dev/null
+[[ \"\$(node --version)\" == \"v$NODE_VERSION\" ]]
+[[ \"\$(npm --version)\" == \"$NPM_VERSION\" ]]
+[[ \"\$(id -u)\" == \"0\" ]]
+[[ \"\$(stat -c '%u' /usr/bin/git)\" == \"0\" ]]
+cd /aurora-devlab/worktrees/host
+
+# The runner intentionally disables system/global Git config. Bind only this exact worktree as safe
+# through process-local Git config; never use wildcard safe-directory trust and never persist trust outside this process.
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=safe.directory
+export GIT_CONFIG_VALUE_0=/aurora-devlab/worktrees/host
+
+[[ \"\$(git rev-parse HEAD)\" == '$EXPECTED_HOST_SHA' ]]
+[[ -z \"\$(git status --porcelain)\" ]]
+
+set -a
+# shellcheck disable=SC1091
+source /aurora-devlab/state/postgres.env
+set +a
+[[ \"\${AURORA_W15J_DATABASE_URL:-}\" == postgresql://* || \"\${AURORA_W15J_DATABASE_URL:-}\" == postgres://* ]]
+export AURORA_W15J_DP5_MATERIAL=/aurora-devlab/config/w15j-dp5-material.json
+export AURORA_W15J_PROVIDER_MODULE=/aurora-devlab/config/trusted-w15j-provider.mjs
+export AURORA_W15J_HOST_READINESS_DIR=/aurora-devlab/host-readiness/$RUN_ID
+export AURORA_W15J_BOOTSTRAP_REFRESH_FILE=/aurora-devlab/state/w15j-bootstrap-refresh.json
+export AURORA_W15J_BOOTSTRAP_RECONNECT_FILE=/aurora-devlab/state/w15j-bootstrap-reconnect.json
+
+if [[ '$USE_PREBUILT' == 'YES' ]]; then
+  echo W15J_HOST_BUILD_MODE=VERIFIED_PREBUILT
+else
+  npm ci
+  # The external provider imports only freshly compiled canonical owners from this exact host HEAD.
+  # Do not rely on residual dist output from a previous run.
+  npm run build --workspace @aurora/contracts
+  npm run build --workspace @aurora/events
+  npm run build --workspace @aurora/policy-core
+  ./node_modules/.bin/tsc --project services/executors/tsconfig.build.json --pretty false
+  ./node_modules/.bin/tsc --project services/mobile-gateway/tsconfig.runtime.json --pretty false
+fi
+python3 /aurora-devlab/worktrees/devlab/tools/tablet-devlab/check-bootstrap-principal-age.py /aurora-devlab/config/w15j-dp5-material.json $MAX_BOOTSTRAP_PRINCIPAL_AGE_SECONDS
+node tools/physical/run-w15j-local-host.mjs
+"

@@ -61,7 +61,18 @@ const controlTests = [];
 collectTests(resolve(repoRoot, 'packages/control/test'), controlTests);
 controlTests.sort();
 
-const testFiles = ['tools/test/smoke.test.mjs', ...controlTests];
+const testFiles = [
+  'tools/test/smoke.test.mjs',
+  'tools/test/tablet-devlab.test.mjs',
+  'tools/test/tablet-devlab-postgres-termux.test.mjs',
+  'tools/test/tablet-devlab-debian-user.test.mjs',
+  'tools/test/tablet-devlab-node-runtime.test.mjs',
+  'tools/test/tablet-devlab-jq-boolean.test.mjs',
+  'tools/test/tablet-devlab-self-binding.test.mjs',
+  'tools/test/tablet-devlab-dossier-lifecycle.test.mjs',
+  'tools/test/tablet-devlab-dp5-campaign.test.mjs',
+  ...controlTests,
+];
 let status = run(process.execPath, ['--experimental-strip-types', '--test', ...testFiles]);
 
 const executorTests = [];

@@ -34,3 +34,6 @@ reference/source-archives/*.zip
 # Generated media/runtime outputs
 **/output/
 **/tmp/
+
+# Local auxiliary Git worktrees are runtime tooling, never repository content
+/worktrees/
