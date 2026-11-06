@@ -169,17 +169,17 @@
     },
     {
       "id": "W15-J",
-      "title": "W15-J - Physical Device Integration, Security & Acceptance",
+      "title": "W15-J - Physical Integration & First-Experience Smoke Acceptance",
       "dependsOn": ["W15-H", "W15-I"],
       "customAgent": "aurora-integration",
       "actions": [
-        "1. Run physical Android integration across lifecycle, registration/session, native/app capabilities, permission denial, offline/reconnect and voice.",
-        "2. Test missing app, revoked session, stale capability, duplicate command, late receipt, EXECUTION_UNCERTAIN and kill switch.",
-        "3. Run four Risk Gates plus device-specific threat scenarios owned now vs deferred to W19.",
-        "4. Run performance/battery/resource observations appropriate to tablet target.",
-        "5. Close DP4/DP5 only with exact-head evidence and W14/W17 handoffs."
+        "1. Run eight genuine representative-tablet physical Experience Gate scenarios EX-01..EX-08, including install, W14 session, basic voice, one governed native effect and Receipt/Evidence/readback.",
+        "2. Prove bounded DENY, cancel/kill, offline/reconnect, dedupe, restart and EXECUTION_UNCERTAIN fail-closed behavior; never turn an unavailable observation into PASS.",
+        "3. Reconcile exact Android/Host/DevLab/APK provenance, Quality/Test Build/Security, scoped Risk Gates A-D and Program Control physical smoke evidence.",
+        "4. Accept W15-J only after 8/8 physical PASS, controlled integration and post-merge checks; this releases W16 BUILD eligibility, not DP5 publication or Release 1.0.",
+        "5. Transfer the full original DP5 48-scenario and >=100-wake certification dossier to W20-H / DP7; preserve existing validators and evidence requirements."
       ],
-      "ownership": "W15 integration/physical acceptance.",
+      "ownership": "W15 integration and physical first-experience smoke acceptance; full DP5/DP7 certification remains W20-H-owned.",
       "forbidden": "Do not claim Release 1.0; final device security/release remains W19/W20."
     }
   ]

@@ -4,7 +4,7 @@
   "wave": "W16",
   "defaults": {
     "mode": "IMPLEMENTATION",
-    "sourceDependencies": "W14-W15 accepted as applicable plus upstream read models/evidence",
+    "sourceDependencies": "W14-H accepted plus the re-scoped W15-J physical Experience Gate accepted on exact main; full DP5 remains required at W20-H",
     "mission": "Schema-driven workspace and desktop/web control surfaces for progress, approvals, evidence, budgets, latency/cost and routing/cache/template summaries; UI is never authority and never exposes private chain-of-thought.",
     "sources": [
       "- Developer Manual v0.5 ss. 21, 26, 29-34",
@@ -20,7 +20,7 @@
       "dependsOn": ["W14-H", "W15-J"],
       "customAgent": "aurora-coordinator",
       "actions": [
-        "1. Revalidate W14/W15 and upstream read/evidence contracts.",
+        "1. Revalidate accepted W14 and re-scoped W15-J Experience Gate evidence plus upstream read/request/evidence contracts; do not infer final DP5 certification.",
         "2. Freeze workspace views, command/control boundaries and ownership.",
         "3. Define which UI actions create requests vs display state; UI must never mint authority.",
         "4. Define schema-driven component strategy and desktop/web packaging.",

@@ -11,6 +11,17 @@ val auroraReleaseTupleId = providers.environmentVariable("AURORA_RELEASE_TUPLE_I
 val auroraLocalGatewayOrigin =
     providers.environmentVariable("AURORA_LOCAL_GATEWAY_ORIGIN").orElse("http://10.0.2.2:8080").get()
 
+// Packaging opt-in only. It never enables inference or creates an application/voice binding.
+val auroraNativePreparation =
+    providers.gradleProperty("auroraNativePreparation").orElse("false").get().let {
+        require(it == "true" || it == "false") { "auroraNativePreparation must be true or false" }
+        it == "true"
+    }
+val auroraLlamaSource = providers.environmentVariable("AURORA_LLAMA_SOURCE_DIR").orNull
+require(!auroraNativePreparation || !auroraLlamaSource.isNullOrBlank()) {
+    "native preparation requires the separately checked-out, pinned AURORA_LLAMA_SOURCE_DIR"
+}
+
 val physicalDevSigningEnvironment =
     listOf(
         "AURORA_PHYSICAL_DEV_KEYSTORE",
@@ -20,6 +31,9 @@ val physicalDevSigningEnvironment =
     )
 val physicalDevSigningRequested =
     physicalDevSigningEnvironment.any { providers.environmentVariable(it).isPresent }
+require(!auroraNativePreparation || !physicalDevSigningRequested) {
+    "native preparation is LOCAL debug only; physical signing is outside this preparation gate"
+}
 
 // The physical-development signing lane handles persistent key material. Never resolve those values
 // into AGP's signing model while Gradle configuration caching is active, because the configured model
@@ -66,6 +80,31 @@ android {
         buildConfigField("String", "AURORA_RELEASE_TUPLE_ID", buildConfigString(auroraReleaseTupleId))
         buildConfigField("String", "AURORA_SIGNING_PROFILE", "\"NON_PHYSICAL\"")
         buildConfigField("boolean", "AURORA_PHYSICAL_ACCEPTANCE_CONTROLS", "false")
+        // No property or environment override: changing activation requires a separately reviewed gate.
+        buildConfigField("boolean", "AURORA_NATIVE_INFERENCE_ENABLED", "false")
+        buildConfigField("boolean", "AURORA_NATIVE_COMPONENT_PACKAGED", auroraNativePreparation.toString())
+        if (auroraNativePreparation) {
+            ndk { abiFilters += "arm64-v8a" }
+            externalNativeBuild {
+                cmake {
+                    arguments += listOf(
+                        "-DAURORA_LLAMA_SOURCE_DIR=${checkNotNull(auroraLlamaSource)}",
+                        "-DANDROID_STL=c++_shared",
+                    )
+                    targets += "aurora_llama"
+                }
+            }
+        }
+    }
+
+    if (auroraNativePreparation) {
+        ndkVersion = "29.0.13113456"
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.31.6"
+            }
+        }
     }
 
     if (physicalDevSigningConfigured) {
@@ -150,6 +189,13 @@ android {
 // available only to LOCAL by disabling the impossible stagingPhysicalDev/productionPhysicalDev
 // combinations through the supported variant API.
 androidComponents {
+    beforeVariants(selector().all()) { variantBuilder ->
+        if (auroraNativePreparation &&
+            (variantBuilder.buildType != "debug" ||
+                !variantBuilder.productFlavors.contains("environment" to "local"))) {
+            variantBuilder.enable = false
+        }
+    }
     beforeVariants(selector().withBuildType("physicalDev")) { variantBuilder ->
         if (!variantBuilder.productFlavors.contains("environment" to "local")) {
             variantBuilder.enable = false
