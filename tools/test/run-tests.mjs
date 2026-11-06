@@ -94,6 +94,10 @@ const contextTests = [];
 collectTests(resolve(repoRoot, 'packages/context/test'), contextTests);
 contextTests.sort();
 
+const cortexTests = [];
+collectTests(resolve(repoRoot, 'packages/cortex/test'), cortexTests);
+cortexTests.sort();
+
 const providerTests = [];
 collectTests(resolve(repoRoot, 'packages/providers/test'), providerTests);
 providerTests.sort();
@@ -109,6 +113,7 @@ if (
     n8nBridgeTests.length > 0 ||
     mobileGatewayTests.length > 0 ||
     contextTests.length > 0 ||
+    cortexTests.length > 0 ||
     providerTests.length > 0 ||
     revenueTests.length > 0)
 ) {
@@ -141,6 +146,10 @@ if (status === 0) {
 }
 
 if (status === 0) {
+  status = compileAndRunServiceTests('packages/cortex', cortexTests);
+}
+
+if (status === 0) {
   status = compileAndRunServiceTests('packages/providers', providerTests);
 }
 
@@ -150,6 +159,6 @@ if (status === 0) {
 
 const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
 console.log(
-  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} context_tests=${contextTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
+  `[aurora:test] control_tests=${controlTests.length} executor_tests=${executorTests.length} agent_runtime_tests=${agentRuntimeTests.length} n8n_bridge_tests=${n8nBridgeTests.length} mobile_gateway_tests=${mobileGatewayTests.length} context_tests=${contextTests.length} cortex_tests=${cortexTests.length} provider_tests=${providerTests.length} revenue_tests=${revenueTests.length} duration_ms=${durationMs.toFixed(2)} exit_code=${status}`,
 );
 process.exit(status);

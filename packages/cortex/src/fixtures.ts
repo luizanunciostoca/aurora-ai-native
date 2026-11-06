@@ -1,0 +1,86 @@
+import type { CortexSnapshot } from './contracts.js';
+
+export const CORTEX_DEMO_SNAPSHOT: CortexSnapshot = {
+  schemaVersion: 'w16-prebuild.v1',
+  generatedAt: '2026-09-17T18:00:00.000Z',
+  connection: 'MOCK',
+  viewState: 'READY',
+  entities: [
+    {
+      id: 'agent:planner',
+      kind: 'AGENT',
+      title: 'Planner',
+      subtitle: 'Read-only prebuild projection',
+      status: 'AVAILABLE',
+      updatedAt: '2026-09-17T17:59:00.000Z',
+    },
+    {
+      id: 'system:dp5-gate',
+      kind: 'SYSTEM',
+      title: 'W15-J / DP5 gate',
+      subtitle: 'Physical acceptance remains external to Cortex prebuild',
+      status: 'NOT_ACCEPTED',
+      updatedAt: '2026-09-17T17:58:00.000Z',
+    },
+  ],
+  timeline: [
+    {
+      id: 'event:prebuild-ready',
+      occurredAt: '2026-09-17T17:59:30.000Z',
+      category: 'PREBUILD',
+      severity: 'INFO',
+      title: 'Cortex headless foundation loaded',
+      entityRefs: ['agent:planner'],
+    },
+    {
+      id: 'event:dp5-still-pending',
+      occurredAt: '2026-09-17T17:58:30.000Z',
+      category: 'GATE',
+      severity: 'NOTICE',
+      title: 'DP5 remains not accepted',
+      entityRefs: ['system:dp5-gate'],
+    },
+  ],
+  searchDocuments: [
+    {
+      id: 'doc:planner',
+      entityId: 'agent:planner',
+      title: 'Planner agent',
+      body: 'Planning projection for Cortex prebuild demonstrations.',
+      keywords: ['planner', 'agent', 'planning'],
+      route: 'OVERVIEW',
+    },
+    {
+      id: 'doc:dp5',
+      entityId: 'system:dp5-gate',
+      title: 'DP5 gate',
+      body: 'W15-J physical acceptance is not represented by mock Cortex evidence.',
+      keywords: ['dp5', 'w15-j', 'gate'],
+      route: 'SYSTEM',
+    },
+  ],
+  commands: [
+    {
+      id: 'navigate.overview',
+      labelRef: 'cortex.command.navigateOverview',
+      keywords: ['overview', 'home'],
+      shortcut: 'G O',
+      mode: 'NAVIGATE',
+      route: 'OVERVIEW',
+      enabled: true,
+      authorizesExecution: false,
+    },
+    {
+      id: 'preview.runtime-connection',
+      labelRef: 'cortex.command.previewRuntimeConnection',
+      keywords: ['runtime', 'connection', 'adapter'],
+      mode: 'PREVIEW_ONLY',
+      enabled: true,
+      authorizesExecution: false,
+    },
+  ],
+  physicalAcceptance: false,
+  authorizesExecution: false,
+  provesExecutionSuccess: false,
+  retryAuthorized: false,
+};
