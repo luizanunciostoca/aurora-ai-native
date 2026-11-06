@@ -261,6 +261,78 @@ const LOCAL_QWEN_UNVERIFIED_OBSERVATION: StrategyAvailabilityObservation = {
   source: 'W05F_LOCAL_MODEL_NOT_VERIFIED',
 };
 
+/** Consume only the projection's data fields, never accessors or extra metadata. */
+function snapshotLocalQwenData(
+  value: unknown,
+  fields: readonly string[],
+): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const snapshot = Object.create(null) as Record<string, unknown>;
+  for (const field of fields) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, field);
+    if (!descriptor) continue;
+    if (!('value' in descriptor)) return null;
+    snapshot[field] = descriptor.value as unknown;
+  }
+  return snapshot;
+}
+
+/** Preserve explicit fallback order without retaining a caller-owned array or iterator. */
+function snapshotLocalQwenFallbacks(value: unknown): string[] | null {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+  if (!lengthDescriptor || !('value' in lengthDescriptor)) return null;
+  const length: unknown = lengthDescriptor.value;
+  if (typeof length !== 'number' || !Number.isSafeInteger(length) || length < 0) return null;
+
+  // Refuse sparse input before iterating an attacker-controlled length. Extra
+  // methods/metadata are not consumed, including Symbol.iterator accessors.
+  const indices = Reflect.ownKeys(value).filter(
+    (key) => typeof key === 'string' && /^(0|[1-9][0-9]*)$/.test(key) && Number(key) < length,
+  );
+  if (indices.length !== length) return null;
+  const copied: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+    if (!descriptor || !('value' in descriptor) || typeof descriptor.value !== 'string')
+      return null;
+    copied.push(descriptor.value);
+  }
+  return copied;
+}
+
+function snapshotLocalQwenRequest(value: unknown): {
+  nowEpochMs: unknown;
+  health: Record<string, unknown> | undefined;
+  fallbackStrategyIds: readonly string[];
+} | null {
+  try {
+    const request = snapshotLocalQwenData(value, ['nowEpochMs', 'health', 'fallbackStrategyIds']);
+    if (!request) return null;
+    const fallbackStrategyIds = snapshotLocalQwenFallbacks(request.fallbackStrategyIds);
+    if (!fallbackStrategyIds) return null;
+    const health =
+      request.health === undefined
+        ? undefined
+        : snapshotLocalQwenData(request.health, [
+            'source',
+            'state',
+            'observedAt',
+            'maxAgeMs',
+            'modelIntegrityVerified',
+            'endpointIdentityVerified',
+            'authorizesExecution',
+          ]);
+    if (health === null) return null;
+    return { nowEpochMs: request.nowEpochMs, health, fallbackStrategyIds };
+  } catch {
+    // Reflection can fail on revoked/hostile proxies. Invalid ingress must not
+    // preserve selectable health or expose private exception details.
+    return null;
+  }
+}
+
 /**
  * Create one optional descriptor in the canonical W05-E registry. Without a
  * current, separately attested runtime projection it remains unselectable.
@@ -270,19 +342,16 @@ const LOCAL_QWEN_UNVERIFIED_OBSERVATION: StrategyAvailabilityObservation = {
 export function createLocalQwenStrategyDescriptor(
   request: LocalQwenDescriptorRequest,
 ): StrategyDescriptor {
-  const health = request?.health;
-  const healthObservation: StrategyAvailabilityObservation | undefined = health
-    ? {
-        state: health.state,
-        observedAt: health.observedAt,
-        maxAgeMs: health.maxAgeMs,
-        source: health.source,
-      }
-    : undefined;
-  const currentState =
+  const snapshot = snapshotLocalQwenRequest(request);
+  const health = snapshot?.health;
+  let observation = LOCAL_QWEN_UNVERIFIED_OBSERVATION;
+  if (
+    snapshot &&
     health &&
-    healthObservation &&
-    Number.isSafeInteger(request?.nowEpochMs) &&
+    typeof snapshot.nowEpochMs === 'number' &&
+    Number.isSafeInteger(snapshot.nowEpochMs) &&
+    typeof health.observedAt === 'string' &&
+    typeof health.maxAgeMs === 'number' &&
     Number.isSafeInteger(health.maxAgeMs) &&
     health.maxAgeMs >= 0 &&
     health.maxAgeMs <= LOCAL_QWEN_MAX_AGE_MS &&
@@ -291,14 +360,22 @@ export function createLocalQwenStrategyDescriptor(
     health.authorizesExecution === false &&
     health.source === 'W05F_VERIFIED_LOCAL_MODEL_HEALTH' &&
     (health.state === 'AVAILABLE' || health.state === 'DEGRADED' || health.state === 'UNAVAILABLE')
-      ? evaluateStrategyAvailability(healthObservation, request.nowEpochMs)
-      : null;
-  const observation =
-    currentState === 'CURRENT_AVAILABLE' ||
-    currentState === 'CURRENT_DEGRADED' ||
-    currentState === 'UNAVAILABLE'
-      ? (healthObservation ?? LOCAL_QWEN_UNVERIFIED_OBSERVATION)
-      : LOCAL_QWEN_UNVERIFIED_OBSERVATION;
+  ) {
+    const healthObservation: StrategyAvailabilityObservation = {
+      state: health.state,
+      observedAt: health.observedAt,
+      maxAgeMs: health.maxAgeMs,
+      source: health.source,
+    };
+    const currentState = evaluateStrategyAvailability(healthObservation, snapshot.nowEpochMs);
+    if (
+      currentState === 'CURRENT_AVAILABLE' ||
+      currentState === 'CURRENT_DEGRADED' ||
+      currentState === 'UNAVAILABLE'
+    ) {
+      observation = healthObservation;
+    }
+  }
 
   return {
     strategyId: 'aurora.local.qwen35.2b',
@@ -311,8 +388,9 @@ export function createLocalQwenStrategyDescriptor(
       taskClasses: ['INFORMATIONAL', 'GENERATIVE'],
       reasoningLevels: ['L1', 'L2', 'L3'],
     },
-    availability: observation,
-    fallbackStrategyIds: request?.fallbackStrategyIds ?? [],
+    // Never let a consumer mutate the shared UNKNOWN default for later calls.
+    availability: { ...observation },
+    fallbackStrategyIds: snapshot?.fallbackStrategyIds ?? [],
   };
 }
 
