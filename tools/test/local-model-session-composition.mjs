@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -14,9 +15,11 @@ import { fileURLToPath } from 'node:url';
 // W14 managers and W02/W05/W06 producers/consumers are real compiled modules.
 // The retained legacy fault cases inject a synthetic preparation source; the
 // separately labelled current-producer cases exercise the concrete new source.
-// Authentication, attestation, upstream owner records/readers, source adapters,
-// model health/manifest and transport remain explicit synthetic fixtures.
-// Neither case class is physical/native proof or an authenticated data-owner store.
+// The institutional cases add real, owner-selected authored PUBLIC text and the
+// actual private Memory Fabric adapter. Their lifecycle projections, authentication,
+// attestation, policy/consent, upstream owner records/readers, model health/manifest
+// and transport remain explicitly synthetic fixtures. A test promotion is not a
+// current data-owner grant. No case class is physical/native or runtime-owner proof.
 assert.equal(process.version, 'v22.16.0', 'use the pinned Node 22.16.0 runtime');
 const arguments_ = process.argv.slice(2);
 const allowDirtyPreparation = arguments_.includes('--allow-dirty-preparation');
@@ -59,6 +62,20 @@ const sourceArtifacts = [
   ],
   ['packages/context/src/query/validate.ts', 'packages/context/dist/query/validate.js'],
   ['packages/context/src/sources/acquire.ts', 'packages/context/dist/sources/acquire.js'],
+  [
+    'packages/context/src/sources/aurora-institutional-content.ts',
+    'packages/context/dist/sources/aurora-institutional-content.js',
+  ],
+  [
+    'packages/context/src/sources/public-institutional-memory-source.ts',
+    'packages/context/dist/sources/public-institutional-memory-source.js',
+  ],
+  ['packages/context/src/memory-fabric/fabric.ts', 'packages/context/dist/memory-fabric/fabric.js'],
+  ['packages/context/src/memory-fabric/types.ts', 'packages/context/dist/memory-fabric/types.js'],
+  [
+    'packages/context/src/memory-boundaries/model.ts',
+    'packages/context/dist/memory-boundaries/model.js',
+  ],
   ['packages/contracts/src/consent/index.ts', 'packages/contracts/dist/consent/index.js'],
   ['packages/policy/src/index.ts', 'packages/policy/dist/packages/policy/src/index.js'],
   [
@@ -185,6 +202,15 @@ const { compilePublicLocalModelPrompt } = from(
 const { CurrentPublicModelContext } = from(
   'packages/context/dist/minimal-context/current-public-model-context.js',
 );
+const { AURORA_INSTITUTIONAL_CONTENT } = from(
+  'packages/context/dist/sources/aurora-institutional-content.js',
+);
+const { prepareInstitutionalPublicMemorySource, PUBLIC_INSTITUTIONAL_ADAPTER_ID } = from(
+  'packages/context/dist/sources/public-institutional-memory-source.js',
+);
+const { createMemoryFabricSnapshot, stageMemoryProposal, transitionMemoryProjection } = from(
+  'packages/context/dist/memory-fabric/fabric.js',
+);
 const { createSessionBoundKeyedLocalModel } = from(
   'services/agent-runtime/dist/runtime/session-bound-local-model.js',
 );
@@ -234,6 +260,7 @@ const CREDENTIAL = 'FIXTURE_AUTHENTICATION_NOT_A_REAL_CREDENTIAL';
 const TOKEN = 'FIXTURE_MODEL_TOKEN_NOT_A_REAL_CREDENTIAL_'.padEnd(64, 'x');
 const PUBLIC_TEXT = 'Horário público de atendimento: 09:00 às 18:00.';
 const GENERATED_TEXT = 'Atendimento público: 09:00 às 18:00.';
+const INSTITUTIONAL_SYNTHETIC_REPLY = 'SYNTHETIC_COMPLETION_NOT_A_REAL_MODEL_RESULT';
 const at = (epoch) => new Date(epoch).toISOString();
 const totals = {
   credentialReads: 0,
@@ -247,6 +274,7 @@ const totals = {
   currentContextAdapterReads: 0,
   currentSourceReads: 0,
   currentStrategySelections: 0,
+  institutionalSnapshotReads: 0,
 };
 const results = [];
 const cases = [];
@@ -254,6 +282,12 @@ const scenario = (name, run) =>
   cases.push({ name, run, coverage: 'LEGACY_INJECTED_PREPARATION_BOUNDARY_REGRESSION' });
 const currentProducerScenario = (name, run) =>
   cases.push({ name, run, coverage: 'ACTUAL_W02_W05_W06_CURRENT_PREPARATION_COMPOSITION' });
+const institutionalScenario = (name, run) =>
+  cases.push({
+    name,
+    run,
+    coverage: 'REAL_AUTHORED_PUBLIC_CONTENT_WITH_SYNTHETIC_MEMORY_AND_AUTHORITY_FIXTURES',
+  });
 
 function noAuthority(value, gateway = false) {
   eq(value.authorizesExecution, false);
@@ -507,10 +541,10 @@ function makePrompt(binding, now, options) {
   return prompt;
 }
 
-function completion(withTools = false) {
+function completion(withTools = false, content = GENERATED_TEXT) {
   const message = {
     role: 'assistant',
-    content: GENERATED_TEXT,
+    content,
     ...(withTools
       ? {
           tool_calls: [
@@ -530,6 +564,85 @@ function completion(withTools = false) {
 }
 
 /**
+ * Test-only Memory Fabric projection. The text is the real authored source; every
+ * tenant, lifecycle transition and validation/promotion reference here is synthetic.
+ * The real reducers neither persist nor authenticate an owning source. Using them
+ * in this fixture must never be reported as a runtime source-owner promotion.
+ */
+function makeSyntheticInstitutionalMemoryFixture(binding, observed, lifecycle = 'CANONICAL') {
+  const content = AURORA_INSTITUTIONAL_CONTENT;
+  const projectionReference = `fixture:institutional-projection:${binding.requestId}`;
+  const staged = stageMemoryProposal({
+    snapshot: createMemoryFabricSnapshot({ tenantId: binding.tenantId }),
+    maxDataClassification: 'PUBLIC',
+    proposal: {
+      kind: 'MemoryWriteProposal',
+      proposalReference: projectionReference,
+      memoryKey: content.memoryKey,
+      boundaryCandidate: {
+        boundary: 'COMPANY',
+        tenant: { tenantId: binding.tenantId },
+        classification: 'PUBLIC',
+        sourceOwner: 'COMPANY_KNOWLEDGE',
+        sourceReference: content.sourceReference,
+        provenanceReference: content.provenanceReference,
+        observedAt: at(observed - 1000),
+        conflictState: 'NONE',
+      },
+      producer: {
+        kind: 'SYSTEM',
+        producerReference: 'fixture:institutional-projection-not-a-live-owner',
+      },
+      content: { kind: 'TEXT', digest: content.sourceRevision, payload: content.text },
+    },
+  });
+  eq(staged.status, 'STAGED');
+  eq(staged.authorizesExecution, false);
+  eq(staged.snapshot.authorizesExecution, false);
+  eq(staged.record.lifecycle, 'CANDIDATE');
+  const memory = {
+    binding,
+    projectionReference,
+    snapshot: staged.snapshot,
+    readMode: 'CURRENT',
+    preparedAttempted: false,
+    prepared: null,
+    lastReadRequest: null,
+  };
+  ok(['CANDIDATE', 'VALIDATED', 'CANONICAL', 'REVOKED'].includes(lifecycle));
+  if (lifecycle !== 'CANDIDATE') transitionSyntheticInstitutionalMemory(memory, 'VALIDATED');
+  if (lifecycle === 'CANONICAL' || lifecycle === 'REVOKED')
+    transitionSyntheticInstitutionalMemory(memory, 'CANONICAL');
+  if (lifecycle === 'REVOKED') transitionSyntheticInstitutionalMemory(memory, 'REVOKED');
+  return memory;
+}
+
+function transitionSyntheticInstitutionalMemory(memory, to) {
+  const record = memory.snapshot.records.find(
+    (item) => item.projectionReference === memory.projectionReference,
+  );
+  ok(record, 'fixture transition must target an existing exact projection');
+  const transitioned = transitionMemoryProjection({
+    snapshot: memory.snapshot,
+    tenant: { tenantId: memory.binding.tenantId },
+    projectionReference: memory.projectionReference,
+    expectedLifecycleRevision: record.lifecycleRevision,
+    to,
+    evidenceReference: `fixture:institutional-${to.toLowerCase()}:${memory.binding.requestId}`,
+    ...(to === 'VALIDATED'
+      ? {
+          sourceCommitReference: AURORA_INSTITUTIONAL_CONTENT.sourceReference,
+          sourceCommitRevision: AURORA_INSTITUTIONAL_CONTENT.sourceRevision,
+        }
+      : {}),
+  });
+  eq(transitioned.applied, true);
+  eq(transitioned.authorizesExecution, false);
+  eq(transitioned.record.authorizesExecution, false);
+  memory.snapshot = transitioned.snapshot;
+}
+
+/**
  * These are deliberately synthetic upstream owner records/readers, NOT the implementation under
  * test. Policy decisions, context acquisition/minimization/prompt compilation and preparation
  * currentness are performed by the real W02/W05/W06 modules below. Record timestamps are captured
@@ -543,6 +656,8 @@ function currentOwnerFixture({
   rememberPreparation,
   fixture,
 }) {
+  const institutional = options.institutionalSourceFixture === true;
+  const adapterId = institutional ? PUBLIC_INSTITUTIONAL_ADAPTER_ID : ADAPTER;
   const entries = new Map();
   let currentEntry;
   const count = (name) => {
@@ -599,6 +714,9 @@ function currentOwnerFixture({
       classification: 'PUBLIC',
     };
     const policyReference = { reference: 'policy:current-producer:fixture', version: '1.0.0' };
+    const institutionalMemory = institutional
+      ? makeSyntheticInstitutionalMemoryFixture(bound, observed, options.institutionalLifecycle)
+      : null;
     const query = {
       kind: 'ContextQuery',
       schemaVersion: '1.0.0',
@@ -611,12 +729,13 @@ function currentOwnerFixture({
       consent: { ...consent.reference },
       maxDataClassification: 'PUBLIC',
       currentness: 'CURRENT_REQUIRED',
+      ...(institutional ? { deadline: { deadlineAt: at(bound.deadlineMs) } } : {}),
       selectors: [
         {
-          adapterId: ADAPTER,
+          adapterId,
           sourceClass: 'COMPANY_KNOWLEDGE',
-          key: 'documentRef',
-          value: 'public:42',
+          key: institutional ? 'projectionReference' : 'documentRef',
+          value: institutional ? institutionalMemory.projectionReference : 'public:42',
         },
       ],
       limits: { maxSourceFanout: 1, maxItemsPerSource: 2, maxTotalItems: 2 },
@@ -677,14 +796,16 @@ function currentOwnerFixture({
       expiresAtEpochMs: expires,
       query,
       policyEvaluation,
-      instruction: 'Resuma o horário público da empresa.',
+      instruction: institutional
+        ? 'Apresente a Aurora Córtex usando somente o texto institucional fornecido.'
+        : 'Resuma o horário público da empresa.',
       retrievalPolicy: {
         minimumTrustBps: 6000,
-        trustBpsByAdapter: { [ADAPTER]: 9500 },
+        trustBpsByAdapter: { [adapterId]: 9500 },
         maxAgeMsBySourceClass: { COMPANY_KNOWLEDGE: 60000 },
       },
       compilerLimits: { maxItems: 2, maxCanonicalUnits: 100000 },
-      allowedAdapterIds: [ADAPTER],
+      allowedAdapterIds: [adapterId],
     };
     const routingRecord = {
       kind: 'CURRENT_LOCAL_MODEL_ROUTING_RECORD',
@@ -718,6 +839,7 @@ function currentOwnerFixture({
       policySnapshot,
       sourceItem,
       modelHealth: health(observed),
+      ...(institutional ? { institutionalMemory } : {}),
     };
     entries.set(key, entry);
     currentEntry = entry;
@@ -741,11 +863,11 @@ function currentOwnerFixture({
     adapters: [
       {
         descriptor: {
-          adapterId: ADAPTER,
+          adapterId,
           sourceClass: 'COMPANY_KNOWLEDGE',
           readOnly: true,
-          supportedSelectorKeys: ['documentRef'],
-          maxItemsPerRead: 2,
+          supportedSelectorKeys: [institutional ? 'projectionReference' : 'documentRef'],
+          maxItemsPerRead: institutional ? 1 : 2,
         },
         async read(request) {
           count('currentContextAdapterReads');
@@ -756,9 +878,47 @@ function currentOwnerFixture({
           eq(request.currentness, 'CURRENT_REQUIRED');
           eq(request.purpose.purposeId, 'public.information');
           eq(request.consent.reference, 'consent:current-producer:fixture');
-          eq(request.selector.adapterId, ADAPTER);
-          eq(request.selector.value, 'public:42');
-          eq(request.limit, 2);
+          eq(request.selector.adapterId, adapterId);
+          eq(
+            request.selector.value,
+            institutional ? currentEntry.institutionalMemory.projectionReference : 'public:42',
+          );
+          eq(request.limit, institutional ? 1 : 2);
+          if (institutional) {
+            // Only after canonical policy/consent prechecks invoke this read do we
+            // capture the synthetic source projection. The wrapper adds counters
+            // and test scheduling only; the production adapter validates all data.
+            const memory = currentEntry.institutionalMemory;
+            memory.lastReadRequest = globalThis.structuredClone(request);
+            if (!memory.preparedAttempted) {
+              memory.preparedAttempted = true;
+              memory.prepared = prepareInstitutionalPublicMemorySource({
+                binding: memory.binding,
+                projectionReference: memory.projectionReference,
+                now,
+                readCurrentSnapshot(readBinding) {
+                  count('institutionalSnapshotReads');
+                  // W05 uses null-prototype own-data captures; the W06 facade
+                  // normalizes to ordinary frozen records. Compare every own
+                  // field without mistaking that representation for identity drift.
+                  deep(
+                    { ...readBinding },
+                    { ...memory.binding },
+                    'all eleven original flight fields must match',
+                  );
+                  if (memory.readMode === 'NULL') return null;
+                  if (memory.readMode === 'THROW') throw new Error('SYNTHETIC_SOURCE_UNAVAILABLE');
+                  if (memory.readMode === 'PROMISE') return Promise.resolve(memory.snapshot);
+                  return memory.snapshot;
+                },
+              });
+            }
+            const prepared = memory.prepared;
+            if (!prepared) return { items: [] };
+            deep(prepared.adapter.descriptor, owner.adapters[0].descriptor);
+            if (options.currentReadHook) await options.currentReadHook({ f: fixture(), counters });
+            return prepared.adapter.read(request);
+          }
           if (options.currentReadHook) await options.currentReadHook({ f: fixture(), counters });
           return { items: [currentEntry.sourceItem] };
         },
@@ -766,9 +926,16 @@ function currentOwnerFixture({
     ],
     readCurrentSource(bound, adapterId, sourceReference) {
       count('currentSourceReads');
-      eq(adapterId, ADAPTER);
-      eq(sourceReference, SOURCE);
-      return entryFor(bound).sourceItem;
+      eq(adapterId, institutional ? PUBLIC_INSTITUTIONAL_ADAPTER_ID : ADAPTER);
+      eq(sourceReference, institutional ? AURORA_INSTITUTIONAL_CONTENT.sourceReference : SOURCE);
+      const entry = entryFor(bound);
+      return institutional
+        ? (entry.institutionalMemory.prepared?.readCurrentSource(
+            bound,
+            adapterId,
+            sourceReference,
+          ) ?? null)
+        : entry.sourceItem;
     },
   };
   const context = new CurrentPublicModelContext({
@@ -845,6 +1012,7 @@ function fixture(options = {}) {
     currentContextAdapterReads: 0,
     currentSourceReads: 0,
     currentStrategySelections: 0,
+    institutionalSnapshotReads: 0,
   };
   let lastPreparation;
   let lastBound;
@@ -998,6 +1166,35 @@ function fixture(options = {}) {
           false,
           'private metadata must stay outside the model body',
         );
+      }
+      if (options.institutionalSourceFixture) {
+        const content = AURORA_INSTITUTIONAL_CONTENT;
+        const memory = f.currentOwners().institutionalMemory;
+        const record = memory.snapshot.records[0];
+        eq(payload.messages[1].content.includes(content.text), true);
+        for (const forbidden of [
+          content.sourceReference,
+          content.sourceRevision,
+          content.contentSha256,
+          content.memoryKey,
+          content.provenanceReference,
+          content.authorship,
+          content.useScope,
+          PUBLIC_INSTITUTIONAL_ADAPTER_ID,
+          memory.projectionReference,
+          record.producer.producerReference,
+          record.validationReference,
+          record.promotionReference,
+          'MemoryProjectionRecord',
+          'sourceCommitRevision',
+          'lifecycleRevision',
+        ].filter((value) => value !== undefined)) {
+          eq(
+            init.body.includes(forbidden),
+            false,
+            'hidden institutional metadata must stay private',
+          );
+        }
       }
       return options.responder
         ? options.responder({ counters, init, f })
@@ -2219,6 +2416,453 @@ currentProducerScenario(
   },
 );
 
+function institutionalFixture(options = {}) {
+  return fixture({
+    ...options,
+    currentProducers: true,
+    institutionalSourceFixture: true,
+    responder: options.responder ?? (() => completion(false, INSTITUTIONAL_SYNTHETIC_REPLY)),
+  });
+}
+
+function institutionalItem(memory, binding = memory.binding) {
+  ok(memory.prepared !== null, 'this scenario must exercise the actual prepared source');
+  return memory.prepared.readCurrentSource(
+    binding,
+    PUBLIC_INSTITUTIONAL_ADAPTER_ID,
+    AURORA_INSTITUTIONAL_CONTENT.sourceReference,
+  );
+}
+
+institutionalScenario(
+  'real owner-selected institutional bytes traverse actual W06 W05 W14 with explicitly synthetic lifecycle and model reply',
+  async () => {
+    const content = AURORA_INSTITUTIONAL_CONTENT;
+    eq(sha256(Buffer.from(content.text, 'utf8')), content.contentSha256);
+    eq(Buffer.byteLength(content.text, 'utf8'), 353);
+    eq(content.utf8Bytes, 353);
+    eq(content.classification, 'PUBLIC');
+    eq(content.authorship, 'ASSISTANT_AUTHORED_UNDER_OWNER_DELEGATION');
+    eq(content.useScope, 'LOCAL_INSTITUTIONAL_INFORMATION_ONLY');
+    noAuthority(content);
+    for (const institutionalLifecycle of ['VALIDATED', 'CANONICAL']) {
+      const f = institutionalFixture({ institutionalLifecycle });
+      const result = await bounded(f.run());
+      eq(result.status, 'GENERATED');
+      eq(result.content, INSTITUTIONAL_SYNTHETIC_REPLY);
+      noAuthority(result, true);
+      const prepared = f.preparation();
+      eq(prepared.minimizedPublicPrompt.status, 'READY');
+      eq(prepared.minimizedPublicPrompt.prompt.includes(content.text), true);
+      deep(prepared.minimizedPublicPrompt.includedSourceReferences, [content.sourceReference]);
+      eq(f.counters.currentContextAdapterReads, 1);
+      ok(f.counters.institutionalSnapshotReads >= 3, 'owner data must be reread at release guards');
+      eq(f.counters.credentialReads, 1);
+      eq(f.counters.transportCalls, 1);
+      const memory = f.currentOwners().institutionalMemory;
+      eq(memory.snapshot.records[0].lifecycle, institutionalLifecycle);
+      eq(memory.snapshot.authorizesExecution, false);
+      eq(
+        memory.lastReadRequest.limit,
+        1,
+        'the query bound must narrow to the actual adapter limit',
+      );
+      eq(memory.lastReadRequest.deadline.deadlineAt, at(memory.binding.deadlineMs));
+      eq(institutionalItem(memory).payload, content.text);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+institutionalScenario(
+  'candidate revoked conflicting stale or altered institutional projections cannot become model input',
+  async () => {
+    const variants = [
+      { institutionalLifecycle: 'CANDIDATE' },
+      { institutionalLifecycle: 'REVOKED' },
+      {
+        mutateCurrentOwners(entry) {
+          entry.institutionalMemory.snapshot.records[0].conflictState = 'CONFLICTING';
+        },
+      },
+      {
+        mutateCurrentOwners(entry) {
+          entry.institutionalMemory.snapshot.records[0].content.payload += ' Texto não autorizado.';
+        },
+      },
+      {
+        mutateCurrentOwners(entry) {
+          entry.institutionalMemory.snapshot.records[0].content.digest = `sha256:${'0'.repeat(64)}`;
+        },
+      },
+      {
+        mutateCurrentOwners(entry) {
+          entry.institutionalMemory.snapshot.records[0].sourceCommitRevision = 'sha256:wrong';
+        },
+      },
+      {
+        mutateCurrentOwners(entry) {
+          entry.institutionalMemory.snapshot.records[0].observedAt = at(NOW - 120000);
+        },
+      },
+      {
+        mutateCurrentOwners(entry) {
+          entry.institutionalMemory.snapshot.records[0].classification = 'INTERNAL';
+        },
+      },
+      {
+        mutateCurrentOwners(entry) {
+          delete entry.institutionalMemory.snapshot.records[0].validationReference;
+        },
+      },
+      {
+        mutateCurrentOwners(entry) {
+          delete entry.institutionalMemory.snapshot.records[0].promotionReference;
+        },
+      },
+    ];
+    for (const options of variants) {
+      const f = institutionalFixture(options);
+      const result = await bounded(f.run());
+      abstained(result);
+      noModelCalls(f, 1);
+      eq(f.counters.currentContextAdapterReads, 1);
+      eq(JSON.stringify(result).includes(AURORA_INSTITUTIONAL_CONTENT.text), false);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+institutionalScenario(
+  'PUBLIC institutional data cannot substitute for the independent model-processing policy',
+  async () => {
+    for (const mutateCurrentOwners of [
+      (entry) => {
+        entry.policySnapshot.rules = [];
+      },
+      (entry) => {
+        entry.policySnapshot.rules[0].action = 'context.read';
+      },
+      (entry) => {
+        entry.policySnapshot.rules[0].effect = 'DENY';
+      },
+      (entry) => {
+        entry.policySnapshot.rules[0].effect = 'REQUIRE_APPROVAL';
+      },
+    ]) {
+      const f = institutionalFixture({ mutateCurrentOwners });
+      abstained(await bounded(f.run()));
+      noModelCalls(f, 1);
+      eq(f.counters.currentContextAdapterReads, 0);
+      eq(
+        f.counters.institutionalSnapshotReads,
+        0,
+        'data is not read before model policy permits it',
+      );
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+institutionalScenario(
+  'PUBLIC does not bypass required current consent including a caller-like requiresConsent false attempt',
+  async () => {
+    for (const mutateCurrentOwners of [
+      (entry) => {
+        delete entry.contextRecord.policyEvaluation.consent;
+      },
+      (entry) => {
+        entry.contextRecord.policyEvaluation.consent.status = 'REVOKED';
+      },
+      (entry) => {
+        entry.contextRecord.policyEvaluation.consent.expiresAt = at(NOW);
+      },
+      (entry) => {
+        entry.contextRecord.policyEvaluation.consent.scope.purposeIds = ['other.purpose'];
+      },
+      (entry) => {
+        entry.contextRecord.query.requiresConsent = false;
+        delete entry.contextRecord.query.consent;
+        delete entry.contextRecord.policyEvaluation.consent;
+      },
+    ]) {
+      const f = institutionalFixture({ mutateCurrentOwners });
+      abstained(await bounded(f.run()));
+      noModelCalls(f, 1);
+      eq(f.counters.currentContextAdapterReads, 0);
+      eq(f.counters.institutionalSnapshotReads, 0);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+institutionalScenario(
+  'missing throwing or Promise-valued source owners fail closed without asynchronous authority or revival',
+  async () => {
+    for (const readMode of ['NULL', 'THROW', 'PROMISE']) {
+      const initiallyUnavailable = institutionalFixture({
+        mutateCurrentOwners(entry) {
+          entry.institutionalMemory.readMode = readMode;
+        },
+      });
+      abstained(await bounded(initiallyUnavailable.run()));
+      noModelCalls(initiallyUnavailable, 1);
+      eq(initiallyUnavailable.counters.institutionalSnapshotReads, 1);
+      eq(initiallyUnavailable.outstanding(), 0);
+
+      const becameUnavailable = institutionalFixture({
+        async currentPreparedHook({ f, prepared }) {
+          ok(prepared !== null);
+          const memory = f.currentOwners().institutionalMemory;
+          memory.readMode = readMode;
+          eq(institutionalItem(memory), null);
+          const readsAfterFailure = f.counters.institutionalSnapshotReads;
+          memory.readMode = 'CURRENT';
+          await Promise.resolve();
+          eq(institutionalItem(memory), null, 'restoring the reader must not revive this flight');
+          eq(f.counters.institutionalSnapshotReads, readsAfterFailure);
+        },
+      });
+      abstained(await bounded(becameUnavailable.run()));
+      noModelCalls(becameUnavailable, 1);
+      eq(becameUnavailable.outstanding(), 0);
+    }
+  },
+);
+
+institutionalScenario(
+  'hidden lifecycle provenance and snapshot changes invalidate unchanged institutional text before model dispatch',
+  async () => {
+    for (const change of [
+      (memory) => {
+        memory.snapshot.revision += 1;
+      },
+      (memory) => {
+        memory.snapshot.records[0].lifecycleRevision += 1;
+      },
+      (memory) => {
+        memory.snapshot.records[0].producer.producerReference = 'fixture:other-producer';
+      },
+      (memory) => {
+        memory.snapshot.records[0].validationReference = 'fixture:other-validation';
+      },
+      (memory) => {
+        memory.snapshot.records[0].promotionReference = 'fixture:other-promotion';
+      },
+      (memory) => {
+        memory.snapshot.records[0].retentionPolicyReference = 'fixture:other-retention';
+      },
+      (memory) => transitionSyntheticInstitutionalMemory(memory, 'REVOKED'),
+    ]) {
+      const f = institutionalFixture({
+        credentialHook({ f: current }) {
+          const memory = current.currentOwners().institutionalMemory;
+          const before = institutionalItem(memory);
+          eq(before.payload, AURORA_INSTITUTIONAL_CONTENT.text);
+          change(memory);
+          eq(memory.snapshot.records[0].content.payload, before.payload);
+          eq(memory.snapshot.records[0].content.digest, before.sourceRevision);
+        },
+      });
+      abstained(await bounded(f.run()));
+      eq(f.counters.credentialReads, 1);
+      eq(f.counters.transportCalls, 0);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+institutionalScenario(
+  'real source currentness in final W14 await discards the synthetic model reply after projection revocation',
+  async () => {
+    const f = institutionalFixture({
+      attestationHook({ readIndex, counters, f: current }) {
+        if (readIndex !== 4) return;
+        eq(counters.transportCalls, 1);
+        transitionSyntheticInstitutionalMemory(
+          current.currentOwners().institutionalMemory,
+          'REVOKED',
+        );
+      },
+    });
+    const result = await bounded(f.run());
+    abstained(result);
+    eq(f.counters.transportCalls, 1);
+    eq(JSON.stringify(result).includes(INSTITUTIONAL_SYNTHETIC_REPLY), false);
+    eq(f.outstanding(), 0);
+  },
+);
+
+institutionalScenario(
+  'the actual source binds all eleven flight fields and cannot revive after identity drift',
+  async () => {
+    const fields = [
+      'tenantId',
+      'actorIdentityId',
+      'correlationId',
+      'gatewaySessionId',
+      'connectionId',
+      'gatewayGeneration',
+      'deviceSessionId',
+      'deviceId',
+      'registrationVersion',
+      'requestId',
+      'deadlineMs',
+    ];
+    for (const field of fields) {
+      const f = institutionalFixture({
+        currentPreparedHook({ f: current, prepared }) {
+          ok(prepared !== null);
+          const memory = current.currentOwners().institutionalMemory;
+          deep(Object.keys(memory.binding).sort(), [...fields].sort());
+          const value = memory.binding[field];
+          const different = {
+            ...memory.binding,
+            [field]: typeof value === 'number' ? value + 1 : `${value}:other`,
+          };
+          const reads = current.counters.institutionalSnapshotReads;
+          eq(institutionalItem(memory, different), null);
+          eq(institutionalItem(memory), null);
+          eq(
+            current.counters.institutionalSnapshotReads,
+            reads,
+            'identity drift must not read owner data',
+          );
+        },
+      });
+      abstained(await bounded(f.run()));
+      noModelCalls(f, 1);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+institutionalScenario(
+  'actual adapter refuses widened selectors limits fields deadlines or identities without another source read',
+  async () => {
+    for (const change of [
+      (request) => {
+        request.limit = 2;
+      },
+      (request) => {
+        request.selector.key = 'memoryKey';
+      },
+      (request) => {
+        request.selector.value = '*';
+      },
+      (request) => {
+        request.requestedFields = ['payload', 'producer'];
+      },
+      (request) => {
+        delete request.deadline;
+      },
+      (request) => {
+        request.deadline.deadlineAt = at(NOW + 4999);
+      },
+      (request) => {
+        request.tenant.tenantId = 'tenant:foreign';
+      },
+      (request) => {
+        request.correlation.correlationId = 'correlation:foreign';
+      },
+      (request) => {
+        request.actor.identityId = 'identity:foreign';
+      },
+    ]) {
+      const f = institutionalFixture({
+        async currentPreparedHook({ f: current, prepared }) {
+          ok(prepared !== null);
+          const memory = current.currentOwners().institutionalMemory;
+          const request = globalThis.structuredClone(memory.lastReadRequest);
+          const reads = current.counters.institutionalSnapshotReads;
+          change(request);
+          deep((await memory.prepared.adapter.read(request)).items, []);
+          deep((await memory.prepared.adapter.read(memory.lastReadRequest)).items, []);
+          eq(institutionalItem(memory), null);
+          eq(current.counters.institutionalSnapshotReads, reads);
+        },
+      });
+      abstained(await bounded(f.run()));
+      noModelCalls(f, 1);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+institutionalScenario(
+  'source observation and capture deadlines do not refresh and clock rollback cannot restore a flight',
+  async () => {
+    for (const invalidNow of [NOW + 10000, NOW - 1]) {
+      const f = institutionalFixture({
+        currentPreparedHook({ f: current, prepared }) {
+          ok(prepared !== null);
+          const memory = current.currentOwners().institutionalMemory;
+          const first = institutionalItem(memory);
+          eq(first.observedAt, at(NOW - 1000));
+          current.setNow(invalidNow);
+          eq(institutionalItem(memory), null);
+          current.setNow(NOW);
+          eq(institutionalItem(memory), null);
+          eq(memory.snapshot.records[0].observedAt, first.observedAt);
+        },
+      });
+      abstained(await bounded(f.run(f.body('request:institutional:fixed-expiry', NOW + 20000))));
+      noModelCalls(f, 1);
+      eq(f.outstanding(), 0);
+    }
+  },
+);
+
+for (const stopKind of ['cancel', 'deadline']) {
+  institutionalScenario(
+    `bounded ${stopKind} during institutional acquisition retains its read fence until settlement and then permits a new flight`,
+    async () => {
+      const started = deferred();
+      const release = deferred();
+      const f = institutionalFixture({
+        async currentReadHook({ counters }) {
+          if (counters.currentContextAdapterReads !== 1) return;
+          started.resolve();
+          await release.promise;
+        },
+      });
+      const request = f.body(
+        `request:institutional:${stopKind}:old`,
+        NOW + (stopKind === 'deadline' ? 100 : 5000),
+      );
+      const pending = f.run(request);
+      try {
+        await bounded(started.promise);
+        eq(f.counters.institutionalSnapshotReads, 1);
+        if (stopKind === 'cancel') {
+          const cancelled = f.operation.cancel(request, f.binding);
+          eq(cancelled.requested, true);
+          noAuthority(cancelled, true);
+        }
+        abstained(await bounded(pending), stopKind === 'cancel' ? 'CANCELLED' : 'TIMEOUT');
+        await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+        abstained(await bounded(f.run(f.body(`request:institutional:${stopKind}:blocked`))));
+        eq(f.counters.currentContextAdapterReads, 1);
+        eq(f.counters.institutionalSnapshotReads, 1);
+        eq(f.counters.credentialReads, 0);
+        eq(f.counters.transportCalls, 0);
+      } finally {
+        release.resolve();
+      }
+      await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+      const result = await bounded(f.run(f.body(`request:institutional:${stopKind}:recovered`)));
+      eq(result.status, 'GENERATED');
+      eq(result.content, INSTITUTIONAL_SYNTHETIC_REPLY);
+      noAuthority(result, true);
+      eq(f.counters.producerCalls, 3);
+      eq(f.counters.currentContextAdapterReads, 2);
+      eq(f.counters.credentialReads, 1);
+      eq(f.counters.transportCalls, 1);
+      eq(f.outstanding(), 0);
+    },
+  );
+}
+
 for (const entry of cases) {
   const before = assertions;
   const start = performance.now();
@@ -2238,13 +2882,22 @@ const legacyResults = results.filter(
 const currentProducerResults = results.filter(
   (entry) => entry.coverage === 'ACTUAL_W02_W05_W06_CURRENT_PREPARATION_COMPOSITION',
 );
+const institutionalResults = results.filter(
+  (entry) =>
+    entry.coverage === 'REAL_AUTHORED_PUBLIC_CONTENT_WITH_SYNTHETIC_MEMORY_AND_AUTHORITY_FIXTURES',
+);
 eq(
   legacyResults.length,
   34,
   'all previous boundary regression scenarios must remain; no skipped proofs',
 );
-eq(currentProducerResults.length, 19, 'all new actual current-producer scenarios must execute');
-eq(results.length, 53, 'every declared scenario must execute');
+eq(
+  currentProducerResults.length,
+  19,
+  'all retained actual current-producer scenarios must execute',
+);
+eq(institutionalResults.length, 12, 'all selected-content scenarios must execute');
+eq(results.length, 65, 'every declared scenario must execute');
 eq(unexpectedFetchCalls, 0);
 for (const identity of identities) {
   eq(
@@ -2288,6 +2941,20 @@ console.log(
       coverageCounts: {
         legacyInjectedPreparationBoundaryRegressions: legacyResults.length,
         actualCurrentPreparationProducerComposition: currentProducerResults.length,
+        realAuthoredInstitutionalContentWithSyntheticOwners: institutionalResults.length,
+      },
+      retainedRegressionCaseAssertions: [...legacyResults, ...currentProducerResults].reduce(
+        (count, entry) => count + entry.assertions,
+        0,
+      ),
+      authoredInstitutionalContent: {
+        sourceReference: AURORA_INSTITUTIONAL_CONTENT.sourceReference,
+        contentSha256: AURORA_INSTITUTIONAL_CONTENT.contentSha256,
+        utf8Bytes: AURORA_INSTITUTIONAL_CONTENT.utf8Bytes,
+        provenanceReference: AURORA_INSTITUTIONAL_CONTENT.provenanceReference,
+        sourceOwnerAuthenticated: false,
+        runtimeProjectionPromoted: false,
+        modelReplySynthetic: true,
       },
       skipped: 0,
       unexpectedFetchCalls,
@@ -2300,6 +2967,7 @@ console.log(
         'All named W14 managers and W02/W05/W06 producers/consumers are actual compiled source modules from this one tree.',
         'The 34 legacy boundary regression scenarios deliberately inject a synthetic preparation orchestration; they do not prove the concrete current-source adapter.',
         'The separately counted current-producer scenarios invoke actual CurrentPublicModelContext and CurrentLocalModelPreparationSource, current-policy lookup/precheck/consent, acquisition, minimization, prompt compilation and current strategy routing.',
+        'The twelve institutional scenarios use the real 353-byte owner-selected authored PUBLIC text, the actual private institutional adapter and Memory Fabric reducers. Test-only staging, validation, promotion and revocation references are synthetic; no runtime source was promoted or authenticated.',
         'Authenticator, device attestation, W04 planning inputs, upstream owner/policy/consent/source records and readers, model health/manifest, credentials and model transport remain synthetic fixtures, not authenticated live authorities.',
         'The completion-denial case injects one explicit fault over an otherwise real GatewaySessionManager; it is not provider evidence.',
         'The global fetch is prohibited. No live HTTP/socket endpoint, model, GGUF integrity verification, Android/JNI, tablet or physical action was exercised.',

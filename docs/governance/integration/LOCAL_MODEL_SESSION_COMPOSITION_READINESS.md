@@ -27,6 +27,7 @@ canonical managers; it does not introduce another identity or policy registry.
 | `SessionBoundLocalModel` | Snapshot the exact eleven-field identity, obtain a current W05/W06 preparation, preserve the PUBLIC-only bridge | Missing producers, identity mismatch and stale purpose/consent/source observations abstain |
 | `CurrentLocalModelPreparationSource` | Compose the owning W05 router and its current strategy port with the private current W06 context producer | Missing current records, changed routing/manifest or a stale context handle cannot become a preparation |
 | `CurrentPublicModelContext` | Call the existing W02 policy/consent and W06 acquisition/retrieval/minimization implementations on current read-only owner records | Invalid policy/consent denies before data acquisition; source drift, truncation and unsafe context deny prompt release |
+| Private institutional Memory Fabric projection | Select the chosen original PUBLIC text from an eligible existing COMPANY projection; preserve its complete record identity privately | Missing current owner, unsuitable lifecycle, metadata drift, revocation, expiry or changed bytes cannot become text |
 | `createSessionBoundKeyedLocalModel` | Reuse one existing bounded keyed client; check the request's live guard after credential acquisition and immediately before transport | Revocation while credentials are awaited must result in zero transport calls |
 | Final release guard | Recheck the captured preparation synchronously after W14's last asynchronous attestation check | No stale prepared text is released; absent, duplicate or invalid guards cannot approve output |
 | Lifecycle closure | Cancel/complete using the originally admitted session, connection and request | Uncertain finalization returns `RECONCILIATION_REQUIRED` and quarantines that operation; no automatic retry under another identity |
@@ -75,6 +76,55 @@ last transport guard from the injected transport call. This protects the observe
 in-process boundary; it does not undo a request already sent or claim instantaneous
 observation of an external revocation that its authoritative provider has not delivered.
 
+## Owner-delegated institutional data — not operational authority
+
+On 2026-11-06 the owner explicitly delegated the choice of content for this first
+information-only preparation. The exact decision, selected text and bounded source
+allocation are recorded in [#575/6691169203](https://github.com/luizanunciostoca/aurora-ai-native/issues/575#issuecomment-6691169203).
+The original assistant-authored text is versioned once in
+`packages/context/src/sources/aurora-institutional-content.ts`. It describes the
+Aurora project's goals and distinguishes an informational response from an action.
+It is not a transcript of private conversations, a third-party excerpt or a claim
+that the product is already active.
+
+The selected content is **353 UTF-8 bytes**, without a trailing newline; SHA-256
+`4ec28cf000232d5ecaac43dd28e0d760b020116b5b014455239ade7c3c3b2280`.
+The file is a content/provenance candidate only. It contains no tenant, actor,
+session, current observation, active consent, policy ALLOW or fabricated validation
+and promotion receipt. Neither importing the module nor approving its prose writes
+to W03 or promotes it to a current production Memory Fabric record.
+
+The private source adapter consumes the existing `readMemoryProjection` operation
+and exact `ContextSourceItem` contract. It does not create another registry, store
+or policy engine. Only the chosen exact text may pass, from one eligible COMPANY /
+COMPANY_KNOWLEDGE / PUBLIC / TEXT projection with matching digest, revision and
+provenance, no conflict and appropriate existing lifecycle evidence. A CANDIDATE
+does not become VALIDATED or CANONICAL merely because the adapter needs a result.
+
+The facade keeps one bounded comparison capture, not a source of truth. It binds
+the original eleven identity fields, snapshot revision and complete source record;
+the same text with a changed owner, lifecycle revision, validation/promotion
+reference or source-commit identity is not the same capture. Every current-source
+read consults the synchronous, non-blocking owning snapshot provider again.
+Missing, asynchronous, revoked or changed source state invalidates that capture;
+restoring old bytes cannot revive it. A new preparation requires a new instance.
+
+Capture expiry is bounded by the request deadline and ten seconds. The original
+`observedAt` is preserved, never renewed just because the source was read. The
+existing retrieval policy still owns the admissible age of COMPANY knowledge.
+An asynchronous W03 load or an old in-memory snapshot is not, by itself, a truthful
+synchronous current owner; this work does not install that operational provider.
+
+W02 policy/purpose and any required consent remain independent. PUBLIC is neither
+an automatic consent exemption nor an obligation to invent a ConsentRecord. An
+absent or denying current policy still blocks the real selected content. No
+`requiresConsent: false` fallback is introduced by this data adapter.
+
+The software proof uses the real selected text and actual Memory Fabric selection,
+projection and W02/W05/W06/W14 code. Any identity, policy, lifecycle promotion,
+attestation or model result supplied by its harness remains explicitly synthetic.
+Passing that proof is not a production source promotion or native inference.
+
 ## Bounds and non-authority
 
 - The request horizon is at most 30 seconds; a prepared projection lives at most
@@ -116,9 +166,11 @@ the gateway-auth leaf, and the normal test runner performs its canonical checks.
 The one-tree composition proof loads actual compiled W14 managers and W02/W05/W06
 producers/consumers, including the current-record source classes and the session-bound
 keyed factory. The earlier injected-preparation boundary regressions remain explicitly
-distinguished from the new concrete-producer scenarios. Authentication, attestation,
-current owner records, source-adapter data, runtime health, manifest, credentials and
-model responses are **explicit synthetic fixtures**. The canonical evaluators and
+distinguished from the new concrete-producer scenarios. The institutional scenarios
+also use the actual Memory Fabric reducers and private text projection, with the
+real selected original text. Authentication, attestation, current owner records,
+lifecycle evidence, other source data, runtime health, manifest, credentials and
+model responses remain **explicit synthetic fixtures**. The canonical evaluators and
 new producer implementations are actual code; the fixtures are not real consent or
 an authenticated data-owner service. No real model, tablet, backend or network
 endpoint is exercised. Global fetch is forbidden; the only model transport is counted
@@ -147,16 +199,25 @@ runtime or physical-acceptance status.
 
 ## Remaining gates — not implemented or proven here
 
-1. Bind the actual host authentication, attestation, current purpose/consent/source
-   owners and launcher-owned ephemeral credential provider. The implemented private
-   composers do not supply those owners or persistent stores. Absence must remain
-   unavailable; a permissive fixture must never be promoted as an implementation.
+1. Bind the actual host authentication, attestation and current purpose/consent/source
+   owners. The institutional content and text projection are prepared, but they do
+   not supply those operational owners or create persistent records. Absence must
+   remain unavailable; a permissive fixture must never be promoted as an
+   implementation. Launcher-owned ephemeral credentials apply only if the keyed
+   HTTP transport is chosen; they are not an inherent prerequisite for JNI.
 2. Implement and prove the chosen native host-to-core boundary. The existing keyed
    HTTP client and this TypeScript proof are not equivalent to the disabled Android
    JNI path and do not establish a persistent tablet session. Before native activation,
-   current source/session checks are also needed after potentially long model-file
-   verification/loading and before generation and final result release. A cached
-   Android connection snapshot or one initial prompt resolution is insufficient.
+   current source/session checks must be bound to the chosen native candidate after
+   model-file verification/loading and before generation and final result release.
+   Native Draft #589 separately supplies cooperative internal checkpoints; it is
+   not imported or activated by this core candidate. A cached Android connection
+   snapshot or one initial prompt resolution is insufficient. The existing Android
+   HTTP channel has a finite request budget and synchronizes network post/close;
+   do not map every decode checkpoint to an unbudgeted request or make local
+   cancellation wait on that monitor. A revised authenticated lifecycle must
+   preserve the original W14 request until genuine finalization, without creating
+   a second server, identity or approval cache.
 3. Obtain the distinct authorization required for installation, model import and
    activation, then prove the installed APK/digest, device/session, current permissions,
    real inference and observable behavior. None of these actions is included here.
