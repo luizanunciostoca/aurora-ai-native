@@ -1,8 +1,8 @@
 # Aurora AI-Native — Current Program Status & Document Authority
 
-Status: `ACTIVE_CURRENT_PROGRAM_STATE_W00_W14_ACCEPTED_W15_00_I_ACCEPTED_W15_J_DP5_PHYSICAL_PENDING_W16_READINESS_ONLY`
-Audit date: 2026-09-06
-Canonical implementation baseline at this status candidate: `958381223d857fc821657fc1026d92bc48055456`
+Status: `W00_W14_AND_W15_00_I_ACCEPTED_W15_J_EXPERIENCE_PHYSICAL_PENDING_DP5_FINAL_AT_W20_H_W16_PREBUILD`
+Audit date: 2026-10-28
+Canonical implementation baseline at this status candidate: `77f0f8532197025ee913dd02fcb56878d9d667a9`
 
 ## Authority order
 
@@ -24,69 +24,50 @@ No prompt, task node, PREBUILD/readiness artifact, draft/open PR, agent/model ou
 - W13-H issue #326: `aurora:accepted / closed`.
 - W14-H issue #265: `aurora:accepted / closed`; DP3 gateway/device-session publication is accepted.
 - W15-00 and W15-A through W15-I: `aurora:accepted / closed`.
-- W15-J issue #344: `IN_PROGRESS / PHYSICAL_DP5_REQUIRED`; it is not accepted and remains the current program frontier.
-- W16-00 issue #116: `READINESS_ONLY / PREBUILD_NON_AUTHORITATIVE`; BUILD remains blocked by W15-J.
+- W15-J issue #344: `IN_PROGRESS / EXPERIENCE_SMOKE_REQUIRED`; it is not accepted. The original full physical DP5 matrix is deferred to W20-H by the 2026-10-28 owner decision.
+- W16-00 issue #116: `READINESS_ONLY / PREBUILD_NON_AUTHORITATIVE`; BUILD remains blocked until re-scoped W15-J is actually accepted on main after the eight physical smoke checks and post-merge verification.
 - W17-W20: downstream dependency-gated. PREBUILD/readiness may exist where governance explicitly permits it, but it does not satisfy dependencies or create BUILD authority.
 
-## Current live frontier — W15-J physical Device Plane acceptance
+## Current live frontier — W15-J first-experience physical integration
 
-At this audit snapshot, the only open canonical implementation PRs are the paired W15-J candidates below. Both are draft by design and both are based directly on current `main` with `behind=0`.
+The explicit repository-owner decision on 2026-10-28 is to complete a **small, genuinely physical first-experience gate now** and move the comprehensive DP5 certification to W20-H/DP7. See [W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md](w15/W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md). The canonical Puzzle edge `W16-00 -> W15-J` remains intact, so no dependency is satisfied by a new label or readiness artifact alone.
 
-### Android / physical DP5 candidate — PR #413
+At this update, canonical `main` is `77f0f8532197025ee913dd02fcb56878d9d667a9`. Live draft W15-J candidates are:
+- Android PR #413, live HEAD `e42ea0650a5056dd0d26e6ac69021691b5625332`;
+- LOCAL host PR #462, live HEAD `790049ae133035db3ed1517b31d9110d7f20d9a4`;
+- Tablet DevLab PR #499, live HEAD `009804b6021ac6ef4fb364825cb72cacba19a534`.
 
-- exact HEAD: `11781e0fa7017d031a97f477490f160f62ff4dbd`;
-- base/main: `958381223d857fc821657fc1026d92bc48055456`;
-- exact-head Android Foundation: SUCCESS;
-- exact-head Quality: SUCCESS;
-- exact-head Test Build: SUCCESS;
-- exact-head Security: SUCCESS.
+Candidate bodies, earlier r11 packaging identities and historical CI evidence reference different SHAs. **Do not reuse an old APK or claim exact-head CI** until current Android/Host/DevLab/packaging/device tuple is reconciled and current SHA-bound checks are rerun. Green software CI alone does not prove a physical effect.
 
-The exact physical-input APK is byte-bound as:
+### W15-J re-scoped acceptance (not yet satisfied)
 
-- variant: `localDebug`;
-- package: `ai.aurora.device.local`;
-- version: `0.15.0-alpha.1`;
-- APK SHA-256: `898ed4246586429a5c06d5c6ceeb4f99f7a6bcd591ca2b2375dda37b0bbe1790`;
-- packaging artifact ZIP SHA-256: `8b4c085e5440728652a9af4f9c15fd4a8c08cce7212d72192ebf32ea47fc3ad9`.
+Eight representative-tablet scenarios EX-01..EX-08 are all mandatory:
+1. exact candidate/package/device binding, genuine install/readback and cold launch;
+2. onboarding, permissions and authenticated W14 session/device binding;
+3. five to ten exploratory physical wake activations with a repeatable command;
+4. one benign and reversible W02/W07-governed native effect on actual hardware;
+5. correlated Receipt/Evidence/readback and reconciled outcome;
+6. DENY/stale-authority path with no effect;
+7. cancel/kill safety;
+8. restart/offline/reconnect/duplicate/uncertainty fail-closed behavior.
 
-The artifact identity remains explicitly fail-closed: `canonical_acceptance=false`, `physical_evidence_required=true`, `dp5_status=INCOMPLETE`.
+No P0/P1 unresolved; scoped Risk Gates A-D, exact final source/package manifest, Quality/Test Build/Security, controlled integration, Program Control review and post-merge exact-main verification are still required. All `PASS` observations must be real, current-tuple physical evidence. `EXPERIENCE_READY` is not `aurora:accepted` by itself.
 
-### Governed LOCAL host candidate — PR #462
+Until that sequence completes, #344 stays OPEN/unaccepted and #116 stays PREBUILD. W15-J `aurora:accepted` after the revised scope means a governed integration adequate for W16 DEVELOPMENT, **not `DP5 OPEN`**.
 
-- exact HEAD: `3efc2d741d0498dcd5aa3996019b115df390315e`;
-- base/main: `958381223d857fc821657fc1026d92bc48055456`;
-- exact-head Quality run `34039052609`: SUCCESS;
-- exact-head Test Build run `34039052557`: SUCCESS;
-- exact-head Security run `34039052976`: SUCCESS;
-- exact-head Aurora Copilot Fabric Validation run `34039052542`: SUCCESS.
+### Deferred final DP5/DP7
 
-The candidate composes the current W03 durable delivery/execution-state owners, W07 current-authority/safeguard/containment/reconciliation owners and W14 device/session/trust owners into the real LOCAL host path. Issue #460 remains open until this candidate can be canonically integrated through the shared W15-J reality gate.
-
-### What remains before W15-J acceptance
-
-CI and artifact provenance are necessary but not sufficient. W15-J may not receive `aurora:accepted`, and PR #413/#462 may not be merged as the W15-J acceptance pair, until genuine representative hardware/environment evidence proves the mandatory DP5 matrix, including at minimum:
-
-1. exact APK installation and exact candidate/device/environment binding;
-2. bootstrap and authenticated W14 device/session path;
-3. real wake/voice/presence path where the scenario requires it;
-4. governed W07 dispatch into W15 native execution;
-5. native effect plus Receipt/Evidence and reconciliation/readback;
-6. disconnect/reconnect, dedupe, offline, cancellation/kill, late evidence and `EXECUTION_UNCERTAIN` reconcile-before-retry behavior;
-7. threat, resource/performance and cleanup evidence;
-8. operator attestation and independent acceptance review;
-9. integrated Risk Gates A Correctness, B Safety/Authority, C Performance/Economics and D Failure/Recoverability on the exact physical candidate tuple.
-
-Until those controls pass, physical DP5 is `NOT_RUN / INCOMPLETE`; green CI, a package hash, ACK/receipt presence, transcript confidence or local Android permission must not be promoted to verified external outcome or retry authority.
+Full 48-scenario physical matrix, >=100 wake attempts, seven-role semantics, threat/privacy/resource/performance/lifecycle matrix, cleanup, sealing, operator attestation, independent reviewer and final Risk Gates A-D remain mandatory at W20-H against the final release candidate. The existing DP5 dossier validator remains strict and is not relaxed. W20-J cannot authorize Release 1.0 until DP5+DP7 and all other release gates pass.
 
 ## Downstream state
 
 ### W16 — Workspace / Experience
 
-W16-00 depends on W14-H plus W15-J. W14-H is accepted; W15-J is not. Therefore W16 may continue only governed PREBUILD/readiness work that does not publish runtime BUILD authority. No W16 implementation merge may infer W15-J acceptance from the prepared APK or software-only CI.
+W16-00 depends on W14-H plus W15-J. W14-H is accepted; W15-J is not. W16 remains governed PREBUILD/readiness-only until the revised W15-J Experience Gate has 8/8 genuine physical PASS, controlled exact-head integration, post-merge Q/TB/S and canonical `aurora:accepted` on #344. After that, Program Control may reconcile W14/W15 contracts and release W16 BUILD without claiming full DP5.
 
 ### W17-W20
 
-W17 observability/evidence, W18 evaluation/adaptive promotion, W19 converged security and W20 integrated staging/release remain governed by their live DAG dependencies. They may consume accepted upstream contracts and approved readiness artifacts only within their own gates; they cannot bypass W15/W16 dependency edges.
+W17 observability/evidence, W18 evaluation/adaptive promotion and W19 converged security remain governed by their live DAG dependencies and may build from the accepted W15-J first-experience integration; none may assert full DP5 certification. W20-H owns comprehensive DP5+DP7 physical verification, while W20-J retains final Release 1.0 authority.
 
 ## Architecture boundaries retained
 
@@ -127,7 +108,7 @@ Puzzle/READY_FRONTIER governance remains active. Program Control owns coordinati
 
 Current safe execution priority is:
 
-`W15-J PHYSICAL DP5 -> ACCEPT/INTEGRATE EXACT PAIR -> RELEASE W16 BUILD FRONTIER -> RECALCULATE DOWNSTREAM DAG`
+`W15-J 8/8 PHYSICAL EXPERIENCE -> RECONCILE/ACCEPT EXACT W15-J CANDIDATES -> RELEASE W16 BUILD -> W20-H FULL DP5/DP7 -> W20-J RELEASE DECISION`
 
 Parallel work is permitted only where path ownership is disjoint and dependencies are already satisfied. Work on W16-W20 that would depend on W15-J runtime acceptance remains readiness/prebuild only.
 

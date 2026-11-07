@@ -18,10 +18,11 @@ permissions:
 jobs:
   android-foundation:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
       - uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c
         with:
@@ -31,14 +32,17 @@ jobs:
         with:
           gradle-version: '9.4.1'
           cache-read-only: true
-      - name: Install stable Android SDK
+      - name: Install pinned Android build tools
         shell: bash
         run: |
+          set -euo pipefail
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           test -n "$SDK_ROOT"
           SDKMANAGER="$(command -v sdkmanager || find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort | tail -n 1)"
           test -n "$SDKMANAGER"
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+          # Stable channel only. Never accept a new license implicitly in this job.
+          "$SDKMANAGER" --channel=0 "platforms;android-36" "build-tools;36.0.0" \
+            "ndk;30.0.16248370" "cmake;3.31.6" </dev/null
       - name: Test and assemble Android foundation
         shell: bash
         run: >-
@@ -47,3 +51,62 @@ jobs:
           :app:assembleLocalDebug
           :app:assembleStagingDebug
           :app:assembleProductionDebug
+
+      - name: Check out the exact native engine source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ggml-org/llama.cpp
+          ref: 8642541b255bfb5dc39cd351a178be09013a55d6
+          path: .aurora-native-upstream/llama.cpp
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Test packaging verifier negative cases
+        shell: bash
+        run: >-
+          python3 -m unittest discover -s apps/aurora-android/verification
+          -p 'test_native_preparation_artifact.py' -v
+
+      - name: Build disabled LOCAL native preparation
+        shell: bash
+        env:
+          AURORA_ANDROID_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          AURORA_HOST_SHA: UNBOUND_NATIVE_PREPARATION
+          AURORA_RELEASE_TUPLE_ID: NATIVE_PREPARATION_NO_PHYSICAL_TUPLE
+          AURORA_LLAMA_SOURCE_DIR: ${{ github.workspace }}/.aurora-native-upstream/llama.cpp
+          CMAKE_BUILD_PARALLEL_LEVEL: '2'
+        run: >-
+          gradle --no-daemon --console=plain --max-workers=2 -p apps/aurora-android
+          -PauroraNativePreparation=true
+          :app:testLocalDebugUnitTest :app:assembleLocalDebug
+
+      - name: Verify exact APK, disabled DEX flags, JNI, ELF and signature
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          python3 apps/aurora-android/verification/native_preparation_artifact.py \
+            --apk apps/aurora-android/app/build/outputs/apk/local/debug/app-local-debug.apk \
+            --source-sha "$SOURCE_SHA" \
+            --sdk "${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}" \
+            --llama-source "$GITHUB_WORKSPACE/.aurora-native-upstream/llama.cpp" \
+            --output "$RUNNER_TEMP/aurora-native-preparation"
+
+      - name: Upload preparation only (installation not authorized)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aurora-native-preparation-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/aurora-native-preparation
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload Android unit test reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: aurora-native-preparation-tests-${{ github.event.pull_request.head.sha || github.sha }}
+          path: apps/aurora-android/app/build/test-results/testLocalDebugUnitTest
+          if-no-files-found: warn
+          retention-days: 7

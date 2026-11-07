@@ -72,3 +72,11 @@ W15-00 itself is governance-only and may change only `docs/governance/w15/**`.
 ## W15-00 acceptance scope
 
 Acceptance requires exact-final-HEAD Quality, Test Build and Security; cleanup/duplicate/source-of-truth/scope-leak audit; Risk Gates A-D; live-main race check immediately before expected-head protected merge; and post-merge exact-main Q/TB/S before W15-00 is marked `aurora:accepted` and W15-A is released.
+
+## 2026-10-28 owner-directed W15-J acceptance split
+
+The canonical internal DAG above is unchanged. The terminal W15-J task now proves only the **eight mandatory first-experience physical smoke checks** in [W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md](W15_J_EXPERIENCE_FIRST_AND_DEFERRED_DP5_2026-10-28.md), on a reconciled Android/Host/DevLab/APK/tablet tuple. Scoped Risk Gates A-D, exact final software gates, controlled integration and post-merge evidence remain mandatory before W15-J may receive `aurora:accepted`.
+
+After that acceptance, W16 may begin governed BUILD while W15-J/DP5 are reported separately: W15-J experience integration accepted; **full DP5 remains closed**. W20-H inherits the preserved comprehensive 48-scenario, >=100-wake, seven-role, lifecycle/privacy/threat/resource, seal, attestation, independent review and full Risk Gate evidence, paired with DP7 final physical release acceptance. W20-J remains the only Release 1.0 decision node.
+
+This amendment is not permission to bypass W02/W07 authority, to infer physical PASS from CI, or to treat a first supervised experience as public release readiness.

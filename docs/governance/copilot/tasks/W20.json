@@ -137,15 +137,15 @@
     },
     {
       "id": "W20-H",
-      "title": "W20-H - Physical Android E2E / DP7",
+      "title": "W20-H - Full DP5 Certification and Physical Android E2E / DP7",
       "dependsOn": ["W20-B"],
       "customAgent": "aurora-integration",
       "actions": [
-        "1. If Device Plane is included, run command -> policy -> authority -> ActionIntent -> Device Executor -> app/hardware -> Receipt -> readback/evidence on physical device.",
-        "2. Cover offline, permission denied, app missing, session expired/revoked, duplicate command, late receipt, disconnect, EXECUTION_UNCERTAIN and kill switch.",
-        "3. Verify battery/resource/lifecycle constraints as relevant.",
-        "4. Capture device/build/environment evidence.",
-        "5. Close DP7 only on complete pass."
+        "1. Run the deferred complete original DP5 campaign on the final exact source/APK/host/device tuple: all 48 representative-tablet scenarios plus the complete governed ActionIntent -> Device Executor -> hardware/app -> Receipt/Evidence -> readback/reconciliation chain.",
+        "2. Run at least 100 deliberate wake activations plus false-wake/noise, privacy, lifecycle, permission and performance/battery/resource observations.",
+        "3. Cover DENY, stale/revoked session, app missing, reconnect/offline, duplicate, cancel/kill, late receipt, EXECUTION_UNCERTAIN and reconcile-before-retry; complete seven-role semantic binding.",
+        "4. Preserve preflight, collector, cleanup, immutable manifest/seal, operator attestation, independent review and the final threat matrix with Risk Gates A-D.",
+        "5. Publish DP5 and DP7 only on complete exact-release-candidate evidence; block W20-J Release 1.0 when either physical certification gate is incomplete."
       ],
       "ownership": "Physical device release acceptance.",
       "forbidden": "If Device Plane is excluded, record explicit release scope rather than fabricating pass."
@@ -172,7 +172,7 @@
       "customAgent": "aurora-implementation",
       "actions": [
         "1. Assemble exact release SHA, PRs, CI, migrations, feature flags, dependencies, risk residuals, SLO/DR/security evidence and rollback manifest.",
-        "2. Run final Reality Gate and exact-main Quality/Test Build/Security.",
+        "2. Require W20-H full DP5 and DP7 physical certification plus final Reality Gate and exact-main Quality/Test Build/Security.",
         "3. Require all P0/P1 blockers resolved.",
         "4. Decision must be READY_FOR_RELEASE, BLOCKED or explicitly scoped non-release; no ambiguous 'mostly ready'.",
         "5. Synchronize GitHub/Drive status and publish Release 1.0 acceptance."
