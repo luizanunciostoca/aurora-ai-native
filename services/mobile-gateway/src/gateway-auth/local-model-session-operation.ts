@@ -15,6 +15,7 @@ import { GATEWAY_PROTOCOL_VERSION, type GatewaySessionSnapshot } from './types.j
 const MAX_TIME_MS = 8_640_000_000_000_000;
 const MAX_OPERATION_MS = 30_000;
 const MAX_OUTPUT_BYTES = 32_768;
+const MAX_REGISTERED_WORK = 64;
 const SAFE_REFERENCE = /^[A-Za-z0-9._:-]+$/u;
 const NO_AUTHORITY = {
   authoritySemantics: 'INTELLIGENCE_ONLY_NO_AUTHORITY',
@@ -81,6 +82,8 @@ export interface LocalModelSessionGuards {
   readonly revalidateCurrent: () => Promise<boolean>;
   readonly isCurrent: () => boolean;
   readonly registerReleaseGuard: (guard: (nowMs: number) => boolean) => void;
+  /** Private real-work observation, distinct from the bounded logical result. */
+  readonly registerWork: (work: Promise<unknown>) => void;
 }
 
 export interface LocalModelSessionOperationDependencies {
@@ -115,6 +118,11 @@ interface Flight {
   readonly controller: AbortController;
   readonly deliver: (result: LocalModelSessionOperationResult) => void;
   readonly pendingChecks: Set<Promise<boolean>>;
+  readonly pendingWork: Set<Promise<void>>;
+  readonly registeredWork: Set<Promise<unknown>>;
+  workRegistrationOpen: boolean;
+  workProtocolFailed: boolean;
+  workRejected: boolean;
   bound: LocalModelBoundRequest | null;
   lastNowMs: number;
   latestAttestation: DeviceAttestationReference | null;
@@ -364,6 +372,11 @@ export class LocalModelSessionOperation {
         controller: new AbortController(),
         deliver: resolve,
         pendingChecks: new Set(),
+        pendingWork: new Set(),
+        registeredWork: new Set(),
+        workRegistrationOpen: false,
+        workProtocolFailed: false,
+        workRejected: false,
         bound: null,
         lastNowMs: nowMs,
         latestAttestation: null,
@@ -629,6 +642,67 @@ export class LocalModelSessionOperation {
     flight.releaseGuard = guard;
   }
 
+  #workProtocolFailure(flight: Flight): void {
+    flight.workProtocolFailed = true;
+    flight.workRegistrationOpen = false;
+    flight.reconciliationRequired = true;
+    this.#quarantined = true;
+    const current = this.#flight;
+    if (current && current !== flight) {
+      // A stale callback cannot lend the previous binding to the new flight.
+      // Global ownership uncertainty also stops the current flight using ONLY
+      // its own cancellation identity, retaining all of its accepted fences.
+      current.workProtocolFailed = true;
+      current.workRegistrationOpen = false;
+      current.reconciliationRequired = true;
+    }
+    if (current) this.#stop(current, 'RECONCILIATION_REQUIRED');
+  }
+
+  #registerWork(flight: Flight, work: Promise<unknown>): void {
+    if (
+      this.#flight !== flight ||
+      !flight.invoking ||
+      !flight.workRegistrationOpen ||
+      flight.stopped ||
+      flight.workProtocolFailed ||
+      flight.registeredWork.size >= MAX_REGISTERED_WORK ||
+      flight.registeredWork.has(work)
+    ) {
+      try {
+        // Contain a refused native rejection without admitting it as evidence,
+        // invoking a thenable, or forgetting any already accepted operation.
+        void Promise.prototype.then.call(
+          work,
+          () => undefined,
+          () => undefined,
+        );
+      } catch {
+        /* A malformed/thenable input is still rejected. */
+      }
+      this.#workProtocolFailure(flight);
+      throw new Error('LOCAL_MODEL_WORK_NOT_ADMITTED');
+    }
+    let terminal: Promise<void>;
+    try {
+      // Brand-check without evaluating a caller-controlled then accessor or
+      // assimilating a thenable. Rejection proves termination, not permission.
+      terminal = Promise.prototype.then.call(
+        work,
+        () => undefined,
+        () => {
+          flight.workRejected = true;
+        },
+      ) as Promise<void>;
+    } catch {
+      this.#workProtocolFailure(flight);
+      throw new Error('LOCAL_MODEL_WORK_INVALID');
+    }
+    flight.registeredWork.add(work);
+    flight.pendingWork.add(terminal);
+    void terminal.then(() => flight.pendingWork.delete(terminal));
+  }
+
   async #perform(flight: Flight): Promise<void> {
     let result = abstain('W14_UPSTREAM_UNAVAILABLE');
     try {
@@ -684,13 +758,20 @@ export class LocalModelSessionOperation {
         return;
       }
       flight.invoking = true;
+      flight.workRegistrationOpen = true;
       const guards: LocalModelSessionGuards = Object.freeze({
         revalidateCurrent: () => this.#delegateRevalidation(flight),
         isCurrent: () => flight.invoking && this.#isCurrent(flight),
         registerReleaseGuard: (guard: (nowMs: number) => boolean) =>
           this.#registerReleaseGuard(flight, guard),
+        registerWork: (work: Promise<unknown>) => this.#registerWork(flight, work),
       });
-      const raw = await this.#deps.invoke(flight.bound, flight.controller.signal, guards);
+      const invocation = this.#deps.invoke(flight.bound, flight.controller.signal, guards);
+      // The core must register its root fence within the invoke call itself,
+      // before any queued producer can start. Missing evidence is not no-work.
+      if (flight.registeredWork.size === 0) this.#workProtocolFailure(flight);
+      const raw = await invocation;
+      flight.workRegistrationOpen = false;
       flight.invoking = false;
       if (flight.stopped) return;
       try {
@@ -700,11 +781,17 @@ export class LocalModelSessionOperation {
       }
       if (!(await this.#revalidate(flight))) result = abstain('DEVICE_TRUST_NOT_CURRENT');
     } catch {
+      if (flight.invoking && flight.registeredWork.size === 0) this.#workProtocolFailure(flight);
       result = abstain('W14_UPSTREAM_UNAVAILABLE');
     } finally {
       flight.invoking = false;
+      flight.workRegistrationOpen = false;
       // A delegate cannot release the slot while an initiated validation is still unresolved.
       if (flight.pendingChecks.size > 0) await Promise.all([...flight.pendingChecks]);
+      // Registration is closed. Drain actual work, including cleanup, rather
+      // than a Promise.race that already returned TIMEOUT/CANCELLED.
+      while (flight.pendingWork.size > 0) await Promise.all([...flight.pendingWork]);
+      if (flight.workRejected) result = abstain('W14_UPSTREAM_UNAVAILABLE');
       this.#finish(flight, result);
     }
   }
@@ -714,7 +801,7 @@ export class LocalModelSessionOperation {
       const nowMs = this.#now(flight);
       if (!flight.stopped && nowMs >= flight.body.deadlineMs) this.#stop(flight, 'TIMEOUT');
       if (flight.beginAttempted && !flight.beginReturned) flight.reconciliationRequired = true;
-      if (flight.admitted && !flight.completeAttempted) {
+      if (flight.admitted && !flight.completeAttempted && !flight.workProtocolFailed) {
         flight.completeAttempted = true;
         const completed = this.#deps.gatewaySessions.completeRequest(
           this.#boundOperation(flight, nowMs),
@@ -764,7 +851,8 @@ export class LocalModelSessionOperation {
       this.#quarantined = true;
       result = abstain('RECONCILIATION_REQUIRED');
     } else if (flight.stopped) result = abstain(flight.stopped);
-    if (this.#flight === flight) this.#flight = null;
+    // Unknown ownership cannot be repaired by forgetting the original binding.
+    if (this.#flight === flight && !flight.workProtocolFailed) this.#flight = null;
     this.#deliver(flight, result);
   }
 }

@@ -141,6 +141,7 @@ function harness() {
     bound: null as SessionLocalModelBinding | null,
     requests: [] as LocalInferenceRequest[],
     releaseGuard: null as ((now: number) => boolean) | null,
+    work: [] as Promise<unknown>[],
   };
   const source: SessionLocalModelPreparationSource = {
     async prepareCurrent(bound) {
@@ -173,6 +174,9 @@ function harness() {
     registerReleaseGuard: (guard) => {
       state.releaseGuard = guard;
     },
+    registerWork: (work) => {
+      state.work.push(work);
+    },
   };
   const dependencies = { client, source, now: () => state.now };
   const model = new SessionBoundLocalModel(dependencies);
@@ -180,6 +184,101 @@ function harness() {
   const run = (input = binding()) => model.infer(input, controller.signal, session);
   return { state, source, client, session, dependencies, model, controller, run };
 }
+
+test('SessionBound registers a root fence synchronously, including genuine no-work rejects', async () => {
+  for (const mode of ['invalid', 'cancelled', 'expired', 'missing-source'] as const) {
+    const h = harness();
+    if (mode === 'cancelled') h.controller.abort();
+    const model =
+      mode === 'missing-source'
+        ? new SessionBoundLocalModel({ client: h.client, now: () => NOW })
+        : h.model;
+    const pending = model.infer(
+      mode === 'invalid'
+        ? { ...binding(), requestId: '' }
+        : mode === 'expired'
+          ? binding({ deadlineMs: NOW })
+          : binding(),
+      h.controller.signal,
+      h.session,
+    );
+    assert.equal(h.state.work.length, 1, mode);
+    assert.notEqual(code(await pending), 'GENERATED');
+    await Promise.all(h.state.work);
+    assert.equal(h.state.preparationCalls, 0);
+    assert.equal(h.state.clientCalls, 0);
+  }
+});
+
+test('SessionBound root owns a descendant that outlives the producer logical result', async () => {
+  const h = harness();
+  const actual = deferred<undefined>();
+  let started = false;
+  h.source.prepareCurrent = async (_binding, _signal, registerWork) => {
+    if (!registerWork) throw new Error('required fixture observation');
+    let admitted = false;
+    const work = Promise.resolve().then(() => {
+      if (!admitted) throw new Error('not admitted');
+      started = true;
+      return actual.promise;
+    });
+    registerWork(work);
+    admitted = true;
+    return null;
+  };
+  const pending = h.run();
+  assert.equal(h.state.work.length, 2); // root plus gated preparation
+  const root = h.state.work[0];
+  if (!root) throw new Error('root fence absent');
+  let rootSettled = false;
+  void root.then(() => {
+    rootSettled = true;
+  });
+  assert.equal(code(await pending), 'UNAVAILABLE');
+  assert.equal(started, true);
+  assert.equal(rootSettled, false);
+  assert.equal(code(await h.run(binding({ requestId: 'request:second' }))), 'BUSY');
+  actual.resolve(undefined);
+  await root;
+  assert.equal(rootSettled, true);
+  h.source.prepareCurrent = async (input) => preparation(input);
+  assert.equal(code(await h.run(binding({ requestId: 'request:third' }))), 'GENERATED');
+});
+
+test('SessionBound refuses absent/throwing root observers and prevents rejected descendant admission', async () => {
+  for (const rejectAt of [1, 2]) {
+    const h = harness();
+    let registrations = 0;
+    h.session.registerWork = (work) => {
+      registrations += 1;
+      if (registrations === rejectAt) throw new Error('fixture observer failed');
+      h.state.work.push(work);
+    };
+    assert.equal(code(await h.run()), 'UNAVAILABLE');
+    await tick();
+    await Promise.all(h.state.work);
+    assert.equal(h.state.preparationCalls, 0);
+    assert.equal(h.state.clientCalls, 0);
+  }
+  const h = harness();
+  const missing = { ...h.session, registerWork: undefined } as unknown as SessionLocalModelGuards;
+  assert.equal(
+    code(await h.model.infer(binding(), h.controller.signal, missing)),
+    'INVALID_REQUEST',
+  );
+  assert.equal(h.state.preparationCalls, 0);
+});
+
+test('SessionBound requires synchronous undefined observer completion before admitting its root', async () => {
+  const h = harness();
+  h.session.registerWork = async () => {
+    throw new Error('synthetic asynchronous observer');
+  };
+  assert.equal(code(await h.run()), 'UNAVAILABLE');
+  await tick();
+  assert.equal(h.state.preparationCalls, 0);
+  assert.equal(h.state.clientCalls, 0);
+});
 
 test('composes a bound PUBLIC preparation with the existing bridge and revalidates before dispatch/release', async () => {
   const h = harness();
@@ -410,6 +509,7 @@ test('does not retain aliases to the caller binding or dependency container', as
       throw new Error('REPLACEMENT_CLIENT_MUST_NOT_RUN');
     },
   };
+  await until(() => h.state.bound !== null);
   assert.equal(h.state.bound?.tenantId, 'tenant:one');
   const captured = h.state.bound;
   if (captured === null) throw new Error('expected captured binding');

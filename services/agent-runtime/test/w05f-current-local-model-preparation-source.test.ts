@@ -162,6 +162,82 @@ function harness() {
   };
 }
 
+test('preparation observes real work before current reads and propagates context descendants', async () => {
+  const actual = deferred<undefined>();
+  let reads = 0;
+  let contextCalls = 0;
+  let finished = 0;
+  const observed: Promise<unknown>[] = [];
+  const source = new CurrentLocalModelPreparationSource({
+    now: () => NOW,
+    routing: {
+      readCurrent: () => {
+        reads += 1;
+        return record();
+      },
+      strategies: { registryVersion: 'registry:v1', select: () => null },
+      routeIntelligence: () => route(),
+    },
+    context: {
+      async prepareCurrent(_input, _signal, registerWork) {
+        contextCalls += 1;
+        if (!registerWork) throw new Error('fixture observer missing');
+        // Represents a bounded W06 null result with acquisition still pending.
+        registerWork(actual.promise);
+        return null;
+      },
+      revalidateCurrent: async () => false,
+      isCurrent: () => false,
+    },
+  });
+  const signal = new AbortController().signal;
+  const pending = source.prepareCurrent(binding, signal, (work) => {
+    if (observed.length === 0) assert.equal(reads, 0);
+    observed.push(work);
+    void work.then(() => {
+      finished += 1;
+    });
+  });
+  assert.equal(observed.length, 1);
+  assert.equal(await pending, null);
+  assert.equal(observed.length, 2);
+  assert.equal(finished, 1);
+  assert.equal(await source.prepareCurrent(binding, signal), null);
+  assert.equal(contextCalls, 1);
+  actual.resolve(undefined);
+  await Promise.all(observed);
+  await source.prepareCurrent(binding, signal);
+  assert.equal(contextCalls, 2);
+});
+
+test('preparation observer rejection starts neither routing nor context; revalidation uses a gated fence', async () => {
+  const h = harness();
+  assert.equal(
+    await h.source.prepareCurrent(binding, h.controller.signal, () => {
+      throw new Error('observation denied');
+    }),
+    null,
+  );
+  assert.equal(h.state.routeCalls, 0);
+  assert.equal(h.state.contextCalls, 0);
+  const prepared = await h.prepare();
+  if (!prepared) throw new Error('fixture preparation missing');
+  const before = h.state.revalidateCalls;
+  assert.equal(
+    await h.source.revalidateCurrent(
+      prepared.preparationRef,
+      binding,
+      NOW,
+      h.controller.signal,
+      () => {
+        throw new Error('observation denied');
+      },
+    ),
+    false,
+  );
+  assert.equal(h.state.revalidateCalls, before);
+});
+
 test('missing owner dependencies abstain without calling a router or context adapter', async () => {
   const source = new CurrentLocalModelPreparationSource({ now: () => NOW });
   assert.equal(await source.prepareCurrent(binding, new AbortController().signal), null);
@@ -306,6 +382,7 @@ test('routing revocation during awaited context denies late preparation', async 
   const pending = deferred<unknown>();
   h.state.wait = pending.promise;
   const running = h.prepare();
+  await Promise.resolve(); // the admitted producer starts in its gated microtask
   assert.equal(h.state.contextCalls, 1);
   h.state.record = null;
   pending.resolve(context());
@@ -317,6 +394,7 @@ test('cancelled pending context remains busy until settlement, cannot publish la
   const pending = deferred<unknown>();
   h.state.wait = pending.promise;
   const running = h.prepare();
+  await Promise.resolve();
   h.controller.abort();
   assert.equal(await h.source.prepareCurrent(binding, new AbortController().signal), null);
   assert.equal(h.state.contextCalls, 1);
@@ -340,6 +418,7 @@ test('routing changes across asynchronous revalidation are checked again before 
     NOW,
     h.controller.signal,
   );
+  await Promise.resolve();
   assert.equal(h.state.revalidateCalls, 1);
   h.state.record = null;
   pending.resolve(true);

@@ -5,6 +5,9 @@ import {
   type LocalInferenceRequest,
   type LocalModelManifestProjection,
   type SelectedModelRouteProjection,
+  type LocalModelWorkObserver,
+  startObservedLocalModelWork,
+  registerLocalModelWork,
 } from './local-inference.js';
 import {
   KeyedLocalQwenInferenceClient,
@@ -54,12 +57,14 @@ export interface SessionLocalModelPreparationSource {
   prepareCurrent(
     binding: SessionLocalModelBinding,
     signal: AbortSignal,
+    registerWork?: LocalModelWorkObserver,
   ): Promise<SessionLocalModelPreparation | null>;
   revalidateCurrent(
     preparationRef: string,
     binding: SessionLocalModelBinding,
     nowEpochMs: number,
     signal: AbortSignal,
+    registerWork?: LocalModelWorkObserver,
   ): Promise<boolean>;
   /** Synchronous, side-effect-free current lookup, not an optimistic cached approval. */
   isCurrent(preparationRef: string, binding: SessionLocalModelBinding, nowEpochMs: number): boolean;
@@ -70,6 +75,7 @@ export interface SessionLocalModelGuards {
   revalidateCurrent(): Promise<boolean>;
   isCurrent(): boolean;
   registerReleaseGuard(guard: (nowEpochMs: number) => boolean): void;
+  registerWork(work: Promise<unknown>): void;
 }
 
 export interface SessionBoundLocalModelDependencies {
@@ -79,6 +85,7 @@ export interface SessionBoundLocalModelDependencies {
     infer(
       request: LocalInferenceRequest,
       dispatchGuard: () => boolean,
+      registerWork: LocalModelWorkObserver,
     ): Promise<LocalInferenceResult>;
   };
   readonly source?: SessionLocalModelPreparationSource;
@@ -257,7 +264,7 @@ function bindingFrom(value: unknown): SessionLocalModelBinding | null {
 }
 
 function guardsFrom(value: unknown): SessionLocalModelGuards | null {
-  const keys = ['revalidateCurrent', 'isCurrent', 'registerReleaseGuard'] as const;
+  const keys = ['revalidateCurrent', 'isCurrent', 'registerReleaseGuard', 'registerWork'] as const;
   if (!ownRecord(value, keys)) return null;
   const prototype = Object.getPrototypeOf(value);
   if (prototype !== Object.prototype && prototype !== null) return null;
@@ -365,23 +372,66 @@ export class SessionBoundLocalModel {
     let guards: SessionLocalModelGuards | null;
     let startedAt: number;
     try {
-      binding = bindingFrom(capture(input));
       guards = guardsFrom(sessionGuards);
-      if (binding === null || guards === null) return Promise.resolve(abstain('INVALID_REQUEST'));
-      if (aborted(signal)) return Promise.resolve(abstain('CANCELLED'));
-      startedAt = this.#now();
-      if (!time(startedAt) || binding.deadlineMs - startedAt > MAX_REQUEST_MS)
-        return Promise.resolve(abstain('INVALID_REQUEST'));
-      if (binding.deadlineMs <= startedAt) return Promise.resolve(abstain('TIMEOUT'));
+      if (guards === null) return Promise.resolve(abstain('INVALID_REQUEST'));
     } catch {
       return Promise.resolve(abstain('INVALID_REQUEST'));
     }
-    if (!this.#source) return Promise.resolve(abstain('UNAVAILABLE'));
-    if (this.#busy) return Promise.resolve(abstain('BUSY'));
+    // The mandatory root fence is registered synchronously, even for a genuine
+    // no-work rejection. It settles only after the producer and every admitted
+    // descendant operation have terminated; it is NOT the logical response.
+    let resolveRoot: () => void = () => undefined;
+    const rootWork = new Promise<void>((resolve) => {
+      resolveRoot = resolve;
+    });
+    try {
+      registerLocalModelWork(guards.registerWork, rootWork);
+    } catch {
+      resolveRoot();
+      return Promise.resolve(abstain('UNAVAILABLE'));
+    }
+    const noWork = (code: Extract<LocalInferenceResult, { status: 'ABSTAINED' }>['code']) => {
+      resolveRoot();
+      return Promise.resolve(abstain(code));
+    };
+    try {
+      binding = bindingFrom(capture(input));
+      if (binding === null) return noWork('INVALID_REQUEST');
+      if (aborted(signal)) return noWork('CANCELLED');
+      startedAt = this.#now();
+      if (!time(startedAt) || binding.deadlineMs - startedAt > MAX_REQUEST_MS)
+        return noWork('INVALID_REQUEST');
+      if (binding.deadlineMs <= startedAt) return noWork('TIMEOUT');
+    } catch {
+      return noWork('INVALID_REQUEST');
+    }
+    if (!this.#source) return noWork('UNAVAILABLE');
+    if (this.#busy) return noWork('BUSY');
     this.#busy = true;
     const capturedBinding = binding;
     const capturedGuards = guards;
     const controller = new AbortController();
+    let producerDone = false;
+    const pendingWork = new Set<Promise<void>>();
+    const releaseIfQuiescent = (): void => {
+      if (!producerDone || pendingWork.size !== 0) return;
+      this.#busy = false;
+      resolveRoot();
+    };
+    const registerWork: LocalModelWorkObserver = (work) => {
+      // Delegate first: the gated descendant must not start if admission fails.
+      registerLocalModelWork(capturedGuards.registerWork, work);
+      const settled = Promise.prototype.then.call(
+        work,
+        () => undefined,
+        () => undefined,
+      ) as Promise<void>;
+      pendingWork.add(settled);
+      void settled.then(() => {
+        pendingWork.delete(settled);
+        releaseIfQuiescent();
+      });
+    };
     return new Promise((resolve) => {
       let finished = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -416,21 +466,31 @@ export class SessionBoundLocalModel {
         timer = setTimeout(() => stop('TIMEOUT'), capturedBinding.deadlineMs - startedAt);
         if (aborted(signal)) {
           onCancel();
-          this.#busy = false;
+          producerDone = true;
+          releaseIfQuiescent();
           return;
         }
       } catch {
-        this.#busy = false;
+        producerDone = true;
+        releaseIfQuiescent();
         finish(abstain('INVALID_REQUEST'));
         return;
       }
-      void this.#produce(capturedBinding, controller.signal, capturedGuards, startedAt).then(
+      void this.#produce(
+        capturedBinding,
+        controller.signal,
+        capturedGuards,
+        startedAt,
+        registerWork,
+      ).then(
         (result) => {
-          this.#busy = false;
+          producerDone = true;
+          releaseIfQuiescent();
           finish(result);
         },
         () => {
-          this.#busy = false;
+          producerDone = true;
+          releaseIfQuiescent();
           finish(abstain('UNAVAILABLE'));
         },
       );
@@ -453,13 +513,17 @@ export class SessionBoundLocalModel {
     signal: AbortSignal,
     guards: SessionLocalModelGuards,
     startedAt: number,
+    registerWork: LocalModelWorkObserver,
   ): Promise<LocalInferenceResult> {
     const source = this.#source;
     if (!source) return abstain('UNAVAILABLE');
     // Do not call a producer after the logical timeout/cancel has already won.
     if (this.#currentTime(binding, startedAt, signal) === null)
       return abstain(aborted(signal) ? 'CANCELLED' : 'TIMEOUT');
-    const raw = await source.prepareCurrent(binding, signal);
+    const raw = await startObservedLocalModelWork(
+      () => source.prepareCurrent(binding, signal, registerWork),
+      registerWork,
+    );
     if (aborted(signal)) return abstain('CANCELLED');
     if (raw === null) return abstain('UNAVAILABLE');
     const snapshot = capture(raw);
@@ -526,7 +590,20 @@ export class SessionBoundLocalModel {
     const validate = async (): Promise<boolean> => {
       let now = current();
       if (now === null) return false;
-      if ((await source.revalidateCurrent(prepared.preparationRef, binding, now, signal)) !== true)
+      const checkedAt = now;
+      if (
+        (await startObservedLocalModelWork(
+          () =>
+            source.revalidateCurrent(
+              prepared.preparationRef,
+              binding,
+              checkedAt,
+              signal,
+              registerWork,
+            ),
+          registerWork,
+        )) !== true
+      )
         return false;
       now = current();
       if (now === null || (await guards.revalidateCurrent()) !== true) return false;
@@ -535,7 +612,11 @@ export class SessionBoundLocalModel {
     if (!(await validate()) || !live()) return abstain(aborted(signal) ? 'CANCELLED' : 'REJECTED');
     const result = await inferWithPublicLocalModelPrompt(
       {
-        infer: (request) => this.#client.infer(request, live),
+        infer: (request) =>
+          startObservedLocalModelWork(
+            () => this.#client.infer(request, live, registerWork),
+            registerWork,
+          ),
       },
       {
         tenantId: binding.tenantId,
@@ -588,13 +669,46 @@ export function createSessionBoundKeyedLocalModel(dependencies: {
     ...(dependencies.source === undefined ? {} : { source: dependencies.source }),
     now: dependencies.now,
     client: {
-      async infer(request, guard) {
+      async infer(request, guard, registerWork) {
         if (activeGuard !== null) return abstain('BUSY');
+        // Cleanup is separately owned so the captured guard cannot be lent to a
+        // newer request while the original credential/transport still runs.
+        let finishCleanup: () => void = () => undefined;
+        const cleanup = new Promise<void>((resolve) => {
+          finishCleanup = resolve;
+        });
+        try {
+          registerLocalModelWork(registerWork, cleanup);
+        } catch {
+          finishCleanup();
+          return abstain('UNAVAILABLE');
+        }
+        let logicalDone = false;
+        const pending = new Set<Promise<void>>();
+        const release = (): void => {
+          if (!logicalDone || pending.size !== 0) return;
+          if (activeGuard === guard) activeGuard = null;
+          finishCleanup();
+        };
+        const observe: LocalModelWorkObserver = (work) => {
+          registerLocalModelWork(registerWork, work);
+          const settled = Promise.prototype.then.call(
+            work,
+            () => undefined,
+            () => undefined,
+          ) as Promise<void>;
+          pending.add(settled);
+          void settled.then(() => {
+            pending.delete(settled);
+            release();
+          });
+        };
         activeGuard = guard;
         try {
-          return await keyed.infer(request);
+          return await keyed.infer(request, observe);
         } finally {
-          if (activeGuard === guard) activeGuard = null;
+          logicalDone = true;
+          release();
         }
       },
     },

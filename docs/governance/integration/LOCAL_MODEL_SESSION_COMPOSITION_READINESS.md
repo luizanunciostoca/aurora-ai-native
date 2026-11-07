@@ -30,7 +30,7 @@ canonical managers; it does not introduce another identity or policy registry.
 | Private institutional Memory Fabric projection | Select the chosen original PUBLIC text from an eligible existing COMPANY projection; preserve its complete record identity privately | Missing current owner, unsuitable lifecycle, metadata drift, revocation, expiry or changed bytes cannot become text |
 | `createSessionBoundKeyedLocalModel` | Reuse one existing bounded keyed client; check the request's live guard after credential acquisition and immediately before transport | Revocation while credentials are awaited must result in zero transport calls |
 | Final release guard | Recheck the captured preparation synchronously after W14's last asynchronous attestation check | No stale prepared text is released; absent, duplicate or invalid guards cannot approve output |
-| Lifecycle closure | Cancel/complete using the originally admitted session, connection and request | Uncertain finalization returns `RECONCILIATION_REQUIRED` and quarantines that operation; no automatic retry under another identity |
+| Lifecycle closure | Cancel/complete using the originally admitted session, connection and request, retaining it until registered original local work settles | Uncertain work tracking or canonical finalization returns `RECONCILIATION_REQUIRED` and quarantines that operation; no automatic retry under another identity |
 
 The W14 wrapper supplies a private guards object with asynchronous revalidation,
 a synchronous current-state lookup and one-time registration of the final source
@@ -136,12 +136,49 @@ Passing that proof is not a production source promotion or native inference.
 - The existing client still enforces its model identity, prompt/output budgets,
   information-only response schema, timeout and single-flight rules.
 - Logical cancellation or timeout does not prove transport/model quiescence.
-  Unsettled work remains busy; the persistent underlying client retains its own
-  busy guard after a logical response. Never replace it to bypass that state.
+  Unsettled work remains busy, including the original W14 request, until observed
+  local work and response cleanup settle. Never replace a busy client to bypass it.
 - Invalid synchronous verdicts are denied. A mistakenly returned native rejected
   Promise is contained, not awaited as approval; arbitrary thenables are not assimilated.
 - Callback implementations must not synchronously block the JavaScript thread.
   Timers bound asynchronous waits, not arbitrary blocking trusted code.
+
+## Original-call lifecycle correction
+
+The continuation allocated in [#575/6699625822](https://github.com/luizanunciostoca/aurora-ai-native/issues/575#issuecomment-6699625822)
+corrects a source-level defect in the composed lifecycle. The previous wrappers
+could correctly deliver a bounded logical cancellation while their producer,
+credential read, transport or body cleanup still ran. W14 awaited only that
+logical result and could complete its canonical request too early. Its downstream
+client's own BUSY guard did not prove that W14 had retained the original admission.
+
+The existing private guards now carry a per-call `registerWork(Promise)` observer,
+outside all request bodies, prompt content and serialized binding fields. A real
+work promise is registered before that work may start, including the root producer
+and W06 acquisition. The keyed HTTP composition retains its original credential
+read under the same bounded client operation, rather than ending that operation
+when only the credential waiter's cancellation race settled. HTTP body reads and
+their cancellation/discard cleanup are part of that original local operation.
+
+Logical cancellation/deadline still returns promptly. It does not remove admitted
+work from tracking, lend a newer request's guard to it, or call `completeRequest`
+while accepted work remains pending. Completion uses the originally admitted
+session, connection and request exactly once after observed settlement. Invalid
+tracking must fail closed; missing, malformed, late or over-budget registration
+cannot be treated as a resolved completion barrier. A rejected work promise is a
+terminal observation, not a successful model response or permission grant.
+
+This is a fence around **observed asynchronous work in this process**, not a
+receipt that an independently running HTTP model server has physically stopped.
+Native teardown is separately observed per call in Draft #589; this TypeScript
+candidate neither imports that Android code nor composes a JNI transport.
+
+The discriminating regression was first run against the unchanged prior core
+`a71d3197cbac2e00c6c242eb24b1456c4caf85ff`: while a raw credential read remained
+blocked, the actual W14 completion count was **1**, where the corrected assertion
+requires **0**. The baseline tracked sources did not change. Previously retained
+tests that allowed a new admission during that pending read are corrected rather
+than preserved as desired behavior. Their late-result/identity protection remains.
 
 ## Reproducible offline evidence
 
@@ -197,6 +234,16 @@ uncertain canonical finalization. Test results, exact candidate identity and CI
 receipts belong in the existing readiness PR/coordination issue, not a fabricated
 runtime or physical-acceptance status.
 
+The lifecycle continuation retains the 34 boundary, 19 current-producer and 12
+institutional scenarios, with the premature-completion expectations corrected,
+and adds six separately counted local-work lifecycle scenarios (71 total). The
+proof counts canonical begin/cancel/complete calls and original identities, not
+just the caller's response code or a component-local busy flag. Producer,
+revalidation, W06 acquisition, credential, transport, reader cancellation and
+error-body discard phases must keep the original admission until their observed
+work settles. All blocking phases and upstream records remain explicit test
+fixtures; no network, live consent, native inference or physical action is proved.
+
 ## Remaining gates — not implemented or proven here
 
 1. Bind the actual host authentication, attestation and current purpose/consent/source
@@ -205,6 +252,12 @@ runtime or physical-acceptance status.
    remain unavailable; a permissive fixture must never be promoted as an
    implementation. Launcher-owned ephemeral credentials apply only if the keyed
    HTTP transport is chosen; they are not an inherent prerequisite for JNI.
+   The audited refs have a policy registry/evaluators and Memory Fabric reducers/
+   CAS persistence, but not a composed model-data `CurrentPolicySource`, consent
+   owner or current source invalidation service. COMPANY `VALIDATED` is sufficient
+   for this selected source; `CANONICAL` promotion is not required. Neither state
+   may be manufactured without the legitimate owner's validation evidence.
+   Required consent depends on the real applicable policy, not on a PUBLIC label.
 2. Implement and prove the chosen native host-to-core boundary. The existing keyed
    HTTP client and this TypeScript proof are not equivalent to the disabled Android
    JNI path and do not establish a persistent tablet session. Before native activation,

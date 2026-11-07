@@ -54,6 +54,7 @@ function fixture(
     readonly authLifetimeMs?: number;
     readonly attestationAgeMs?: number;
     readonly registerSyntheticReleaseGuard?: boolean;
+    readonly registerSyntheticWork?: boolean;
   } = {},
 ) {
   let clock = NOW;
@@ -159,11 +160,23 @@ function fixture(
       if (clockFailure) throw new Error('private-clock-error');
       return clock;
     },
-    invoke: async (bound, signal, guards) => {
+    invoke: (bound, signal, guards) => {
       counts.invoke += 1;
       // Explicit software-only source fixture, never an assertion about live consent.
       if (options.registerSyntheticReleaseGuard !== false) guards.registerReleaseGuard(() => true);
-      return options.invoke ? options.invoke(bound, signal, guards) : GENERATED;
+      if (options.registerSyntheticWork === false)
+        return options.invoke ? options.invoke(bound, signal, guards) : Promise.resolve(GENERATED);
+      // This fixture observes its actual synthetic invocation, never a resolved
+      // substitute for production work. Admission is before the fixture starts.
+      let admitted = false;
+      const work = Promise.resolve().then(() => {
+        if (!admitted) throw new Error('fixture work not admitted');
+        return options.invoke ? options.invoke(bound, signal, guards) : GENERATED;
+      });
+      void work.catch(() => undefined);
+      guards.registerWork(work);
+      admitted = true;
+      return work;
     },
   };
   const operation = new LocalModelSessionOperation(deps);
@@ -950,4 +963,211 @@ test('a fulfilled Promise payload is discarded without later thenable assimilati
   assert.equal(denied(await f.operation.run(f.body(), f.binding)), 'REJECTED');
   await tick();
   assert.equal(thenReads, 0);
+});
+
+test('W14 drains real descendant work after logical cancellation and completes only the original request', async () => {
+  const actual = deferred<undefined>();
+  const started = deferred<undefined>();
+  const completed: string[] = [];
+  const f = fixture({
+    invoke: async (_bound, _signal, guards) => {
+      guards.registerWork(actual.promise);
+      started.resolve(undefined);
+      return GENERATED;
+    },
+  });
+  const originalComplete = f.gatewayPort.completeRequest;
+  f.gatewayPort.completeRequest = (input) => {
+    completed.push((input as { requestId: string }).requestId);
+    return originalComplete(input);
+  };
+  const running = f.operation.run(f.body(), f.binding);
+  await started.promise;
+  await tick();
+  assert.equal(f.counts.complete, 0);
+  assert.equal(f.outstanding(), 1);
+  assert.equal(f.operation.cancel(f.body(), f.binding).requested, true);
+  assert.equal(denied(await running), 'CANCELLED');
+  assert.equal(denied(await f.operation.run(f.body('request:other'), f.binding)), 'BUSY');
+  assert.equal(f.counts.begin, 1);
+  assert.equal(f.counts.complete, 0);
+  actual.resolve(undefined);
+  await tick();
+  assert.equal(f.counts.complete, 1);
+  assert.equal(f.outstanding(), 0);
+  assert.deepEqual(completed, ['request:core:1']);
+});
+
+test('missing synchronous root evidence quarantines rather than treating logical fulfillment as quiescence', async () => {
+  const f = fixture({ registerSyntheticWork: false });
+  assert.equal(denied(await f.operation.run(f.body(), f.binding)), 'RECONCILIATION_REQUIRED');
+  await tick();
+  assert.equal(f.counts.complete, 0);
+  assert.equal(f.outstanding(), 1);
+  assert.equal(
+    denied(await f.operation.run(f.body('request:new'), f.binding)),
+    'RECONCILIATION_REQUIRED',
+  );
+});
+
+test('malformed work never evaluates then accessors and never releases canonical ownership', async () => {
+  let accessorReads = 0;
+  const malformed = {
+    get then() {
+      accessorReads += 1;
+      throw new Error('private accessor');
+    },
+  };
+  const f = fixture({
+    invoke: async (_binding, _signal, guards) => {
+      guards.registerWork(malformed as unknown as Promise<unknown>);
+      return GENERATED;
+    },
+  });
+  assert.equal(denied(await f.operation.run(f.body(), f.binding)), 'RECONCILIATION_REQUIRED');
+  await tick();
+  assert.equal(accessorReads, 0);
+  assert.equal(f.counts.complete, 0);
+  assert.equal(f.outstanding(), 1);
+});
+
+test('late work registration during final attestation quarantines without dropping already pending work', async () => {
+  const observation = deferred<DeviceAttestationReference | null>();
+  const finalRead = deferred<undefined>();
+  const actual = deferred<undefined>();
+  let captured: LocalModelSessionGuards | undefined;
+  let reads = 0;
+  const f = fixture({
+    readCurrent: async () => {
+      reads += 1;
+      if (reads === 2) {
+        finalRead.resolve(undefined);
+        return observation.promise;
+      }
+      return f.attestation();
+    },
+    invoke: async (_binding, _signal, guards) => {
+      captured = guards;
+      guards.registerWork(actual.promise);
+      return GENERATED;
+    },
+  });
+  const running = f.operation.run(f.body(), f.binding);
+  await finalRead.promise;
+  if (!captured) throw new Error('fixture guards missing');
+  assert.throws(() => captured?.registerWork(Promise.resolve()), /NOT_ADMITTED/);
+  assert.equal(denied(await running), 'RECONCILIATION_REQUIRED');
+  assert.equal(f.counts.complete, 0);
+  observation.resolve(f.attestation());
+  await tick();
+  assert.equal(f.counts.complete, 0);
+  actual.resolve(undefined);
+  await tick();
+  assert.equal(f.counts.complete, 0);
+  assert.equal(f.outstanding(), 1);
+});
+
+test('finite work admission rejects duplicate and overflow without replacing pending work by a resolved fallback', async () => {
+  for (const mode of ['duplicate', 'overflow'] as const) {
+    const actual = deferred<undefined>();
+    const f = fixture({
+      invoke: async (_binding, _signal, guards) => {
+        if (mode === 'duplicate') {
+          guards.registerWork(actual.promise);
+          guards.registerWork(actual.promise);
+        } else {
+          for (let index = 0; index < 64; index += 1)
+            guards.registerWork(actual.promise.then(() => undefined));
+        }
+        return GENERATED;
+      },
+    });
+    assert.equal(denied(await f.operation.run(f.body(), f.binding)), 'RECONCILIATION_REQUIRED');
+    assert.equal(f.counts.complete, 0);
+    actual.resolve(undefined);
+    await tick();
+    assert.equal(f.counts.complete, 0);
+    assert.equal(f.outstanding(), 1);
+  }
+});
+
+test('rejected actual work is terminal evidence, not approval and not permanent protocol quarantine', async () => {
+  let fail = true;
+  const f = fixture({
+    invoke: async (_binding, _signal, guards) => {
+      if (fail) {
+        let admitted = false;
+        const work = Promise.resolve().then(() => {
+          if (!admitted) throw new Error('not admitted');
+          throw new Error('expected synthetic producer failure');
+        });
+        guards.registerWork(work);
+        admitted = true;
+      }
+      return GENERATED;
+    },
+  });
+  assert.equal(denied(await f.operation.run(f.body(), f.binding)), 'W14_UPSTREAM_UNAVAILABLE');
+  assert.equal(f.counts.complete, 1);
+  fail = false;
+  assert.equal((await f.operation.run(f.body('request:second'), f.binding)).status, 'GENERATED');
+  assert.equal(f.counts.complete, 2);
+});
+
+test('late callback from completed A quarantines pending B using B identity and never dispatches either old work or B', async () => {
+  const beforeDispatch = deferred<undefined>();
+  const release = deferred<undefined>();
+  let prior: LocalModelSessionGuards | undefined;
+  let current: LocalModelSessionGuards | undefined;
+  let dispatches = 0;
+  const cancellations: string[] = [];
+  const f = fixture({
+    invoke: async (binding, signal, guards) => {
+      if (binding.requestId === 'request:A') {
+        prior = guards;
+        return GENERATED;
+      }
+      current = guards;
+      beforeDispatch.resolve(undefined);
+      await release.promise;
+      if (signal.aborted || !guards.isCurrent())
+        return {
+          ...GENERATED,
+          status: 'ABSTAINED',
+          code: 'CANCELLED',
+        };
+      dispatches += 1;
+      return GENERATED;
+    },
+  });
+  const originalCancel = f.gatewayPort.cancelRequest;
+  f.gatewayPort.cancelRequest = (input) => {
+    cancellations.push((input as { requestId: string }).requestId);
+    return originalCancel(input);
+  };
+  assert.equal((await f.operation.run(f.body('request:A'), f.binding)).status, 'GENERATED');
+  assert.equal(f.counts.complete, 1);
+  const second = f.operation.run(f.body('request:B'), f.binding);
+  await beforeDispatch.promise;
+  if (!prior || !current) throw new Error('both fixture guards required');
+  const stale = prior;
+  assert.throws(
+    () => stale.registerWork(Promise.reject(new Error('refused late work'))),
+    /NOT_ADMITTED/,
+  );
+  assert.equal(denied(await second), 'RECONCILIATION_REQUIRED');
+  assert.equal(current.isCurrent(), false);
+  assert.deepEqual(cancellations, ['request:B']);
+  assert.equal(f.counts.begin, 2);
+  assert.equal(f.counts.complete, 1);
+  assert.equal(f.outstanding(), 1);
+  release.resolve(undefined);
+  await tick();
+  assert.equal(dispatches, 0);
+  assert.equal(f.counts.complete, 1);
+  assert.equal(f.outstanding(), 1);
+  assert.equal(
+    denied(await f.operation.run(f.body('request:C'), f.binding)),
+    'RECONCILIATION_REQUIRED',
+  );
 });

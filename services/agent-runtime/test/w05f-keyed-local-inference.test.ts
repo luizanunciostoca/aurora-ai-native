@@ -305,7 +305,7 @@ test('W05-F does not send a request after cancellation while credential source i
   assert.equal(networkCalls, 0);
 });
 
-test('W05-F cancellation terminates a request even if the credential source never resolves', async () => {
+test('W05-F cancellation bounds its logical response even if the credential source never resolves', async () => {
   let sourceWasCalled = false;
   let networkCalls = 0;
   const instance = new KeyedLocalQwenInferenceClient({
@@ -335,4 +335,75 @@ test('W05-F cancellation terminates a request even if the credential source neve
   assert.equal(result.status, 'ABSTAINED');
   if (result.status === 'ABSTAINED') assert.equal(result.code, 'CANCELLED');
   assert.equal(networkCalls, 0);
+});
+
+test('keyed observer owns the raw credential read after cancellation and prevents a newer borrower', async () => {
+  let provide: (value: EphemeralLocalModelCredential | null) => void = () => undefined;
+  const raw = new Promise<EphemeralLocalModelCredential | null>((resolve) => {
+    provide = resolve;
+  });
+  let reads = 0;
+  let sends = 0;
+  let terminal = false;
+  const work: Promise<unknown>[] = [];
+  const instance = new KeyedLocalQwenInferenceClient({
+    now: () => NOW,
+    credentialSource: {
+      readCurrent: () => {
+        reads += 1;
+        return raw;
+      },
+    },
+    transport: fakeFetch(async () => {
+      sends += 1;
+      return completion();
+    }),
+  });
+  const controller = new AbortController();
+  const pending = instance.infer(request({ signal: controller.signal }), (actual) => {
+    assert.equal(reads, 0);
+    work.push(actual);
+    void actual.then(() => {
+      terminal = true;
+    });
+  });
+  for (let i = 0; i < 50 && reads === 0; i += 1) await Promise.resolve();
+  assert.equal(reads, 1);
+  controller.abort();
+  const stopped = await pending;
+  assert.equal(stopped.status === 'ABSTAINED' && stopped.code, 'CANCELLED');
+  const blocked = await instance.infer(request());
+  assert.equal(blocked.status === 'ABSTAINED' && blocked.code, 'BUSY');
+  assert.equal(terminal, false);
+  assert.equal(reads, 1);
+  provide(key());
+  await Promise.all(work);
+  assert.equal(terminal, true);
+  assert.equal(sends, 0);
+  assert.equal((await instance.infer(request())).status, 'GENERATED');
+  assert.equal(sends, 1);
+});
+
+test('keyed observer failure prevents even a credential read', async () => {
+  let reads = 0;
+  let sends = 0;
+  const instance = new KeyedLocalQwenInferenceClient({
+    now: () => NOW,
+    credentialSource: {
+      readCurrent: async () => {
+        reads += 1;
+        return key();
+      },
+    },
+    transport: fakeFetch(async () => {
+      sends += 1;
+      return completion();
+    }),
+  });
+  const result = await instance.infer(request(), () => {
+    throw new Error('unavailable observer');
+  });
+  assert.equal(result.status === 'ABSTAINED' && result.code, 'UNAVAILABLE');
+  assert.equal(reads, 0);
+  assert.equal(sends, 0);
 });

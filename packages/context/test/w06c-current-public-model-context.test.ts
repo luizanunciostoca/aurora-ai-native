@@ -280,6 +280,80 @@ async function until(predicate: () => boolean): Promise<void> {
   throw new Error('fixture checkpoint not reached');
 }
 
+test('W06 observes raw acquisition before it begins and retains its fence after cancellation', async () => {
+  const f = fixture();
+  const read = deferred<ContextSourceReadResult>();
+  f.state.read = () => read.promise;
+  const observed: Promise<unknown>[] = [];
+  let terminals = 0;
+  const pending = f.context.prepareCurrent(f.state.binding, f.controller.signal, (work) => {
+    assert.equal(f.state.ownerReads, 0);
+    assert.equal(f.state.adapterReads, 0);
+    observed.push(work);
+    void work.then(() => {
+      terminals += 1;
+    });
+  });
+  assert.equal(observed.length, 1);
+  await until(() => f.state.adapterReads === 1);
+  f.controller.abort();
+  noOutput(await pending);
+  assert.equal(terminals, 0);
+  noOutput(await f.context.prepareCurrent(f.state.binding, new AbortController().signal));
+  assert.equal(f.state.adapterReads, 1);
+  read.resolve({ items: [makeItem()] });
+  await Promise.all(observed);
+  assert.equal(terminals, 1);
+});
+
+test('W06 rejected observer cannot start owners or release the BUSY slot of a newer acquisition', async () => {
+  const f = fixture();
+  const read = deferred<ContextSourceReadResult>();
+  f.state.read = () => read.promise;
+  const denied = f.context.prepareCurrent(f.state.binding, f.controller.signal, () => {
+    throw new Error('observer rejected');
+  });
+  // Same turn: the denied fence has not reached its terminal handler yet.
+  noOutput(await f.context.prepareCurrent(f.state.binding, new AbortController().signal));
+  noOutput(await denied);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(f.state.ownerReads, 0);
+  assert.equal(f.state.adapterReads, 0);
+  const next = f.context.prepareCurrent(f.state.binding, new AbortController().signal);
+  await until(() => f.state.adapterReads === 1);
+  noOutput(await f.context.prepareCurrent(f.state.binding, new AbortController().signal));
+  assert.equal(f.state.adapterReads, 1);
+  read.resolve({ items: [makeItem()] });
+  ready(await next);
+});
+
+test('W06 refuses asynchronous observers before owner read and revalidation', async () => {
+  const f = fixture();
+  noOutput(
+    await f.context.prepareCurrent(f.state.binding, f.controller.signal, async () => {
+      throw new Error('synthetic async observer');
+    }),
+  );
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(f.state.ownerReads, 0);
+  assert.equal(f.state.adapterReads, 0);
+  const result = ready(await f.prepare());
+  const reads = f.state.ownerReads;
+  assert.equal(
+    await f.context.revalidateCurrent(
+      result.contextRef,
+      f.state.binding,
+      NOW,
+      f.controller.signal,
+      async () => {
+        throw new Error('synthetic async observer');
+      },
+    ),
+    false,
+  );
+  assert.equal(f.state.ownerReads, reads);
+});
+
 test('W06 current source composes canonical policy, consent, acquisition and bounded PUBLIC prompt', async () => {
   const f = fixture();
   const result = ready(await f.prepare());

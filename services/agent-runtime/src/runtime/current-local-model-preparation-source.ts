@@ -4,6 +4,9 @@ import {
   QWEN35_2B_Q4_K_M_SHA256,
   type LocalModelManifestProjection,
   type SelectedModelRouteProjection,
+  type LocalModelWorkObserver,
+  startObservedLocalModelWork,
+  registerLocalModelWork,
 } from './local-inference.js';
 import type {
   SessionLocalModelBinding,
@@ -25,12 +28,14 @@ export interface CurrentPublicModelContextPort {
   prepareCurrent(
     binding: SessionLocalModelBinding,
     signal: AbortSignal,
+    registerWork?: LocalModelWorkObserver,
   ): Promise<CurrentPublicModelContextPreparation | null>;
   revalidateCurrent(
     reference: string,
     binding: SessionLocalModelBinding,
     nowEpochMs: number,
     signal: AbortSignal,
+    registerWork?: LocalModelWorkObserver,
   ): Promise<boolean>;
   isCurrent(reference: string, binding: SessionLocalModelBinding, nowEpochMs: number): boolean;
 }
@@ -392,6 +397,7 @@ export class CurrentLocalModelPreparationSource implements SessionLocalModelPrep
   async prepareCurrent(
     input: SessionLocalModelBinding,
     signal: AbortSignal,
+    registerWork?: LocalModelWorkObserver,
   ): Promise<SessionLocalModelPreparation | null> {
     if (this.#busy) return null;
     this.#active = null;
@@ -414,67 +420,94 @@ export class CurrentLocalModelPreparationSource implements SessionLocalModelPrep
       return null;
     }
     this.#busy = true;
-    try {
-      const routing = this.#readRouting(binding, start);
-      if (!routing) return null;
-      const context = capture(await this.#context.prepareCurrent(binding, signal));
-      const now = this.#now();
-      if (
-        !time(now) ||
-        now < start ||
-        aborted(signal) ||
-        !keys(context, CONTEXT_KEYS) ||
-        context.kind !== 'CURRENT_PUBLIC_MODEL_CONTEXT_PREPARATION' ||
-        !reference(context.contextRef) ||
-        !same(bindingOf(context.binding), binding) ||
-        !liveWindow(context, now, binding.deadlineMs)
-      )
-        return null;
-      const prompt = context.minimizedPublicPrompt;
-      if (
-        !data(prompt) ||
-        prompt.status !== 'READY' ||
-        prompt.authorizesExecution !== false ||
-        prompt.canInvokeTools !== false ||
-        prompt.purpose !== 'INFORMATION_ONLY' ||
-        prompt.tenantId !== binding.tenantId ||
-        prompt.correlationId !== binding.correlationId
-      )
-        return null;
-      const current = this.#readRouting(binding, now);
-      if (!current || !same(current.record, routing.record) || !same(current.route, routing.route))
-        return null;
-      if (this.#sequence >= Number.MAX_SAFE_INTEGER) return null;
-      const expiresAtEpochMs = Math.min(
-        binding.deadlineMs,
-        routing.record.expiresAtEpochMs,
-        context.expiresAtEpochMs as number,
-        now + MAX_AGE_MS,
-      );
-      const prepared: SessionLocalModelPreparation = Object.freeze({
-        kind: 'W05_W06_SESSION_LOCAL_MODEL_PREPARATION',
-        binding,
-        preparationRef: 'local-preparation:' + String(++this.#sequence),
-        observedAtEpochMs: now,
-        expiresAtEpochMs,
-        route: current.route,
-        manifest: current.record.manifest,
-        minimizedPublicPrompt: context.minimizedPublicPrompt,
-        maxOutputTokens: current.record.maxOutputTokens,
+    const contextSource = this.#context;
+    let producerDone = false;
+    const pending = new Set<Promise<void>>();
+    const release = (): void => {
+      if (producerDone && pending.size === 0) this.#busy = false;
+    };
+    const observe: LocalModelWorkObserver = (work) => {
+      if (registerWork !== undefined) registerLocalModelWork(registerWork, work);
+      const settled = Promise.prototype.then.call(
+        work,
+        () => undefined,
+        () => undefined,
+      ) as Promise<void>;
+      pending.add(settled);
+      void settled.then(() => {
+        pending.delete(settled);
+        release();
       });
-      this.#active = {
-        prepared,
-        routing: current.record,
-        context: context as unknown as CurrentPublicModelContextPreparation,
-        signal,
-        lastNow: now,
-      };
-      return this.isCurrent(prepared.preparationRef, binding, now) ? prepared : null;
+    };
+    try {
+      return await startObservedLocalModelWork(async () => {
+        if (aborted(signal)) return null;
+        const routing = this.#readRouting(binding, start);
+        if (!routing) return null;
+        const context = capture(await contextSource.prepareCurrent(binding, signal, observe));
+        const now = this.#now();
+        if (
+          !time(now) ||
+          now < start ||
+          aborted(signal) ||
+          !keys(context, CONTEXT_KEYS) ||
+          context.kind !== 'CURRENT_PUBLIC_MODEL_CONTEXT_PREPARATION' ||
+          !reference(context.contextRef) ||
+          !same(bindingOf(context.binding), binding) ||
+          !liveWindow(context, now, binding.deadlineMs)
+        )
+          return null;
+        const prompt = context.minimizedPublicPrompt;
+        if (
+          !data(prompt) ||
+          prompt.status !== 'READY' ||
+          prompt.authorizesExecution !== false ||
+          prompt.canInvokeTools !== false ||
+          prompt.purpose !== 'INFORMATION_ONLY' ||
+          prompt.tenantId !== binding.tenantId ||
+          prompt.correlationId !== binding.correlationId
+        )
+          return null;
+        const current = this.#readRouting(binding, now);
+        if (
+          !current ||
+          !same(current.record, routing.record) ||
+          !same(current.route, routing.route)
+        )
+          return null;
+        if (this.#sequence >= Number.MAX_SAFE_INTEGER) return null;
+        const expiresAtEpochMs = Math.min(
+          binding.deadlineMs,
+          routing.record.expiresAtEpochMs,
+          context.expiresAtEpochMs as number,
+          now + MAX_AGE_MS,
+        );
+        const prepared: SessionLocalModelPreparation = Object.freeze({
+          kind: 'W05_W06_SESSION_LOCAL_MODEL_PREPARATION',
+          binding,
+          preparationRef: 'local-preparation:' + String(++this.#sequence),
+          observedAtEpochMs: now,
+          expiresAtEpochMs,
+          route: current.route,
+          manifest: current.record.manifest,
+          minimizedPublicPrompt: context.minimizedPublicPrompt,
+          maxOutputTokens: current.record.maxOutputTokens,
+        });
+        this.#active = {
+          prepared,
+          routing: current.record,
+          context: context as unknown as CurrentPublicModelContextPreparation,
+          signal,
+          lastNow: now,
+        };
+        return this.isCurrent(prepared.preparationRef, binding, now) ? prepared : null;
+      }, registerWork);
     } catch {
       this.#active = null;
       return null;
     } finally {
-      this.#busy = false;
+      producerDone = true;
+      release();
     }
   }
 
@@ -537,35 +570,39 @@ export class CurrentLocalModelPreparationSource implements SessionLocalModelPrep
     binding: SessionLocalModelBinding,
     nowEpochMs: number,
     signal: AbortSignal,
+    registerWork?: LocalModelWorkObserver,
   ): Promise<boolean> {
     const active = this.#active;
     let admitted = false;
     try {
-      if (
-        !active ||
-        aborted(signal) ||
-        !this.isCurrent(reference_, binding, nowEpochMs) ||
-        !this.#context
-      )
-        return false;
-      admitted = true;
-      if (
-        (await this.#context.revalidateCurrent(
-          active.context.contextRef,
-          active.prepared.binding,
-          nowEpochMs,
-          signal,
-        )) !== true
-      ) {
-        if (this.#active === active) this.#active = null;
-        return false;
-      }
-      if (this.#active !== active) return false;
-      if (aborted(signal)) {
-        this.#active = null;
-        return false;
-      }
-      return this.isCurrent(reference_, binding, this.#now());
+      return await startObservedLocalModelWork(async () => {
+        if (
+          !active ||
+          aborted(signal) ||
+          !this.isCurrent(reference_, binding, nowEpochMs) ||
+          !this.#context
+        )
+          return false;
+        admitted = true;
+        if (
+          (await this.#context.revalidateCurrent(
+            active.context.contextRef,
+            active.prepared.binding,
+            nowEpochMs,
+            signal,
+            registerWork,
+          )) !== true
+        ) {
+          if (this.#active === active) this.#active = null;
+          return false;
+        }
+        if (this.#active !== active) return false;
+        if (aborted(signal)) {
+          this.#active = null;
+          return false;
+        }
+        return this.isCurrent(reference_, binding, this.#now());
+      }, registerWork);
     } catch {
       if (admitted && this.#active === active) this.#active = null;
       return false;

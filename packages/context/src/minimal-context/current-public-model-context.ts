@@ -758,6 +758,25 @@ function sourceItem(
   return item;
 }
 
+function registerCurrentContextWork(
+  registerWork: (work: Promise<unknown>) => void,
+  work: Promise<unknown>,
+): void {
+  if (typeof registerWork !== 'function') throw new Error('INVALID_WORK_OBSERVER');
+  const returned: unknown = registerWork(work);
+  if (returned === undefined) return;
+  try {
+    void Promise.prototype.then.call(
+      returned,
+      () => undefined,
+      () => undefined,
+    );
+  } catch {
+    /* Reject thenables without reading their accessors. */
+  }
+  throw new Error('ASYNCHRONOUS_WORK_OBSERVER');
+}
+
 /**
  * Actual W02/W06 producer composition, kept leaf-private and inactive by default.
  * It retains only one bounded preparation capture, never current owner truth.
@@ -781,6 +800,7 @@ export class CurrentPublicModelContext {
   prepareCurrent(
     bindingInput: PublicModelContextBinding,
     signal: AbortSignal,
+    registerWork?: (work: Promise<unknown>) => void,
   ): Promise<CurrentPublicModelContextPreparation | null> {
     let binding: PublicModelContextBinding;
     let started: number;
@@ -836,32 +856,50 @@ export class CurrentPublicModelContext {
         finish(null);
         return;
       }
-      void this.#produce(binding, signal, started, () => settled).then(
-        (prepared) => {
-          this.#busy = false;
-          if (settled) return;
-          try {
-            if (prepared === null) {
-              finish(null);
-              return;
-            }
-            this.#prepared = prepared;
-            if (!this.isCurrent(prepared.result.contextRef, binding, this.#now())) {
+      let admitted = false;
+      // This fence owns the actual acquisition and finalization, not finish(null)
+      // from cancellation/TTL. Admission precedes the first adapter/owner call.
+      const work = Promise.resolve()
+        .then(() => {
+          if (!admitted) throw new Error('CURRENT_CONTEXT_WORK_NOT_ADMITTED');
+          return this.#produce(binding, signal, started, () => settled);
+        })
+        .then(
+          (prepared) => {
+            this.#busy = false;
+            if (settled) return;
+            try {
+              if (prepared === null) {
+                finish(null);
+                return;
+              }
+              this.#prepared = prepared;
+              if (!this.isCurrent(prepared.result.contextRef, binding, this.#now())) {
+                this.#prepared = null;
+                finish(null);
+                return;
+              }
+              finish(prepared.result);
+            } catch {
               this.#prepared = null;
               finish(null);
-              return;
             }
-            finish(prepared.result);
-          } catch {
-            this.#prepared = null;
+          },
+          () => {
+            this.#busy = false;
             finish(null);
-          }
-        },
-        () => {
-          this.#busy = false;
-          finish(null);
-        },
-      );
+          },
+        );
+      try {
+        if (registerWork !== undefined) {
+          registerCurrentContextWork(registerWork, work);
+        }
+        admitted = true;
+      } catch {
+        // The denied gated task still has a terminal handler queued. Let that
+        // sole handler release BUSY, so it cannot release a newer preparation.
+        finish(null);
+      }
     });
   }
 
@@ -870,9 +908,23 @@ export class CurrentPublicModelContext {
     binding: PublicModelContextBinding,
     nowEpochMs: number,
     signal: AbortSignal,
+    registerWork?: (work: Promise<unknown>) => void,
   ): Promise<boolean> {
+    let admitted = false;
+    const work = Promise.resolve().then(() => {
+      if (!admitted) return false;
+      try {
+        return !aborted(signal) && this.isCurrent(contextRef, binding, nowEpochMs);
+      } catch {
+        return false;
+      }
+    });
     try {
-      return !aborted(signal) && this.isCurrent(contextRef, binding, nowEpochMs);
+      if (registerWork !== undefined) {
+        registerCurrentContextWork(registerWork, work);
+      }
+      admitted = true;
+      return await work;
     } catch {
       return false;
     }
@@ -962,7 +1014,7 @@ export class CurrentPublicModelContext {
     stopped: () => boolean,
   ): Promise<Prepared | null> {
     const owner = this.#owner;
-    if (!owner) return null;
+    if (!owner || stopped() || aborted(signal)) return null;
     const initial = inputs(owner, binding, started);
     const adapters = adapterCaptures(owner);
     const sources: SourceCapture[] = [];

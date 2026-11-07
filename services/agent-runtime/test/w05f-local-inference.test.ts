@@ -119,6 +119,141 @@ function nextTurn(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+test('real-work fence is admitted before transport and outlives logical cancellation and discard', async () => {
+  const response = deferred<Response>();
+  const cleanup = deferred<undefined>();
+  let calls = 0;
+  let discards = 0;
+  let terminals = 0;
+  const work: Promise<unknown>[] = [];
+  const instance = client(
+    fakeFetch(async () => {
+      calls += 1;
+      return response.promise;
+    }),
+  );
+  const controller = new AbortController();
+  const pending = instance.infer(request({ signal: controller.signal }), (actual) => {
+    assert.equal(calls, 0);
+    work.push(actual);
+    void actual.then(() => {
+      terminals += 1;
+    });
+  });
+  assert.equal(work.length, 1);
+  await nextTurn();
+  assert.equal(calls, 1);
+  controller.abort();
+  expectAbstained(await pending, 'CANCELLED');
+  assert.equal(terminals, 0);
+  expectAbstained(await instance.infer(request()), 'BUSY');
+  response.resolve(
+    new Response(
+      new ReadableStream<Uint8Array>({
+        cancel() {
+          discards += 1;
+          return cleanup.promise;
+        },
+      }),
+      { status: 503 },
+    ),
+  );
+  await nextTurn();
+  assert.equal(discards, 1);
+  assert.equal(terminals, 0);
+  expectAbstained(await instance.infer(request()), 'BUSY');
+  cleanup.resolve(undefined);
+  await Promise.all(work);
+  assert.equal(terminals, 1);
+});
+
+test('throwing work observer never starts its scheduled transport and does not poison a no-work slot', async () => {
+  let calls = 0;
+  const instance = client(
+    fakeFetch(async () => {
+      calls += 1;
+      return completion();
+    }),
+  );
+  expectAbstained(
+    await instance.infer(request(), () => {
+      throw new Error('observer failed');
+    }),
+    'UNAVAILABLE',
+  );
+  await nextTurn();
+  assert.equal(calls, 0);
+  assert.equal((await instance.infer(request())).status, 'GENERATED');
+  assert.equal(calls, 1);
+});
+
+test('async or value-returning observer is rejected without starting transport or reading thenables', async () => {
+  let thenReads = 0;
+  const observers = [
+    () => true,
+    async () => {
+      throw new Error('synthetic async observer failure');
+    },
+    () => ({
+      get then() {
+        thenReads += 1;
+        throw new Error('not a native Promise');
+      },
+    }),
+  ];
+  for (const observer of observers) {
+    let calls = 0;
+    const instance = client(
+      fakeFetch(async () => {
+        calls += 1;
+        return completion();
+      }),
+    );
+    expectAbstained(await instance.infer(request(), observer), 'UNAVAILABLE');
+    await nextTurn();
+    assert.equal(calls, 0);
+  }
+  assert.equal(thenReads, 0);
+});
+
+test('real-work fence includes awaited reader cancellation after bounded response', async () => {
+  const cleanup = deferred<undefined>();
+  let cancelling = false;
+  let terminal = false;
+  const instance = client(
+    fakeFetch(
+      async () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            cancel() {
+              cancelling = true;
+              return cleanup.promise;
+            },
+          }),
+          { headers: { 'content-type': 'application/json' } },
+        ),
+    ),
+  );
+  const controller = new AbortController();
+  const work: Promise<unknown>[] = [];
+  const pending = instance.infer(request({ signal: controller.signal }), (actual) => {
+    work.push(actual);
+    void actual.then(() => {
+      terminal = true;
+    });
+  });
+  await nextTurn();
+  controller.abort();
+  expectAbstained(await pending, 'CANCELLED');
+  await nextTurn();
+  assert.equal(cancelling, true);
+  assert.equal(terminal, false);
+  expectAbstained(await instance.infer(request()), 'BUSY');
+  cleanup.resolve(undefined);
+  await Promise.all(work);
+  assert.equal(terminal, true);
+});
+
 test('W05 local model invokes only loopback and returns untrusted text, never execution', async () => {
   let calls = 0;
   const implementation = fakeFetch(async (url, init) => {
@@ -651,6 +786,7 @@ test(
         }),
       );
       const pending = instance.infer(request({ signal: controller.signal }));
+      await nextTurn(); // cancellation must occur during the actual transport
       controller.abort();
       const cancelled = await pending;
       expectAbstained(cancelled, 'CANCELLED');

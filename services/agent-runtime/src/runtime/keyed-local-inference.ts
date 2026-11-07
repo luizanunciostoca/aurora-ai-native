@@ -3,6 +3,7 @@ import {
   LocalQwenInferenceClient,
   type LocalInferenceRequest,
   type LocalInferenceResult,
+  type LocalModelWorkObserver,
 } from './local-inference.js';
 
 const API_KEY_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
@@ -120,34 +121,21 @@ function assertRequestShape(
   return { headers, signal: init.signal };
 }
 
-function readCredentialWithinRequest(
+async function readCredentialWithinRequest(
   source: EphemeralLocalModelCredentialSource,
   signal: AbortSignal,
 ): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new Error('LOCAL_KEY_REQUEST_CANCELLED'));
-      return;
-    }
-    const cancelled = (): void => {
-      signal.removeEventListener('abort', cancelled);
-      reject(new Error('LOCAL_KEY_REQUEST_CANCELLED'));
-    };
-    signal.addEventListener('abort', cancelled, { once: true });
-    void Promise.resolve()
-      .then(() => source.readCurrent())
-      .then(
-        (value) => {
-          signal.removeEventListener('abort', cancelled);
-          if (signal.aborted) reject(new Error('LOCAL_KEY_REQUEST_CANCELLED'));
-          else resolve(value);
-        },
-        () => {
-          signal.removeEventListener('abort', cancelled);
-          reject(new Error('LOCAL_KEY_SOURCE_UNAVAILABLE'));
-        },
-      );
-  });
+  if (signal.aborted) throw new Error('LOCAL_KEY_REQUEST_CANCELLED');
+  let value: unknown;
+  try {
+    // The outer bounded client returns cancellation immediately. Its real work
+    // must still own this raw read, even if the credential owner ignores abort.
+    value = await source.readCurrent();
+  } catch {
+    throw new Error('LOCAL_KEY_SOURCE_UNAVAILABLE');
+  }
+  if (signal.aborted) throw new Error('LOCAL_KEY_REQUEST_CANCELLED');
+  return value;
 }
 
 /**
@@ -192,7 +180,10 @@ export class KeyedLocalQwenInferenceClient {
     this.#client = new LocalQwenInferenceClient({ transport: keyedTransport, now });
   }
 
-  infer(request: LocalInferenceRequest): Promise<LocalInferenceResult> {
-    return this.#client.infer(request);
+  infer(
+    request: LocalInferenceRequest,
+    registerWork?: LocalModelWorkObserver,
+  ): Promise<LocalInferenceResult> {
+    return this.#client.infer(request, registerWork);
   }
 }

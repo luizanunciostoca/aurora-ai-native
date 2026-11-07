@@ -9,6 +9,7 @@ import { performance } from 'node:perf_hooks';
 import { ReadableStream } from 'node:stream/web';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { fileURLToPath } from 'node:url';
+import { TextEncoder } from 'node:util';
 
 // Offline, one-tree composition proof. Run only after npm run build and
 // tsc -p services/mobile-gateway/tsconfig.test.json in the same checked-out tree.
@@ -288,6 +289,8 @@ const institutionalScenario = (name, run) =>
     run,
     coverage: 'REAL_AUTHORED_PUBLIC_CONTENT_WITH_SYNTHETIC_MEMORY_AND_AUTHORITY_FIXTURES',
   });
+const lifecycleScenario = (name, run) =>
+  cases.push({ name, run, coverage: 'ACTUAL_LOCAL_WORK_LIFECYCLE_CLOSURE' });
 
 function noAuthority(value, gateway = false) {
   eq(value.authorizesExecution, false);
@@ -314,6 +317,35 @@ function deferred() {
     resolvePromise = resolvePending;
   });
   return { promise, resolve: resolvePromise };
+}
+
+function retainedOriginalRequest(f, request) {
+  eq(f.counters.beginCalls, 1);
+  eq(f.counters.cancelCalls, 1);
+  eq(f.counters.completeCalls, 0, 'logical cancellation must not complete original work');
+  eq(f.outstanding(), 1, 'the original canonical request must remain admitted');
+  for (const entry of f.lifecycleOperations) {
+    eq(entry.sessionId, f.binding.sessionId);
+    eq(entry.connectionId, f.binding.connectionId);
+    eq(entry.requestId, request.requestId);
+    ok(entry.operation !== 'completeRequest');
+  }
+}
+
+function finalizedOriginalRequest(f, request) {
+  eq(f.counters.completeCalls, 1, 'actual settlement must finalize exactly once');
+  deep(
+    f.lifecycleOperations.filter((entry) => entry.operation === 'completeRequest'),
+    [
+      {
+        operation: 'completeRequest',
+        sessionId: f.binding.sessionId,
+        connectionId: f.binding.connectionId,
+        requestId: request.requestId,
+      },
+    ],
+  );
+  eq(f.outstanding(), 0);
 }
 
 async function bounded(promise, label = 'scenario') {
@@ -968,20 +1000,20 @@ function currentOwnerFixture({
     ...(options.uncomposedRouting ? {} : { routing }),
   });
   const source = {
-    async prepareCurrent(bound, signal) {
+    async prepareCurrent(bound, signal, registerWork) {
       counters.producerCalls += 1;
       totals.producerCalls += 1;
       rememberBound(bound);
-      const prepared = await actual.prepareCurrent(bound, signal);
+      const prepared = await actual.prepareCurrent(bound, signal, registerWork);
       rememberPreparation(prepared);
       if (options.currentPreparedHook)
         await options.currentPreparedHook({ f: fixture(), prepared });
       return prepared;
     },
-    async revalidateCurrent(reference, bound, nowEpochMs, signal) {
+    async revalidateCurrent(reference, bound, nowEpochMs, signal, registerWork) {
       counters.sourceRevalidations += 1;
       totals.sourceRevalidations += 1;
-      return actual.revalidateCurrent(reference, bound, nowEpochMs, signal);
+      return actual.revalidateCurrent(reference, bound, nowEpochMs, signal, registerWork);
     },
     isCurrent(reference, bound, nowEpochMs) {
       counters.sourceSyncChecks += 1;
@@ -1013,7 +1045,11 @@ function fixture(options = {}) {
     currentSourceReads: 0,
     currentStrategySelections: 0,
     institutionalSnapshotReads: 0,
+    beginCalls: 0,
+    cancelCalls: 0,
+    completeCalls: 0,
   };
+  const lifecycleOperations = [];
   let lastPreparation;
   let lastBound;
   const authenticator = {
@@ -1265,6 +1301,7 @@ function fixture(options = {}) {
       eq(reference, PREPARATION_REF);
       eq(nowEpochMs, currentNow);
       deep(bound, lastBound);
+      if (options.revalidateHook) await options.revalidateHook({ counters, f });
       return sourceCurrent && !signal.aborted;
     },
     isCurrent(reference, bound, nowEpochMs) {
@@ -1295,26 +1332,40 @@ function fixture(options = {}) {
     ...clientDependencies,
     ...(options.missingSource ? {} : { source }),
   });
-  const gatewayPort = options.completeFault
-    ? new Proxy(gateway, {
-        get(target, key) {
-          if (key === 'completeRequest')
-            return () => {
-              counters.completionFaults += 1;
-              return {
-                ok: false,
-                error: {
-                  code: 'REQUEST_NOT_FOUND',
-                  message: 'synthetic finalization fault',
-                  retryable: false,
-                },
-              };
+  const gatewayPort = new Proxy(gateway, {
+    get(target, key) {
+      const countKey = {
+        beginRequest: 'beginCalls',
+        cancelRequest: 'cancelCalls',
+        completeRequest: 'completeCalls',
+      }[key];
+      if (countKey) {
+        return (input) => {
+          counters[countKey] += 1;
+          lifecycleOperations.push({
+            operation: key,
+            sessionId: input.sessionId,
+            connectionId: input.connectionId,
+            requestId: input.requestId,
+          });
+          if (key === 'completeRequest' && options.completeFault) {
+            counters.completionFaults += 1;
+            return {
+              ok: false,
+              error: {
+                code: 'REQUEST_NOT_FOUND',
+                message: 'synthetic finalization fault',
+                retryable: false,
+              },
             };
-          const value = Reflect.get(target, key, target);
-          return typeof value === 'function' ? value.bind(target) : value;
-        },
-      })
-    : gateway;
+          }
+          return target[key](input);
+        };
+      }
+      const value = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
   const operation = new LocalModelSessionOperation({
     gatewaySessions: gatewayPort,
     deviceSessions,
@@ -1343,6 +1394,7 @@ function fixture(options = {}) {
     binding,
     body,
     counters,
+    lifecycleOperations,
     run: (request = body(), socket = binding) => operation.run(request, socket),
     now: () => currentNow,
     setNow(value) {
@@ -1758,7 +1810,7 @@ for (const revokedOwner of ['source', 'W14 device registry']) {
 
 for (const stopKind of ['cancel', 'timeout']) {
   scenario(
-    `${stopKind} during credential await cannot lend a newer request guard to the late credential`,
+    `${stopKind} during credential await retains the original request and cannot lend a newer guard`,
     async () => {
       const started = deferred();
       const release = deferred();
@@ -1794,18 +1846,23 @@ for (const stopKind of ['cancel', 'timeout']) {
       eq(f.counters.credentialReads, 1);
       eq(f.counters.transportCalls, 0);
       await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+      retainedOriginalRequest(f, firstBody);
+      abstained(await bounded(f.run(f.body('request:composition:credential-still-busy'))), 'BUSY');
+      eq(f.counters.producerCalls, 1);
+      eq(f.counters.credentialReads, 1);
+      // The previous expectation allowed a new W14 admission while the old raw
+      // credential read was unresolved. That expectation is the corrected defect.
+      release.resolve();
+      await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+      finalizedOriginalRequest(f, firstBody);
       let newSettled = false;
       const newPending = f.run(f.body(newRequestId)).then((result) => {
         newSettled = true;
         return result;
       });
       await bounded(newStarted.promise);
-      // The keyed wrapper rejects the cancelled credential wait promptly, even
-      // if the synthetic source is uncooperative. A new valid client flight can
-      // therefore own its guard while the old raw credential is still pending.
       eq(f.counters.credentialReads, 2);
       eq(f.counters.transportCalls, 0);
-      release.resolve();
       await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
       eq(f.counters.credentialReads, 2);
       eq(newSettled, false, 'the new flight must remain inside its own credential await');
@@ -1818,6 +1875,7 @@ for (const stopKind of ['cancel', 'timeout']) {
       eq(f.counters.producerCalls, 2);
       eq(f.counters.credentialReads, 2);
       eq(f.counters.transportCalls, 1);
+      eq(f.counters.completeCalls, 2);
       eq(f.outstanding(), 0);
     },
   );
@@ -1934,9 +1992,11 @@ scenario(
         return release.promise;
       },
     });
-    const pending = f.run(f.body('request:composition:short-deadline', NOW + 100));
+    const request = f.body('request:composition:short-deadline', NOW + 100);
+    const pending = f.run(request);
     await bounded(started.promise);
     abstained(await bounded(pending), 'TIMEOUT');
+    retainedOriginalRequest(f, request);
     abstained(await bounded(f.run(f.body('request:composition:timeout-busy'))), 'BUSY');
     eq(f.counters.credentialReads, 1);
     eq(f.counters.transportCalls, 1);
@@ -1955,6 +2015,7 @@ scenario(
     );
     await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
     eq(lateBodiesCancelled, 1);
+    finalizedOriginalRequest(f, request);
   },
 );
 
@@ -1980,6 +2041,7 @@ scenario(
     eq(cancellation.requested, true);
     noAuthority(cancellation, true);
     abstained(await bounded(pending));
+    retainedOriginalRequest(f, firstBody);
     abstained(await bounded(f.run(f.body('request:composition:busy'))), 'BUSY');
     eq(f.counters.credentialReads, 1);
     eq(f.counters.transportCalls, 1);
@@ -1998,6 +2060,7 @@ scenario(
     );
     await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
     eq(lateBodiesCancelled, 1);
+    finalizedOriginalRequest(f, firstBody);
     const recovered = await bounded(f.run(f.body('request:composition:recovered')));
     eq(recovered.status, 'GENERATED');
     eq(recovered.content, GENERATED_TEXT);
@@ -2393,22 +2456,23 @@ currentProducerScenario(
     eq(cancellation.requested, true);
     noAuthority(cancellation, true);
     abstained(await bounded(pending), 'CANCELLED');
-    // The source API deliberately returns null rather than exporting a BUSY result. Let outer
-    // logical cancellation settle, then prove the actual retained W06 read fence rather than
-    // assuming that every caller propagates the same diagnostic code as a native/HTTP client.
+    // The W06 facade may return null promptly, but W14 must also retain its
+    // original request while the actual source acquisition is still pending.
     await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
-    abstained(await bounded(f.run(f.body('request:current-owner:pending-read'))));
-    eq(f.counters.producerCalls, 2);
+    retainedOriginalRequest(f, request);
+    abstained(await bounded(f.run(f.body('request:current-owner:pending-read'))), 'BUSY');
+    eq(f.counters.producerCalls, 1);
     eq(f.counters.currentContextAdapterReads, 1, 'no second read may start before quiescence');
     eq(f.counters.credentialReads, 0);
     eq(f.counters.transportCalls, 0);
     release.resolve();
     await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+    finalizedOriginalRequest(f, request);
     const result = await bounded(f.run(f.body('request:current-owner:recovered')));
     eq(result.status, 'GENERATED');
     eq(result.content, GENERATED_TEXT);
     noAuthority(result, true);
-    eq(f.counters.producerCalls, 3);
+    eq(f.counters.producerCalls, 2);
     eq(f.counters.currentContextAdapterReads, 2);
     eq(f.counters.credentialReads, 1);
     eq(f.counters.transportCalls, 1);
@@ -2841,7 +2905,11 @@ for (const stopKind of ['cancel', 'deadline']) {
         }
         abstained(await bounded(pending), stopKind === 'cancel' ? 'CANCELLED' : 'TIMEOUT');
         await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
-        abstained(await bounded(f.run(f.body(`request:institutional:${stopKind}:blocked`))));
+        retainedOriginalRequest(f, request);
+        abstained(
+          await bounded(f.run(f.body(`request:institutional:${stopKind}:blocked`))),
+          'BUSY',
+        );
         eq(f.counters.currentContextAdapterReads, 1);
         eq(f.counters.institutionalSnapshotReads, 1);
         eq(f.counters.credentialReads, 0);
@@ -2850,17 +2918,152 @@ for (const stopKind of ['cancel', 'deadline']) {
         release.resolve();
       }
       await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+      finalizedOriginalRequest(f, request);
       const result = await bounded(f.run(f.body(`request:institutional:${stopKind}:recovered`)));
       eq(result.status, 'GENERATED');
       eq(result.content, INSTITUTIONAL_SYNTHETIC_REPLY);
       noAuthority(result, true);
-      eq(f.counters.producerCalls, 3);
+      eq(f.counters.producerCalls, 2);
       eq(f.counters.currentContextAdapterReads, 2);
       eq(f.counters.credentialReads, 1);
       eq(f.counters.transportCalls, 1);
       eq(f.outstanding(), 0);
     },
   );
+}
+
+for (const phase of ['prepare', 'revalidate']) {
+  lifecycleScenario(
+    `cancel keeps the original W14 admission during real ${phase} settlement`,
+    async () => {
+      const started = deferred();
+      const release = deferred();
+      const holdFirst = async ({ counters }) => {
+        const count = phase === 'prepare' ? counters.producerCalls : counters.sourceRevalidations;
+        if (count !== 1) return;
+        started.resolve();
+        await release.promise;
+      };
+      const f = fixture(
+        phase === 'prepare'
+          ? { prepareHook: (current) => holdFirst({ counters: current.counters }) }
+          : { revalidateHook: holdFirst },
+      );
+      const request = f.body(`request:lifecycle:${phase}:old`);
+      const pending = f.run(request);
+      try {
+        await bounded(started.promise);
+        eq(f.operation.cancel(request, f.binding).requested, true);
+        abstained(await bounded(pending), 'CANCELLED');
+        await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+        retainedOriginalRequest(f, request);
+        abstained(await bounded(f.run(f.body(`request:lifecycle:${phase}:busy`))), 'BUSY');
+        eq(f.counters.producerCalls, 1);
+        eq(f.counters.credentialReads, 0);
+        eq(f.counters.transportCalls, 0);
+      } finally {
+        release.resolve();
+      }
+      await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+      finalizedOriginalRequest(f, request);
+      const recovered = await bounded(f.run(f.body(`request:lifecycle:${phase}:new`)));
+      eq(recovered.status, 'GENERATED');
+      noAuthority(recovered, true);
+      eq(f.counters.transportCalls, 1);
+      eq(f.counters.completeCalls, 2);
+    },
+  );
+}
+
+for (const phase of ['reader-cancel', 'error-discard']) {
+  for (const stopKind of ['cancel', 'timeout']) {
+    lifecycleScenario(
+      `${stopKind} cannot complete W14 while original ${phase} cleanup remains pending`,
+      async () => {
+        const started = deferred();
+        const release = deferred();
+        let cleanupCalls = 0;
+        let readerCalls = 0;
+        const heldCleanup = () => {
+          cleanupCalls += 1;
+          started.resolve();
+          return release.promise;
+        };
+        // Explicit HTTP/body-reader doubles: their unsettled cleanup is observable,
+        // not evidence that a remote model process has stopped.
+        const f = fixture({
+          responder({ counters }) {
+            if (counters.transportCalls !== 1) return completion();
+            if (phase === 'error-discard')
+              return {
+                ok: false,
+                status: 503,
+                body: { cancel: heldCleanup },
+              };
+            const bytes = new TextEncoder().encode(
+              JSON.stringify({
+                choices: [
+                  {
+                    finish_reason: 'stop',
+                    message: { role: 'assistant', content: GENERATED_TEXT },
+                  },
+                ],
+              }),
+            );
+            return {
+              ok: true,
+              status: 200,
+              headers: new Headers({ 'content-type': 'application/json' }),
+              body: {
+                getReader: () => ({
+                  async read() {
+                    readerCalls += 1;
+                    return readerCalls === 1
+                      ? { done: false, value: bytes }
+                      : { done: true, value: undefined };
+                  },
+                  cancel: heldCleanup,
+                }),
+              },
+            };
+          },
+        });
+        const request = f.body(
+          `request:lifecycle:${phase}:${stopKind}`,
+          NOW + (stopKind === 'timeout' ? 100 : 5000),
+        );
+        const pending = f.run(request);
+        try {
+          await bounded(started.promise);
+          eq(cleanupCalls, 1);
+          if (phase === 'reader-cancel') eq(readerCalls, 2);
+          if (stopKind === 'cancel') eq(f.operation.cancel(request, f.binding).requested, true);
+          abstained(await bounded(pending), stopKind === 'cancel' ? 'CANCELLED' : 'TIMEOUT');
+          await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+          retainedOriginalRequest(f, request);
+          abstained(
+            await bounded(f.run(f.body(`request:lifecycle:${phase}:${stopKind}:busy`))),
+            'BUSY',
+          );
+          eq(f.counters.credentialReads, 1);
+          eq(f.counters.transportCalls, 1);
+          eq(cleanupCalls, 1, 'cleanup is not retried to manufacture settlement');
+        } finally {
+          release.resolve();
+        }
+        await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+        finalizedOriginalRequest(f, request);
+        const recovered = await bounded(
+          f.run(f.body(`request:lifecycle:${phase}:${stopKind}:new`)),
+        );
+        eq(recovered.status, 'GENERATED');
+        noAuthority(recovered, true);
+        eq(f.counters.completeCalls, 2);
+        eq(f.counters.transportCalls, 2);
+        eq(cleanupCalls, 1);
+      },
+    );
+  }
 }
 
 for (const entry of cases) {
@@ -2886,6 +3089,9 @@ const institutionalResults = results.filter(
   (entry) =>
     entry.coverage === 'REAL_AUTHORED_PUBLIC_CONTENT_WITH_SYNTHETIC_MEMORY_AND_AUTHORITY_FIXTURES',
 );
+const lifecycleResults = results.filter(
+  (entry) => entry.coverage === 'ACTUAL_LOCAL_WORK_LIFECYCLE_CLOSURE',
+);
 eq(
   legacyResults.length,
   34,
@@ -2897,7 +3103,8 @@ eq(
   'all retained actual current-producer scenarios must execute',
 );
 eq(institutionalResults.length, 12, 'all selected-content scenarios must execute');
-eq(results.length, 65, 'every declared scenario must execute');
+eq(lifecycleResults.length, 6, 'all actual local-work lifecycle regressions must execute');
+eq(results.length, 71, 'every declared scenario must execute');
 eq(unexpectedFetchCalls, 0);
 for (const identity of identities) {
   eq(
@@ -2942,6 +3149,7 @@ console.log(
         legacyInjectedPreparationBoundaryRegressions: legacyResults.length,
         actualCurrentPreparationProducerComposition: currentProducerResults.length,
         realAuthoredInstitutionalContentWithSyntheticOwners: institutionalResults.length,
+        actualLocalWorkLifecycleClosure: lifecycleResults.length,
       },
       retainedRegressionCaseAssertions: [...legacyResults, ...currentProducerResults].reduce(
         (count, entry) => count + entry.assertions,
@@ -2970,6 +3178,7 @@ console.log(
         'The twelve institutional scenarios use the real 353-byte owner-selected authored PUBLIC text, the actual private institutional adapter and Memory Fabric reducers. Test-only staging, validation, promotion and revocation references are synthetic; no runtime source was promoted or authenticated.',
         'Authenticator, device attestation, W04 planning inputs, upstream owner/policy/consent/source records and readers, model health/manifest, credentials and model transport remain synthetic fixtures, not authenticated live authorities.',
         'The completion-denial case injects one explicit fault over an otherwise real GatewaySessionManager; it is not provider evidence.',
+        'Six local-work lifecycle cases and corrected retained regressions assert that logical cancellation does not complete the original W14 request before observed producer/read/credential/transport/cleanup settlement. This is not quiescence proof for a remote model server.',
         'The global fetch is prohibited. No live HTTP/socket endpoint, model, GGUF integrity verification, Android/JNI, tablet or physical action was exercised.',
         'This proves bounded offline software composition only, not deployed core activation, W14 cryptographic peer authentication, data-consent attestation, native integration or final acceptance.',
       ],

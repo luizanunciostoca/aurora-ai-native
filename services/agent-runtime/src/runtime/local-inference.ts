@@ -100,6 +100,48 @@ export interface LocalInferenceDependencies {
   readonly now: () => number;
 }
 
+/** Private per-call observation; never supplied by a request/model payload. */
+export type LocalModelWorkObserver = (work: Promise<unknown>) => void;
+
+/** Observation must complete in this call; an async callback is not admission. */
+export function registerLocalModelWork(
+  registerWork: LocalModelWorkObserver,
+  work: Promise<unknown>,
+): void {
+  if (typeof registerWork !== 'function') throw new Error('LOCAL_MODEL_WORK_OBSERVER_INVALID');
+  const returned: unknown = registerWork(work);
+  if (returned === undefined) return;
+  try {
+    void Promise.prototype.then.call(
+      returned,
+      () => undefined,
+      () => undefined,
+    );
+  } catch {
+    /* Do not inspect or assimilate arbitrary thenables. */
+  }
+  throw new Error('LOCAL_MODEL_WORK_OBSERVER_NOT_SYNCHRONOUS');
+}
+
+/** Admit the real operation before its first side effect, not its bounded response race. */
+export function startObservedLocalModelWork<T>(
+  start: () => T | Promise<T>,
+  registerWork?: LocalModelWorkObserver,
+): Promise<T> {
+  let admitted = false;
+  const work = Promise.resolve().then(() => {
+    if (!admitted) throw new Error('LOCAL_MODEL_WORK_NOT_ADMITTED');
+    return start();
+  });
+  // A failed observer must not leave a scheduled rejection unhandled or start the producer.
+  void work.catch(() => undefined);
+  if (registerWork !== undefined) {
+    registerLocalModelWork(registerWork, work);
+  }
+  admitted = true;
+  return work;
+}
+
 const NO_AUTHORITY = {
   authoritySemantics: 'INTELLIGENCE_ONLY_NO_AUTHORITY',
   authorizesExecution: false,
@@ -348,7 +390,10 @@ export class LocalQwenInferenceClient {
     };
   }
 
-  async infer(input: LocalInferenceRequest): Promise<LocalInferenceResult> {
+  async infer(
+    input: LocalInferenceRequest,
+    registerWork?: LocalModelWorkObserver,
+  ): Promise<LocalInferenceResult> {
     const request = snapshotRequest(input);
     if (!request) return abstain('INVALID_REQUEST');
     if (!validRoute(request)) return abstain('INVALID_ROUTE');
@@ -430,7 +475,7 @@ export class LocalQwenInferenceClient {
     }
     const timeout = setTimeout(() => stop('TIMEOUT'), deadline - now);
 
-    const operation = (async (): Promise<LocalInferenceResult> => {
+    const operation = async (): Promise<LocalInferenceResult> => {
       try {
         const beforeDispatch = currentStop();
         if (beforeDispatch) return abstain(beforeDispatch);
@@ -482,12 +527,25 @@ export class LocalQwenInferenceClient {
       } catch {
         return abstain(stopCode ?? 'UNAVAILABLE');
       }
-    })();
-    const settledOperation = operation.finally(() => {
-      // An aborted caller is not proof that an uncooperative transport/read has
-      // stopped. Retain BUSY until the actual operation and cleanup settle.
+    };
+    let settledOperation: Promise<LocalInferenceResult>;
+    try {
+      settledOperation = startObservedLocalModelWork(async () => {
+        try {
+          return await operation();
+        } finally {
+          // Includes credential lookup, transport, body read AND awaited cleanup.
+          // Local settlement is not evidence that a remote server has stopped.
+          this.inFlight = false;
+        }
+      }, registerWork);
+    } catch {
+      // The gated microtask cannot start after failed admission.
       this.inFlight = false;
-    });
+      clearTimeout(timeout);
+      detachCancellation();
+      return abstain('UNAVAILABLE');
+    }
     try {
       const result = await Promise.race([settledOperation, stopped]);
       const beforeReturn = currentStop();
