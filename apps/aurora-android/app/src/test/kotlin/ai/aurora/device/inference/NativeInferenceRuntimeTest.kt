@@ -21,7 +21,9 @@ import org.junit.Test
 class NativeInferenceRuntimeTest {
     @Test fun disabledDefaultAndShippingFactoryDoNotStartDependencies() {
         val h = Harness(enabled = false)
-        assertFailure(h.runtime.submit(h.request()), NativeInferenceFailure.DISABLED)
+        val disabled = h.runtime.submit(h.request())
+        assertFailure(disabled, NativeInferenceFailure.DISABLED)
+        assertQuiescence(disabled, NativeInferenceQuiescence.QUIESCENT)
         assertEquals(NativeInferenceState.DISABLED, h.runtime.close())
         assertEquals(0, h.sourceCalls.get())
         assertEquals(0, h.storeCalls.get())
@@ -31,7 +33,9 @@ class NativeInferenceRuntimeTest {
         assertFalse(BuildConfig.AURORA_NATIVE_INFERENCE_ENABLED)
         val shipped = NativeInferencePreparation.create()
         assertEquals(NativeInferenceState.DISABLED, shipped.state())
-        assertFailure(shipped.submit(h.request()), NativeInferenceFailure.DISABLED)
+        val shippingRefusal = shipped.submit(h.request())
+        assertFailure(shippingRefusal, NativeInferenceFailure.DISABLED)
+        assertQuiescence(shippingRefusal, NativeInferenceQuiescence.QUIESCENT)
         assertEquals(NativeInferenceState.DISABLED, shipped.close())
     }
 
@@ -60,7 +64,11 @@ class NativeInferenceRuntimeTest {
             h.request().copy(budget = NativeInferenceBudget(contextTokens = 2_049)),
             h.request().copy(budget = NativeInferenceBudget(maxOutputBytes = 32_769)),
         )
-        invalid.forEach { assertFailure(h.runtime.submit(it), NativeInferenceFailure.INVALID_REQUEST) }
+        invalid.forEach {
+            val call = h.runtime.submit(it)
+            assertFailure(call, NativeInferenceFailure.INVALID_REQUEST)
+            assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
+        }
         h.clock.now.set(Long.MIN_VALUE)
         assertFailure(h.runtime.submit(NativeInferenceRequest("opaque", Long.MAX_VALUE)), NativeInferenceFailure.INVALID_REQUEST)
         assertEquals(0, h.sourceCalls.get())
@@ -73,6 +81,7 @@ class NativeInferenceRuntimeTest {
         val call = h.runtime.submit(h.request())
         assertTrue((h.work as ManualExecutor).runNext())
         assertNull(call.pollResult())
+        assertQuiescence(call, NativeInferenceQuiescence.PENDING)
         assertEquals(NativeInferenceState.BUSY, h.runtime.state())
         assertEquals(0, h.model.closes.get())
         assertEquals(0, h.operation.releases.get())
@@ -87,6 +96,7 @@ class NativeInferenceRuntimeTest {
         assertEquals(1, h.operation.releases.get())
         assertEquals(1, h.model.closes.get())
         assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+        assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
         call.cancel()
         assertSame(result, call.pollResult())
         assertEquals(0, h.operation.cancels.get())
@@ -152,12 +162,14 @@ class NativeInferenceRuntimeTest {
         val call = h.runtime.submit(h.request())
         call.cancel()
         assertFailure(call, NativeInferenceFailure.CANCELLED)
+        assertQuiescence(call, NativeInferenceQuiescence.PENDING)
         assertEquals(NativeInferenceState.BUSY, h.runtime.state())
         h.drain()
         assertEquals(0, h.sourceCalls.get())
         assertEquals(0, h.storeCalls.get())
         assertEquals(0, h.operation.generates.get())
         assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+        assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
     }
 
     @Test fun blockedGenerationCannotDelayCancelOrReleaseItsFlightEarly() {
@@ -171,17 +183,20 @@ class NativeInferenceRuntimeTest {
             await(entered)
             call.cancel()
             assertFailure(call, NativeInferenceFailure.CANCELLED)
+            assertQuiescence(call, NativeInferenceQuiescence.PENDING)
             assertFailure(h.runtime.submit(h.request()), NativeInferenceFailure.BUSY)
             assertEquals(0, h.model.closes.get())
             allowReturn.countDown()
             barrier(worker)
             assertEquals(0, h.operation.releases.get()) // Cancellation is still queued.
             assertEquals(NativeInferenceState.BUSY, h.runtime.state())
+            assertQuiescence(call, NativeInferenceQuiescence.PENDING)
             (h.cancellations as ManualExecutor).drain()
             await(h.model.closed)
             barrier(worker)
             assertEquals(NativeInferenceState.IDLE, h.runtime.state())
             assertFailure(call, NativeInferenceFailure.CANCELLED)
+            assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
         } finally {
             allowReturn.countDown()
             worker.shutdownNow()
@@ -200,6 +215,7 @@ class NativeInferenceRuntimeTest {
             (h.work as ManualExecutor).runNext()
             await(cancelEntered)
             assertFailure(call, NativeInferenceFailure.CANCELLED)
+            assertQuiescence(call, NativeInferenceQuiescence.PENDING)
             assertEquals(NativeInferenceState.BUSY, h.runtime.state())
             assertEquals(0, h.operation.releases.get())
             assertEquals(0, h.model.closes.get())
@@ -208,6 +224,7 @@ class NativeInferenceRuntimeTest {
             h.drain()
             assertEquals(NativeInferenceState.IDLE, h.runtime.state())
             assertEquals(1, h.operation.releases.get())
+            assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
         } finally {
             allowCancel.countDown()
             cancellationLane.shutdownNow()
@@ -227,6 +244,7 @@ class NativeInferenceRuntimeTest {
             h.clock.now.set(request.deadlineNanos)
             h.scheduler.fireDue()
             assertFailure(call, NativeInferenceFailure.TIMEOUT)
+            assertQuiescence(call, NativeInferenceQuiescence.PENDING)
             assertEquals(0, h.model.closes.get())
             assertEquals(0, h.engine.reserves.get())
             assertFailure(h.runtime.submit(h.request()), NativeInferenceFailure.BUSY)
@@ -235,6 +253,7 @@ class NativeInferenceRuntimeTest {
             barrier(worker)
             assertEquals(NativeInferenceState.IDLE, h.runtime.state())
             assertFailure(call, NativeInferenceFailure.TIMEOUT)
+            assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
         } finally {
             allowHash.countDown()
             worker.shutdownNow()
@@ -254,6 +273,7 @@ class NativeInferenceRuntimeTest {
             h.clock.now.set(request.deadlineNanos)
             h.scheduler.fireDue()
             assertFailure(call, NativeInferenceFailure.TIMEOUT)
+            assertQuiescence(call, NativeInferenceQuiescence.PENDING)
             assertEquals(NativeInferenceState.BUSY, h.runtime.state())
             allowReturn.countDown()
             barrier(worker)
@@ -263,6 +283,7 @@ class NativeInferenceRuntimeTest {
             barrier(worker)
             assertFailure(call, NativeInferenceFailure.TIMEOUT)
             assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+            assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
         } finally {
             allowReturn.countDown()
             worker.shutdownNow()
@@ -284,6 +305,7 @@ class NativeInferenceRuntimeTest {
                 if (byDeadline) { h.clock.now.set(request.deadlineNanos); h.scheduler.fireDue() } else call.cancel()
                 val expected = if (byDeadline) NativeInferenceFailure.TIMEOUT else NativeInferenceFailure.CANCELLED
                 assertFailure(call, expected)
+                assertQuiescence(call, NativeInferenceQuiescence.PENDING)
                 assertEquals(NativeInferenceState.BUSY, h.runtime.state())
                 assertEquals(0, h.model.closes.get())
                 assertEquals(0, h.operation.cancels.get()) // Never race cancel against release.
@@ -292,6 +314,7 @@ class NativeInferenceRuntimeTest {
                 barrier(worker)
                 assertFailure(call, expected)
                 assertEquals(NativeInferenceState.IDLE, h.runtime.state())
+                assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
             } finally {
                 allowRelease.countDown()
                 worker.shutdownNow()
@@ -333,10 +356,14 @@ class NativeInferenceRuntimeTest {
             val call = h.runtime.submit(h.request())
             h.drain()
             assertFailure(call, NativeInferenceFailure.QUARANTINED)
+            assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
             assertEquals(0, h.model.closes.get())
             assertEquals(NativeInferenceState.QUARANTINED, h.runtime.state())
-            assertFailure(h.runtime.submit(h.request()), NativeInferenceFailure.QUARANTINED)
+            val refused = h.runtime.submit(h.request())
+            assertFailure(refused, NativeInferenceFailure.QUARANTINED)
+            assertQuiescence(refused, NativeInferenceQuiescence.QUIESCENT)
             assertEquals(NativeInferenceState.QUARANTINED, h.runtime.close())
+            assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
         }
     }
 
@@ -348,6 +375,7 @@ class NativeInferenceRuntimeTest {
         assertEquals(1, h.operation.releases.get())
         assertEquals(1, h.model.closes.get())
         assertFailure(call, NativeInferenceFailure.QUARANTINED)
+        assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
         assertFailure(h.runtime.submit(h.request()), NativeInferenceFailure.QUARANTINED)
     }
 
@@ -360,6 +388,7 @@ class NativeInferenceRuntimeTest {
         assertEquals(1, h.model.closes.get())
         assertEquals(0, h.engine.reserves.get())
         assertFailure(call, NativeInferenceFailure.QUARANTINED)
+        assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
         assertEquals(NativeInferenceState.QUARANTINED, h.runtime.state())
         assertFailure(h.runtime.submit(h.request()), NativeInferenceFailure.QUARANTINED)
         assertEquals(1, h.model.hashCloses.get()) // No retry of an uncertain, possibly reused FD.
@@ -425,12 +454,16 @@ class NativeInferenceRuntimeTest {
     @Test fun schedulerAndInitialWorkerRejectionNeverStartModelWork() {
         val h = Harness()
         h.scheduler.fail = true
-        assertFailure(h.runtime.submit(h.request()), NativeInferenceFailure.NATIVE_UNAVAILABLE)
+        val unscheduled = h.runtime.submit(h.request())
+        assertFailure(unscheduled, NativeInferenceFailure.NATIVE_UNAVAILABLE)
+        assertQuiescence(unscheduled, NativeInferenceQuiescence.QUIESCENT)
         assertEquals(NativeInferenceState.IDLE, h.runtime.state())
         assertEquals(0, h.storeCalls.get())
         val rejected = Harness()
         (rejected.work as ManualExecutor).reject = true
-        assertFailure(rejected.runtime.submit(rejected.request()), NativeInferenceFailure.NATIVE_UNAVAILABLE)
+        val unstarted = rejected.runtime.submit(rejected.request())
+        assertFailure(unstarted, NativeInferenceFailure.NATIVE_UNAVAILABLE)
+        assertQuiescence(unstarted, NativeInferenceQuiescence.QUIESCENT)
         assertEquals(NativeInferenceState.IDLE, rejected.runtime.state())
         assertEquals(0, rejected.engine.reserves.get())
     }
@@ -442,6 +475,7 @@ class NativeInferenceRuntimeTest {
         queue.reject = true // The initial worker is queued; only its cleanup submission is rejected.
         assertTrue(queue.runNext())
         assertFailure(call, NativeInferenceFailure.QUARANTINED)
+        assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
         assertEquals(0, h.operation.releases.get())
         assertEquals(0, h.model.closes.get())
         assertEquals(NativeInferenceState.QUARANTINED, h.runtime.state())
@@ -456,10 +490,14 @@ class NativeInferenceRuntimeTest {
         val call = h.runtime.submit(h.request())
         assertEquals(NativeInferenceState.CLOSING, h.runtime.close())
         assertFailure(call, NativeInferenceFailure.CLOSED)
-        assertFailure(h.runtime.submit(h.request()), NativeInferenceFailure.CLOSED)
+        assertQuiescence(call, NativeInferenceQuiescence.PENDING)
+        val refused = h.runtime.submit(h.request())
+        assertFailure(refused, NativeInferenceFailure.CLOSED)
+        assertQuiescence(refused, NativeInferenceQuiescence.QUIESCENT)
         h.drain()
         assertEquals(NativeInferenceState.CLOSED, h.runtime.state())
         assertEquals(0, h.storeCalls.get())
+        assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
     }
 
     @Test fun currentPromptIsRecheckedAfterHashAndReservationAndAfterTeardown() {
@@ -638,12 +676,14 @@ class NativeInferenceRuntimeTest {
         try {
             val call = h.runtime.submit(h.request())
             assertFailure(call, NativeInferenceFailure.QUARANTINED)
+            assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
             assertEquals(NativeInferenceState.QUARANTINED, h.runtime.state())
             assertEquals(2, h.sourceCalls.get())
             assertEquals(0, h.operation.generates.get())
             allowReturn.countDown()
             barrier(worker)
             assertFailure(call, NativeInferenceFailure.QUARANTINED)
+            assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
             assertEquals(0, h.operation.generates.get())
             assertEquals(2, h.sourceCalls.get())
             assertEquals(0, h.operation.releases.get())
@@ -695,6 +735,7 @@ class NativeInferenceRuntimeTest {
                         else -> NativeInferenceFailure.CANCELLED
                     }
                     assertFailure(call, expected)
+                    assertQuiescence(call, NativeInferenceQuiescence.PENDING)
                     assertEquals(
                         if (stopKind == "close") NativeInferenceState.CLOSING else NativeInferenceState.BUSY,
                         h.runtime.state(),
@@ -711,6 +752,7 @@ class NativeInferenceRuntimeTest {
                     await(h.model.closed)
                     barrier(worker)
                     assertFailure(call, expected)
+                    assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
                     assertEquals(checkpoint, h.sourceCalls.get())
                     assertEquals(1, h.operation.releases.get())
                     assertEquals(1, h.model.closes.get())
@@ -1051,6 +1093,164 @@ class NativeInferenceRuntimeTest {
         }
     }
 
+    @Test fun quiescenceWaitExpiryDoesNotCancelCompleteOrStartTheCall() {
+        val h = Harness()
+        val call = h.runtime.submit(h.request())
+        assertQuiescence(call, NativeInferenceQuiescence.PENDING)
+        assertNull(call.awaitQuiescence(1, TimeUnit.MILLISECONDS))
+        assertNull(call.awaitResult(0, TimeUnit.NANOSECONDS))
+        assertThrows(IllegalArgumentException::class.java) { call.awaitQuiescence(-1, TimeUnit.NANOSECONDS) }
+        assertQuiescence(call, NativeInferenceQuiescence.PENDING)
+        assertEquals(0, h.sourceCalls.get())
+        assertEquals(0, h.storeCalls.get())
+        assertEquals(0, h.engine.reserves.get())
+        call.cancel()
+        assertFailure(call, NativeInferenceFailure.CANCELLED)
+        assertSame(call.pollResult(), call.awaitResult(0, TimeUnit.NANOSECONDS))
+        assertNull(call.awaitQuiescence(1, TimeUnit.MILLISECONDS))
+        assertQuiescence(call, NativeInferenceQuiescence.PENDING)
+        h.drain()
+        assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
+        assertFailure(call, NativeInferenceFailure.CANCELLED)
+        assertEquals(0, h.sourceCalls.get())
+        assertEquals(0, h.storeCalls.get())
+    }
+
+    @Test fun terminalQuiescenceCannotBeResetOrPromotedByALateObservation() {
+        for (terminal in listOf(NativeInferenceQuiescence.QUIESCENT, NativeInferenceQuiescence.UNCERTAIN)) {
+            val call = NativeInferenceCall()
+            assertThrows(IllegalArgumentException::class.java) {
+                call.finishQuiescence(NativeInferenceQuiescence.PENDING)
+            }
+            assertQuiescence(call, NativeInferenceQuiescence.PENDING)
+            assertTrue(call.finishQuiescence(terminal))
+            assertFalse(call.finishQuiescence(NativeInferenceQuiescence.QUIESCENT))
+            assertFalse(call.finishQuiescence(NativeInferenceQuiescence.UNCERTAIN))
+            call.finish(NativeInferenceResult.Abstained(NativeInferenceFailure.CANCELLED))
+            call.cancel()
+            assertQuiescence(call, terminal)
+        }
+    }
+
+    @Test fun callQuiescenceIsIndependentOfAnotherFlightEvenWhenRequestReferencesMatch() {
+        val h = Harness()
+        val request = h.request()
+        val first = h.runtime.submit(request)
+        h.drain()
+        assertQuiescence(first, NativeInferenceQuiescence.QUIESCENT)
+        val firstResult = first.pollResult()
+        val second = h.runtime.submit(request) // Object/Flight identity, not the caller's string.
+        assertEquals(NativeInferenceState.BUSY, h.runtime.state())
+        assertQuiescence(second, NativeInferenceQuiescence.PENDING)
+        assertQuiescence(first, NativeInferenceQuiescence.QUIESCENT)
+        val refused = h.runtime.submit(request)
+        assertFailure(refused, NativeInferenceFailure.BUSY)
+        assertQuiescence(refused, NativeInferenceQuiescence.QUIESCENT)
+        first.cancel()
+        refused.cancel()
+        assertSame(firstResult, first.pollResult())
+        assertNull(second.pollResult())
+        assertQuiescence(second, NativeInferenceQuiescence.PENDING)
+        h.drain()
+        assertTrue(second.pollResult() is NativeInferenceResult.Text)
+        assertQuiescence(second, NativeInferenceQuiescence.QUIESCENT)
+        assertQuiescence(first, NativeInferenceQuiescence.QUIESCENT)
+        assertEquals(0, h.operation.cancels.get())
+        assertEquals(2, h.operation.releases.get())
+        assertEquals(2, h.model.closes.get())
+    }
+
+    @Test fun aBlockedOriginalDescriptorCloseCannotBeMistakenForCallQuiescence() {
+        for (stopKind in listOf("cancel", "deadline", "close")) {
+            val worker = daemonExecutor()
+            val trigger = daemonExecutor()
+            val entered = CountDownLatch(1)
+            val allowClose = CountDownLatch(1)
+            val h = Harness(work = worker)
+            h.model.beforeClose = { entered.countDown(); allowClose.await() }
+            try {
+                val request = h.request()
+                val call = h.runtime.submit(request)
+                await(entered)
+                assertEquals(1, h.operation.releases.get())
+                assertNull(call.pollResult())
+                assertQuiescence(call, NativeInferenceQuiescence.PENDING)
+                trigger.submit {
+                    when (stopKind) {
+                        "deadline" -> { h.clock.now.set(request.deadlineNanos); h.scheduler.fireDue() }
+                        "close" -> h.runtime.close()
+                        else -> call.cancel()
+                    }
+                }.get(5, TimeUnit.SECONDS)
+                val expected = when (stopKind) {
+                    "deadline" -> NativeInferenceFailure.TIMEOUT
+                    "close" -> NativeInferenceFailure.CLOSED
+                    else -> NativeInferenceFailure.CANCELLED
+                }
+                assertFailure(call, expected)
+                assertSame(call.pollResult(), call.awaitResult(0, TimeUnit.NANOSECONDS))
+                assertQuiescence(call, NativeInferenceQuiescence.PENDING)
+                assertEquals(1L, h.model.closed.count)
+                assertEquals(0, h.operation.cancels.get())
+                allowClose.countDown()
+                assertEquals(NativeInferenceQuiescence.QUIESCENT, call.awaitQuiescence(5, TimeUnit.SECONDS))
+                barrier(worker)
+                assertFailure(call, expected)
+                assertEquals(0L, h.model.closed.count)
+                assertQuiescence(call, NativeInferenceQuiescence.QUIESCENT)
+            } finally {
+                allowClose.countDown()
+                worker.shutdownNow()
+                trigger.shutdownNow()
+            }
+        }
+    }
+
+    @Test fun acceptedThenThrowingWorkerCannotClaimQuiescenceEvenAfterItsQueueDrains() {
+        val queued = ManualExecutor()
+        val acceptedThenFailed = Executor { command ->
+            queued.execute(command)
+            throw IllegalStateException("PRIVATE_ACCEPTED_WORKER")
+        }
+        val h = Harness(work = acceptedThenFailed)
+        val call = h.runtime.submit(h.request())
+        assertFailure(call, NativeInferenceFailure.QUARANTINED)
+        assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
+        assertEquals(1, queued.size())
+        queued.drain()
+        assertEquals(0, h.sourceCalls.get())
+        assertEquals(0, h.storeCalls.get())
+        assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
+        assertEquals(NativeInferenceState.QUARANTINED, h.runtime.close())
+        assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
+        assertFalse(call.pollResult().toString().contains("PRIVATE_ACCEPTED_WORKER"))
+    }
+
+    @Test fun acceptedThenThrowingCancellationCannotPromoteAnUncertainCallAfterReturning() {
+        val queued = ManualExecutor()
+        val acceptedThenFailed = Executor { command ->
+            queued.execute(command)
+            throw IllegalStateException("PRIVATE_ACCEPTED_CANCEL")
+        }
+        val h = Harness(cancellations = acceptedThenFailed)
+        val call = h.runtime.submit(h.request())
+        h.operation.onGenerate = { call.cancel(); goodOutput() }
+        h.drain()
+        assertFailure(call, NativeInferenceFailure.CANCELLED)
+        assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
+        assertEquals(1, queued.size())
+        assertEquals(0, h.operation.cancels.get())
+        queued.drain()
+        h.drain()
+        assertEquals(1, h.operation.cancels.get())
+        assertEquals(0, h.operation.releases.get())
+        assertEquals(0, h.model.closes.get())
+        assertFailure(call, NativeInferenceFailure.CANCELLED)
+        assertQuiescence(call, NativeInferenceQuiescence.UNCERTAIN)
+        assertEquals(NativeInferenceState.QUARANTINED, h.runtime.state())
+        assertFalse(call.pollResult().toString().contains("PRIVATE_ACCEPTED_CANCEL"))
+    }
+
     private class Harness(
         val work: Executor = ManualExecutor(),
         val cancellations: Executor = ManualExecutor(),
@@ -1215,6 +1415,11 @@ class NativeInferenceRuntimeTest {
         fun daemonExecutor(): ExecutorService = Executors.newSingleThreadExecutor { task -> Thread(task, "native-inference-jvm-test").apply { isDaemon = true } }
         fun await(latch: CountDownLatch) { assertTrue("JVM fixture did not reach the expected boundary", latch.await(5, TimeUnit.SECONDS)) }
         fun barrier(executor: ExecutorService) { executor.submit {}.get(5, TimeUnit.SECONDS) }
+        fun assertQuiescence(call: NativeInferenceCall, expected: NativeInferenceQuiescence) {
+            assertEquals(expected, call.pollQuiescence())
+            if (expected == NativeInferenceQuiescence.PENDING) assertNull(call.awaitQuiescence(0, TimeUnit.NANOSECONDS))
+            else assertEquals(expected, call.awaitQuiescence(0, TimeUnit.NANOSECONDS))
+        }
         fun assertFailure(call: NativeInferenceCall, expected: NativeInferenceFailure) {
             val result = call.pollResult()
             assertTrue("Expected $expected, got $result", result is NativeInferenceResult.Abstained)

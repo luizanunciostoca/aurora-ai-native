@@ -464,6 +464,9 @@ internal class BoundedNativeInferenceRuntime(
             flight.timer
         }
         cancelTimer(timer)
+        // The original worker/cancel work, release, FD close and final source read have ended.
+        // A logical result may already have been published by stop(); stop never marks teardown.
+        flight.call.finishQuiescence(NativeInferenceQuiescence.QUIESCENT)
     }
 
     private fun finishWithoutWorker(flight: Flight, reason: NativeInferenceFailure) {
@@ -477,6 +480,8 @@ internal class BoundedNativeInferenceRuntime(
             flight.timer
         }
         cancelTimer(timer)
+        // Submission was refused before its worker started; this call owns no model/native work.
+        flight.call.finishQuiescence(NativeInferenceQuiescence.QUIESCENT)
     }
 
     private fun quarantine(flight: Flight) {
@@ -487,6 +492,7 @@ internal class BoundedNativeInferenceRuntime(
             flight.pending = abstained(NativeInferenceFailure.QUARANTINED)
             clearPromptDigestLocked(flight)
             flight.call.finish(flight.stopped.get()?.let { abstained(it) } ?: flight.pending)
+            flight.call.finishQuiescence(NativeInferenceQuiescence.UNCERTAIN)
         }
     }
 
@@ -515,6 +521,10 @@ internal class BoundedNativeInferenceRuntime(
 
     private companion object {
         fun abstained(reason: NativeInferenceFailure): NativeInferenceResult = NativeInferenceResult.Abstained(reason)
-        fun completed(reason: NativeInferenceFailure): NativeInferenceCall = NativeInferenceCall().also { it.finish(abstained(reason)) }
+        fun completed(reason: NativeInferenceFailure): NativeInferenceCall = NativeInferenceCall().also {
+            it.finish(abstained(reason))
+            // Refusal starts no work for this call, even if another flight is busy/quarantined.
+            it.finishQuiescence(NativeInferenceQuiescence.QUIESCENT)
+        }
     }
 }

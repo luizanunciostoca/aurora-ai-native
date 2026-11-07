@@ -74,6 +74,34 @@ The JNI entry thread polls this query before and after model loading, before and
 
 **Limit:** these are cooperative checkpoints, not instantaneous or continuous revocation inside an opaque model load, tokenization, decode or provider read. They cannot create missing current policy/consent/routing/session/PUBLIC-source producers. The shipping factory is still literally disabled, and there is still no application/voice/session caller of this leaf.
 
+## Original-call teardown observation
+
+The continuation allocated in [#575/6699625822](https://github.com/luizanunciostoca/aurora-ai-native/issues/575#issuecomment-6699625822)
+adds a private observation to the **original `NativeInferenceCall`**, independently
+of its logical result. It extends this existing leaf; it creates no second
+session, registry, executor or authenticated route, and changes no JNI/C++ ABI.
+
+`pollQuiescence()` returns `PENDING`, `QUIESCENT` or `UNCERTAIN` for that call only.
+`awaitQuiescence(timeout, unit)` is a non-UI wait: an expired wait returns null,
+without cancelling the call or asserting that resources were released. Neither
+`cancel()`, `pollResult()` nor `awaitResult()` proves teardown. A later call's BUSY
+or IDLE state cannot overwrite the original call's terminal observation.
+
+Only the owning runtime may move PENDING to QUIESCENT after the original worker
+and cancellation work, native release, descriptor close, final current-source
+check and flight detachment have finished. A known no-work refusal can be
+QUIESCENT immediately, including the unchanged shipping factory's DISABLED
+result. That says nothing about a different call's resources. Indeterminate
+ownership/release/executor behavior moves the original call to sticky UNCERTAIN,
+never to a successful teardown or an automatic retry permission.
+
+This closes an observability gap needed by a future lifecycle adapter: a bounded
+logical CANCELLED result can coexist with PENDING cleanup. It does **not** install
+that adapter, supply current policy/consent/source owners, load a model or prove
+the native library's behavior on the tablet. The factory remains OFF and the
+newly compiled APK, if its existing checks pass, remains preparation-only and
+unauthorized for installation. Previous APK bytes do not include this change.
+
 ## Bounded real-provider discovery
 
 A single metadata-only Native Termux Agent V3 probe, [morro-termux-control #3680](https://github.com/luizanunciostoca/morro-termux-control/issues/3680#issuecomment-6690018115), was read back on 2026-11-06 at 16:36:32 UTC. Its canonical request SHA-256 was `9d19cae530023311458fa470579aa3bb9a90ddf80c8a956d12f154a9ae9a3206`, matching preflight and result. It confirmed the expected boot/session on an SM-X820, aarch64, Android API 36, then read only three previously identified provider metadata files. It did not import/execute the provider, read credentials, start a service, install anything, load a model, grant consent or change boot.

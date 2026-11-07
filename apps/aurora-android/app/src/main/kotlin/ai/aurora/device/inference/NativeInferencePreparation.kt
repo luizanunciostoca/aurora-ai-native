@@ -17,7 +17,11 @@ internal object NativeInferencePreparation {
 
 private class DisabledNativeInference(private val reason: NativeInferenceFailure) : NativeInference {
     override fun submit(request: NativeInferenceRequest): NativeInferenceCall =
-        NativeInferenceCall().also { it.finish(NativeInferenceResult.Abstained(reason)) }
+        NativeInferenceCall().also {
+            it.finish(NativeInferenceResult.Abstained(reason))
+            // The disabled factory never constructs or starts a worker, source or native operation.
+            it.finishQuiescence(NativeInferenceQuiescence.QUIESCENT)
+        }
 
     override fun state(): NativeInferenceState = NativeInferenceState.DISABLED
 

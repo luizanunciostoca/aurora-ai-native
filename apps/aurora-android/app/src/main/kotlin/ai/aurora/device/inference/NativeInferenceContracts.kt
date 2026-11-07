@@ -74,10 +74,15 @@ internal sealed class NativeInferenceResult {
     }
 }
 
+/** Only QUIESCENT proves this call's teardown; UNCERTAIN is terminal, not permission to retry. */
+internal enum class NativeInferenceQuiescence { PENDING, QUIESCENT, UNCERTAIN }
+
 /** Completion and cancellation deliberately do not expose a mutable Future or imply quiescence. */
 internal class NativeInferenceCall {
     private val result = AtomicReference<NativeInferenceResult?>(null)
     private val completed = CountDownLatch(1)
+    private val quiescence = AtomicReference(NativeInferenceQuiescence.PENDING)
+    private val teardownObserved = CountDownLatch(1)
 
     @Volatile private var cancellation: () -> Unit = {}
 
@@ -91,6 +96,15 @@ internal class NativeInferenceCall {
         return if (completed.await(timeout, unit)) result.get() else null
     }
 
+    /** This call only: a later call's global BUSY/IDLE state cannot change this observation. */
+    fun pollQuiescence(): NativeInferenceQuiescence = quiescence.get()
+
+    /** Non-UI wait. Expiry returns null without cancelling, closing or promoting the call. */
+    fun awaitQuiescence(timeout: Long, unit: TimeUnit): NativeInferenceQuiescence? {
+        require(timeout >= 0)
+        return if (teardownObserved.await(timeout, unit)) quiescence.get() else null
+    }
+
     internal fun onCancellation(action: () -> Unit) {
         cancellation = action
     }
@@ -98,6 +112,14 @@ internal class NativeInferenceCall {
     internal fun finish(value: NativeInferenceResult): Boolean {
         if (!result.compareAndSet(null, value)) return false
         completed.countDown()
+        return true
+    }
+
+    /** Runtime-only terminal observation; neither logical completion nor a wait calls this. */
+    internal fun finishQuiescence(value: NativeInferenceQuiescence): Boolean {
+        require(value != NativeInferenceQuiescence.PENDING)
+        if (!quiescence.compareAndSet(NativeInferenceQuiescence.PENDING, value)) return false
+        teardownObserved.countDown()
         return true
     }
 }
